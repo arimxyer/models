@@ -41,8 +41,8 @@ pub fn model(model_id: &str, json: bool) -> Result<()> {
         }
     }
 
-    let (provider_id, provider_name, model) = found
-        .ok_or_else(|| anyhow::anyhow!("Model '{}' not found", model_id))?;
+    let (provider_id, provider_name, model) =
+        found.ok_or_else(|| anyhow::anyhow!("Model '{}' not found", model_id))?;
 
     let detail = ModelDetail {
         id: model.id.clone(),
@@ -128,7 +128,10 @@ fn print_detail(d: &ModelDetail) {
     if let Some(date) = &d.knowledge_cutoff {
         println!("Knowledge:   {}", date);
     }
-    println!("Open Weights: {}", if d.open_weights { "Yes" } else { "No" });
+    println!(
+        "Open Weights: {}",
+        if d.open_weights { "Yes" } else { "No" }
+    );
     if let Some(status) = &d.status {
         println!("Status:      {}", status);
     }

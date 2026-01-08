@@ -27,7 +27,12 @@ pub fn draw(f: &mut Frame, app: &mut App) {
 
 fn draw_header(f: &mut Frame, area: Rect, _app: &App) {
     let header = Paragraph::new(Line::from(vec![
-        Span::styled(" models ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " models ",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw("- AI Model Browser"),
     ]));
     f.render_widget(header, area);
@@ -60,7 +65,7 @@ fn draw_providers(f: &mut Frame, area: Rect, app: &mut App) {
     items.push(ListItem::new(all_text).style(all_style));
 
     // Individual providers
-    for (_i, (id, provider)) in app.providers.iter().enumerate() {
+    for (id, provider) in app.providers.iter() {
         let text = format!("{} ({})", id, provider.models.len());
         items.push(ListItem::new(text));
     }
@@ -106,10 +111,7 @@ fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
             "Model ID", "Provider", "Cost", "Context"
         )
     } else {
-        format!(
-            "{:<35} {:>12} {:>8}",
-            "Model ID", "Cost", "Context"
-        )
+        format!("{:<35} {:>12} {:>8}", "Model ID", "Cost", "Context")
     };
     items.push(ListItem::new(header_text).style(header_style));
 
@@ -126,12 +128,7 @@ fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
                 ctx
             )
         } else {
-            format!(
-                "{:<35} {:>12} {:>8}",
-                truncate(&entry.id, 35),
-                cost,
-                ctx
-            )
+            format!("{:<35} {:>12} {:>8}", truncate(&entry.id, 35), cost, ctx)
         };
         items.push(ListItem::new(text));
     }
@@ -169,9 +166,17 @@ fn draw_detail(f: &mut Frame, area: Rect, app: &App) {
 
         let mut detail_lines = vec![
             Line::from(vec![
-                Span::styled(&model.name, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    &model.name,
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("  "),
-                Span::styled(format!("({})", entry.id), Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    format!("({})", entry.id),
+                    Style::default().fg(Color::DarkGray),
+                ),
             ]),
             Line::from(vec![
                 Span::styled("Provider: ", Style::default().fg(Color::DarkGray)),
@@ -186,9 +191,24 @@ fn draw_detail(f: &mut Frame, area: Rect, app: &App) {
             ]),
             Line::from(vec![
                 Span::styled("Input Cost: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(format!("{:<10}", model.cost.as_ref().and_then(|c| c.input).map(|v| format!("${}/M", v)).unwrap_or("-".into()))),
+                Span::raw(format!(
+                    "{:<10}",
+                    model
+                        .cost
+                        .as_ref()
+                        .and_then(|c| c.input)
+                        .map(|v| format!("${}/M", v))
+                        .unwrap_or("-".into())
+                )),
                 Span::styled("Output Cost: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(model.cost.as_ref().and_then(|c| c.output).map(|v| format!("${}/M", v)).unwrap_or("-".into())),
+                Span::raw(
+                    model
+                        .cost
+                        .as_ref()
+                        .and_then(|c| c.output)
+                        .map(|v| format!("${}/M", v))
+                        .unwrap_or("-".into()),
+                ),
             ]),
             Line::from(vec![
                 Span::styled("Capabilities: ", Style::default().fg(Color::DarkGray)),

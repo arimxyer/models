@@ -95,30 +95,36 @@ impl App {
                 if self.selected_provider < self.provider_list_len().saturating_sub(1) {
                     self.selected_provider += 1;
                     self.selected_model = 0;
-                    self.provider_list_state.select(Some(self.selected_provider));
+                    self.provider_list_state
+                        .select(Some(self.selected_provider));
                     self.update_filtered_models();
-                    self.model_list_state.select(Some(self.selected_model + 1)); // +1 for header
+                    self.model_list_state.select(Some(self.selected_model + 1));
+                    // +1 for header
                 }
             }
             Message::PrevProvider => {
                 if self.selected_provider > 0 {
                     self.selected_provider -= 1;
                     self.selected_model = 0;
-                    self.provider_list_state.select(Some(self.selected_provider));
+                    self.provider_list_state
+                        .select(Some(self.selected_provider));
                     self.update_filtered_models();
-                    self.model_list_state.select(Some(self.selected_model + 1)); // +1 for header
+                    self.model_list_state.select(Some(self.selected_model + 1));
+                    // +1 for header
                 }
             }
             Message::NextModel => {
                 if self.selected_model < self.filtered_models.len().saturating_sub(1) {
                     self.selected_model += 1;
-                    self.model_list_state.select(Some(self.selected_model + 1)); // +1 for header
+                    self.model_list_state.select(Some(self.selected_model + 1));
+                    // +1 for header
                 }
             }
             Message::PrevModel => {
                 if self.selected_model > 0 {
                     self.selected_model -= 1;
-                    self.model_list_state.select(Some(self.selected_model + 1)); // +1 for header
+                    self.model_list_state.select(Some(self.selected_model + 1));
+                    // +1 for header
                 }
             }
             Message::SwitchFocus => {
@@ -219,14 +225,6 @@ impl App {
         };
     }
 
-    pub fn current_provider(&self) -> Option<&(String, Provider)> {
-        if self.is_all_selected() {
-            None
-        } else {
-            self.providers.get(self.selected_provider - 1)
-        }
-    }
-
     pub fn current_model(&self) -> Option<&ModelEntry> {
         self.filtered_models.get(self.selected_model)
     }
@@ -236,10 +234,7 @@ impl App {
     }
 
     pub fn total_model_count(&self) -> usize {
-        self.providers
-            .iter()
-            .map(|(_, p)| p.models.len())
-            .sum()
+        self.providers.iter().map(|(_, p)| p.models.len()).sum()
     }
 
     /// Get the full provider/model-id string for copying

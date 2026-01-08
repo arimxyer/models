@@ -39,11 +39,7 @@ pub fn search(query: &str, json: bool) -> Result<()> {
         }
     }
 
-    results.sort_by(|a, b| {
-        a.provider
-            .cmp(&b.provider)
-            .then_with(|| a.id.cmp(&b.id))
-    });
+    results.sort_by(|a, b| a.provider.cmp(&b.provider).then_with(|| a.id.cmp(&b.id)));
 
     if json {
         println!("{}", serde_json::to_string_pretty(&results)?);

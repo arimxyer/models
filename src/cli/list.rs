@@ -43,11 +43,7 @@ pub fn providers(json: bool) -> Result<()> {
         table.set_header(vec!["ID", "Name", "Models"]);
 
         for info in infos {
-            table.add_row(vec![
-                info.id,
-                info.name,
-                info.models_count.to_string(),
-            ]);
+            table.add_row(vec![info.id, info.name, info.models_count.to_string()]);
         }
 
         println!("{table}");
@@ -91,11 +87,7 @@ pub fn models(provider: Option<String>, json: bool) -> Result<()> {
         }
     }
 
-    infos.sort_by(|a, b| {
-        a.provider
-            .cmp(&b.provider)
-            .then_with(|| a.id.cmp(&b.id))
-    });
+    infos.sort_by(|a, b| a.provider.cmp(&b.provider).then_with(|| a.id.cmp(&b.id)));
 
     if json {
         println!("{}", serde_json::to_string_pretty(&infos)?);
@@ -106,7 +98,14 @@ pub fn models(provider: Option<String>, json: bool) -> Result<()> {
 
         let mut table = Table::new();
         table.load_preset(UTF8_FULL_CONDENSED);
-        table.set_header(vec!["ID", "Name", "Provider", "Context", "Cost (in/out)", "Capabilities"]);
+        table.set_header(vec![
+            "ID",
+            "Name",
+            "Provider",
+            "Context",
+            "Cost (in/out)",
+            "Capabilities",
+        ]);
 
         for info in infos {
             table.add_row(vec![

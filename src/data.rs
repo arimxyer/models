@@ -6,12 +6,16 @@ pub struct Provider {
     pub id: String,
     pub name: String,
     #[serde(default)]
+    #[allow(dead_code)]
     pub npm: Option<String>,
     #[serde(default)]
+    #[allow(dead_code)]
     pub env: Vec<String>,
     #[serde(default)]
+    #[allow(dead_code)]
     pub doc: Option<String>,
     #[serde(default)]
+    #[allow(dead_code)]
     pub api: Option<String>,
     #[serde(default)]
     pub models: HashMap<String, Model>,
@@ -30,6 +34,7 @@ pub struct Model {
     #[serde(default)]
     pub attachment: bool,
     #[serde(default)]
+    #[allow(dead_code)]
     pub temperature: bool,
     #[serde(default)]
     pub modalities: Option<Modalities>,
@@ -66,6 +71,7 @@ pub struct Limits {
     #[serde(default)]
     pub context: Option<u64>,
     #[serde(default)]
+    #[allow(dead_code)]
     pub input: Option<u64>,
     #[serde(default)]
     pub output: Option<u64>,
@@ -99,8 +105,14 @@ impl Model {
     pub fn cost_str(&self) -> String {
         match &self.cost {
             Some(c) => {
-                let input = c.input.map(|v| format!("${}", v)).unwrap_or("-".to_string());
-                let output = c.output.map(|v| format!("${}", v)).unwrap_or("-".to_string());
+                let input = c
+                    .input
+                    .map(|v| format!("${}", v))
+                    .unwrap_or("-".to_string());
+                let output = c
+                    .output
+                    .map(|v| format!("${}", v))
+                    .unwrap_or("-".to_string());
                 format!("{}/{}", input, output)
             }
             None => "-/-".to_string(),
