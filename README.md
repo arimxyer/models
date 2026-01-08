@@ -4,6 +4,8 @@ A fast CLI and TUI for browsing AI model information from [models.dev](https://m
 
 Quickly look up context windows, pricing, capabilities, and more for 2000+ models across 75+ providers.
 
+<video src="demo.webm" controls width="100%"></video>
+
 ## Features
 
 - **CLI commands** for scripting and quick lookups
@@ -56,26 +58,7 @@ Just run `models` with no arguments to launch the interactive browser:
 models
 ```
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ models - AI Model Browser                                                   │
-├──────────────────────┬──────────────────────────────────────────────────────┤
-│ Providers            │ Model ID                Provider     Cost    Context │
-│                      │────────────────────────────────────────────────────  │
-│ > All (2023)         │ > claude-opus-4-5       anthropic   $5/$25     200k  │
-│   abacus (52)        │   claude-opus-4-1       anthropic   $15/$75    200k  │
-│   anthropic (21)     │   claude-sonnet-4-5     anthropic   $3/$15     200k  │
-│   openai (45)        │   claude-haiku-4-5      anthropic   $1/$5      200k  │
-│   ...                │   ...                                                │
-├──────────────────────┴──────────────────────────────────────────────────────┤
-│ Claude Opus 4.5  (claude-opus-4-5)                                          │
-│ Provider: anthropic                                                         │
-│ Context: 200k        Output: 64k                                            │
-│ Input Cost: $5/M     Output Cost: $25/M                                     │
-│ Capabilities: reasoning, tools, files                                       │
-└─────────────────────────────────────────────────────────────────────────────┘
- j/k nav   h/l panel   / search   c copy   C copy id   q quit
-```
+![models TUI screenshot](screenshot.png)
 
 #### TUI Keybindings
 
