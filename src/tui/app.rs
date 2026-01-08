@@ -27,14 +27,22 @@ pub enum Message {
     ClearSearch,
 }
 
+#[derive(Debug, Clone)]
+pub struct ModelEntry {
+    pub id: String,
+    pub model: Model,
+    pub provider_id: String,
+}
+
 pub struct App {
     pub providers: Vec<(String, Provider)>,
+    /// 0 = "All", 1+ = actual provider index + 1
     pub selected_provider: usize,
     pub selected_model: usize,
     pub focus: Focus,
     pub mode: Mode,
     pub search_query: String,
-    filtered_models: Vec<(String, Model)>,
+    filtered_models: Vec<ModelEntry>,
 }
 
 impl App {
@@ -44,7 +52,7 @@ impl App {
 
         let mut app = Self {
             providers,
-            selected_provider: 0,
+            selected_provider: 0, // Start with "All"
             selected_model: 0,
             focus: Focus::Providers,
             mode: Mode::Normal,
@@ -56,11 +64,20 @@ impl App {
         app
     }
 
+    pub fn is_all_selected(&self) -> bool {
+        self.selected_provider == 0
+    }
+
+    /// Returns the number of items in the provider list (including "All")
+    pub fn provider_list_len(&self) -> usize {
+        self.providers.len() + 1
+    }
+
     pub fn update(&mut self, msg: Message) -> bool {
         match msg {
             Message::Quit => return false,
             Message::NextProvider => {
-                if self.selected_provider < self.providers.len().saturating_sub(1) {
+                if self.selected_provider < self.provider_list_len().saturating_sub(1) {
                     self.selected_provider += 1;
                     self.selected_model = 0;
                     self.update_filtered_models();
@@ -115,37 +132,87 @@ impl App {
     }
 
     fn update_filtered_models(&mut self) {
-        if let Some((_, provider)) = self.providers.get(self.selected_provider) {
-            let query_lower = self.search_query.to_lowercase();
+        let query_lower = self.search_query.to_lowercase();
 
-            self.filtered_models = provider
-                .models
+        self.filtered_models = if self.is_all_selected() {
+            // Show all models from all providers
+            let mut entries: Vec<ModelEntry> = self
+                .providers
                 .iter()
-                .filter(|(id, model)| {
-                    if query_lower.is_empty() {
-                        return true;
-                    }
-                    id.to_lowercase().contains(&query_lower)
-                        || model.name.to_lowercase().contains(&query_lower)
+                .flat_map(|(provider_id, provider)| {
+                    provider.models.iter().filter_map(|(model_id, model)| {
+                        let matches = query_lower.is_empty()
+                            || model_id.to_lowercase().contains(&query_lower)
+                            || model.name.to_lowercase().contains(&query_lower)
+                            || provider_id.to_lowercase().contains(&query_lower);
+
+                        if matches {
+                            Some(ModelEntry {
+                                id: model_id.clone(),
+                                model: model.clone(),
+                                provider_id: provider_id.clone(),
+                            })
+                        } else {
+                            None
+                        }
+                    })
                 })
-                .map(|(id, model)| (id.clone(), model.clone()))
                 .collect();
 
-            self.filtered_models.sort_by(|a, b| a.0.cmp(&b.0));
+            entries.sort_by(|a, b| a.provider_id.cmp(&b.provider_id).then(a.id.cmp(&b.id)));
+            entries
         } else {
-            self.filtered_models.clear();
-        }
+            // Show models for selected provider only
+            let provider_idx = self.selected_provider - 1;
+            if let Some((provider_id, provider)) = self.providers.get(provider_idx) {
+                let mut entries: Vec<ModelEntry> = provider
+                    .models
+                    .iter()
+                    .filter_map(|(model_id, model)| {
+                        let matches = query_lower.is_empty()
+                            || model_id.to_lowercase().contains(&query_lower)
+                            || model.name.to_lowercase().contains(&query_lower);
+
+                        if matches {
+                            Some(ModelEntry {
+                                id: model_id.clone(),
+                                model: model.clone(),
+                                provider_id: provider_id.clone(),
+                            })
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                entries.sort_by(|a, b| a.id.cmp(&b.id));
+                entries
+            } else {
+                Vec::new()
+            }
+        };
     }
 
     pub fn current_provider(&self) -> Option<&(String, Provider)> {
-        self.providers.get(self.selected_provider)
+        if self.is_all_selected() {
+            None
+        } else {
+            self.providers.get(self.selected_provider - 1)
+        }
     }
 
-    pub fn current_model(&self) -> Option<&(String, Model)> {
+    pub fn current_model(&self) -> Option<&ModelEntry> {
         self.filtered_models.get(self.selected_model)
     }
 
-    pub fn filtered_models(&self) -> &[(String, Model)] {
+    pub fn filtered_models(&self) -> &[ModelEntry] {
         &self.filtered_models
+    }
+
+    pub fn total_model_count(&self) -> usize {
+        self.providers
+            .iter()
+            .map(|(_, p)| p.models.len())
+            .sum()
     }
 }

@@ -12,10 +12,10 @@ pub fn draw(f: &mut Frame, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1), // Header
-            Constraint::Min(0),    // Main content
-            Constraint::Length(3), // Detail panel
-            Constraint::Length(1), // Footer/search
+            Constraint::Length(1),  // Header
+            Constraint::Min(0),     // Main content
+            Constraint::Length(10), // Detail panel (expanded)
+            Constraint::Length(1),  // Footer/search
         ])
         .split(f.area());
 
@@ -51,23 +51,33 @@ fn draw_providers(f: &mut Frame, area: Rect, app: &App) {
         Style::default().fg(Color::DarkGray)
     };
 
-    let items: Vec<ListItem> = app
-        .providers
-        .iter()
-        .enumerate()
-        .map(|(i, (id, provider))| {
-            let style = if i == app.selected_provider {
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default()
-            };
+    // Build items list with "All" at the top
+    let mut items: Vec<ListItem> = Vec::with_capacity(app.providers.len() + 1);
 
-            let text = format!("{} ({})", id, provider.models.len());
-            ListItem::new(text).style(style)
-        })
-        .collect();
+    // "All" option
+    let all_style = if app.selected_provider == 0 {
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::Green)
+    };
+    let all_text = format!("All ({})", app.total_model_count());
+    items.push(ListItem::new(all_text).style(all_style));
+
+    // Individual providers
+    for (i, (id, provider)) in app.providers.iter().enumerate() {
+        let style = if i + 1 == app.selected_provider {
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default()
+        };
+
+        let text = format!("{} ({})", id, provider.models.len());
+        items.push(ListItem::new(text).style(style));
+    }
 
     let list = List::new(items)
         .block(
@@ -90,30 +100,63 @@ fn draw_models(f: &mut Frame, area: Rect, app: &App) {
     };
 
     let models = app.filtered_models();
+    let show_provider_col = app.is_all_selected();
 
-    let items: Vec<ListItem> = models
-        .iter()
-        .enumerate()
-        .map(|(i, (id, model))| {
-            let style = if i == app.selected_model {
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default()
-            };
+    // Build items with header row
+    let mut items: Vec<ListItem> = Vec::with_capacity(models.len() + 1);
 
-            let cost = model.cost_str();
-            let ctx = model.context_str();
-            let text = format!("{:<35} {:>12}  {:>8} ctx", id, cost, ctx);
-            ListItem::new(text).style(style)
-        })
-        .collect();
+    // Header row
+    let header_style = Style::default()
+        .fg(Color::DarkGray)
+        .add_modifier(Modifier::UNDERLINED);
+    let header_text = if show_provider_col {
+        format!(
+            "{:<30} {:<18} {:>10} {:>8}",
+            "Model ID", "Provider", "Cost", "Context"
+        )
+    } else {
+        format!(
+            "{:<35} {:>12} {:>8}",
+            "Model ID", "Cost", "Context"
+        )
+    };
+    items.push(ListItem::new(header_text).style(header_style));
+
+    // Model rows
+    for (i, entry) in models.iter().enumerate() {
+        let style = if i == app.selected_model {
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default()
+        };
+
+        let cost = entry.model.cost_str();
+        let ctx = entry.model.context_str();
+        let text = if show_provider_col {
+            format!(
+                "{:<30} {:<18} {:>10} {:>8}",
+                truncate(&entry.id, 30),
+                truncate(&entry.provider_id, 18),
+                cost,
+                ctx
+            )
+        } else {
+            format!(
+                "{:<35} {:>12} {:>8}",
+                truncate(&entry.id, 35),
+                cost,
+                ctx
+            )
+        };
+        items.push(ListItem::new(text).style(style));
+    }
 
     let title = if app.search_query.is_empty() {
-        " Models ".to_string()
+        format!(" Models ({}) ", models.len())
     } else {
-        format!(" Models (filter: {}) ", app.search_query)
+        format!(" Models ({}) [filter: {}] ", models.len(), app.search_query)
     };
 
     let list = List::new(items).block(
@@ -127,29 +170,63 @@ fn draw_models(f: &mut Frame, area: Rect, app: &App) {
 }
 
 fn draw_detail(f: &mut Frame, area: Rect, app: &App) {
-    let detail = if let Some((_id, model)) = app.current_model() {
-        let provider_name = app
-            .current_provider()
-            .map(|(pid, _)| pid.as_str())
-            .unwrap_or("-");
+    let lines: Vec<Line> = if let Some(entry) = app.current_model() {
+        let model = &entry.model;
+        let provider_id = &entry.provider_id;
 
         let caps = model.capabilities_str();
         let modalities = model.modalities_str();
 
-        Line::from(vec![
-            Span::styled(&model.name, Style::default().add_modifier(Modifier::BOLD)),
-            Span::raw(" | "),
-            Span::styled(provider_name, Style::default().fg(Color::Cyan)),
-            Span::raw(" | "),
-            Span::raw(format!("Context: {} | Output: {} | ", model.context_str(), model.output_str())),
-            Span::raw(format!("Caps: {} | ", caps)),
-            Span::raw(format!("IO: {}", modalities)),
-        ])
+        let mut detail_lines = vec![
+            Line::from(vec![
+                Span::styled(&model.name, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                Span::raw("  "),
+                Span::styled(format!("({})", entry.id), Style::default().fg(Color::DarkGray)),
+            ]),
+            Line::from(vec![
+                Span::styled("Provider: ", Style::default().fg(Color::DarkGray)),
+                Span::styled(provider_id, Style::default().fg(Color::Cyan)),
+            ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("Context: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(format!("{:<12}", model.context_str())),
+                Span::styled("Output: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(model.output_str()),
+            ]),
+            Line::from(vec![
+                Span::styled("Input Cost: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(format!("{:<10}", model.cost.as_ref().and_then(|c| c.input).map(|v| format!("${}/M", v)).unwrap_or("-".into()))),
+                Span::styled("Output Cost: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(model.cost.as_ref().and_then(|c| c.output).map(|v| format!("${}/M", v)).unwrap_or("-".into())),
+            ]),
+            Line::from(vec![
+                Span::styled("Capabilities: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(caps),
+            ]),
+            Line::from(vec![
+                Span::styled("Modalities: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(modalities),
+            ]),
+        ];
+
+        // Add release date if available
+        if let Some(date) = &model.release_date {
+            detail_lines.push(Line::from(vec![
+                Span::styled("Released: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(date),
+            ]));
+        }
+
+        detail_lines
     } else {
-        Line::from("No model selected")
+        vec![Line::from(Span::styled(
+            "No model selected",
+            Style::default().fg(Color::DarkGray),
+        ))]
     };
 
-    let paragraph = Paragraph::new(detail)
+    let paragraph = Paragraph::new(lines)
         .block(Block::default().borders(Borders::ALL).title(" Details "))
         .wrap(Wrap { trim: true });
 
@@ -180,4 +257,12 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
 
     let paragraph = Paragraph::new(content);
     f.render_widget(paragraph, area);
+}
+
+fn truncate(s: &str, max_len: usize) -> String {
+    if s.len() <= max_len {
+        s.to_string()
+    } else {
+        format!("{}...", &s[..max_len.saturating_sub(3)])
+    }
 }
