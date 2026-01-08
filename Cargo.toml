@@ -3,6 +3,11 @@ name = "models"
 version = "0.1.0"
 edition = "2021"
 description = "CLI/TUI tool for querying AI model information from models.dev"
+license = "MIT"
+repository = "https://github.com/arimxyer/models"
+readme = "README.md"
+keywords = ["cli", "tui", "ai", "models", "llm"]
+categories = ["command-line-utilities"]
 
 [dependencies]
 # CLI
