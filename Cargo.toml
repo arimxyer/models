@@ -24,3 +24,6 @@ anyhow = "1"
 
 # Formatting
 comfy-table = "7"
+
+# Clipboard
+arboard = "3"

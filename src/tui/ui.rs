@@ -234,14 +234,29 @@ fn draw_detail(f: &mut Frame, area: Rect, app: &App) {
 }
 
 fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
+    // If there's a status message, show it instead of normal footer
+    if let Some(status) = &app.status_message {
+        let content = Line::from(vec![
+            Span::styled(" ", Style::default()),
+            Span::styled(status, Style::default().fg(Color::Green)),
+        ]);
+        let paragraph = Paragraph::new(content);
+        f.render_widget(paragraph, area);
+        return;
+    }
+
     let content = match app.mode {
         Mode::Normal => Line::from(vec![
             Span::styled(" j/k ", Style::default().fg(Color::Yellow)),
-            Span::raw("navigate  "),
+            Span::raw("nav  "),
             Span::styled(" h/l ", Style::default().fg(Color::Yellow)),
-            Span::raw("switch panel  "),
+            Span::raw("panel  "),
             Span::styled(" / ", Style::default().fg(Color::Yellow)),
             Span::raw("search  "),
+            Span::styled(" c ", Style::default().fg(Color::Yellow)),
+            Span::raw("copy  "),
+            Span::styled(" C ", Style::default().fg(Color::Yellow)),
+            Span::raw("copy id  "),
             Span::styled(" q ", Style::default().fg(Color::Yellow)),
             Span::raw("quit"),
         ]),

@@ -3,8 +3,10 @@ mod event;
 mod ui;
 
 use std::io::stdout;
+use std::time::Instant;
 
 use anyhow::Result;
+use arboard::Clipboard;
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture},
     execute,
@@ -13,7 +15,7 @@ use crossterm::{
 use ratatui::prelude::*;
 
 use crate::api;
-use app::App;
+use app::{App, Message};
 
 pub fn run() -> Result<()> {
     // Fetch data before setting up terminal
@@ -44,12 +46,59 @@ pub fn run() -> Result<()> {
 }
 
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()> {
+    let mut clipboard = Clipboard::new().ok();
+    let mut status_clear_time: Option<Instant> = None;
+
     loop {
+        // Clear status message after 2 seconds
+        if let Some(clear_time) = status_clear_time {
+            if clear_time.elapsed().as_secs() >= 2 {
+                app.clear_status();
+                status_clear_time = None;
+            }
+        }
+
         terminal.draw(|f| ui::draw(f, app))?;
 
         if let Some(msg) = event::handle_events(app)? {
-            if !app.update(msg) {
-                return Ok(());
+            match msg {
+                Message::CopyFull => {
+                    if let Some(text) = app.get_copy_full() {
+                        if let Some(ref mut cb) = clipboard {
+                            if cb.set_text(&text).is_ok() {
+                                app.set_status(format!("Copied: {}", text));
+                                status_clear_time = Some(Instant::now());
+                            } else {
+                                app.set_status("Failed to copy".to_string());
+                                status_clear_time = Some(Instant::now());
+                            }
+                        } else {
+                            app.set_status("Clipboard unavailable".to_string());
+                            status_clear_time = Some(Instant::now());
+                        }
+                    }
+                }
+                Message::CopyModelId => {
+                    if let Some(text) = app.get_copy_model_id() {
+                        if let Some(ref mut cb) = clipboard {
+                            if cb.set_text(&text).is_ok() {
+                                app.set_status(format!("Copied: {}", text));
+                                status_clear_time = Some(Instant::now());
+                            } else {
+                                app.set_status("Failed to copy".to_string());
+                                status_clear_time = Some(Instant::now());
+                            }
+                        } else {
+                            app.set_status("Clipboard unavailable".to_string());
+                            status_clear_time = Some(Instant::now());
+                        }
+                    }
+                }
+                _ => {
+                    if !app.update(msg) {
+                        return Ok(());
+                    }
+                }
             }
         }
     }

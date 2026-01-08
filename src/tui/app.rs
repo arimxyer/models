@@ -25,6 +25,8 @@ pub enum Message {
     SearchInput(char),
     SearchBackspace,
     ClearSearch,
+    CopyFull,    // Copy provider/model-id
+    CopyModelId, // Copy just model-id
 }
 
 #[derive(Debug, Clone)]
@@ -42,6 +44,7 @@ pub struct App {
     pub focus: Focus,
     pub mode: Mode,
     pub search_query: String,
+    pub status_message: Option<String>,
     filtered_models: Vec<ModelEntry>,
 }
 
@@ -57,6 +60,7 @@ impl App {
             focus: Focus::Providers,
             mode: Mode::Normal,
             search_query: String::new(),
+            status_message: None,
             filtered_models: Vec::new(),
         };
 
@@ -127,6 +131,8 @@ impl App {
                 self.selected_model = 0;
                 self.update_filtered_models();
             }
+            // Copy messages are handled in the main loop
+            Message::CopyFull | Message::CopyModelId => {}
         }
         true
     }
@@ -214,5 +220,24 @@ impl App {
             .iter()
             .map(|(_, p)| p.models.len())
             .sum()
+    }
+
+    /// Get the full provider/model-id string for copying
+    pub fn get_copy_full(&self) -> Option<String> {
+        self.current_model()
+            .map(|entry| format!("{}/{}", entry.provider_id, entry.id))
+    }
+
+    /// Get just the model-id for copying
+    pub fn get_copy_model_id(&self) -> Option<String> {
+        self.current_model().map(|entry| entry.id.clone())
+    }
+
+    pub fn set_status(&mut self, msg: String) {
+        self.status_message = Some(msg);
+    }
+
+    pub fn clear_status(&mut self) {
+        self.status_message = None;
     }
 }

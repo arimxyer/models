@@ -29,6 +29,10 @@ fn handle_normal_mode(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Opti
         KeyCode::Char('q') => Some(Message::Quit),
         KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => Some(Message::Quit),
 
+        // Copy shortcuts
+        KeyCode::Char('c') => Some(Message::CopyFull),    // c = copy provider/model-id
+        KeyCode::Char('C') => Some(Message::CopyModelId), // C = copy model-id only
+
         // Navigation
         KeyCode::Char('j') | KeyCode::Down => match app.focus {
             Focus::Providers => Some(Message::NextProvider),
