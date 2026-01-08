@@ -1,3 +1,5 @@
+use ratatui::widgets::ListState;
+
 use crate::data::{Model, Provider, ProvidersMap};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -41,6 +43,8 @@ pub struct App {
     /// 0 = "All", 1+ = actual provider index + 1
     pub selected_provider: usize,
     pub selected_model: usize,
+    pub provider_list_state: ListState,
+    pub model_list_state: ListState,
     pub focus: Focus,
     pub mode: Mode,
     pub search_query: String,
@@ -53,10 +57,17 @@ impl App {
         let mut providers: Vec<(String, Provider)> = providers_map.into_iter().collect();
         providers.sort_by(|a, b| a.0.cmp(&b.0));
 
+        let mut provider_list_state = ListState::default();
+        provider_list_state.select(Some(0));
+        let mut model_list_state = ListState::default();
+        model_list_state.select(Some(1)); // +1 for header row
+
         let mut app = Self {
             providers,
             selected_provider: 0, // Start with "All"
             selected_model: 0,
+            provider_list_state,
+            model_list_state,
             focus: Focus::Providers,
             mode: Mode::Normal,
             search_query: String::new(),
@@ -84,24 +95,30 @@ impl App {
                 if self.selected_provider < self.provider_list_len().saturating_sub(1) {
                     self.selected_provider += 1;
                     self.selected_model = 0;
+                    self.provider_list_state.select(Some(self.selected_provider));
                     self.update_filtered_models();
+                    self.model_list_state.select(Some(self.selected_model + 1)); // +1 for header
                 }
             }
             Message::PrevProvider => {
                 if self.selected_provider > 0 {
                     self.selected_provider -= 1;
                     self.selected_model = 0;
+                    self.provider_list_state.select(Some(self.selected_provider));
                     self.update_filtered_models();
+                    self.model_list_state.select(Some(self.selected_model + 1)); // +1 for header
                 }
             }
             Message::NextModel => {
                 if self.selected_model < self.filtered_models.len().saturating_sub(1) {
                     self.selected_model += 1;
+                    self.model_list_state.select(Some(self.selected_model + 1)); // +1 for header
                 }
             }
             Message::PrevModel => {
                 if self.selected_model > 0 {
                     self.selected_model -= 1;
+                    self.model_list_state.select(Some(self.selected_model + 1)); // +1 for header
                 }
             }
             Message::SwitchFocus => {
@@ -120,16 +137,19 @@ impl App {
                 self.search_query.push(c);
                 self.selected_model = 0;
                 self.update_filtered_models();
+                self.model_list_state.select(Some(self.selected_model + 1)); // +1 for header
             }
             Message::SearchBackspace => {
                 self.search_query.pop();
                 self.selected_model = 0;
                 self.update_filtered_models();
+                self.model_list_state.select(Some(self.selected_model + 1)); // +1 for header
             }
             Message::ClearSearch => {
                 self.search_query.clear();
                 self.selected_model = 0;
                 self.update_filtered_models();
+                self.model_list_state.select(Some(self.selected_model + 1)); // +1 for header
             }
             // Copy messages are handled in the main loop
             Message::CopyFull | Message::CopyModelId => {}

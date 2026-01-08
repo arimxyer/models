@@ -8,7 +8,7 @@ use ratatui::{
 
 use super::app::{App, Focus, Mode};
 
-pub fn draw(f: &mut Frame, app: &App) {
+pub fn draw(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -33,7 +33,7 @@ fn draw_header(f: &mut Frame, area: Rect, _app: &App) {
     f.render_widget(header, area);
 }
 
-fn draw_main(f: &mut Frame, area: Rect, app: &App) {
+fn draw_main(f: &mut Frame, area: Rect, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(25), Constraint::Percentage(75)])
@@ -43,7 +43,7 @@ fn draw_main(f: &mut Frame, area: Rect, app: &App) {
     draw_models(f, chunks[1], app);
 }
 
-fn draw_providers(f: &mut Frame, area: Rect, app: &App) {
+fn draw_providers(f: &mut Frame, area: Rect, app: &mut App) {
     let is_focused = app.focus == Focus::Providers;
     let border_style = if is_focused {
         Style::default().fg(Color::Cyan)
@@ -55,28 +55,14 @@ fn draw_providers(f: &mut Frame, area: Rect, app: &App) {
     let mut items: Vec<ListItem> = Vec::with_capacity(app.providers.len() + 1);
 
     // "All" option
-    let all_style = if app.selected_provider == 0 {
-        Style::default()
-            .fg(Color::Yellow)
-            .add_modifier(Modifier::BOLD)
-    } else {
-        Style::default().fg(Color::Green)
-    };
+    let all_style = Style::default().fg(Color::Green);
     let all_text = format!("All ({})", app.total_model_count());
     items.push(ListItem::new(all_text).style(all_style));
 
     // Individual providers
-    for (i, (id, provider)) in app.providers.iter().enumerate() {
-        let style = if i + 1 == app.selected_provider {
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD)
-        } else {
-            Style::default()
-        };
-
+    for (_i, (id, provider)) in app.providers.iter().enumerate() {
         let text = format!("{} ({})", id, provider.models.len());
-        items.push(ListItem::new(text).style(style));
+        items.push(ListItem::new(text));
     }
 
     let list = List::new(items)
@@ -86,12 +72,17 @@ fn draw_providers(f: &mut Frame, area: Rect, app: &App) {
                 .border_style(border_style)
                 .title(" Providers "),
         )
+        .highlight_style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )
         .highlight_symbol("> ");
 
-    f.render_widget(list, area);
+    f.render_stateful_widget(list, area, &mut app.provider_list_state);
 }
 
-fn draw_models(f: &mut Frame, area: Rect, app: &App) {
+fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
     let is_focused = app.focus == Focus::Models;
     let border_style = if is_focused {
         Style::default().fg(Color::Cyan)
@@ -123,15 +114,7 @@ fn draw_models(f: &mut Frame, area: Rect, app: &App) {
     items.push(ListItem::new(header_text).style(header_style));
 
     // Model rows
-    for (i, entry) in models.iter().enumerate() {
-        let style = if i == app.selected_model {
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD)
-        } else {
-            Style::default()
-        };
-
+    for entry in models.iter() {
         let cost = entry.model.cost_str();
         let ctx = entry.model.context_str();
         let text = if show_provider_col {
@@ -150,7 +133,7 @@ fn draw_models(f: &mut Frame, area: Rect, app: &App) {
                 ctx
             )
         };
-        items.push(ListItem::new(text).style(style));
+        items.push(ListItem::new(text));
     }
 
     let title = if app.search_query.is_empty() {
@@ -159,14 +142,21 @@ fn draw_models(f: &mut Frame, area: Rect, app: &App) {
         format!(" Models ({}) [filter: {}] ", models.len(), app.search_query)
     };
 
-    let list = List::new(items).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .border_style(border_style)
-            .title(title),
-    );
+    let list = List::new(items)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(border_style)
+                .title(title),
+        )
+        .highlight_style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol("> ");
 
-    f.render_widget(list, area);
+    f.render_stateful_widget(list, area, &mut app.model_list_state);
 }
 
 fn draw_detail(f: &mut Frame, area: Rect, app: &App) {

@@ -58,7 +58,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()> 
             }
         }
 
-        terminal.draw(|f| ui::draw(f, app))?;
+        terminal.draw(|f| ui::draw(f, app))?;  // app is &mut App
 
         if let Some(msg) = event::handle_events(app)? {
             match msg {
