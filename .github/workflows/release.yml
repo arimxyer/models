@@ -111,3 +111,138 @@ jobs:
 
       - name: Publish
         run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  update-homebrew:
+    name: Update Homebrew Tap
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Calculate SHA256 hashes
+        id: hashes
+        run: |
+          echo "x86_64_apple=$(sha256sum artifacts/models-x86_64-apple-darwin/models-x86_64-apple-darwin.tar.gz | cut -d ' ' -f1)" >> $GITHUB_OUTPUT
+          echo "aarch64_apple=$(sha256sum artifacts/models-aarch64-apple-darwin/models-aarch64-apple-darwin.tar.gz | cut -d ' ' -f1)" >> $GITHUB_OUTPUT
+          echo "x86_64_linux=$(sha256sum artifacts/models-x86_64-unknown-linux-gnu/models-x86_64-unknown-linux-gnu.tar.gz | cut -d ' ' -f1)" >> $GITHUB_OUTPUT
+          echo "aarch64_linux=$(sha256sum artifacts/models-aarch64-unknown-linux-gnu/models-aarch64-unknown-linux-gnu.tar.gz | cut -d ' ' -f1)" >> $GITHUB_OUTPUT
+
+      - name: Update Homebrew formula
+        env:
+          GH_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+
+          git clone https://x-access-token:${GH_TOKEN}@github.com/arimxyer/homebrew-tap.git
+          cd homebrew-tap
+
+          cat > Formula/models.rb << 'EOF'
+          # typed: false
+          # frozen_string_literal: true
+
+          class Models < Formula
+            desc "Fast CLI and TUI for browsing AI model information from models.dev"
+            homepage "https://github.com/arimxyer/models"
+            version "VERSION_PLACEHOLDER"
+            license "MIT"
+
+            on_macos do
+              if Hardware::CPU.intel?
+                url "https://github.com/arimxyer/models/releases/download/vVERSION_PLACEHOLDER/models-x86_64-apple-darwin.tar.gz"
+                sha256 "HASH_X86_64_APPLE"
+
+                def install
+                  bin.install "models"
+                end
+              end
+              if Hardware::CPU.arm?
+                url "https://github.com/arimxyer/models/releases/download/vVERSION_PLACEHOLDER/models-aarch64-apple-darwin.tar.gz"
+                sha256 "HASH_AARCH64_APPLE"
+
+                def install
+                  bin.install "models"
+                end
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.intel? && Hardware::CPU.is_64_bit?
+                url "https://github.com/arimxyer/models/releases/download/vVERSION_PLACEHOLDER/models-x86_64-unknown-linux-gnu.tar.gz"
+                sha256 "HASH_X86_64_LINUX"
+                def install
+                  bin.install "models"
+                end
+              end
+              if Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
+                url "https://github.com/arimxyer/models/releases/download/vVERSION_PLACEHOLDER/models-aarch64-unknown-linux-gnu.tar.gz"
+                sha256 "HASH_AARCH64_LINUX"
+                def install
+                  bin.install "models"
+                end
+              end
+            end
+          end
+          EOF
+
+          sed -i "s/VERSION_PLACEHOLDER/${VERSION}/g" Formula/models.rb
+          sed -i "s/HASH_X86_64_APPLE/${{ steps.hashes.outputs.x86_64_apple }}/g" Formula/models.rb
+          sed -i "s/HASH_AARCH64_APPLE/${{ steps.hashes.outputs.aarch64_apple }}/g" Formula/models.rb
+          sed -i "s/HASH_X86_64_LINUX/${{ steps.hashes.outputs.x86_64_linux }}/g" Formula/models.rb
+          sed -i "s/HASH_AARCH64_LINUX/${{ steps.hashes.outputs.aarch64_linux }}/g" Formula/models.rb
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/models.rb
+          git commit -m "Update models to ${VERSION}"
+          git push
+
+  update-scoop:
+    name: Update Scoop Bucket
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Calculate SHA256 hash
+        id: hash
+        run: |
+          echo "windows=$(sha256sum artifacts/models-x86_64-pc-windows-msvc/models-x86_64-pc-windows-msvc.zip | cut -d ' ' -f1)" >> $GITHUB_OUTPUT
+
+      - name: Update Scoop manifest
+        env:
+          GH_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+
+          git clone https://x-access-token:${GH_TOKEN}@github.com/arimxyer/scoop-bucket.git
+          cd scoop-bucket
+
+          cat > bucket/models.json << EOF
+          {
+              "version": "${VERSION}",
+              "architecture": {
+                  "64bit": {
+                      "url": "https://github.com/arimxyer/models/releases/download/v${VERSION}/models-x86_64-pc-windows-msvc.zip",
+                      "bin": [
+                          "models.exe"
+                      ],
+                      "hash": "${{ steps.hash.outputs.windows }}"
+                  }
+              },
+              "homepage": "https://github.com/arimxyer/models",
+              "license": "MIT",
+              "description": "Fast CLI and TUI for browsing AI model information from models.dev"
+          }
+          EOF
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add bucket/models.json
+          git commit -m "Update models to ${VERSION}"
+          git push

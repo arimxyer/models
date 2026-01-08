@@ -17,7 +17,7 @@ Quickly look up context windows, pricing, capabilities, and more for 2000+ model
 ### Cargo (from crates.io)
 
 ```bash
-cargo install models
+cargo install modelsdev
 ```
 
 ### Homebrew (macOS/Linux)

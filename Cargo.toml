@@ -1,5 +1,5 @@
 [package]
-name = "models"
+name = "modelsdev"
 version = "0.1.0"
 edition = "2021"
 description = "CLI/TUI tool for querying AI model information from models.dev"
@@ -8,6 +8,10 @@ repository = "https://github.com/arimxyer/models"
 readme = "README.md"
 keywords = ["cli", "tui", "ai", "models", "llm"]
 categories = ["command-line-utilities"]
+
+[[bin]]
+name = "models"
+path = "src/main.rs"
 
 [dependencies]
 # CLI
