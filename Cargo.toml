@@ -1,0 +1,26 @@
+[package]
+name = "models"
+version = "0.1.0"
+edition = "2021"
+description = "CLI/TUI tool for querying AI model information from models.dev"
+
+[dependencies]
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# HTTP
+reqwest = { version = "0.12", features = ["json", "blocking"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# TUI
+ratatui = "0.29"
+crossterm = "0.28"
+
+# Error handling
+anyhow = "1"
+
+# Formatting
+comfy-table = "7"
