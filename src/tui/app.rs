@@ -262,14 +262,14 @@ impl App {
             }
             SortOrder::ReleaseDate => {
                 // Sort by release date descending (newest first), None values last
-                entries.sort_by(|a, b| {
-                    match (&b.model.release_date, &a.model.release_date) {
+                entries.sort_by(
+                    |a, b| match (&b.model.release_date, &a.model.release_date) {
                         (Some(b_date), Some(a_date)) => b_date.cmp(a_date),
                         (Some(_), None) => std::cmp::Ordering::Less,
                         (None, Some(_)) => std::cmp::Ordering::Greater,
                         (None, None) => a.id.cmp(&b.id),
-                    }
-                });
+                    },
+                );
             }
             SortOrder::Cost => {
                 // Sort by input cost ascending (cheapest first), None values last
@@ -277,9 +277,9 @@ impl App {
                     let a_cost = a.model.cost.as_ref().and_then(|c| c.input);
                     let b_cost = b.model.cost.as_ref().and_then(|c| c.input);
                     match (a_cost, b_cost) {
-                        (Some(a_val), Some(b_val)) => {
-                            a_val.partial_cmp(&b_val).unwrap_or(std::cmp::Ordering::Equal)
-                        }
+                        (Some(a_val), Some(b_val)) => a_val
+                            .partial_cmp(&b_val)
+                            .unwrap_or(std::cmp::Ordering::Equal),
                         (Some(_), None) => std::cmp::Ordering::Less,
                         (None, Some(_)) => std::cmp::Ordering::Greater,
                         (None, None) => a.id.cmp(&b.id),
