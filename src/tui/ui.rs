@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use super::app::{App, Focus, Mode};
+use super::app::{App, Focus, Mode, SortOrder};
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
@@ -133,10 +133,22 @@ fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
         items.push(ListItem::new(text));
     }
 
+    let sort_indicator = match app.sort_order {
+        SortOrder::Default => "",
+        SortOrder::ReleaseDate => " ↓date",
+        SortOrder::Cost => " ↑cost",
+        SortOrder::Context => " ↓ctx",
+    };
+
     let title = if app.search_query.is_empty() {
-        format!(" Models ({}) ", models.len())
+        format!(" Models ({}){} ", models.len(), sort_indicator)
     } else {
-        format!(" Models ({}) [filter: {}] ", models.len(), app.search_query)
+        format!(
+            " Models ({}) [filter: {}]{} ",
+            models.len(),
+            app.search_query,
+            sort_indicator
+        )
     };
 
     let list = List::new(items)
@@ -263,10 +275,10 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
             Span::raw("panel  "),
             Span::styled(" / ", Style::default().fg(Color::Yellow)),
             Span::raw("search  "),
+            Span::styled(" s ", Style::default().fg(Color::Yellow)),
+            Span::raw("sort  "),
             Span::styled(" c ", Style::default().fg(Color::Yellow)),
             Span::raw("copy  "),
-            Span::styled(" C ", Style::default().fg(Color::Yellow)),
-            Span::raw("copy id  "),
             Span::styled(" q ", Style::default().fg(Color::Yellow)),
             Span::raw("quit"),
         ]),

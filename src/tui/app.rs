@@ -14,6 +14,26 @@ pub enum Mode {
     Search,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SortOrder {
+    #[default]
+    Default,
+    ReleaseDate,
+    Cost,
+    Context,
+}
+
+impl SortOrder {
+    pub fn next(self) -> Self {
+        match self {
+            SortOrder::Default => SortOrder::ReleaseDate,
+            SortOrder::ReleaseDate => SortOrder::Cost,
+            SortOrder::Cost => SortOrder::Context,
+            SortOrder::Context => SortOrder::Default,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum Message {
     Quit,
@@ -29,6 +49,7 @@ pub enum Message {
     ClearSearch,
     CopyFull,    // Copy provider/model-id
     CopyModelId, // Copy just model-id
+    CycleSort,   // Cycle through sort options
 }
 
 #[derive(Debug, Clone)]
@@ -47,6 +68,7 @@ pub struct App {
     pub model_list_state: ListState,
     pub focus: Focus,
     pub mode: Mode,
+    pub sort_order: SortOrder,
     pub search_query: String,
     pub status_message: Option<String>,
     filtered_models: Vec<ModelEntry>,
@@ -70,6 +92,7 @@ impl App {
             model_list_state,
             focus: Focus::Providers,
             mode: Mode::Normal,
+            sort_order: SortOrder::Default,
             search_query: String::new(),
             status_message: None,
             filtered_models: Vec::new(),
@@ -159,6 +182,12 @@ impl App {
             }
             // Copy messages are handled in the main loop
             Message::CopyFull | Message::CopyModelId => {}
+            Message::CycleSort => {
+                self.sort_order = self.sort_order.next();
+                self.selected_model = 0;
+                self.update_filtered_models();
+                self.model_list_state.select(Some(self.selected_model + 1)); // +1 for header
+            }
         }
         true
     }
@@ -191,7 +220,7 @@ impl App {
                 })
                 .collect();
 
-            entries.sort_by(|a, b| a.provider_id.cmp(&b.provider_id).then(a.id.cmp(&b.id)));
+            self.sort_entries(&mut entries);
             entries
         } else {
             // Show models for selected provider only
@@ -217,12 +246,60 @@ impl App {
                     })
                     .collect();
 
-                entries.sort_by(|a, b| a.id.cmp(&b.id));
+                self.sort_entries(&mut entries);
                 entries
             } else {
                 Vec::new()
             }
         };
+    }
+
+    fn sort_entries(&self, entries: &mut [ModelEntry]) {
+        match self.sort_order {
+            SortOrder::Default => {
+                // Sort by provider, then model id (alphabetical)
+                entries.sort_by(|a, b| a.provider_id.cmp(&b.provider_id).then(a.id.cmp(&b.id)));
+            }
+            SortOrder::ReleaseDate => {
+                // Sort by release date descending (newest first), None values last
+                entries.sort_by(|a, b| {
+                    match (&b.model.release_date, &a.model.release_date) {
+                        (Some(b_date), Some(a_date)) => b_date.cmp(a_date),
+                        (Some(_), None) => std::cmp::Ordering::Less,
+                        (None, Some(_)) => std::cmp::Ordering::Greater,
+                        (None, None) => a.id.cmp(&b.id),
+                    }
+                });
+            }
+            SortOrder::Cost => {
+                // Sort by input cost ascending (cheapest first), None values last
+                entries.sort_by(|a, b| {
+                    let a_cost = a.model.cost.as_ref().and_then(|c| c.input);
+                    let b_cost = b.model.cost.as_ref().and_then(|c| c.input);
+                    match (a_cost, b_cost) {
+                        (Some(a_val), Some(b_val)) => {
+                            a_val.partial_cmp(&b_val).unwrap_or(std::cmp::Ordering::Equal)
+                        }
+                        (Some(_), None) => std::cmp::Ordering::Less,
+                        (None, Some(_)) => std::cmp::Ordering::Greater,
+                        (None, None) => a.id.cmp(&b.id),
+                    }
+                });
+            }
+            SortOrder::Context => {
+                // Sort by context size descending (largest first), None values last
+                entries.sort_by(|a, b| {
+                    let a_ctx = a.model.limit.as_ref().and_then(|l| l.context);
+                    let b_ctx = b.model.limit.as_ref().and_then(|l| l.context);
+                    match (b_ctx, a_ctx) {
+                        (Some(b_val), Some(a_val)) => b_val.cmp(&a_val),
+                        (Some(_), None) => std::cmp::Ordering::Less,
+                        (None, Some(_)) => std::cmp::Ordering::Greater,
+                        (None, None) => a.id.cmp(&b.id),
+                    }
+                });
+            }
+        }
     }
 
     pub fn current_model(&self) -> Option<&ModelEntry> {

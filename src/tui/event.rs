@@ -50,6 +50,9 @@ fn handle_normal_mode(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Opti
         KeyCode::Char('/') => Some(Message::EnterSearch),
         KeyCode::Esc => Some(Message::ClearSearch),
 
+        // Sort
+        KeyCode::Char('s') => Some(Message::CycleSort),
+
         _ => None,
     }
 }
