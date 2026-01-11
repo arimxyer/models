@@ -71,6 +71,7 @@ models
 | `Tab` | Switch panels |
 | `/` | Enter search mode |
 | `Esc` | Clear search / exit search mode |
+| `s` | Cycle sort order (name, date, cost, context) |
 | `c` | Copy `provider/model-id` to clipboard |
 | `C` | Copy `model-id` to clipboard |
 | `q` | Quit |
