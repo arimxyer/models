@@ -72,6 +72,9 @@ models
 | `/` | Enter search mode |
 | `Esc` | Clear search / exit search mode |
 | `s` | Cycle sort order (name, date, cost, context) |
+| `1` | Toggle filter: reasoning models only |
+| `2` | Toggle filter: tool-calling models only |
+| `3` | Toggle filter: open weights only |
 | `c` | Copy `provider/model-id` to clipboard |
 | `C` | Copy `model-id` to clipboard |
 | `q` | Quit |
