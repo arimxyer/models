@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use super::app::{App, Focus, Mode, SortOrder};
+use super::app::{App, Filters, Focus, Mode, SortOrder};
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
@@ -140,13 +140,30 @@ fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
         SortOrder::Context => " ↓ctx",
     };
 
-    let title = if app.search_query.is_empty() {
+    let filter_indicator = format_filters(&app.filters);
+
+    let title = if app.search_query.is_empty() && filter_indicator.is_empty() {
         format!(" Models ({}){} ", models.len(), sort_indicator)
-    } else {
+    } else if app.search_query.is_empty() {
         format!(
-            " Models ({}) [filter: {}]{} ",
+            " Models ({}){} [{}] ",
+            models.len(),
+            sort_indicator,
+            filter_indicator
+        )
+    } else if filter_indicator.is_empty() {
+        format!(
+            " Models ({}) [{}]{} ",
             models.len(),
             app.search_query,
+            sort_indicator
+        )
+    } else {
+        format!(
+            " Models ({}) [{}] [{}]{} ",
+            models.len(),
+            app.search_query,
+            filter_indicator,
             sort_indicator
         )
     };
@@ -271,12 +288,12 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
         Mode::Normal => Line::from(vec![
             Span::styled(" j/k ", Style::default().fg(Color::Yellow)),
             Span::raw("nav  "),
-            Span::styled(" h/l ", Style::default().fg(Color::Yellow)),
-            Span::raw("panel  "),
             Span::styled(" / ", Style::default().fg(Color::Yellow)),
             Span::raw("search  "),
             Span::styled(" s ", Style::default().fg(Color::Yellow)),
             Span::raw("sort  "),
+            Span::styled(" 1/2/3 ", Style::default().fg(Color::Yellow)),
+            Span::raw("filter  "),
             Span::styled(" c ", Style::default().fg(Color::Yellow)),
             Span::raw("copy  "),
             Span::styled(" q ", Style::default().fg(Color::Yellow)),
@@ -302,4 +319,18 @@ fn truncate(s: &str, max_len: usize) -> String {
     } else {
         format!("{}...", &s[..max_len.saturating_sub(3)])
     }
+}
+
+fn format_filters(filters: &Filters) -> String {
+    let mut active = Vec::new();
+    if filters.reasoning {
+        active.push("reasoning");
+    }
+    if filters.tools {
+        active.push("tools");
+    }
+    if filters.open_weights {
+        active.push("open");
+    }
+    active.join(", ")
 }

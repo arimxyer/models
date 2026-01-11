@@ -53,6 +53,11 @@ fn handle_normal_mode(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Opti
         // Sort
         KeyCode::Char('s') => Some(Message::CycleSort),
 
+        // Filters
+        KeyCode::Char('1') => Some(Message::ToggleReasoning),
+        KeyCode::Char('2') => Some(Message::ToggleTools),
+        KeyCode::Char('3') => Some(Message::ToggleOpenWeights),
+
         _ => None,
     }
 }

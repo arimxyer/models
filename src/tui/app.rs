@@ -34,6 +34,13 @@ impl SortOrder {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Filters {
+    pub reasoning: bool,
+    pub tools: bool,
+    pub open_weights: bool,
+}
+
 #[derive(Debug)]
 pub enum Message {
     Quit,
@@ -47,9 +54,12 @@ pub enum Message {
     SearchInput(char),
     SearchBackspace,
     ClearSearch,
-    CopyFull,    // Copy provider/model-id
-    CopyModelId, // Copy just model-id
-    CycleSort,   // Cycle through sort options
+    CopyFull,          // Copy provider/model-id
+    CopyModelId,       // Copy just model-id
+    CycleSort,         // Cycle through sort options
+    ToggleReasoning,   // Toggle reasoning filter
+    ToggleTools,       // Toggle tools filter
+    ToggleOpenWeights, // Toggle open weights filter
 }
 
 #[derive(Debug, Clone)]
@@ -69,6 +79,7 @@ pub struct App {
     pub focus: Focus,
     pub mode: Mode,
     pub sort_order: SortOrder,
+    pub filters: Filters,
     pub search_query: String,
     pub status_message: Option<String>,
     filtered_models: Vec<ModelEntry>,
@@ -93,6 +104,7 @@ impl App {
             focus: Focus::Providers,
             mode: Mode::Normal,
             sort_order: SortOrder::Default,
+            filters: Filters::default(),
             search_query: String::new(),
             status_message: None,
             filtered_models: Vec::new(),
@@ -188,6 +200,37 @@ impl App {
                 self.update_filtered_models();
                 self.model_list_state.select(Some(self.selected_model + 1)); // +1 for header
             }
+            Message::ToggleReasoning => {
+                self.filters.reasoning = !self.filters.reasoning;
+                self.selected_model = 0;
+                self.update_filtered_models();
+                self.model_list_state.select(Some(self.selected_model + 1));
+            }
+            Message::ToggleTools => {
+                self.filters.tools = !self.filters.tools;
+                self.selected_model = 0;
+                self.update_filtered_models();
+                self.model_list_state.select(Some(self.selected_model + 1));
+            }
+            Message::ToggleOpenWeights => {
+                self.filters.open_weights = !self.filters.open_weights;
+                self.selected_model = 0;
+                self.update_filtered_models();
+                self.model_list_state.select(Some(self.selected_model + 1));
+            }
+        }
+        true
+    }
+
+    fn passes_filters(&self, model: &Model) -> bool {
+        if self.filters.reasoning && !model.reasoning {
+            return false;
+        }
+        if self.filters.tools && !model.tool_call {
+            return false;
+        }
+        if self.filters.open_weights && !model.open_weights {
+            return false;
         }
         true
     }
@@ -202,12 +245,12 @@ impl App {
                 .iter()
                 .flat_map(|(provider_id, provider)| {
                     provider.models.iter().filter_map(|(model_id, model)| {
-                        let matches = query_lower.is_empty()
+                        let search_matches = query_lower.is_empty()
                             || model_id.to_lowercase().contains(&query_lower)
                             || model.name.to_lowercase().contains(&query_lower)
                             || provider_id.to_lowercase().contains(&query_lower);
 
-                        if matches {
+                        if search_matches && self.passes_filters(model) {
                             Some(ModelEntry {
                                 id: model_id.clone(),
                                 model: model.clone(),
@@ -230,11 +273,11 @@ impl App {
                     .models
                     .iter()
                     .filter_map(|(model_id, model)| {
-                        let matches = query_lower.is_empty()
+                        let search_matches = query_lower.is_empty()
                             || model_id.to_lowercase().contains(&query_lower)
                             || model.name.to_lowercase().contains(&query_lower);
 
-                        if matches {
+                        if search_matches && self.passes_filters(model) {
                             Some(ModelEntry {
                                 id: model_id.clone(),
                                 model: model.clone(),
