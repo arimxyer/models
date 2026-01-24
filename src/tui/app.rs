@@ -48,6 +48,10 @@ pub enum Message {
     PrevProvider,
     NextModel,
     PrevModel,
+    SelectFirstProvider,
+    SelectLastProvider,
+    SelectFirstModel,
+    SelectLastModel,
     SwitchFocus,
     EnterSearch,
     ExitSearch,
@@ -160,6 +164,34 @@ impl App {
                     self.selected_model -= 1;
                     self.model_list_state.select(Some(self.selected_model + 1));
                     // +1 for header
+                }
+            }
+            Message::SelectFirstProvider => {
+                self.selected_provider = 0;
+                self.selected_model = 0;
+                self.provider_list_state
+                    .select(Some(self.selected_provider));
+                self.update_filtered_models();
+                self.model_list_state.select(Some(self.selected_model + 1));
+            }
+            Message::SelectLastProvider => {
+                self.selected_provider = self.provider_list_len().saturating_sub(1);
+                self.selected_model = 0;
+                self.provider_list_state
+                    .select(Some(self.selected_provider));
+                self.update_filtered_models();
+                self.model_list_state.select(Some(self.selected_model + 1));
+            }
+            Message::SelectFirstModel => {
+                if self.selected_model > 0 {
+                    self.selected_model = 0;
+                    self.model_list_state.select(Some(self.selected_model + 1));
+                }
+            }
+            Message::SelectLastModel => {
+                if self.selected_model < self.filtered_models.len().saturating_sub(1) {
+                    self.selected_model = self.filtered_models.len().saturating_sub(1);
+                    self.model_list_state.select(Some(self.selected_model + 1));
                 }
             }
             Message::SwitchFocus => {

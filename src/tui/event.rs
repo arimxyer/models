@@ -42,9 +42,17 @@ fn handle_normal_mode(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Opti
             Focus::Providers => Some(Message::PrevProvider),
             Focus::Models => Some(Message::PrevModel),
         },
+        KeyCode::Char('g') => match app.focus {
+            Focus::Providers => Some(Message::SelectFirstProvider),
+            Focus::Models => Some(Message::SelectFirstModel),
+        },
+        KeyCode::Char('G') => match app.focus {
+            Focus::Providers => Some(Message::SelectLastProvider),
+            Focus::Models => Some(Message::SelectLastModel),
+        },
         KeyCode::Char('h') | KeyCode::Left => Some(Message::SwitchFocus),
         KeyCode::Char('l') | KeyCode::Right => Some(Message::SwitchFocus),
-        KeyCode::Tab => Some(Message::SwitchFocus),
+        KeyCode::Tab | KeyCode::BackTab => Some(Message::SwitchFocus),
 
         // Search
         KeyCode::Char('/') => Some(Message::EnterSearch),
