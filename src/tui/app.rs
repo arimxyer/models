@@ -52,6 +52,10 @@ pub enum Message {
     SelectLastProvider,
     SelectFirstModel,
     SelectLastModel,
+    PageDownProvider,
+    PageUpProvider,
+    PageDownModel,
+    PageUpModel,
     SwitchFocus,
     EnterSearch,
     ExitSearch,
@@ -174,6 +178,38 @@ impl App {
             Message::SelectLastModel => {
                 if self.selected_model < self.filtered_models.len().saturating_sub(1) {
                     self.selected_model = self.filtered_models.len().saturating_sub(1);
+                    self.model_list_state.select(Some(self.selected_model + 1));
+                }
+            }
+            Message::PageDownProvider => {
+                let page_size = 10;
+                let last_index = self.provider_list_len().saturating_sub(1);
+                let next = (self.selected_provider + page_size).min(last_index);
+                if next != self.selected_provider {
+                    self.select_provider_at_index(next);
+                }
+            }
+            Message::PageUpProvider => {
+                let page_size = 10;
+                let next = self.selected_provider.saturating_sub(page_size);
+                if next != self.selected_provider {
+                    self.select_provider_at_index(next);
+                }
+            }
+            Message::PageDownModel => {
+                let page_size = 10;
+                let last_index = self.filtered_models.len().saturating_sub(1);
+                let next = (self.selected_model + page_size).min(last_index);
+                if next != self.selected_model {
+                    self.selected_model = next;
+                    self.model_list_state.select(Some(self.selected_model + 1));
+                }
+            }
+            Message::PageUpModel => {
+                let page_size = 10;
+                let next = self.selected_model.saturating_sub(page_size);
+                if next != self.selected_model {
+                    self.selected_model = next;
                     self.model_list_state.select(Some(self.selected_model + 1));
                 }
             }

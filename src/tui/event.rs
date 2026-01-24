@@ -50,6 +50,22 @@ fn handle_normal_mode(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Opti
             Focus::Providers => Some(Message::SelectLastProvider),
             Focus::Models => Some(Message::SelectLastModel),
         },
+        KeyCode::Char('d') if modifiers.contains(KeyModifiers::CONTROL) => match app.focus {
+            Focus::Providers => Some(Message::PageDownProvider),
+            Focus::Models => Some(Message::PageDownModel),
+        },
+        KeyCode::Char('u') if modifiers.contains(KeyModifiers::CONTROL) => match app.focus {
+            Focus::Providers => Some(Message::PageUpProvider),
+            Focus::Models => Some(Message::PageUpModel),
+        },
+        KeyCode::PageDown => match app.focus {
+            Focus::Providers => Some(Message::PageDownProvider),
+            Focus::Models => Some(Message::PageDownModel),
+        },
+        KeyCode::PageUp => match app.focus {
+            Focus::Providers => Some(Message::PageUpProvider),
+            Focus::Models => Some(Message::PageUpModel),
+        },
         KeyCode::Char('h') | KeyCode::Left => Some(Message::SwitchFocus),
         KeyCode::Char('l') | KeyCode::Right => Some(Message::SwitchFocus),
         KeyCode::Tab | KeyCode::BackTab => Some(Message::SwitchFocus),

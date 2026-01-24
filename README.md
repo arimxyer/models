@@ -66,9 +66,13 @@ models
 |-----|--------|
 | `j` / `↓` | Move down |
 | `k` / `↑` | Move up |
+| `g` | Jump to first item |
+| `G` | Jump to last item |
+| `Ctrl+d` / `PageDown` | Page down (10 items) |
+| `Ctrl+u` / `PageUp` | Page up (10 items) |
 | `h` / `←` | Switch to providers panel |
 | `l` / `→` | Switch to models panel |
-| `Tab` | Switch panels |
+| `Tab` / `Shift+Tab` | Switch panels |
 | `/` | Enter search mode |
 | `Esc` | Clear search / exit search mode |
 | `s` | Cycle sort order (name, date, cost, context) |
