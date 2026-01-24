@@ -132,24 +132,12 @@ impl App {
             Message::Quit => return false,
             Message::NextProvider => {
                 if self.selected_provider < self.provider_list_len().saturating_sub(1) {
-                    self.selected_provider += 1;
-                    self.selected_model = 0;
-                    self.provider_list_state
-                        .select(Some(self.selected_provider));
-                    self.update_filtered_models();
-                    self.model_list_state.select(Some(self.selected_model + 1));
-                    // +1 for header
+                    self.select_provider_at_index(self.selected_provider + 1);
                 }
             }
             Message::PrevProvider => {
                 if self.selected_provider > 0 {
-                    self.selected_provider -= 1;
-                    self.selected_model = 0;
-                    self.provider_list_state
-                        .select(Some(self.selected_provider));
-                    self.update_filtered_models();
-                    self.model_list_state.select(Some(self.selected_model + 1));
-                    // +1 for header
+                    self.select_provider_at_index(self.selected_provider - 1);
                 }
             }
             Message::NextModel => {
@@ -167,20 +155,15 @@ impl App {
                 }
             }
             Message::SelectFirstProvider => {
-                self.selected_provider = 0;
-                self.selected_model = 0;
-                self.provider_list_state
-                    .select(Some(self.selected_provider));
-                self.update_filtered_models();
-                self.model_list_state.select(Some(self.selected_model + 1));
+                if self.selected_provider > 0 {
+                    self.select_provider_at_index(0);
+                }
             }
             Message::SelectLastProvider => {
-                self.selected_provider = self.provider_list_len().saturating_sub(1);
-                self.selected_model = 0;
-                self.provider_list_state
-                    .select(Some(self.selected_provider));
-                self.update_filtered_models();
-                self.model_list_state.select(Some(self.selected_model + 1));
+                let last_index = self.provider_list_len().saturating_sub(1);
+                if self.selected_provider < last_index {
+                    self.select_provider_at_index(last_index);
+                }
             }
             Message::SelectFirstModel => {
                 if self.selected_model > 0 {
@@ -375,6 +358,16 @@ impl App {
                 });
             }
         }
+    }
+
+    fn select_provider_at_index(&mut self, index: usize) {
+        self.selected_provider = index;
+        self.selected_model = 0;
+        self.provider_list_state
+            .select(Some(self.selected_provider));
+        self.update_filtered_models();
+        self.model_list_state.select(Some(self.selected_model + 1));
+        // +1 for header
     }
 
     pub fn current_model(&self) -> Option<&ModelEntry> {
