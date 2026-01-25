@@ -289,33 +289,52 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
         return;
     }
 
-    let content = match app.mode {
-        Mode::Normal => Line::from(vec![
-            Span::styled(" ↑/↓ ", Style::default().fg(Color::Yellow)),
-            Span::raw("nav  "),
-            Span::styled(" / ", Style::default().fg(Color::Yellow)),
-            Span::raw("search  "),
-            Span::styled(" s ", Style::default().fg(Color::Yellow)),
-            Span::raw("sort  "),
-            Span::styled(" c ", Style::default().fg(Color::Yellow)),
-            Span::raw("copy  "),
-            Span::styled(" q ", Style::default().fg(Color::Yellow)),
-            Span::raw("quit  "),
-            Span::styled(" ? ", Style::default().fg(Color::Yellow)),
-            Span::raw("help"),
-        ]),
-        Mode::Search => Line::from(vec![
-            Span::styled(" Search: ", Style::default().fg(Color::Cyan)),
-            Span::raw(&app.search_query),
-            Span::styled("_", Style::default().add_modifier(Modifier::SLOW_BLINK)),
-            Span::raw("  "),
-            Span::styled(" Enter/Esc ", Style::default().fg(Color::Yellow)),
-            Span::raw("confirm"),
-        ]),
-    };
+    match app.mode {
+        Mode::Normal => {
+            // Split footer into left and right sections
+            let chunks = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Min(0), Constraint::Length(10)])
+                .split(area);
 
-    let paragraph = Paragraph::new(content);
-    f.render_widget(paragraph, area);
+            let left_content = Line::from(vec![
+                Span::styled(" q ", Style::default().fg(Color::Yellow)),
+                Span::raw("quit  "),
+                Span::styled(" ↑/↓ ", Style::default().fg(Color::Yellow)),
+                Span::raw("nav  "),
+                Span::styled(" Tab ", Style::default().fg(Color::Yellow)),
+                Span::raw("switch  "),
+                Span::styled(" / ", Style::default().fg(Color::Yellow)),
+                Span::raw("search  "),
+                Span::styled(" s ", Style::default().fg(Color::Yellow)),
+                Span::raw("sort  "),
+                Span::styled(" c ", Style::default().fg(Color::Yellow)),
+                Span::raw("copy"),
+            ]);
+
+            let right_content = Line::from(vec![
+                Span::styled(" ? ", Style::default().fg(Color::Yellow)),
+                Span::raw("help "),
+            ]);
+
+            f.render_widget(Paragraph::new(left_content), chunks[0]);
+            f.render_widget(
+                Paragraph::new(right_content).alignment(ratatui::layout::Alignment::Right),
+                chunks[1],
+            );
+        }
+        Mode::Search => {
+            let content = Line::from(vec![
+                Span::styled(" Search: ", Style::default().fg(Color::Cyan)),
+                Span::raw(&app.search_query),
+                Span::styled("_", Style::default().add_modifier(Modifier::SLOW_BLINK)),
+                Span::raw("  "),
+                Span::styled(" Enter/Esc ", Style::default().fg(Color::Yellow)),
+                Span::raw("confirm"),
+            ]);
+            f.render_widget(Paragraph::new(content), area);
+        }
+    };
 }
 
 fn truncate(s: &str, max_len: usize) -> String {
@@ -385,12 +404,8 @@ fn draw_help_popup(f: &mut Frame, scroll: u16) {
                 .add_modifier(Modifier::BOLD),
         )),
         Line::from(vec![
-            Span::styled("  h/←           ", Style::default().fg(Color::Yellow)),
-            Span::raw("Providers panel"),
-        ]),
-        Line::from(vec![
-            Span::styled("  l/→           ", Style::default().fg(Color::Yellow)),
-            Span::raw("Models panel"),
+            Span::styled("  h/←/l/→       ", Style::default().fg(Color::Yellow)),
+            Span::raw("Switch panels"),
         ]),
         Line::from(vec![
             Span::styled("  Tab           ", Style::default().fg(Color::Yellow)),
@@ -408,8 +423,12 @@ fn draw_help_popup(f: &mut Frame, scroll: u16) {
             Span::raw("Start search"),
         ]),
         Line::from(vec![
+            Span::styled("  Enter/Esc     ", Style::default().fg(Color::Yellow)),
+            Span::raw("Exit search mode"),
+        ]),
+        Line::from(vec![
             Span::styled("  Esc           ", Style::default().fg(Color::Yellow)),
-            Span::raw("Clear/exit search"),
+            Span::raw("Clear search (in normal mode)"),
         ]),
         Line::from(""),
         Line::from(Span::styled(
