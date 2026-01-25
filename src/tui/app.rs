@@ -68,6 +68,9 @@ pub enum Message {
     ToggleReasoning,   // Toggle reasoning filter
     ToggleTools,       // Toggle tools filter
     ToggleOpenWeights, // Toggle open weights filter
+    ToggleHelp,        // Toggle help popup
+    ScrollHelpUp,      // Scroll help popup up
+    ScrollHelpDown,    // Scroll help popup down
 }
 
 #[derive(Debug, Clone)]
@@ -90,6 +93,8 @@ pub struct App {
     pub filters: Filters,
     pub search_query: String,
     pub status_message: Option<String>,
+    pub show_help: bool,
+    pub help_scroll: u16,
     filtered_models: Vec<ModelEntry>,
 }
 
@@ -115,6 +120,8 @@ impl App {
             filters: Filters::default(),
             search_query: String::new(),
             status_message: None,
+            show_help: false,
+            help_scroll: 0,
             filtered_models: Vec::new(),
         };
 
@@ -268,6 +275,24 @@ impl App {
                 self.selected_model = 0;
                 self.update_filtered_models();
                 self.model_list_state.select(Some(self.selected_model + 1));
+            }
+            Message::ToggleHelp => {
+                self.show_help = !self.show_help;
+                if self.show_help {
+                    self.help_scroll = 0; // Reset scroll when opening
+                }
+            }
+            Message::ScrollHelpUp => {
+                self.help_scroll = self.help_scroll.saturating_sub(1);
+            }
+            Message::ScrollHelpDown => {
+                // Help content is 27 lines, cap scroll to prevent scrolling past content
+                const HELP_LINES: u16 = 27;
+                const MIN_VISIBLE: u16 = 5;
+                let max_scroll = HELP_LINES.saturating_sub(MIN_VISIBLE);
+                if self.help_scroll < max_scroll {
+                    self.help_scroll = self.help_scroll.saturating_add(1);
+                }
             }
         }
         true

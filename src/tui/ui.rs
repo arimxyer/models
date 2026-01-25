@@ -2,7 +2,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
     Frame,
 };
 
@@ -23,6 +23,11 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     draw_main(f, chunks[1], app);
     draw_detail(f, chunks[2], app);
     draw_footer(f, chunks[3], app);
+
+    // Draw help popup on top if visible
+    if app.show_help {
+        draw_help_popup(f, app.help_scroll);
+    }
 }
 
 fn draw_header(f: &mut Frame, area: Rect, _app: &App) {
@@ -286,12 +291,8 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
 
     let content = match app.mode {
         Mode::Normal => Line::from(vec![
-            Span::styled(" j/k ", Style::default().fg(Color::Yellow)),
+            Span::styled(" ↑/↓ ", Style::default().fg(Color::Yellow)),
             Span::raw("nav  "),
-            Span::styled(" g/G ", Style::default().fg(Color::Yellow)),
-            Span::raw("first/last  "),
-            Span::styled(" ^d/^u ", Style::default().fg(Color::Yellow)),
-            Span::raw("page  "),
             Span::styled(" / ", Style::default().fg(Color::Yellow)),
             Span::raw("search  "),
             Span::styled(" s ", Style::default().fg(Color::Yellow)),
@@ -299,7 +300,9 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
             Span::styled(" c ", Style::default().fg(Color::Yellow)),
             Span::raw("copy  "),
             Span::styled(" q ", Style::default().fg(Color::Yellow)),
-            Span::raw("quit"),
+            Span::raw("quit  "),
+            Span::styled(" ? ", Style::default().fg(Color::Yellow)),
+            Span::raw("help"),
         ]),
         Mode::Search => Line::from(vec![
             Span::styled(" Search: ", Style::default().fg(Color::Cyan)),
@@ -335,4 +338,151 @@ fn format_filters(filters: &Filters) -> String {
         active.push("open");
     }
     active.join(", ")
+}
+
+fn draw_help_popup(f: &mut Frame, scroll: u16) {
+    let area = centered_rect(50, 70, f.area());
+
+    // Clear the area behind the popup
+    f.render_widget(Clear, area);
+
+    let help_text = vec![
+        Line::from(Span::styled(
+            "Navigation",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )),
+        Line::from(vec![
+            Span::styled("  j/↓           ", Style::default().fg(Color::Yellow)),
+            Span::raw("Move down"),
+        ]),
+        Line::from(vec![
+            Span::styled("  k/↑           ", Style::default().fg(Color::Yellow)),
+            Span::raw("Move up"),
+        ]),
+        Line::from(vec![
+            Span::styled("  g             ", Style::default().fg(Color::Yellow)),
+            Span::raw("First item"),
+        ]),
+        Line::from(vec![
+            Span::styled("  G             ", Style::default().fg(Color::Yellow)),
+            Span::raw("Last item"),
+        ]),
+        Line::from(vec![
+            Span::styled("  Ctrl+d/PgDn   ", Style::default().fg(Color::Yellow)),
+            Span::raw("Page down"),
+        ]),
+        Line::from(vec![
+            Span::styled("  Ctrl+u/PgUp   ", Style::default().fg(Color::Yellow)),
+            Span::raw("Page up"),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(
+            "Panels",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )),
+        Line::from(vec![
+            Span::styled("  h/←           ", Style::default().fg(Color::Yellow)),
+            Span::raw("Providers panel"),
+        ]),
+        Line::from(vec![
+            Span::styled("  l/→           ", Style::default().fg(Color::Yellow)),
+            Span::raw("Models panel"),
+        ]),
+        Line::from(vec![
+            Span::styled("  Tab           ", Style::default().fg(Color::Yellow)),
+            Span::raw("Switch panels"),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(
+            "Search",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )),
+        Line::from(vec![
+            Span::styled("  /             ", Style::default().fg(Color::Yellow)),
+            Span::raw("Start search"),
+        ]),
+        Line::from(vec![
+            Span::styled("  Esc           ", Style::default().fg(Color::Yellow)),
+            Span::raw("Clear/exit search"),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(
+            "Filters & Sort",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )),
+        Line::from(vec![
+            Span::styled("  s             ", Style::default().fg(Color::Yellow)),
+            Span::raw("Cycle sort (name → date → cost → context)"),
+        ]),
+        Line::from(vec![
+            Span::styled("  1             ", Style::default().fg(Color::Yellow)),
+            Span::raw("Toggle reasoning filter"),
+        ]),
+        Line::from(vec![
+            Span::styled("  2             ", Style::default().fg(Color::Yellow)),
+            Span::raw("Toggle tools filter"),
+        ]),
+        Line::from(vec![
+            Span::styled("  3             ", Style::default().fg(Color::Yellow)),
+            Span::raw("Toggle open weights filter"),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(
+            "Other",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )),
+        Line::from(vec![
+            Span::styled("  c             ", Style::default().fg(Color::Yellow)),
+            Span::raw("Copy provider/model"),
+        ]),
+        Line::from(vec![
+            Span::styled("  C             ", Style::default().fg(Color::Yellow)),
+            Span::raw("Copy model only"),
+        ]),
+        Line::from(vec![
+            Span::styled("  q             ", Style::default().fg(Color::Yellow)),
+            Span::raw("Quit"),
+        ]),
+    ];
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan))
+        .title(" Help - press ? or Esc to close (j/k to scroll) ");
+
+    let paragraph = Paragraph::new(help_text)
+        .block(block)
+        .scroll((scroll, 0));
+    f.render_widget(paragraph, area);
+}
+
+/// Create a centered rect using percentage of the available area
+fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage((100 - percent_y) / 2),
+            Constraint::Percentage(percent_y),
+            Constraint::Percentage((100 - percent_y) / 2),
+        ])
+        .split(area);
+
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage((100 - percent_x) / 2),
+            Constraint::Percentage(percent_x),
+            Constraint::Percentage((100 - percent_x) / 2),
+        ])
+        .split(popup_layout[1])[1]
 }

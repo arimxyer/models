@@ -12,6 +12,17 @@ pub fn handle_events(app: &App) -> Result<Option<Message>> {
                 return Ok(None);
             }
 
+            // When help is showing, handle scroll and dismiss keys
+            if app.show_help {
+                let msg = match key.code {
+                    KeyCode::Char('?') | KeyCode::Esc => Some(Message::ToggleHelp),
+                    KeyCode::Char('j') | KeyCode::Down => Some(Message::ScrollHelpDown),
+                    KeyCode::Char('k') | KeyCode::Up => Some(Message::ScrollHelpUp),
+                    _ => None,
+                };
+                return Ok(msg);
+            }
+
             let msg = match app.mode {
                 Mode::Normal => handle_normal_mode(app, key.code, key.modifiers),
                 Mode::Search => handle_search_mode(key.code),
@@ -81,6 +92,9 @@ fn handle_normal_mode(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Opti
         KeyCode::Char('1') => Some(Message::ToggleReasoning),
         KeyCode::Char('2') => Some(Message::ToggleTools),
         KeyCode::Char('3') => Some(Message::ToggleOpenWeights),
+
+        // Help
+        KeyCode::Char('?') => Some(Message::ToggleHelp),
 
         _ => None,
     }

@@ -64,6 +64,7 @@ models
 
 | Key | Action |
 |-----|--------|
+| `?` | Show help popup |
 | `j` / `↓` | Move down |
 | `k` / `↑` | Move up |
 | `g` | Jump to first item |
