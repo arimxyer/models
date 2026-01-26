@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "last_scraped": null,
+  "scrape_source": null,
+  "agents": {
+    "claude-code": {
+      "name": "Claude Code",
+      "repo": "anthropics/claude-code",
+      "categories": ["cli"],
+      "installation_method": "cli",
+      "pricing": {
+        "model": "usage",
+        "free_tier": false,
+        "usage_notes": "Pay per token via Anthropic API"
+      },
+      "supported_providers": ["anthropic"],
+      "platform_support": ["macos", "linux", "windows"],
+      "open_source": false,
+      "cli_binary": "claude",
+      "version_command": ["--version"],
+      "version_regex": "([0-9]+\\.[0-9]+\\.[0-9]+)",
+      "config_files": ["~/.claude/"],
+      "homepage": "https://claude.ai/code",
+      "docs": "https://docs.anthropic.com/en/docs/claude-code"
+    },
+    "aider": {
+      "name": "Aider",
+      "repo": "paul-gauthier/aider",
+      "categories": ["cli"],
+      "installation_method": "cli",
+      "pricing": {
+        "model": "free",
+        "free_tier": true,
+        "usage_notes": "Free tool, pay for underlying model API"
+      },
+      "supported_providers": ["openai", "anthropic", "openrouter", "ollama"],
+      "platform_support": ["macos", "linux", "windows"],
+      "open_source": true,
+      "cli_binary": "aider",
+      "version_command": ["--version"],
+      "version_regex": "aider v([0-9]+\\.[0-9]+\\.[0-9]+)",
+      "config_files": ["~/.aider.conf.yml", ".aider.conf.yml"],
+      "homepage": "https://aider.chat",
+      "docs": "https://aider.chat/docs"
+    },
+    "cursor": {
+      "name": "Cursor",
+      "repo": "getcursor/cursor",
+      "categories": ["ide"],
+      "installation_method": "ide",
+      "pricing": {
+        "model": "hybrid",
+        "subscription_price": 20.0,
+        "subscription_period": "monthly",
+        "free_tier": true,
+        "usage_notes": "Free tier with limits, Pro $20/mo"
+      },
+      "supported_providers": ["openai", "anthropic", "google"],
+      "platform_support": ["macos", "linux", "windows"],
+      "open_source": false,
+      "cli_binary": "cursor",
+      "version_command": ["--version"],
+      "version_regex": "([0-9]+\\.[0-9]+\\.[0-9]+)",
+      "config_files": [],
+      "homepage": "https://cursor.com",
+      "docs": "https://docs.cursor.com"
+    },
+    "windsurf": {
+      "name": "Windsurf",
+      "repo": "codeium/windsurf",
+      "categories": ["ide"],
+      "installation_method": "ide",
+      "pricing": {
+        "model": "hybrid",
+        "free_tier": true,
+        "usage_notes": "Free tier available, Pro subscription for more features"
+      },
+      "supported_providers": ["openai", "anthropic", "google"],
+      "platform_support": ["macos", "linux", "windows"],
+      "open_source": false,
+      "cli_binary": "windsurf",
+      "version_command": ["--version"],
+      "version_regex": "([0-9]+\\.[0-9]+\\.[0-9]+)",
+      "config_files": [],
+      "homepage": "https://windsurf.com",
+      "docs": "https://docs.windsurf.com"
+    },
+    "goose": {
+      "name": "Goose",
+      "repo": "block/goose",
+      "categories": ["cli"],
+      "installation_method": "cli",
+      "pricing": {
+        "model": "free",
+        "free_tier": true,
+        "usage_notes": "Free tool, pay for underlying model API"
+      },
+      "supported_providers": ["openai", "anthropic", "openrouter"],
+      "platform_support": ["macos", "linux", "windows"],
+      "open_source": true,
+      "cli_binary": "goose",
+      "version_command": ["--version"],
+      "version_regex": "([0-9]+\\.[0-9]+\\.[0-9]+)",
+      "config_files": ["~/.config/goose/"],
+      "homepage": "https://github.com/block/goose",
+      "docs": "https://block.github.io/goose/"
+    },
+    "zed": {
+      "name": "Zed",
+      "repo": "zed-industries/zed",
+      "categories": ["ide"],
+      "installation_method": "ide",
+      "pricing": {
+        "model": "hybrid",
+        "free_tier": true,
+        "usage_notes": "Free editor, pay for AI features"
+      },
+      "supported_providers": ["openai", "anthropic", "ollama"],
+      "platform_support": ["macos", "linux"],
+      "open_source": true,
+      "cli_binary": "zed",
+      "version_command": ["--version"],
+      "version_regex": "([0-9]+\\.[0-9]+\\.[0-9]+)",
+      "config_files": ["~/.config/zed/"],
+      "homepage": "https://zed.dev",
+      "docs": "https://zed.dev/docs"
+    }
+  }
+}
