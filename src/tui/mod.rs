@@ -1,3 +1,4 @@
+pub mod agents_app;
 mod app;
 mod event;
 mod ui;
