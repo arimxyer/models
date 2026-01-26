@@ -350,7 +350,7 @@ impl App {
             }
             Message::ScrollHelpDown => {
                 // Help content is 44 lines, cap scroll to prevent scrolling past content
-                const HELP_LINES: u16 = 45;
+                const HELP_LINES: u16 = 47;
                 const MIN_VISIBLE: u16 = 5;
                 let max_scroll = HELP_LINES.saturating_sub(MIN_VISIBLE);
                 if self.help_scroll < max_scroll {
