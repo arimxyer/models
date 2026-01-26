@@ -99,6 +99,10 @@ fn handle_normal_mode(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Opti
         // Help
         KeyCode::Char('?') => Some(Message::ToggleHelp),
 
+        // Tab navigation
+        KeyCode::Char('[') => Some(Message::PrevTab),
+        KeyCode::Char(']') => Some(Message::NextTab),
+
         _ => None,
     }
 }
