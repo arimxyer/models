@@ -111,18 +111,12 @@ pub enum Message {
     OpenAgentRepo,
     OpenAgentDocs,
     CopyAgentName,
-    // Picker modal messages (wired up in later tasks)
-    #[allow(dead_code)]
+    // Picker modal messages
     OpenPicker,
-    #[allow(dead_code)]
     ClosePicker,
-    #[allow(dead_code)]
     PickerNext,
-    #[allow(dead_code)]
     PickerPrev,
-    #[allow(dead_code)]
     PickerToggle,
-    #[allow(dead_code)]
     PickerSave,
 }
 

@@ -36,6 +36,15 @@ pub fn handle_events(app: &App) -> Result<Option<Message>> {
 }
 
 fn handle_normal_mode(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Option<Message> {
+    // Check for picker mode (intercepts before normal handling)
+    if app.current_tab == super::app::Tab::Agents {
+        if let Some(ref agents_app) = app.agents_app {
+            if agents_app.show_picker {
+                return handle_picker_keys(code);
+            }
+        }
+    }
+
     // Global keys (work on any tab)
     match code {
         KeyCode::Char('q') => return Some(Message::Quit),
@@ -148,6 +157,20 @@ fn handle_agents_keys(app: &App, code: KeyCode, _modifiers: KeyModifiers) -> Opt
         KeyCode::Char('2') => Some(Message::ToggleCliFilter),
         KeyCode::Char('3') => Some(Message::ToggleOpenSourceFilter),
 
+        // Picker
+        KeyCode::Char('a') => Some(Message::OpenPicker),
+
+        _ => None,
+    }
+}
+
+fn handle_picker_keys(code: KeyCode) -> Option<Message> {
+    match code {
+        KeyCode::Char('j') | KeyCode::Down => Some(Message::PickerNext),
+        KeyCode::Char('k') | KeyCode::Up => Some(Message::PickerPrev),
+        KeyCode::Char(' ') => Some(Message::PickerToggle),
+        KeyCode::Enter => Some(Message::PickerSave),
+        KeyCode::Esc => Some(Message::ClosePicker),
         _ => None,
     }
 }
