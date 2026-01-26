@@ -1,6 +1,7 @@
 mod agents;
 mod api;
 mod cli;
+mod config;
 mod data;
 mod tui;
 
