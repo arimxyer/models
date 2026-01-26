@@ -32,6 +32,11 @@ pub fn run() -> Result<()> {
     // Create app
     let mut app = app::App::new(providers, agents_file.as_ref(), config.as_ref());
 
+    // Refresh GitHub data for agents (blocking at startup, but fast with gh cli)
+    if let Some(ref mut agents_app) = app.agents_app {
+        agents_app.refresh_github_data(&app.github_client);
+    }
+
     // Main loop
     let result = run_app(&mut terminal, &mut app);
 
