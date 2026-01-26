@@ -61,12 +61,9 @@ pub struct AgentsApp {
     pub focus: AgentFocus,
     pub filters: AgentFilters,
     pub search_query: String,
-    // Picker modal state (for future add/remove functionality)
-    #[allow(dead_code)]
+    // Picker modal state
     pub show_picker: bool,
-    #[allow(dead_code)]
     pub picker_selected: usize,
-    #[allow(dead_code)]
     pub picker_changes: HashMap<String, bool>, // agent_id -> new tracked state
 }
 
@@ -265,8 +262,7 @@ impl AgentsApp {
         false
     }
 
-    // Picker modal methods (integrated in later tasks)
-    #[allow(dead_code)]
+    // Picker modal methods
     pub fn open_picker(&mut self) {
         self.show_picker = true;
         self.picker_selected = 0;
@@ -277,13 +273,11 @@ impl AgentsApp {
         }
     }
 
-    #[allow(dead_code)]
     pub fn close_picker(&mut self) {
         self.show_picker = false;
         self.picker_changes.clear();
     }
 
-    #[allow(dead_code)]
     pub fn picker_toggle_current(&mut self) {
         if let Some(entry) = self.entries.get(self.picker_selected) {
             let current = self.picker_changes.get(&entry.id).copied().unwrap_or(entry.tracked);
@@ -291,21 +285,18 @@ impl AgentsApp {
         }
     }
 
-    #[allow(dead_code)]
     pub fn picker_next(&mut self) {
         if self.picker_selected < self.entries.len().saturating_sub(1) {
             self.picker_selected += 1;
         }
     }
 
-    #[allow(dead_code)]
     pub fn picker_prev(&mut self) {
         if self.picker_selected > 0 {
             self.picker_selected -= 1;
         }
     }
 
-    #[allow(dead_code)]
     pub fn picker_save(&mut self, config: &mut Config) {
         for (agent_id, tracked) in &self.picker_changes {
             config.set_tracked(agent_id, *tracked);

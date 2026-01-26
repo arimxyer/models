@@ -145,11 +145,12 @@ pub struct App {
     pub current_tab: Tab,
     pub agents_app: Option<AgentsApp>,
     pub github_client: GitHubClient,
+    pub config: Config,
     filtered_models: Vec<ModelEntry>,
 }
 
 impl App {
-    pub fn new(providers_map: ProvidersMap, agents_file: Option<&AgentsFile>, config: Option<&Config>) -> Self {
+    pub fn new(providers_map: ProvidersMap, agents_file: Option<&AgentsFile>, config: Option<Config>) -> Self {
         let mut providers: Vec<(String, Provider)> = providers_map.into_iter().collect();
         providers.sort_by(|a, b| a.0.cmp(&b.0));
 
@@ -158,11 +159,8 @@ impl App {
         let mut model_list_state = ListState::default();
         model_list_state.select(Some(1)); // +1 for header row
 
-        let agents_app = match (agents_file, config) {
-            (Some(af), Some(cfg)) => Some(AgentsApp::new(af, cfg)),
-            (Some(af), None) => Some(AgentsApp::new(af, &Config::default())),
-            _ => None,
-        };
+        let config = config.unwrap_or_default();
+        let agents_app = agents_file.map(|af| AgentsApp::new(af, &config));
 
         let mut app = Self {
             providers,
@@ -181,6 +179,7 @@ impl App {
             current_tab: Tab::default(),
             agents_app,
             github_client: GitHubClient::new(),
+            config,
             filtered_models: Vec::new(),
         };
 
@@ -406,14 +405,35 @@ impl App {
             Message::OpenAgentRepo | Message::OpenAgentDocs | Message::CopyAgentName => {
                 // Handled in main loop
             }
-            // Picker messages - handled in main loop (Task 2.4)
-            Message::OpenPicker
-            | Message::ClosePicker
-            | Message::PickerNext
-            | Message::PickerPrev
-            | Message::PickerToggle
-            | Message::PickerSave => {
-                // Handled in main loop
+            Message::OpenPicker => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.open_picker();
+                }
+            }
+            Message::ClosePicker => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.close_picker();
+                }
+            }
+            Message::PickerNext => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.picker_next();
+                }
+            }
+            Message::PickerPrev => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.picker_prev();
+                }
+            }
+            Message::PickerToggle => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.picker_toggle_current();
+                }
+            }
+            Message::PickerSave => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.picker_save(&mut self.config);
+                }
             }
         }
         true

@@ -30,7 +30,7 @@ pub fn run() -> Result<()> {
     let mut terminal = Terminal::new(backend)?;
 
     // Create app
-    let mut app = app::App::new(providers, agents_file.as_ref(), config.as_ref());
+    let mut app = app::App::new(providers, agents_file.as_ref(), config);
 
     // Refresh GitHub data for agents (blocking at startup, but fast with gh cli)
     if let Some(ref mut agents_app) = app.agents_app {
