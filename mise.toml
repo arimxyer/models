@@ -20,7 +20,7 @@ run = "cargo fmt --check"
 
 [tasks.clippy]
 description = "Run clippy lints"
-run = "cargo clippy"
+run = "cargo clippy -- -D warnings"
 
 [tasks.test]
 description = "Run tests"
