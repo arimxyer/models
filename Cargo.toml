@@ -36,3 +36,6 @@ comfy-table = "7"
 
 # Clipboard
 arboard = "3"
+
+# Browser
+open = "5"

@@ -132,6 +132,20 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()> 
                         status_clear_time = Some(Instant::now());
                     }
                 }
+                Message::OpenProviderDoc => {
+                    if let Some(url) = app.get_provider_doc() {
+                        if open::that(&url).is_ok() {
+                            app.set_status(format!("Opened: {}", url));
+                            status_clear_time = Some(Instant::now());
+                        } else {
+                            app.set_status("Failed to open browser".to_string());
+                            status_clear_time = Some(Instant::now());
+                        }
+                    } else {
+                        app.set_status("No documentation URL available".to_string());
+                        status_clear_time = Some(Instant::now());
+                    }
+                }
                 _ => {
                     if !app.update(msg) {
                         return Ok(());

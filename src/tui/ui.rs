@@ -240,8 +240,8 @@ fn draw_provider_detail(f: &mut Frame, area: Rect, app: &App) {
                 ]),
                 Line::from(""),
                 Line::from(vec![
-                    Span::styled("D ", Style::default().fg(Color::Yellow)),
-                    Span::raw("copy docs  "),
+                    Span::styled("o ", Style::default().fg(Color::Yellow)),
+                    Span::raw("open docs - web  "),
                     Span::styled("A ", Style::default().fg(Color::Yellow)),
                     Span::raw("copy api"),
                 ]),
@@ -435,7 +435,7 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
                 Span::styled(" s ", Style::default().fg(Color::Yellow)),
                 Span::raw("sort  "),
                 Span::styled(" c ", Style::default().fg(Color::Yellow)),
-                Span::raw("copy"),
+                Span::raw("copy (prov/model)"),
             ]);
 
             let right_content = Line::from(vec![
@@ -581,7 +581,7 @@ fn draw_help_popup(f: &mut Frame, scroll: u16) {
         ]),
         Line::from(""),
         Line::from(Span::styled(
-            "Copy",
+            "Copy & Open",
             Style::default()
                 .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),
@@ -593,6 +593,10 @@ fn draw_help_popup(f: &mut Frame, scroll: u16) {
         Line::from(vec![
             Span::styled("  C             ", Style::default().fg(Color::Yellow)),
             Span::raw("Copy model only"),
+        ]),
+        Line::from(vec![
+            Span::styled("  o             ", Style::default().fg(Color::Yellow)),
+            Span::raw("Open provider docs in browser"),
         ]),
         Line::from(vec![
             Span::styled("  D             ", Style::default().fg(Color::Yellow)),

@@ -66,6 +66,7 @@ pub enum Message {
     CopyModelId,       // Copy just model-id
     CopyProviderDoc,   // Copy provider documentation URL
     CopyProviderApi,   // Copy provider API URL
+    OpenProviderDoc,   // Open provider documentation URL in browser
     CycleSort,         // Cycle through sort options
     ToggleReasoning,   // Toggle reasoning filter
     ToggleTools,       // Toggle tools filter
@@ -252,11 +253,12 @@ impl App {
                 self.update_filtered_models();
                 self.model_list_state.select(Some(self.selected_model + 1)); // +1 for header
             }
-            // Copy messages are handled in the main loop
+            // Copy and open messages are handled in the main loop
             Message::CopyFull
             | Message::CopyModelId
             | Message::CopyProviderDoc
-            | Message::CopyProviderApi => {}
+            | Message::CopyProviderApi
+            | Message::OpenProviderDoc => {}
             Message::CycleSort => {
                 self.sort_order = self.sort_order.next();
                 self.selected_model = 0;
@@ -292,7 +294,7 @@ impl App {
             }
             Message::ScrollHelpDown => {
                 // Help content is 34 lines, cap scroll to prevent scrolling past content
-                const HELP_LINES: u16 = 34;
+                const HELP_LINES: u16 = 35;
                 const MIN_VISIBLE: u16 = 5;
                 let max_scroll = HELP_LINES.saturating_sub(MIN_VISIBLE);
                 if self.help_scroll < max_scroll {
