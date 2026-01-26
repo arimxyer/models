@@ -885,6 +885,44 @@ fn draw_help_popup(f: &mut Frame, scroll: u16) {
         ]),
         Line::from(""),
         Line::from(Span::styled(
+            "Tabs",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )),
+        Line::from(vec![
+            Span::styled("  [             ", Style::default().fg(Color::Yellow)),
+            Span::raw("Previous tab"),
+        ]),
+        Line::from(vec![
+            Span::styled("  ]             ", Style::default().fg(Color::Yellow)),
+            Span::raw("Next tab"),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(
+            "Agents Tab",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )),
+        Line::from(vec![
+            Span::styled("  r             ", Style::default().fg(Color::Yellow)),
+            Span::raw("Open GitHub repo"),
+        ]),
+        Line::from(vec![
+            Span::styled("  1             ", Style::default().fg(Color::Yellow)),
+            Span::raw("Toggle installed filter"),
+        ]),
+        Line::from(vec![
+            Span::styled("  2             ", Style::default().fg(Color::Yellow)),
+            Span::raw("Toggle CLI filter"),
+        ]),
+        Line::from(vec![
+            Span::styled("  3             ", Style::default().fg(Color::Yellow)),
+            Span::raw("Toggle open source filter"),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(
             "Other",
             Style::default()
                 .fg(Color::Cyan)
