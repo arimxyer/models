@@ -9,6 +9,8 @@ pub fn load_agents() -> Result<AgentsFile> {
     serde_json::from_str(EMBEDDED_AGENTS).context("Failed to parse embedded agents.json")
 }
 
+/// Load agents from custom file path (for future override support)
+#[allow(dead_code)]
 pub fn load_agents_from_file(path: &Path) -> Result<AgentsFile> {
     let content = std::fs::read_to_string(path)
         .with_context(|| format!("Failed to read agents file: {}", path.display()))?;

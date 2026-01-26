@@ -54,7 +54,9 @@ pub struct Pricing {
     pub usage_notes: Option<String>,
 }
 
+/// GitHub API data - fetched live and cached (fields for future use)
 #[derive(Debug, Clone, Default)]
+#[allow(dead_code)]
 pub struct GitHubData {
     pub latest_version: Option<String>,
     pub release_date: Option<String>,
@@ -65,13 +67,17 @@ pub struct GitHubData {
     pub last_commit: Option<String>,
 }
 
+/// Installed CLI info - path field for future use
 #[derive(Debug, Clone, Default)]
+#[allow(dead_code)]
 pub struct InstalledInfo {
     pub version: Option<String>,
     pub path: Option<String>,
 }
 
+/// Agent entry combining static and runtime data
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct AgentEntry {
     pub id: String,
     pub agent: Agent,

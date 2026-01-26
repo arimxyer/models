@@ -1,6 +1,6 @@
 use ratatui::widgets::ListState;
 
-use crate::agents::{Agent, AgentEntry, AgentsFile, GitHubData, InstalledInfo, detect_installed};
+use crate::agents::{AgentEntry, AgentsFile, GitHubData, detect_installed};
 use crate::config::Config;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

@@ -68,6 +68,8 @@ impl Config {
         toml::from_str(&content).context("Failed to parse config.toml")
     }
 
+    /// Save config to disk (for future add/remove picker)
+    #[allow(dead_code)]
     pub fn save(&self) -> Result<()> {
         let path = match Self::config_path() {
             Some(p) => p,
@@ -93,6 +95,8 @@ impl Config {
         self.agents.tracked.is_empty() || self.agents.tracked.contains(agent_id)
     }
 
+    /// Set agent tracking status (for future add/remove picker)
+    #[allow(dead_code)]
     pub fn set_tracked(&mut self, agent_id: &str, tracked: bool) {
         if tracked {
             self.agents.tracked.insert(agent_id.to_string());
