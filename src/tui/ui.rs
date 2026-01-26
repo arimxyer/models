@@ -27,8 +27,8 @@ pub fn draw(f: &mut Frame, app: &mut App) {
             draw_details_row(f, chunks[2], app);
         }
         Tab::Agents => {
-            draw_agents_placeholder(f, chunks[1]);
-            draw_agents_detail_placeholder(f, chunks[2]);
+            draw_agents_main(f, chunks[1], app);
+            draw_agent_detail(f, chunks[2], app);
         }
     }
 
@@ -224,25 +224,257 @@ fn draw_details_row(f: &mut Frame, area: Rect, app: &App) {
     draw_model_detail(f, chunks[1], app);
 }
 
-fn draw_agents_placeholder(f: &mut Frame, area: Rect) {
+fn draw_agents_main(f: &mut Frame, area: Rect, app: &mut App) {
+    let agents_app = match &mut app.agents_app {
+        Some(a) => a,
+        None => {
+            let msg = Paragraph::new("Failed to load agents data")
+                .block(Block::default().borders(Borders::ALL).title(" Agents "));
+            f.render_widget(msg, area);
+            return;
+        }
+    };
+
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(25), Constraint::Percentage(75)])
         .split(area);
 
-    let categories = Paragraph::new("Agents tab coming soon...")
-        .block(Block::default().borders(Borders::ALL).title(" Categories "));
-    f.render_widget(categories, chunks[0]);
-
-    let agents = Paragraph::new("Select an agent to view details")
-        .block(Block::default().borders(Borders::ALL).title(" Agents "));
-    f.render_widget(agents, chunks[1]);
+    draw_agent_categories(f, chunks[0], agents_app);
+    draw_agent_list(f, chunks[1], agents_app);
 }
 
-fn draw_agents_detail_placeholder(f: &mut Frame, area: Rect) {
-    let detail = Paragraph::new("Agent details will appear here")
-        .block(Block::default().borders(Borders::ALL).title(" Details "));
-    f.render_widget(detail, area);
+fn draw_agent_categories(f: &mut Frame, area: Rect, app: &mut super::agents_app::AgentsApp) {
+    use super::agents_app::{AgentCategory, AgentFocus};
+
+    let is_focused = app.focus == AgentFocus::Categories;
+    let border_style = if is_focused {
+        Style::default().fg(Color::Cyan)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+
+    let items: Vec<ListItem> = AgentCategory::variants()
+        .iter()
+        .map(|cat| {
+            let count = app.category_count(*cat);
+            let text = format!("{} ({})", cat.label(), count);
+            ListItem::new(text)
+        })
+        .collect();
+
+    let list = List::new(items)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(border_style)
+                .title(" Categories "),
+        )
+        .highlight_style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol("> ");
+
+    f.render_stateful_widget(list, area, &mut app.category_list_state);
+}
+
+fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut super::agents_app::AgentsApp) {
+    use super::agents_app::AgentFocus;
+
+    let is_focused = app.focus == AgentFocus::Agents;
+    let border_style = if is_focused {
+        Style::default().fg(Color::Cyan)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+
+    let mut items: Vec<ListItem> = Vec::new();
+
+    // Header row
+    let header = format!(
+        "{:<25} {:>10} {:>10} {:>8}",
+        "Agent", "Installed", "Latest", "Status"
+    );
+    items.push(
+        ListItem::new(header).style(
+            Style::default()
+                .fg(Color::DarkGray)
+                .add_modifier(Modifier::UNDERLINED),
+        ),
+    );
+
+    // Agent rows
+    for &idx in &app.filtered_entries {
+        if let Some(entry) = app.entries.get(idx) {
+            let installed = entry
+                .installed
+                .version
+                .as_deref()
+                .unwrap_or("-");
+            let latest = entry
+                .github
+                .latest_version
+                .as_deref()
+                .unwrap_or("-");
+            let status = entry.status_str();
+
+            let row = format!(
+                "{:<25} {:>10} {:>10} {:>8}",
+                truncate(&entry.agent.name, 25),
+                truncate(installed, 10),
+                truncate(latest, 10),
+                status
+            );
+            items.push(ListItem::new(row));
+        }
+    }
+
+    let title = format!(" Agents ({}) ", app.filtered_entries.len());
+
+    let list = List::new(items)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(border_style)
+                .title(title),
+        )
+        .highlight_style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol("> ");
+
+    // Offset by 1 for header row
+    let mut state = app.agent_list_state.clone();
+    if let Some(selected) = state.selected() {
+        state.select(Some(selected + 1));
+    }
+    f.render_stateful_widget(list, area, &mut state);
+}
+
+fn draw_agent_detail(f: &mut Frame, area: Rect, app: &App) {
+    let agents_app = match &app.agents_app {
+        Some(a) => a,
+        None => {
+            let msg = Paragraph::new("No agent data")
+                .block(Block::default().borders(Borders::ALL).title(" Details "));
+            f.render_widget(msg, area);
+            return;
+        }
+    };
+
+    let lines: Vec<Line> = if let Some(entry) = agents_app.current_entry() {
+        let installed = entry
+            .installed
+            .version
+            .as_deref()
+            .unwrap_or("Not installed");
+        let latest = entry
+            .github
+            .latest_version
+            .as_deref()
+            .unwrap_or("Unknown");
+
+        let status = if entry.installed.version.is_none() {
+            "Not Installed"
+        } else if entry.update_available() {
+            "UPDATE AVAILABLE"
+        } else {
+            "Up to date"
+        };
+
+        let pricing = entry
+            .agent
+            .pricing
+            .as_ref()
+            .map(|p| {
+                if p.free_tier {
+                    format!("{} (free tier)", p.model)
+                } else {
+                    p.model.clone()
+                }
+            })
+            .unwrap_or_else(|| "-".to_string());
+
+        let providers = if entry.agent.supported_providers.is_empty() {
+            "-".to_string()
+        } else {
+            entry.agent.supported_providers.join(", ")
+        };
+
+        let categories = if entry.agent.categories.is_empty() {
+            "-".to_string()
+        } else {
+            entry.agent.categories.join(", ")
+        };
+
+        vec![
+            Line::from(vec![
+                Span::styled(
+                    &entry.agent.name,
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw("  "),
+                Span::styled(
+                    &entry.agent.repo,
+                    Style::default().fg(Color::DarkGray),
+                ),
+            ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("Installed: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(format!("{:<12}", installed)),
+                Span::styled("Latest: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(format!("{:<12}", latest)),
+                Span::styled(
+                    status,
+                    if entry.update_available() {
+                        Style::default().fg(Color::Yellow)
+                    } else {
+                        Style::default().fg(Color::Green)
+                    },
+                ),
+            ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("Pricing: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(format!("{:<20}", pricing)),
+                Span::styled("Providers: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(providers),
+            ]),
+            Line::from(vec![
+                Span::styled("Categories: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(format!("{:<18}", categories)),
+                Span::styled("Open Source: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(if entry.agent.open_source { "Yes" } else { "No" }),
+            ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("o ", Style::default().fg(Color::Yellow)),
+                Span::raw("open docs  "),
+                Span::styled("r ", Style::default().fg(Color::Yellow)),
+                Span::raw("open repo  "),
+                Span::styled("c ", Style::default().fg(Color::Yellow)),
+                Span::raw("copy name"),
+            ]),
+        ]
+    } else {
+        vec![Line::from(Span::styled(
+            "No agent selected",
+            Style::default().fg(Color::DarkGray),
+        ))]
+    };
+
+    let paragraph = Paragraph::new(lines)
+        .block(Block::default().borders(Borders::ALL).title(" Details "))
+        .wrap(Wrap { trim: true });
+
+    f.render_widget(paragraph, area);
 }
 
 fn draw_provider_detail(f: &mut Frame, area: Rect, app: &App) {
