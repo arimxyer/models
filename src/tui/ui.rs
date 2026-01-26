@@ -992,6 +992,14 @@ fn draw_help_popup(f: &mut Frame, scroll: u16) {
             Span::styled("  3             ", Style::default().fg(Color::Yellow)),
             Span::raw("Toggle open source filter"),
         ]),
+        Line::from(vec![
+            Span::styled("  a             ", Style::default().fg(Color::Yellow)),
+            Span::raw("Add/remove tracked agents"),
+        ]),
+        Line::from(vec![
+            Span::styled("  u             ", Style::default().fg(Color::Yellow)),
+            Span::raw("Copy update command"),
+        ]),
         Line::from(""),
         Line::from(Span::styled(
             "Other",
