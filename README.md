@@ -69,26 +69,50 @@ models
 
 #### TUI Keybindings
 
+**Navigation**
 | Key | Action |
 |-----|--------|
-| `?` | Show help popup |
 | `j` / `↓` | Move down |
 | `k` / `↑` | Move up |
 | `g` | Jump to first item |
 | `G` | Jump to last item |
-| `Ctrl+d` / `PageDown` | Page down (10 items) |
-| `Ctrl+u` / `PageUp` | Page up (10 items) |
-| `h` / `←` | Switch to providers panel |
-| `l` / `→` | Switch to models panel |
+| `Ctrl+d` / `PageDown` | Page down |
+| `Ctrl+u` / `PageUp` | Page up |
+
+**Panels**
+| Key | Action |
+|-----|--------|
+| `h` / `←` / `l` / `→` | Switch panels |
 | `Tab` / `Shift+Tab` | Switch panels |
+
+**Search**
+| Key | Action |
+|-----|--------|
 | `/` | Enter search mode |
-| `Esc` | Clear search / exit search mode |
-| `s` | Cycle sort order (name, date, cost, context) |
-| `1` | Toggle filter: reasoning models only |
-| `2` | Toggle filter: tool-calling models only |
-| `3` | Toggle filter: open weights only |
-| `c` | Copy `provider/model-id` to clipboard |
-| `C` | Copy `model-id` to clipboard |
+| `Enter` / `Esc` | Exit search mode |
+| `Esc` | Clear search (in normal mode) |
+
+**Filters & Sort**
+| Key | Action |
+|-----|--------|
+| `s` | Cycle sort (name → date → cost → context) |
+| `1` | Toggle reasoning filter |
+| `2` | Toggle tools filter |
+| `3` | Toggle open weights filter |
+
+**Copy & Open**
+| Key | Action |
+|-----|--------|
+| `c` | Copy `provider/model-id` |
+| `C` | Copy `model-id` only |
+| `o` | Open provider docs in browser |
+| `D` | Copy provider docs URL |
+| `A` | Copy provider API URL |
+
+**Other**
+| Key | Action |
+|-----|--------|
+| `?` | Show help popup |
 | `q` | Quit |
 
 ### CLI Commands
