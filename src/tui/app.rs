@@ -34,6 +34,26 @@ impl SortOrder {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Tab {
+    #[default]
+    Models,
+    Agents,
+}
+
+impl Tab {
+    pub fn next(self) -> Self {
+        match self {
+            Tab::Models => Tab::Agents,
+            Tab::Agents => Tab::Models,
+        }
+    }
+
+    pub fn prev(self) -> Self {
+        self.next() // Only two tabs, so prev == next
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Filters {
     pub reasoning: bool,
@@ -74,6 +94,8 @@ pub enum Message {
     ToggleHelp,        // Toggle help popup
     ScrollHelpUp,      // Scroll help popup up
     ScrollHelpDown,    // Scroll help popup down
+    NextTab,
+    PrevTab,
 }
 
 #[derive(Debug, Clone)]
@@ -98,6 +120,7 @@ pub struct App {
     pub status_message: Option<String>,
     pub show_help: bool,
     pub help_scroll: u16,
+    pub current_tab: Tab,
     filtered_models: Vec<ModelEntry>,
 }
 
@@ -125,6 +148,7 @@ impl App {
             status_message: None,
             show_help: false,
             help_scroll: 0,
+            current_tab: Tab::default(),
             filtered_models: Vec::new(),
         };
 
@@ -300,6 +324,12 @@ impl App {
                 if self.help_scroll < max_scroll {
                     self.help_scroll = self.help_scroll.saturating_add(1);
                 }
+            }
+            Message::NextTab => {
+                self.current_tab = self.current_tab.next();
+            }
+            Message::PrevTab => {
+                self.current_tab = self.current_tab.prev();
             }
         }
         true
