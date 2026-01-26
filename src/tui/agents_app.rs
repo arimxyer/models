@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use ratatui::widgets::ListState;
 
 use crate::agents::{AgentEntry, AgentsFile, GitHubClient, GitHubData, detect_installed};
@@ -59,6 +61,13 @@ pub struct AgentsApp {
     pub focus: AgentFocus,
     pub filters: AgentFilters,
     pub search_query: String,
+    // Picker modal state (for future add/remove functionality)
+    #[allow(dead_code)]
+    pub show_picker: bool,
+    #[allow(dead_code)]
+    pub picker_selected: usize,
+    #[allow(dead_code)]
+    pub picker_changes: HashMap<String, bool>, // agent_id -> new tracked state
 }
 
 impl AgentsApp {
@@ -96,6 +105,9 @@ impl AgentsApp {
             focus: AgentFocus::default(),
             filters: AgentFilters::default(),
             search_query: String::new(),
+            show_picker: false,
+            picker_selected: 0,
+            picker_changes: HashMap::new(),
         };
 
         app.update_filtered();
@@ -251,5 +263,57 @@ impl AgentsApp {
             }
         }
         false
+    }
+
+    // Picker modal methods (integrated in later tasks)
+    #[allow(dead_code)]
+    pub fn open_picker(&mut self) {
+        self.show_picker = true;
+        self.picker_selected = 0;
+        self.picker_changes.clear();
+        // Initialize with current tracked states
+        for entry in &self.entries {
+            self.picker_changes.insert(entry.id.clone(), entry.tracked);
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn close_picker(&mut self) {
+        self.show_picker = false;
+        self.picker_changes.clear();
+    }
+
+    #[allow(dead_code)]
+    pub fn picker_toggle_current(&mut self) {
+        if let Some(entry) = self.entries.get(self.picker_selected) {
+            let current = self.picker_changes.get(&entry.id).copied().unwrap_or(entry.tracked);
+            self.picker_changes.insert(entry.id.clone(), !current);
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn picker_next(&mut self) {
+        if self.picker_selected < self.entries.len().saturating_sub(1) {
+            self.picker_selected += 1;
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn picker_prev(&mut self) {
+        if self.picker_selected > 0 {
+            self.picker_selected -= 1;
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn picker_save(&mut self, config: &mut Config) {
+        for (agent_id, tracked) in &self.picker_changes {
+            config.set_tracked(agent_id, *tracked);
+            if let Some(entry) = self.entries.iter_mut().find(|e| e.id == *agent_id) {
+                entry.tracked = *tracked;
+            }
+        }
+        let _ = config.save();
+        self.close_picker();
     }
 }

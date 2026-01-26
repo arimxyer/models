@@ -111,6 +111,19 @@ pub enum Message {
     OpenAgentRepo,
     OpenAgentDocs,
     CopyAgentName,
+    // Picker modal messages (wired up in later tasks)
+    #[allow(dead_code)]
+    OpenPicker,
+    #[allow(dead_code)]
+    ClosePicker,
+    #[allow(dead_code)]
+    PickerNext,
+    #[allow(dead_code)]
+    PickerPrev,
+    #[allow(dead_code)]
+    PickerToggle,
+    #[allow(dead_code)]
+    PickerSave,
 }
 
 #[derive(Debug, Clone)]
@@ -397,6 +410,15 @@ impl App {
                 }
             }
             Message::OpenAgentRepo | Message::OpenAgentDocs | Message::CopyAgentName => {
+                // Handled in main loop
+            }
+            // Picker messages - handled in main loop (Task 2.4)
+            Message::OpenPicker
+            | Message::ClosePicker
+            | Message::PickerNext
+            | Message::PickerPrev
+            | Message::PickerToggle
+            | Message::PickerSave => {
                 // Handled in main loop
             }
         }
