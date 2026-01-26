@@ -41,6 +41,29 @@ pub struct Agent {
     pub docs: Option<String>,
 }
 
+impl Agent {
+    /// Generate the update/install command for this agent
+    #[allow(dead_code)]
+    pub fn update_command(&self) -> Option<String> {
+        match self.installation_method.as_deref() {
+            Some("cli") => {
+                // Determine package manager based on cli_binary
+                match self.cli_binary.as_deref() {
+                    Some("claude") => Some("npm update -g @anthropic-ai/claude-code".to_string()),
+                    Some("aider") => Some("pip install --upgrade aider-chat".to_string()),
+                    Some("goose") => Some("pipx upgrade goose-ai".to_string()),
+                    _ => None,
+                }
+            }
+            Some("ide") => {
+                // IDEs typically auto-update or have their own update mechanism
+                self.homepage.as_ref().map(|h| format!("Visit {} for download", h))
+            }
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Pricing {
     pub model: String,
