@@ -43,7 +43,6 @@ pub struct Agent {
 
 impl Agent {
     /// Generate the update/install command for this agent
-    #[allow(dead_code)]
     pub fn update_command(&self) -> Option<String> {
         match self.installation_method.as_deref() {
             Some("cli") => {

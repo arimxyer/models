@@ -111,6 +111,7 @@ pub enum Message {
     OpenAgentRepo,
     OpenAgentDocs,
     CopyAgentName,
+    CopyUpdateCommand,
     // Picker modal messages
     OpenPicker,
     ClosePicker,
@@ -402,7 +403,7 @@ impl App {
                     agents_app.toggle_open_source_filter();
                 }
             }
-            Message::OpenAgentRepo | Message::OpenAgentDocs | Message::CopyAgentName => {
+            Message::OpenAgentRepo | Message::OpenAgentDocs | Message::CopyAgentName | Message::CopyUpdateCommand => {
                 // Handled in main loop
             }
             Message::OpenPicker => {
