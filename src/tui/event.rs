@@ -43,6 +43,9 @@ fn handle_normal_mode(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Opti
         // Copy shortcuts
         KeyCode::Char('c') => Some(Message::CopyFull), // c = copy provider/model-id
         KeyCode::Char('C') => Some(Message::CopyModelId), // C = copy model-id only
+        KeyCode::Char('D') => Some(Message::CopyProviderDoc), // D = copy provider docs URL
+        KeyCode::Char('A') => Some(Message::CopyProviderApi), // A = copy provider API URL
+        KeyCode::Char('o') => Some(Message::OpenProviderDoc), // o = open provider docs in browser
 
         // Navigation
         KeyCode::Char('j') | KeyCode::Down => match app.focus {

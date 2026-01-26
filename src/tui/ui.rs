@@ -14,14 +14,14 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         .constraints([
             Constraint::Length(1),  // Header
             Constraint::Min(0),     // Main content
-            Constraint::Length(10), // Detail panel (expanded)
+            Constraint::Length(14), // Detail panel (expanded)
             Constraint::Length(1),  // Footer/search
         ])
         .split(f.area());
 
     draw_header(f, chunks[0], app);
     draw_main(f, chunks[1], app);
-    draw_detail(f, chunks[2], app);
+    draw_details_row(f, chunks[2], app);
     draw_footer(f, chunks[3], app);
 
     // Draw help popup on top if visible
@@ -190,7 +190,83 @@ fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
     f.render_stateful_widget(list, area, &mut app.model_list_state);
 }
 
-fn draw_detail(f: &mut Frame, area: Rect, app: &App) {
+fn draw_details_row(f: &mut Frame, area: Rect, app: &App) {
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
+        .split(area);
+
+    draw_provider_detail(f, chunks[0], app);
+    draw_model_detail(f, chunks[1], app);
+}
+
+fn draw_provider_detail(f: &mut Frame, area: Rect, app: &App) {
+    let lines: Vec<Line> = if let Some(entry) = app.current_model() {
+        // Find the provider
+        let provider = app
+            .providers
+            .iter()
+            .find(|(id, _)| id == &entry.provider_id)
+            .map(|(_, p)| p);
+
+        if let Some(provider) = provider {
+            vec![
+                Line::from(vec![Span::styled(
+                    &provider.name,
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                )]),
+                Line::from(""),
+                Line::from(vec![
+                    Span::styled("Docs: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(provider.doc.as_deref().unwrap_or("-")),
+                ]),
+                Line::from(vec![
+                    Span::styled("API:  ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(provider.api.as_deref().unwrap_or("-")),
+                ]),
+                Line::from(vec![
+                    Span::styled("NPM:  ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(provider.npm.as_deref().unwrap_or("-")),
+                ]),
+                Line::from(vec![
+                    Span::styled("Env:  ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(if provider.env.is_empty() {
+                        "-".to_string()
+                    } else {
+                        provider.env.join(", ")
+                    }),
+                ]),
+                Line::from(""),
+                Line::from(vec![
+                    Span::styled("o ", Style::default().fg(Color::Yellow)),
+                    Span::raw("open docs - web  "),
+                    Span::styled("A ", Style::default().fg(Color::Yellow)),
+                    Span::raw("copy api"),
+                ]),
+            ]
+        } else {
+            vec![Line::from(Span::styled(
+                "Provider not found",
+                Style::default().fg(Color::DarkGray),
+            ))]
+        }
+    } else {
+        vec![Line::from(Span::styled(
+            "No model selected",
+            Style::default().fg(Color::DarkGray),
+        ))]
+    };
+
+    let paragraph = Paragraph::new(lines)
+        .block(Block::default().borders(Borders::ALL).title(" Provider "))
+        .wrap(Wrap { trim: true });
+
+    f.render_widget(paragraph, area);
+}
+
+fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
     let lines: Vec<Line> = if let Some(entry) = app.current_model() {
         let model = &entry.model;
         let provider_id = &entry.provider_id;
@@ -198,7 +274,22 @@ fn draw_detail(f: &mut Frame, area: Rect, app: &App) {
         let caps = model.capabilities_str();
         let modalities = model.modalities_str();
 
+        // Format cache costs
+        let cache_read = model
+            .cost
+            .as_ref()
+            .and_then(|c| c.cache_read)
+            .map(|v| format!("${}/M", v))
+            .unwrap_or("-".into());
+        let cache_write = model
+            .cost
+            .as_ref()
+            .and_then(|c| c.cache_write)
+            .map(|v| format!("${}/M", v))
+            .unwrap_or("-".into());
+
         let mut detail_lines = vec![
+            // Row 1: Name and ID
             Line::from(vec![
                 Span::styled(
                     &model.name,
@@ -212,21 +303,36 @@ fn draw_detail(f: &mut Frame, area: Rect, app: &App) {
                     Style::default().fg(Color::DarkGray),
                 ),
             ]),
+            // Row 2: Provider and Family
             Line::from(vec![
                 Span::styled("Provider: ", Style::default().fg(Color::DarkGray)),
-                Span::styled(provider_id, Style::default().fg(Color::Cyan)),
+                Span::styled(
+                    format!("{:<16}", provider_id),
+                    Style::default().fg(Color::Cyan),
+                ),
+                Span::styled("Family: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(model.family.as_deref().unwrap_or("-")),
+            ]),
+            // Row 3: Status
+            Line::from(vec![
+                Span::styled("Status: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(model.status.as_deref().unwrap_or("active")),
             ]),
             Line::from(""),
+            // Row 4: Context, Input, and Output limits
             Line::from(vec![
                 Span::styled("Context: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(format!("{:<12}", model.context_str())),
+                Span::raw(format!("{:<10}", model.context_str())),
+                Span::styled("Input: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(format!("{:<10}", model.input_limit_str())),
                 Span::styled("Output: ", Style::default().fg(Color::DarkGray)),
                 Span::raw(model.output_str()),
             ]),
+            // Row 5: Input and Output cost
             Line::from(vec![
-                Span::styled("Input Cost: ", Style::default().fg(Color::DarkGray)),
+                Span::styled("Input: ", Style::default().fg(Color::DarkGray)),
                 Span::raw(format!(
-                    "{:<10}",
+                    "{:<14}",
                     model
                         .cost
                         .as_ref()
@@ -234,7 +340,7 @@ fn draw_detail(f: &mut Frame, area: Rect, app: &App) {
                         .map(|v| format!("${}/M", v))
                         .unwrap_or("-".into())
                 )),
-                Span::styled("Output Cost: ", Style::default().fg(Color::DarkGray)),
+                Span::styled("Output: ", Style::default().fg(Color::DarkGray)),
                 Span::raw(
                     model
                         .cost
@@ -244,21 +350,41 @@ fn draw_detail(f: &mut Frame, area: Rect, app: &App) {
                         .unwrap_or("-".into()),
                 ),
             ]),
+            // Row 6: Cache read and write costs
+            Line::from(vec![
+                Span::styled("Cache Read: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(format!("{:<10}", cache_read)),
+                Span::styled("Cache Write: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(cache_write),
+            ]),
+            Line::from(""),
+            // Row 7: Capabilities
             Line::from(vec![
                 Span::styled("Capabilities: ", Style::default().fg(Color::DarkGray)),
                 Span::raw(caps),
             ]),
+            // Row 8: Modalities
             Line::from(vec![
                 Span::styled("Modalities: ", Style::default().fg(Color::DarkGray)),
                 Span::raw(modalities),
             ]),
+            // Row 9: Dates
+            Line::from(vec![
+                Span::styled("Released: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(format!(
+                    "{:<14}",
+                    model.release_date.as_deref().unwrap_or("-")
+                )),
+                Span::styled("Knowledge: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(model.knowledge.as_deref().unwrap_or("-")),
+            ]),
         ];
 
-        // Add release date if available
-        if let Some(date) = &model.release_date {
+        // Add last updated if available
+        if let Some(updated) = &model.last_updated {
             detail_lines.push(Line::from(vec![
-                Span::styled("Released: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(date),
+                Span::styled("Updated: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(updated),
             ]));
         }
 
@@ -309,7 +435,7 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
                 Span::styled(" s ", Style::default().fg(Color::Yellow)),
                 Span::raw("sort  "),
                 Span::styled(" c ", Style::default().fg(Color::Yellow)),
-                Span::raw("copy"),
+                Span::raw("copy (prov/model)"),
             ]);
 
             let right_content = Line::from(vec![
@@ -455,7 +581,7 @@ fn draw_help_popup(f: &mut Frame, scroll: u16) {
         ]),
         Line::from(""),
         Line::from(Span::styled(
-            "Other",
+            "Copy & Open",
             Style::default()
                 .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),
@@ -468,6 +594,25 @@ fn draw_help_popup(f: &mut Frame, scroll: u16) {
             Span::styled("  C             ", Style::default().fg(Color::Yellow)),
             Span::raw("Copy model only"),
         ]),
+        Line::from(vec![
+            Span::styled("  o             ", Style::default().fg(Color::Yellow)),
+            Span::raw("Open provider docs in browser"),
+        ]),
+        Line::from(vec![
+            Span::styled("  D             ", Style::default().fg(Color::Yellow)),
+            Span::raw("Copy provider docs URL"),
+        ]),
+        Line::from(vec![
+            Span::styled("  A             ", Style::default().fg(Color::Yellow)),
+            Span::raw("Copy provider API URL"),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(
+            "Other",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )),
         Line::from(vec![
             Span::styled("  q             ", Style::default().fg(Color::Yellow)),
             Span::raw("Quit"),

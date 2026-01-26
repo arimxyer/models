@@ -6,16 +6,12 @@ pub struct Provider {
     pub id: String,
     pub name: String,
     #[serde(default)]
-    #[allow(dead_code)]
     pub npm: Option<String>,
     #[serde(default)]
-    #[allow(dead_code)]
     pub env: Vec<String>,
     #[serde(default)]
-    #[allow(dead_code)]
     pub doc: Option<String>,
     #[serde(default)]
-    #[allow(dead_code)]
     pub api: Option<String>,
     #[serde(default)]
     pub models: HashMap<String, Model>,
@@ -34,7 +30,6 @@ pub struct Model {
     #[serde(default)]
     pub attachment: bool,
     #[serde(default)]
-    #[allow(dead_code)]
     pub temperature: bool,
     #[serde(default)]
     pub modalities: Option<Modalities>,
@@ -71,7 +66,6 @@ pub struct Limits {
     #[serde(default)]
     pub context: Option<u64>,
     #[serde(default)]
-    #[allow(dead_code)]
     pub input: Option<u64>,
     #[serde(default)]
     pub output: Option<u64>,
@@ -98,6 +92,14 @@ impl Model {
         self.limit
             .as_ref()
             .and_then(|l| l.output)
+            .map(format_tokens)
+            .unwrap_or_else(|| "-".to_string())
+    }
+
+    pub fn input_limit_str(&self) -> String {
+        self.limit
+            .as_ref()
+            .and_then(|l| l.input)
             .map(format_tokens)
             .unwrap_or_else(|| "-".to_string())
     }
@@ -129,6 +131,9 @@ impl Model {
         }
         if self.attachment {
             caps.push("files");
+        }
+        if self.temperature {
+            caps.push("temperature");
         }
         if caps.is_empty() {
             "-".to_string()
