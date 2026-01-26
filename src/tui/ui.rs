@@ -374,102 +374,157 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &App) {
     };
 
     let lines: Vec<Line> = if let Some(entry) = agents_app.current_entry() {
-        let installed = entry
-            .installed
-            .version
-            .as_deref()
-            .unwrap_or("Not installed");
-        let latest = entry
-            .github
-            .latest_version
-            .as_deref()
-            .unwrap_or("Unknown");
+        let mut detail_lines = Vec::new();
 
-        let status = if entry.installed.version.is_none() {
-            "Not Installed"
-        } else if entry.update_available() {
-            "UPDATE AVAILABLE"
+        // Row 1: Header - Agent name (bold) + repo name (gray)
+        detail_lines.push(Line::from(vec![
+            Span::styled(
+                &entry.agent.name,
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw("  "),
+            Span::styled(&entry.agent.repo, Style::default().fg(Color::DarkGray)),
+        ]));
+
+        // Row 2: Version comparison with status indicator
+        let installed = entry.installed.version.as_deref();
+        let latest = entry.github.latest_version.as_deref().unwrap_or("Unknown");
+
+        let version_line = if let Some(inst_ver) = installed {
+            let status_span = if entry.update_available() {
+                Span::styled(
+                    " \u{2B06} UPDATE AVAILABLE",
+                    Style::default().fg(Color::Yellow),
+                )
+            } else {
+                Span::styled(" \u{2713} Up to date", Style::default().fg(Color::Green))
+            };
+
+            Line::from(vec![
+                Span::styled("Installed: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(inst_ver),
+                Span::styled(" \u{2192} ", Style::default().fg(Color::DarkGray)),
+                Span::styled("Latest: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(latest),
+                status_span,
+            ])
         } else {
-            "Up to date"
+            Line::from(vec![
+                Span::styled("Latest: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(latest),
+            ])
         };
+        detail_lines.push(version_line);
 
+        // Row 3: Release date
+        let release_date = entry
+            .github
+            .release_date
+            .as_deref()
+            .unwrap_or("-");
+        detail_lines.push(Line::from(vec![
+            Span::styled("Released: ", Style::default().fg(Color::DarkGray)),
+            Span::raw(release_date),
+        ]));
+
+        // Row 4: Badge row - Stars | License | Pricing | Category
+        let stars = entry
+            .github
+            .stars
+            .map(format_stars)
+            .unwrap_or_else(|| "-".to_string());
+        let license = entry
+            .github
+            .license
+            .as_deref()
+            .unwrap_or("-");
         let pricing = entry
             .agent
             .pricing
             .as_ref()
             .map(|p| {
                 if p.free_tier {
-                    format!("{} (free tier)", p.model)
+                    format!("{} (free)", p.model)
                 } else {
                     p.model.clone()
                 }
             })
             .unwrap_or_else(|| "-".to_string());
+        let category = entry
+            .agent
+            .categories
+            .first()
+            .map(|c| c.as_str())
+            .unwrap_or("-");
 
-        let providers = if entry.agent.supported_providers.is_empty() {
-            "-".to_string()
+        detail_lines.push(Line::from(vec![
+            Span::styled("\u{2605} ", Style::default().fg(Color::Yellow)),
+            Span::raw(format!("{:<8}", stars)),
+            Span::styled(" \u{2502} ", Style::default().fg(Color::DarkGray)),
+            Span::raw(format!("{:<12}", license)),
+            Span::styled(" \u{2502} ", Style::default().fg(Color::DarkGray)),
+            Span::raw(format!("{:<16}", pricing)),
+            Span::styled(" \u{2502} ", Style::default().fg(Color::DarkGray)),
+            Span::raw(category),
+        ]));
+
+        detail_lines.push(Line::from(""));
+
+        // Row 5+: Changelog section
+        if let Some(changelog) = &entry.github.changelog {
+            let version_header = entry
+                .github
+                .latest_version
+                .as_deref()
+                .unwrap_or("Latest");
+            detail_lines.push(Line::from(Span::styled(
+                format!("v{} Changelog:", version_header),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )));
+
+            // Truncate changelog to first 5 non-empty lines
+            let changelog_lines: Vec<&str> = changelog
+                .lines()
+                .filter(|line| !line.trim().is_empty())
+                .take(5)
+                .collect();
+
+            for line in changelog_lines {
+                // Truncate long lines to fit in the detail pane
+                let truncated = if line.len() > 80 {
+                    format!("{}...", &line[..77])
+                } else {
+                    line.to_string()
+                };
+                detail_lines.push(Line::from(Span::styled(
+                    format!("  {}", truncated),
+                    Style::default().fg(Color::White),
+                )));
+            }
         } else {
-            entry.agent.supported_providers.join(", ")
-        };
+            detail_lines.push(Line::from(Span::styled(
+                "No changelog available",
+                Style::default().fg(Color::DarkGray),
+            )));
+        }
 
-        let categories = if entry.agent.categories.is_empty() {
-            "-".to_string()
-        } else {
-            entry.agent.categories.join(", ")
-        };
+        detail_lines.push(Line::from(""));
 
-        vec![
-            Line::from(vec![
-                Span::styled(
-                    &entry.agent.name,
-                    Style::default()
-                        .fg(Color::White)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::raw("  "),
-                Span::styled(
-                    &entry.agent.repo,
-                    Style::default().fg(Color::DarkGray),
-                ),
-            ]),
-            Line::from(""),
-            Line::from(vec![
-                Span::styled("Installed: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(format!("{:<12}", installed)),
-                Span::styled("Latest: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(format!("{:<12}", latest)),
-                Span::styled(
-                    status,
-                    if entry.update_available() {
-                        Style::default().fg(Color::Yellow)
-                    } else {
-                        Style::default().fg(Color::Green)
-                    },
-                ),
-            ]),
-            Line::from(""),
-            Line::from(vec![
-                Span::styled("Pricing: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(format!("{:<20}", pricing)),
-                Span::styled("Providers: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(providers),
-            ]),
-            Line::from(vec![
-                Span::styled("Categories: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(format!("{:<18}", categories)),
-                Span::styled("Open Source: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(if entry.agent.open_source { "Yes" } else { "No" }),
-            ]),
-            Line::from(""),
-            Line::from(vec![
-                Span::styled("o ", Style::default().fg(Color::Yellow)),
-                Span::raw("open docs  "),
-                Span::styled("r ", Style::default().fg(Color::Yellow)),
-                Span::raw("open repo  "),
-                Span::styled("c ", Style::default().fg(Color::Yellow)),
-                Span::raw("copy name"),
-            ]),
-        ]
+        // Keybinding hints row
+        detail_lines.push(Line::from(vec![
+            Span::styled("o ", Style::default().fg(Color::Yellow)),
+            Span::raw("open docs  "),
+            Span::styled("r ", Style::default().fg(Color::Yellow)),
+            Span::raw("open repo  "),
+            Span::styled("c ", Style::default().fg(Color::Yellow)),
+            Span::raw("copy name"),
+        ]));
+
+        detail_lines
     } else {
         vec![Line::from(Span::styled(
             "No agent selected",
