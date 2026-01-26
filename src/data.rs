@@ -34,7 +34,6 @@ pub struct Model {
     #[serde(default)]
     pub attachment: bool,
     #[serde(default)]
-    #[allow(dead_code)]
     pub temperature: bool,
     #[serde(default)]
     pub modalities: Option<Modalities>,
@@ -129,6 +128,9 @@ impl Model {
         }
         if self.attachment {
             caps.push("files");
+        }
+        if self.temperature {
+            caps.push("temperature");
         }
         if caps.is_empty() {
             "-".to_string()
