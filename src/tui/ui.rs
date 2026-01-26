@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use super::app::{App, Filters, Focus, Mode, SortOrder};
+use super::app::{App, Filters, Focus, Mode, SortOrder, Tab};
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
@@ -30,15 +30,29 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     }
 }
 
-fn draw_header(f: &mut Frame, area: Rect, _app: &App) {
+fn draw_header(f: &mut Frame, area: Rect, app: &App) {
+    let models_style = if app.current_tab == Tab::Models {
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+
+    let agents_style = if app.current_tab == Tab::Agents {
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+
     let header = Paragraph::new(Line::from(vec![
-        Span::styled(
-            " models ",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::raw("- AI Model Browser"),
+        Span::raw(" "),
+        Span::styled("Models", models_style),
+        Span::raw(" | "),
+        Span::styled("Agents", agents_style),
+        Span::styled("  [/] switch tabs", Style::default().fg(Color::DarkGray)),
     ]));
     f.render_widget(header, area);
 }
