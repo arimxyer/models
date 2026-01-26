@@ -94,6 +94,44 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()> 
                         }
                     }
                 }
+                Message::CopyProviderDoc => {
+                    if let Some(text) = app.get_provider_doc() {
+                        if let Some(ref mut cb) = clipboard {
+                            if cb.set_text(&text).is_ok() {
+                                app.set_status(format!("Copied docs: {}", text));
+                                status_clear_time = Some(Instant::now());
+                            } else {
+                                app.set_status("Failed to copy".to_string());
+                                status_clear_time = Some(Instant::now());
+                            }
+                        } else {
+                            app.set_status("Clipboard unavailable".to_string());
+                            status_clear_time = Some(Instant::now());
+                        }
+                    } else {
+                        app.set_status("No documentation URL available".to_string());
+                        status_clear_time = Some(Instant::now());
+                    }
+                }
+                Message::CopyProviderApi => {
+                    if let Some(text) = app.get_provider_api() {
+                        if let Some(ref mut cb) = clipboard {
+                            if cb.set_text(&text).is_ok() {
+                                app.set_status(format!("Copied API: {}", text));
+                                status_clear_time = Some(Instant::now());
+                            } else {
+                                app.set_status("Failed to copy".to_string());
+                                status_clear_time = Some(Instant::now());
+                            }
+                        } else {
+                            app.set_status("Clipboard unavailable".to_string());
+                            status_clear_time = Some(Instant::now());
+                        }
+                    } else {
+                        app.set_status("No API URL available".to_string());
+                        status_clear_time = Some(Instant::now());
+                    }
+                }
                 _ => {
                     if !app.update(msg) {
                         return Ok(());

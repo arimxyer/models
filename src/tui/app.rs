@@ -64,6 +64,8 @@ pub enum Message {
     ClearSearch,
     CopyFull,          // Copy provider/model-id
     CopyModelId,       // Copy just model-id
+    CopyProviderDoc,   // Copy provider documentation URL
+    CopyProviderApi,   // Copy provider API URL
     CycleSort,         // Cycle through sort options
     ToggleReasoning,   // Toggle reasoning filter
     ToggleTools,       // Toggle tools filter
@@ -251,7 +253,10 @@ impl App {
                 self.model_list_state.select(Some(self.selected_model + 1)); // +1 for header
             }
             // Copy messages are handled in the main loop
-            Message::CopyFull | Message::CopyModelId => {}
+            Message::CopyFull
+            | Message::CopyModelId
+            | Message::CopyProviderDoc
+            | Message::CopyProviderApi => {}
             Message::CycleSort => {
                 self.sort_order = self.sort_order.next();
                 self.selected_model = 0;
@@ -286,8 +291,8 @@ impl App {
                 self.help_scroll = self.help_scroll.saturating_sub(1);
             }
             Message::ScrollHelpDown => {
-                // Help content is 28 lines, cap scroll to prevent scrolling past content
-                const HELP_LINES: u16 = 28;
+                // Help content is 34 lines, cap scroll to prevent scrolling past content
+                const HELP_LINES: u16 = 34;
                 const MIN_VISIBLE: u16 = 5;
                 let max_scroll = HELP_LINES.saturating_sub(MIN_VISIBLE);
                 if self.help_scroll < max_scroll {
@@ -452,6 +457,26 @@ impl App {
     /// Get just the model-id for copying
     pub fn get_copy_model_id(&self) -> Option<String> {
         self.current_model().map(|entry| entry.id.clone())
+    }
+
+    /// Get the provider documentation URL for copying
+    pub fn get_provider_doc(&self) -> Option<String> {
+        self.current_model().and_then(|entry| {
+            self.providers
+                .iter()
+                .find(|(id, _)| id == &entry.provider_id)
+                .and_then(|(_, provider)| provider.doc.clone())
+        })
+    }
+
+    /// Get the provider API URL for copying
+    pub fn get_provider_api(&self) -> Option<String> {
+        self.current_model().and_then(|entry| {
+            self.providers
+                .iter()
+                .find(|(id, _)| id == &entry.provider_id)
+                .and_then(|(_, provider)| provider.api.clone())
+        })
     }
 
     pub fn set_status(&mut self, msg: String) {

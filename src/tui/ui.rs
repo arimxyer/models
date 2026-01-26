@@ -21,7 +21,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
 
     draw_header(f, chunks[0], app);
     draw_main(f, chunks[1], app);
-    draw_detail(f, chunks[2], app);
+    draw_details_row(f, chunks[2], app);
     draw_footer(f, chunks[3], app);
 
     // Draw help popup on top if visible
@@ -190,7 +190,83 @@ fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
     f.render_stateful_widget(list, area, &mut app.model_list_state);
 }
 
-fn draw_detail(f: &mut Frame, area: Rect, app: &App) {
+fn draw_details_row(f: &mut Frame, area: Rect, app: &App) {
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
+        .split(area);
+
+    draw_provider_detail(f, chunks[0], app);
+    draw_model_detail(f, chunks[1], app);
+}
+
+fn draw_provider_detail(f: &mut Frame, area: Rect, app: &App) {
+    let lines: Vec<Line> = if let Some(entry) = app.current_model() {
+        // Find the provider
+        let provider = app
+            .providers
+            .iter()
+            .find(|(id, _)| id == &entry.provider_id)
+            .map(|(_, p)| p);
+
+        if let Some(provider) = provider {
+            vec![
+                Line::from(vec![Span::styled(
+                    &provider.name,
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                )]),
+                Line::from(""),
+                Line::from(vec![
+                    Span::styled("Docs: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(provider.doc.as_deref().unwrap_or("-")),
+                ]),
+                Line::from(vec![
+                    Span::styled("API:  ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(provider.api.as_deref().unwrap_or("-")),
+                ]),
+                Line::from(vec![
+                    Span::styled("NPM:  ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(provider.npm.as_deref().unwrap_or("-")),
+                ]),
+                Line::from(vec![
+                    Span::styled("Env:  ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(if provider.env.is_empty() {
+                        "-".to_string()
+                    } else {
+                        provider.env.join(", ")
+                    }),
+                ]),
+                Line::from(""),
+                Line::from(vec![
+                    Span::styled("D ", Style::default().fg(Color::Yellow)),
+                    Span::raw("copy docs  "),
+                    Span::styled("A ", Style::default().fg(Color::Yellow)),
+                    Span::raw("copy api"),
+                ]),
+            ]
+        } else {
+            vec![Line::from(Span::styled(
+                "Provider not found",
+                Style::default().fg(Color::DarkGray),
+            ))]
+        }
+    } else {
+        vec![Line::from(Span::styled(
+            "No model selected",
+            Style::default().fg(Color::DarkGray),
+        ))]
+    };
+
+    let paragraph = Paragraph::new(lines)
+        .block(Block::default().borders(Borders::ALL).title(" Provider "))
+        .wrap(Wrap { trim: true });
+
+    f.render_widget(paragraph, area);
+}
+
+fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
     let lines: Vec<Line> = if let Some(entry) = app.current_model() {
         let model = &entry.model;
         let provider_id = &entry.provider_id;
@@ -243,11 +319,13 @@ fn draw_detail(f: &mut Frame, area: Rect, app: &App) {
                 Span::raw(model.status.as_deref().unwrap_or("active")),
             ]),
             Line::from(""),
-            // Row 4: Context and Output limits
+            // Row 4: Context, Input, and Output limits
             Line::from(vec![
                 Span::styled("Context: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(format!("{:<12}", model.context_str())),
-                Span::styled("Max Output: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(format!("{:<10}", model.context_str())),
+                Span::styled("Input: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(format!("{:<10}", model.input_limit_str())),
+                Span::styled("Output: ", Style::default().fg(Color::DarkGray)),
                 Span::raw(model.output_str()),
             ]),
             // Row 5: Input and Output cost
@@ -503,7 +581,7 @@ fn draw_help_popup(f: &mut Frame, scroll: u16) {
         ]),
         Line::from(""),
         Line::from(Span::styled(
-            "Other",
+            "Copy",
             Style::default()
                 .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),
@@ -516,6 +594,21 @@ fn draw_help_popup(f: &mut Frame, scroll: u16) {
             Span::styled("  C             ", Style::default().fg(Color::Yellow)),
             Span::raw("Copy model only"),
         ]),
+        Line::from(vec![
+            Span::styled("  D             ", Style::default().fg(Color::Yellow)),
+            Span::raw("Copy provider docs URL"),
+        ]),
+        Line::from(vec![
+            Span::styled("  A             ", Style::default().fg(Color::Yellow)),
+            Span::raw("Copy provider API URL"),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(
+            "Other",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )),
         Line::from(vec![
             Span::styled("  q             ", Style::default().fg(Color::Yellow)),
             Span::raw("Quit"),

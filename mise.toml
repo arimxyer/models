@@ -1,0 +1,31 @@
+[tasks.check]
+description = "Run cargo check"
+run = "cargo check"
+
+[tasks.build]
+description = "Build the project"
+run = "cargo build"
+
+[tasks.build-release]
+description = "Build release binary"
+run = "cargo build --release"
+
+[tasks.fmt]
+description = "Format code with rustfmt"
+run = "cargo fmt"
+
+[tasks.fmt-check]
+description = "Check code formatting"
+run = "cargo fmt --check"
+
+[tasks.clippy]
+description = "Run clippy lints"
+run = "cargo clippy"
+
+[tasks.test]
+description = "Run tests"
+run = "cargo test"
+
+[tasks.run]
+description = "Run the TUI application"
+run = "cargo run -- tui"
