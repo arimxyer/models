@@ -1,5 +1,8 @@
 use ratatui::widgets::ListState;
 
+use super::agents_app::AgentsApp;
+use crate::agents::AgentsFile;
+use crate::config::Config;
 use crate::data::{Model, Provider, ProvidersMap};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -121,11 +124,12 @@ pub struct App {
     pub show_help: bool,
     pub help_scroll: u16,
     pub current_tab: Tab,
+    pub agents_app: Option<AgentsApp>,
     filtered_models: Vec<ModelEntry>,
 }
 
 impl App {
-    pub fn new(providers_map: ProvidersMap) -> Self {
+    pub fn new(providers_map: ProvidersMap, agents_file: Option<&AgentsFile>, config: Option<&Config>) -> Self {
         let mut providers: Vec<(String, Provider)> = providers_map.into_iter().collect();
         providers.sort_by(|a, b| a.0.cmp(&b.0));
 
@@ -133,6 +137,12 @@ impl App {
         provider_list_state.select(Some(0));
         let mut model_list_state = ListState::default();
         model_list_state.select(Some(1)); // +1 for header row
+
+        let agents_app = match (agents_file, config) {
+            (Some(af), Some(cfg)) => Some(AgentsApp::new(af, cfg)),
+            (Some(af), None) => Some(AgentsApp::new(af, &Config::default())),
+            _ => None,
+        };
 
         let mut app = Self {
             providers,
@@ -149,6 +159,7 @@ impl App {
             show_help: false,
             help_scroll: 0,
             current_tab: Tab::default(),
+            agents_app,
             filtered_models: Vec::new(),
         };
 
