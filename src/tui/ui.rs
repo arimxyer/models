@@ -2,7 +2,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
     Frame,
 };
 
@@ -38,6 +38,15 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     // Draw help popup on top if visible
     if app.show_help {
         draw_help_popup(f, app.help_scroll);
+    }
+
+    // Draw picker modal on top if visible (agents tab only)
+    if app.current_tab == Tab::Agents {
+        if let Some(agents_app) = &app.agents_app {
+            if agents_app.show_picker {
+                draw_picker_modal(f, app);
+            }
+        }
     }
 }
 
@@ -1003,6 +1012,114 @@ fn draw_help_popup(f: &mut Frame, scroll: u16) {
 
     let paragraph = Paragraph::new(help_text).block(block).scroll((scroll, 0));
     f.render_widget(paragraph, area);
+}
+
+fn draw_picker_modal(f: &mut Frame, app: &App) {
+    let agents_app = match &app.agents_app {
+        Some(a) => a,
+        None => return,
+    };
+
+    let num_agents = agents_app.entries.len();
+
+    // Calculate popup dimensions
+    // Width: 60 chars or screen width - 4, whichever is smaller
+    let popup_width = std::cmp::min(60, f.area().width.saturating_sub(4));
+    // Height: num agents + 4 (for borders and title/footer)
+    let popup_height = std::cmp::min((num_agents + 4) as u16, f.area().height.saturating_sub(4));
+
+    // Center the popup
+    let area = centered_rect_fixed(popup_width, popup_height, f.area());
+
+    // Clear the background
+    f.render_widget(Clear, area);
+
+    // Build list items with checkboxes
+    let items: Vec<ListItem> = agents_app
+        .entries
+        .iter()
+        .enumerate()
+        .map(|(idx, entry)| {
+            // Get tracked state from picker_changes, fallback to entry.tracked
+            let is_tracked = agents_app
+                .picker_changes
+                .get(&entry.id)
+                .copied()
+                .unwrap_or(entry.tracked);
+
+            let checkbox = if is_tracked { "[x]" } else { "[ ]" };
+
+            // Get first category or empty
+            let category = entry
+                .agent
+                .categories
+                .first()
+                .map(|c| c.as_str())
+                .unwrap_or("");
+
+            // Installed status
+            let installed_status = if entry.installed.version.is_some() {
+                "installed"
+            } else {
+                ""
+            };
+
+            // Build the line with styled spans
+            let line = Line::from(vec![
+                Span::raw(format!("{} ", checkbox)),
+                Span::styled(
+                    format!("{:<20}", truncate(&entry.agent.name, 20)),
+                    Style::default().add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    format!(" {:<10}", truncate(category, 10)),
+                    Style::default().fg(Color::DarkGray),
+                ),
+                Span::styled(
+                    format!(" {}", installed_status),
+                    Style::default().fg(Color::Green),
+                ),
+            ]);
+
+            // Highlight selected row
+            if idx == agents_app.picker_selected {
+                ListItem::new(line).style(
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                )
+            } else {
+                ListItem::new(line)
+            }
+        })
+        .collect();
+
+    let list = List::new(items)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Cyan))
+                .title(" Add/Remove Tracked Agents ")
+                .title_bottom(Line::from(" Space: toggle | Enter: save | Esc: cancel ").centered()),
+        )
+        .highlight_style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        );
+
+    // Create a ListState for proper scrolling
+    let mut list_state = ListState::default();
+    list_state.select(Some(agents_app.picker_selected));
+
+    f.render_stateful_widget(list, area, &mut list_state);
+}
+
+/// Create a centered rect using fixed width and height
+fn centered_rect_fixed(width: u16, height: u16, area: Rect) -> Rect {
+    let x = area.x + (area.width.saturating_sub(width)) / 2;
+    let y = area.y + (area.height.saturating_sub(height)) / 2;
+    Rect::new(x, y, width, height)
 }
 
 /// Create a centered rect using percentage of the available area
