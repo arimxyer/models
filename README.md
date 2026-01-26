@@ -11,7 +11,7 @@ A fast CLI and TUI for browsing AI model information from [models.dev](https://m
 
 Quickly look up context windows, pricing, capabilities, and more for 2000+ models across 75+ providers.
 
-<video src="https://github.com/user-attachments/assets/f5656c18-781e-44f6-a0b3-024ef987aef4" controls width="100%"></video>
+<video src="https://github.com/user-attachments/assets/f4c33f15-8ae7-4997-bb9f-240b79b0b562" controls width="100%"></video>
 
 ## Features
 
