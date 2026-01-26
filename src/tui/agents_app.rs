@@ -1,6 +1,6 @@
 use ratatui::widgets::ListState;
 
-use crate::agents::{AgentEntry, AgentsFile, GitHubData, detect_installed};
+use crate::agents::{AgentEntry, AgentsFile, GitHubClient, GitHubData, detect_installed};
 use crate::config::Config;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -217,5 +217,39 @@ impl AgentsApp {
         self.filters.open_source_only = !self.filters.open_source_only;
         self.selected_agent = 0;
         self.update_filtered();
+    }
+
+    /// Refresh GitHub data for all agents
+    /// Errors are logged but don't crash the app
+    pub fn refresh_github_data(&mut self, client: &GitHubClient) {
+        for entry in &mut self.entries {
+            match client.fetch(&entry.agent.repo) {
+                Ok(github_data) => {
+                    entry.github = github_data;
+                }
+                Err(_e) => {
+                    // Silently continue - GitHub data is optional
+                    // In debug builds, we could log: eprintln!("GitHub fetch failed for {}: {}", entry.id, e);
+                }
+            }
+        }
+    }
+
+    /// Refresh GitHub data for a single agent by ID
+    /// Returns true if the agent was found and refreshed
+    #[allow(dead_code)]
+    pub fn refresh_agent_github(&mut self, client: &GitHubClient, agent_id: &str) -> bool {
+        if let Some(entry) = self.entries.iter_mut().find(|e| e.id == agent_id) {
+            match client.fetch(&entry.agent.repo) {
+                Ok(github_data) => {
+                    entry.github = github_data;
+                    return true;
+                }
+                Err(_e) => {
+                    // Silently continue - GitHub data is optional
+                }
+            }
+        }
+        false
     }
 }
