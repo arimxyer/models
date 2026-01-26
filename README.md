@@ -67,7 +67,7 @@ models
 
 ![models TUI screenshot](public/assets/screenshot.png)
 
-#### TUI Keybindings
+### TUI Keybindings
 
 **Navigation**
 | Key | Action |
