@@ -36,16 +36,31 @@ pub fn handle_events(app: &App) -> Result<Option<Message>> {
 }
 
 fn handle_normal_mode(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Option<Message> {
+    // Global keys (work on any tab)
     match code {
-        KeyCode::Char('q') => Some(Message::Quit),
-        KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => Some(Message::Quit),
+        KeyCode::Char('q') => return Some(Message::Quit),
+        KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => return Some(Message::Quit),
+        KeyCode::Char('[') => return Some(Message::PrevTab),
+        KeyCode::Char(']') => return Some(Message::NextTab),
+        KeyCode::Char('?') => return Some(Message::ToggleHelp),
+        _ => {}
+    }
 
+    // Tab-specific keys
+    match app.current_tab {
+        super::app::Tab::Models => handle_models_keys(app, code, modifiers),
+        super::app::Tab::Agents => handle_agents_keys(app, code, modifiers),
+    }
+}
+
+fn handle_models_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Option<Message> {
+    match code {
         // Copy shortcuts
-        KeyCode::Char('c') => Some(Message::CopyFull), // c = copy provider/model-id
-        KeyCode::Char('C') => Some(Message::CopyModelId), // C = copy model-id only
-        KeyCode::Char('D') => Some(Message::CopyProviderDoc), // D = copy provider docs URL
-        KeyCode::Char('A') => Some(Message::CopyProviderApi), // A = copy provider API URL
-        KeyCode::Char('o') => Some(Message::OpenProviderDoc), // o = open provider docs in browser
+        KeyCode::Char('c') => Some(Message::CopyFull),
+        KeyCode::Char('C') => Some(Message::CopyModelId),
+        KeyCode::Char('D') => Some(Message::CopyProviderDoc),
+        KeyCode::Char('A') => Some(Message::CopyProviderApi),
+        KeyCode::Char('o') => Some(Message::OpenProviderDoc),
 
         // Navigation
         KeyCode::Char('j') | KeyCode::Down => match app.focus {
@@ -96,12 +111,42 @@ fn handle_normal_mode(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Opti
         KeyCode::Char('2') => Some(Message::ToggleTools),
         KeyCode::Char('3') => Some(Message::ToggleOpenWeights),
 
-        // Help
-        KeyCode::Char('?') => Some(Message::ToggleHelp),
+        _ => None,
+    }
+}
 
-        // Tab navigation
-        KeyCode::Char('[') => Some(Message::PrevTab),
-        KeyCode::Char(']') => Some(Message::NextTab),
+fn handle_agents_keys(app: &App, code: KeyCode, _modifiers: KeyModifiers) -> Option<Message> {
+    use super::agents_app::AgentFocus;
+
+    let focus = app
+        .agents_app
+        .as_ref()
+        .map(|a| a.focus)
+        .unwrap_or(AgentFocus::Categories);
+
+    match code {
+        // Navigation
+        KeyCode::Char('j') | KeyCode::Down => match focus {
+            AgentFocus::Categories => Some(Message::NextCategory),
+            AgentFocus::Agents => Some(Message::NextAgent),
+        },
+        KeyCode::Char('k') | KeyCode::Up => match focus {
+            AgentFocus::Categories => Some(Message::PrevCategory),
+            AgentFocus::Agents => Some(Message::PrevAgent),
+        },
+        KeyCode::Char('h') | KeyCode::Left => Some(Message::SwitchAgentFocus),
+        KeyCode::Char('l') | KeyCode::Right => Some(Message::SwitchAgentFocus),
+        KeyCode::Tab | KeyCode::BackTab => Some(Message::SwitchAgentFocus),
+
+        // Actions
+        KeyCode::Char('o') => Some(Message::OpenAgentDocs),
+        KeyCode::Char('r') => Some(Message::OpenAgentRepo),
+        KeyCode::Char('c') => Some(Message::CopyAgentName),
+
+        // Filters
+        KeyCode::Char('1') => Some(Message::ToggleInstalledFilter),
+        KeyCode::Char('2') => Some(Message::ToggleCliFilter),
+        KeyCode::Char('3') => Some(Message::ToggleOpenSourceFilter),
 
         _ => None,
     }

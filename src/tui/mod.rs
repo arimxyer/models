@@ -95,6 +95,38 @@ fn run_app(
                         app.set_status(format!("Opened: {}", url));
                     }
                 }
+                app::Message::OpenAgentDocs => {
+                    if let Some(ref agents_app) = app.agents_app {
+                        if let Some(entry) = agents_app.current_entry() {
+                            if let Some(ref url) = entry.agent.docs {
+                                let _ = open::that(url);
+                                app.set_status(format!("Opened: {}", url));
+                            } else if let Some(ref url) = entry.agent.homepage {
+                                let _ = open::that(url);
+                                app.set_status(format!("Opened: {}", url));
+                            }
+                        }
+                    }
+                }
+                app::Message::OpenAgentRepo => {
+                    if let Some(ref agents_app) = app.agents_app {
+                        if let Some(entry) = agents_app.current_entry() {
+                            let url = format!("https://github.com/{}", entry.agent.repo);
+                            let _ = open::that(&url);
+                            app.set_status(format!("Opened: {}", url));
+                        }
+                    }
+                }
+                app::Message::CopyAgentName => {
+                    if let Some(ref agents_app) = app.agents_app {
+                        if let Some(entry) = agents_app.current_entry() {
+                            if let Ok(mut clipboard) = arboard::Clipboard::new() {
+                                let _ = clipboard.set_text(&entry.agent.name);
+                                app.set_status(format!("Copied: {}", entry.agent.name));
+                            }
+                        }
+                    }
+                }
                 _ => {}
             }
 
