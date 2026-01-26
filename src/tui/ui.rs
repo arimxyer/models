@@ -7,6 +7,7 @@ use ratatui::{
 };
 
 use super::app::{App, Filters, Focus, Mode, SortOrder, Tab};
+use crate::agents::format_stars;
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
@@ -294,8 +295,8 @@ fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut super::agents_app::Agent
 
     // Header row
     let header = format!(
-        "{:<25} {:>10} {:>10} {:>8}",
-        "Agent", "Installed", "Latest", "Status"
+        "{:<25} {:>10} {:>10} {:>8} {:>8}",
+        "Agent", "Installed", "Latest", "Stars", "Status"
     );
     items.push(
         ListItem::new(header).style(
@@ -318,13 +319,19 @@ fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut super::agents_app::Agent
                 .latest_version
                 .as_deref()
                 .unwrap_or("-");
+            let stars = entry
+                .github
+                .stars
+                .map(format_stars)
+                .unwrap_or_else(|| "-".to_string());
             let status = entry.status_str();
 
             let row = format!(
-                "{:<25} {:>10} {:>10} {:>8}",
+                "{:<25} {:>10} {:>10} {:>8} {:>8}",
                 truncate(&entry.agent.name, 25),
                 truncate(installed, 10),
                 truncate(latest, 10),
+                truncate(&stars, 8),
                 status
             );
             items.push(ListItem::new(row));
