@@ -39,3 +39,12 @@ arboard = "3"
 
 # Browser
 open = "5"
+
+# Version comparison
+semver = "1"
+
+# Cross-platform paths
+dirs = "6"
+
+# Config file parsing
+toml = "0.8"
