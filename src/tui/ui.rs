@@ -20,8 +20,18 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         .split(f.area());
 
     draw_header(f, chunks[0], app);
-    draw_main(f, chunks[1], app);
-    draw_details_row(f, chunks[2], app);
+
+    match app.current_tab {
+        Tab::Models => {
+            draw_main(f, chunks[1], app);
+            draw_details_row(f, chunks[2], app);
+        }
+        Tab::Agents => {
+            draw_agents_placeholder(f, chunks[1]);
+            draw_agents_detail_placeholder(f, chunks[2]);
+        }
+    }
+
     draw_footer(f, chunks[3], app);
 
     // Draw help popup on top if visible
@@ -212,6 +222,27 @@ fn draw_details_row(f: &mut Frame, area: Rect, app: &App) {
 
     draw_provider_detail(f, chunks[0], app);
     draw_model_detail(f, chunks[1], app);
+}
+
+fn draw_agents_placeholder(f: &mut Frame, area: Rect) {
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(25), Constraint::Percentage(75)])
+        .split(area);
+
+    let categories = Paragraph::new("Agents tab coming soon...")
+        .block(Block::default().borders(Borders::ALL).title(" Categories "));
+    f.render_widget(categories, chunks[0]);
+
+    let agents = Paragraph::new("Select an agent to view details")
+        .block(Block::default().borders(Borders::ALL).title(" Agents "));
+    f.render_widget(agents, chunks[1]);
+}
+
+fn draw_agents_detail_placeholder(f: &mut Frame, area: Rect) {
+    let detail = Paragraph::new("Agent details will appear here")
+        .block(Block::default().borders(Borders::ALL).title(" Details "));
+    f.render_widget(detail, area);
 }
 
 fn draw_provider_detail(f: &mut Frame, area: Rect, app: &App) {
