@@ -99,6 +99,18 @@ pub enum Message {
     ScrollHelpDown,    // Scroll help popup down
     NextTab,
     PrevTab,
+    // Agents tab messages
+    NextCategory,
+    PrevCategory,
+    NextAgent,
+    PrevAgent,
+    SwitchAgentFocus,
+    ToggleInstalledFilter,
+    ToggleCliFilter,
+    ToggleOpenSourceFilter,
+    OpenAgentRepo,
+    OpenAgentDocs,
+    CopyAgentName,
 }
 
 #[derive(Debug, Clone)]
@@ -341,6 +353,49 @@ impl App {
             }
             Message::PrevTab => {
                 self.current_tab = self.current_tab.prev();
+            }
+            Message::NextCategory => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.next_category();
+                }
+            }
+            Message::PrevCategory => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.prev_category();
+                }
+            }
+            Message::NextAgent => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.next_agent();
+                }
+            }
+            Message::PrevAgent => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.prev_agent();
+                }
+            }
+            Message::SwitchAgentFocus => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.switch_focus();
+                }
+            }
+            Message::ToggleInstalledFilter => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.toggle_installed_filter();
+                }
+            }
+            Message::ToggleCliFilter => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.toggle_cli_filter();
+                }
+            }
+            Message::ToggleOpenSourceFilter => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.toggle_open_source_filter();
+                }
+            }
+            Message::OpenAgentRepo | Message::OpenAgentDocs | Message::CopyAgentName => {
+                // Handled in main loop
             }
         }
         true
