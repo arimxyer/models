@@ -108,13 +108,18 @@ impl AgentsApp {
             .iter()
             .map(|(id, agent)| {
                 let installed = detect_installed(agent);
+                let tracked = config.is_tracked(id);
                 AgentEntry {
                     id: id.clone(),
                     agent: agent.clone(),
                     github: GitHubData::default(),
                     installed,
-                    tracked: config.is_tracked(id),
-                    fetch_status: FetchStatus::default(),
+                    tracked,
+                    fetch_status: if tracked {
+                        FetchStatus::Loading
+                    } else {
+                        FetchStatus::NotStarted
+                    },
                 }
             })
             .collect();
@@ -134,7 +139,7 @@ impl AgentsApp {
                 github: GitHubData::default(),
                 installed,
                 tracked: true, // Custom agents are tracked by default
-                fetch_status: FetchStatus::default(),
+                fetch_status: FetchStatus::Loading, // Tracked, so GitHub fetch will be spawned
             });
         }
 
