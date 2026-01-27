@@ -771,20 +771,36 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
                 .constraints([Constraint::Min(0), Constraint::Length(10)])
                 .split(area);
 
-            let left_content = Line::from(vec![
-                Span::styled(" q ", Style::default().fg(Color::Yellow)),
-                Span::raw("quit  "),
-                Span::styled(" ↑/↓ ", Style::default().fg(Color::Yellow)),
-                Span::raw("nav  "),
-                Span::styled(" Tab ", Style::default().fg(Color::Yellow)),
-                Span::raw("switch  "),
-                Span::styled(" / ", Style::default().fg(Color::Yellow)),
-                Span::raw("search  "),
-                Span::styled(" s ", Style::default().fg(Color::Yellow)),
-                Span::raw("sort  "),
-                Span::styled(" c ", Style::default().fg(Color::Yellow)),
-                Span::raw("copy (prov/model)"),
-            ]);
+            let left_content = match app.current_tab {
+                Tab::Models => Line::from(vec![
+                    Span::styled(" q ", Style::default().fg(Color::Yellow)),
+                    Span::raw("quit  "),
+                    Span::styled(" ↑/↓ ", Style::default().fg(Color::Yellow)),
+                    Span::raw("nav  "),
+                    Span::styled(" Tab ", Style::default().fg(Color::Yellow)),
+                    Span::raw("switch  "),
+                    Span::styled(" / ", Style::default().fg(Color::Yellow)),
+                    Span::raw("search  "),
+                    Span::styled(" s ", Style::default().fg(Color::Yellow)),
+                    Span::raw("sort  "),
+                    Span::styled(" c ", Style::default().fg(Color::Yellow)),
+                    Span::raw("copy"),
+                ]),
+                Tab::Agents => Line::from(vec![
+                    Span::styled(" q ", Style::default().fg(Color::Yellow)),
+                    Span::raw("quit  "),
+                    Span::styled(" ↑/↓ ", Style::default().fg(Color::Yellow)),
+                    Span::raw("nav  "),
+                    Span::styled(" Tab ", Style::default().fg(Color::Yellow)),
+                    Span::raw("switch  "),
+                    Span::styled(" s ", Style::default().fg(Color::Yellow)),
+                    Span::raw("sort  "),
+                    Span::styled(" a ", Style::default().fg(Color::Yellow)),
+                    Span::raw("track  "),
+                    Span::styled(" u ", Style::default().fg(Color::Yellow)),
+                    Span::raw("update"),
+                ]),
+            };
 
             let right_content = Line::from(vec![
                 Span::styled(" ? ", Style::default().fg(Color::Yellow)),
