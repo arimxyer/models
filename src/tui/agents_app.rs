@@ -40,8 +40,8 @@ impl AgentCategory {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AgentFocus {
     #[default]
-    Categories,
-    Agents,
+    List,
+    Details,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -207,8 +207,8 @@ impl AgentsApp {
 
     pub fn switch_focus(&mut self) {
         self.focus = match self.focus {
-            AgentFocus::Categories => AgentFocus::Agents,
-            AgentFocus::Agents => AgentFocus::Categories,
+            AgentFocus::List => AgentFocus::Details,
+            AgentFocus::Details => AgentFocus::List,
         };
     }
 
