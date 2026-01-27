@@ -60,8 +60,7 @@ enum ListCommands {
     },
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
@@ -71,7 +70,14 @@ async fn main() -> Result<()> {
         },
         Some(Commands::Show { model_id, json }) => cli::show::model(&model_id, json)?,
         Some(Commands::Search { query, json }) => cli::search::search(&query, json)?,
-        None => tui::run().await?,
+        None => {
+            // Fetch providers before entering async runtime to avoid blocking in async context
+            let providers = api::fetch_providers()?;
+
+            // Create and run the async runtime only for the TUI
+            let runtime = tokio::runtime::Runtime::new()?;
+            runtime.block_on(tui::run(providers))?;
+        }
     }
 
     Ok(())

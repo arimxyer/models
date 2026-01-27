@@ -7,6 +7,7 @@ use crossterm::{
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
 use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
 
 pub mod agents_app;
 pub mod app;
@@ -14,16 +15,17 @@ pub mod event;
 pub mod ui;
 
 use crate::agents::{load_agents, AgentEntry, AsyncGitHubClient, GitHubData};
-use crate::api::fetch_providers;
 use crate::config::Config;
+use crate::data::ProvidersMap;
 
 /// Spawn background GitHub fetches for all agent entries.
-/// Returns a receiver that will receive (agent_id, github_data) tuples as they complete.
+/// Returns a receiver and the join handles for cleanup.
 fn spawn_github_fetches(
     entries: &[AgentEntry],
     client: AsyncGitHubClient,
-) -> mpsc::Receiver<(String, GitHubData)> {
+) -> (mpsc::Receiver<(String, GitHubData)>, Vec<JoinHandle<()>>) {
     let (tx, rx) = mpsc::channel(100);
+    let mut handles = Vec::with_capacity(entries.len());
 
     for entry in entries {
         let tx = tx.clone();
@@ -31,19 +33,19 @@ fn spawn_github_fetches(
         let id = entry.id.clone();
         let repo = entry.agent.repo.clone();
 
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             if let Ok(data) = client.fetch(&repo).await {
                 let _ = tx.send((id, data)).await;
             }
         });
+        handles.push(handle);
     }
 
-    rx
+    (rx, handles)
 }
 
-pub async fn run() -> Result<()> {
-    // Load data
-    let providers = fetch_providers()?;
+pub async fn run(providers: ProvidersMap) -> Result<()> {
+    // Load remaining data
     let agents_file = load_agents().ok();
     let config = Config::load().ok();
 
@@ -58,15 +60,21 @@ pub async fn run() -> Result<()> {
     let mut app = app::App::new(providers, agents_file.as_ref(), config);
 
     // Spawn background GitHub fetches for agents (non-blocking)
-    let github_rx = if let Some(ref agents_app) = app.agents_app {
+    let (github_rx, fetch_handles) = if let Some(ref agents_app) = app.agents_app {
         let client = AsyncGitHubClient::new(None);
-        Some(spawn_github_fetches(&agents_app.entries, client))
+        let (rx, handles) = spawn_github_fetches(&agents_app.entries, client);
+        (Some(rx), handles)
     } else {
-        None
+        (None, Vec::new())
     };
 
     // Main loop
     let result = run_app(&mut terminal, &mut app, github_rx);
+
+    // Abort any remaining fetch tasks to allow clean shutdown
+    for handle in fetch_handles {
+        handle.abort();
+    }
 
     // Restore terminal
     disable_raw_mode()?;
