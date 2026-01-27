@@ -159,7 +159,6 @@ fn handle_agents_keys(app: &App, code: KeyCode, _modifiers: KeyModifiers) -> Opt
         KeyCode::Char('o') => Some(Message::OpenAgentDocs),
         KeyCode::Char('r') => Some(Message::OpenAgentRepo),
         KeyCode::Char('c') => Some(Message::CopyAgentName),
-        KeyCode::Char('u') => Some(Message::CopyUpdateCommand),
 
         // Filters
         KeyCode::Char('1') => Some(Message::ToggleInstalledFilter),

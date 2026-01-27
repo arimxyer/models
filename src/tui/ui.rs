@@ -814,9 +814,7 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
                     Span::styled(" s ", Style::default().fg(Color::Yellow)),
                     Span::raw("sort  "),
                     Span::styled(" a ", Style::default().fg(Color::Yellow)),
-                    Span::raw("track  "),
-                    Span::styled(" u ", Style::default().fg(Color::Yellow)),
-                    Span::raw("update"),
+                    Span::raw("track"),
                 ]),
             };
 
@@ -1029,10 +1027,6 @@ fn draw_help_popup(f: &mut Frame, scroll: u16) {
         Line::from(vec![
             Span::styled("  a             ", Style::default().fg(Color::Yellow)),
             Span::raw("Add/remove tracked agents"),
-        ]),
-        Line::from(vec![
-            Span::styled("  u             ", Style::default().fg(Color::Yellow)),
-            Span::raw("Copy update command"),
         ]),
         Line::from(""),
         Line::from(Span::styled(

@@ -196,19 +196,6 @@ fn run_app(
                         }
                     }
                 }
-                app::Message::CopyUpdateCommand => {
-                    if let Some(ref agents_app) = app.agents_app {
-                        if let Some(entry) = agents_app.current_entry() {
-                            if let Some(cmd) = entry.agent.update_command() {
-                                if let Ok(mut clipboard) = arboard::Clipboard::new() {
-                                    let _ = clipboard.set_text(&cmd);
-                                    app.set_status(format!("Copied: {}", cmd));
-                                    last_status_time = Some(std::time::Instant::now());
-                                }
-                            }
-                        }
-                    }
-                }
                 app::Message::PickerSave => {
                     // Picker save sets its own status message via app.update
                     last_status_time = Some(std::time::Instant::now());
