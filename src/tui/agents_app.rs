@@ -281,8 +281,9 @@ impl AgentsApp {
         self.update_filtered();
     }
 
-    /// Refresh GitHub data for all agents
+    /// Refresh GitHub data for all agents (sync version, kept for potential CLI use)
     /// Errors are logged but don't crash the app
+    #[allow(dead_code)]
     pub fn refresh_github_data(&mut self, client: &GitHubClient) {
         for entry in &mut self.entries {
             match client.fetch(&entry.agent.repo) {

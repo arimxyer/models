@@ -1,7 +1,7 @@
 use ratatui::widgets::ListState;
 
 use super::agents_app::AgentsApp;
-use crate::agents::{AgentsFile, GitHubClient, GitHubData};
+use crate::agents::{AgentsFile, GitHubData};
 use crate::config::Config;
 use crate::data::{Model, Provider, ProvidersMap};
 
@@ -151,7 +151,6 @@ pub struct App {
     pub help_scroll: u16,
     pub current_tab: Tab,
     pub agents_app: Option<AgentsApp>,
-    pub github_client: GitHubClient,
     pub config: Config,
     filtered_models: Vec<ModelEntry>,
 }
@@ -185,7 +184,6 @@ impl App {
             help_scroll: 0,
             current_tab: Tab::default(),
             agents_app,
-            github_client: GitHubClient::new(),
             config,
             filtered_models: Vec::new(),
         };

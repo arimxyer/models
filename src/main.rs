@@ -60,7 +60,8 @@ enum ListCommands {
     },
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
@@ -70,7 +71,7 @@ fn main() -> Result<()> {
         },
         Some(Commands::Show { model_id, json }) => cli::show::model(&model_id, json)?,
         Some(Commands::Search { query, json }) => cli::search::search(&query, json)?,
-        None => tui::run()?,
+        None => tui::run().await?,
     }
 
     Ok(())
