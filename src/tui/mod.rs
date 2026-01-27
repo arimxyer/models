@@ -18,16 +18,17 @@ use crate::agents::{load_agents, AgentEntry, AsyncGitHubClient, GitHubData};
 use crate::config::Config;
 use crate::data::ProvidersMap;
 
-/// Spawn background GitHub fetches for all agent entries.
+/// Spawn background GitHub fetches for tracked agent entries only.
 /// Returns a receiver and the join handles for cleanup.
 fn spawn_github_fetches(
     entries: &[AgentEntry],
     client: AsyncGitHubClient,
 ) -> (mpsc::Receiver<(String, GitHubData)>, Vec<JoinHandle<()>>) {
     let (tx, rx) = mpsc::channel(100);
-    let mut handles = Vec::with_capacity(entries.len());
+    let tracked_entries: Vec<_> = entries.iter().filter(|e| e.tracked).collect();
+    let mut handles = Vec::with_capacity(tracked_entries.len());
 
-    for entry in entries {
+    for entry in tracked_entries {
         let tx = tx.clone();
         let client = client.clone();
         let id = entry.id.clone();
