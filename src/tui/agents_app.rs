@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use ratatui::widgets::ListState;
 
-use crate::agents::{detect_installed, AgentEntry, AgentsFile, GitHubData};
+use crate::agents::{detect_installed, AgentEntry, AgentsFile, FetchStatus, GitHubData};
 use crate::config::Config;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -114,6 +114,7 @@ impl AgentsApp {
                     github: GitHubData::default(),
                     installed,
                     tracked: config.is_tracked(id),
+                    fetch_status: FetchStatus::default(),
                 }
             })
             .collect();
@@ -133,6 +134,7 @@ impl AgentsApp {
                 github: GitHubData::default(),
                 installed,
                 tracked: true, // Custom agents are tracked by default
+                fetch_status: FetchStatus::default(),
             });
         }
 
