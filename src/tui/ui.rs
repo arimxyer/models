@@ -345,7 +345,7 @@ fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut App) {
     let mut items: Vec<ListItem> = Vec::new();
 
     // Header row
-    let header = format!("{:<20} {:>6} {:>12}", "Agent", "Type", "Version");
+    let header = format!("{:<22} {:>6} {:>8}", "Agent", "Type", "Installed");
     items.push(
         ListItem::new(header).style(
             Style::default()
@@ -365,13 +365,17 @@ fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut App) {
                 "-"
             };
 
-            let version = format_smart_version(entry);
+            let installed = if entry.installed.version.is_some() {
+                "✓"
+            } else {
+                "-"
+            };
 
             let row = format!(
-                "{:<20} {:>6} {:>12}",
-                truncate(&entry.agent.name, 20),
+                "{:<22} {:>6} {:>8}",
+                truncate(&entry.agent.name, 22),
                 agent_type,
-                truncate(&version, 12),
+                installed,
             );
             items.push(ListItem::new(row));
         }
@@ -391,20 +395,6 @@ fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut App) {
         state.select(Some(selected + 1));
     }
     f.render_stateful_widget(list, chunks[1], &mut state);
-}
-
-fn format_smart_version(entry: &crate::agents::AgentEntry) -> String {
-    match (&entry.installed.version, &entry.github.latest_version) {
-        (None, _) => "-".to_string(),
-        (Some(installed), None) => format!("v{}", installed),
-        (Some(installed), Some(latest)) => {
-            if entry.update_available() {
-                format!("{} -> {}", installed, latest)
-            } else {
-                format!("v{} ✓", installed)
-            }
-        }
-    }
 }
 
 fn draw_agent_detail(f: &mut Frame, area: Rect, app: &App) {
