@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 
-use super::GitHubData;
+use super::{GitHubData, Release};
 
 const CACHE_TTL: Duration = Duration::from_secs(60 * 60);
 const GITHUB_API_BASE: &str = "https://api.github.com";
@@ -93,13 +93,13 @@ impl AsyncGitHubClient {
     pub async fn fetch_fresh(&self, repo: &str) -> Result<GitHubData> {
         let mut data = GitHubData::default();
 
-        // Fetch repo and release in parallel
+        // Fetch repo and releases in parallel
         let repo_url = format!("{}/repos/{}", GITHUB_API_BASE, repo);
-        let release_url = format!("{}/repos/{}/releases/latest", GITHUB_API_BASE, repo);
+        let releases_url = format!("{}/repos/{}/releases", GITHUB_API_BASE, repo);
 
-        let (repo_result, release_result) = tokio::join!(
+        let (repo_result, releases_result) = tokio::join!(
             self.get_json::<RepoResponse>(&repo_url),
-            self.get_json::<ReleaseResponse>(&release_url),
+            self.get_json::<Vec<ReleaseResponse>>(&releases_url),
         );
 
         if let Ok(repo_info) = repo_result {
@@ -112,14 +112,22 @@ impl AsyncGitHubClient {
             data.last_commit = repo_info.pushed_at.map(|s| format_relative_time(&s));
         }
 
-        if let Ok(release) = release_result {
-            let version = release
-                .tag_name
-                .strip_prefix('v')
-                .unwrap_or(&release.tag_name);
-            data.latest_version = Some(version.to_string());
-            data.release_date = release.published_at.map(|s| format_relative_time(&s));
-            data.changelog = release.body;
+        if let Ok(releases) = releases_result {
+            data.releases = releases
+                .into_iter()
+                .map(|r| {
+                    let version = r
+                        .tag_name
+                        .strip_prefix('v')
+                        .unwrap_or(&r.tag_name)
+                        .to_string();
+                    Release {
+                        version,
+                        date: r.published_at.map(|s| format_relative_time(&s)),
+                        changelog: r.body,
+                    }
+                })
+                .collect();
         }
 
         Ok(data)
