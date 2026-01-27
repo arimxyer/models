@@ -322,4 +322,35 @@ impl AgentsApp {
         self.update_filtered();  // Re-filter in case tracked_only is active
         Ok(())
     }
+
+    /// Format active filters for display in block title
+    pub fn format_active_filters(&self) -> String {
+        let mut active = Vec::new();
+
+        // Category (if not "All")
+        let category = AgentCategory::variants()[self.selected_category];
+        if category != AgentCategory::All {
+            active.push(category.label().to_lowercase());
+        }
+
+        // Additional filters
+        if self.filters.installed_only {
+            active.push("installed".to_string());
+        }
+        if self.filters.cli_only {
+            active.push("cli".to_string());
+        }
+        if self.filters.open_source_only {
+            active.push("open".to_string());
+        }
+        if self.filters.tracked_only {
+            active.push("tracked".to_string());
+        }
+
+        if !self.search_query.is_empty() {
+            active.push("search".to_string());
+        }
+
+        active.join(", ")
+    }
 }
