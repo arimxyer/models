@@ -245,49 +245,14 @@ fn draw_agents_main(f: &mut Frame, area: Rect, app: &mut App) {
         }
     };
 
+    // Two-panel layout: List (35%) | Details (65%)
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(25), Constraint::Percentage(75)])
+        .constraints([Constraint::Percentage(35), Constraint::Percentage(65)])
         .split(area);
 
-    draw_agent_categories(f, chunks[0], agents_app);
-    draw_agent_list(f, chunks[1], agents_app);
-}
-
-fn draw_agent_categories(f: &mut Frame, area: Rect, app: &mut super::agents_app::AgentsApp) {
-    use super::agents_app::{AgentCategory, AgentFocus};
-
-    let is_focused = app.focus == AgentFocus::Categories;
-    let border_style = if is_focused {
-        Style::default().fg(Color::Cyan)
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
-
-    let items: Vec<ListItem> = AgentCategory::variants()
-        .iter()
-        .map(|cat| {
-            let count = app.category_count(*cat);
-            let text = format!("{} ({})", cat.label(), count);
-            ListItem::new(text)
-        })
-        .collect();
-
-    let list = List::new(items)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(border_style)
-                .title(" Categories "),
-        )
-        .highlight_style(
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD),
-        )
-        .highlight_symbol("> ");
-
-    f.render_stateful_widget(list, area, &mut app.category_list_state);
+    draw_agent_list(f, chunks[0], app);
+    draw_agent_detail(f, chunks[1], app);
 }
 
 fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut super::agents_app::AgentsApp) {
