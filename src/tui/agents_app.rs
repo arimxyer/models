@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use ratatui::widgets::ListState;
 
-use crate::agents::{AgentEntry, AgentsFile, GitHubClient, GitHubData, detect_installed};
+use crate::agents::{detect_installed, AgentEntry, AgentsFile, GitHubClient, GitHubData};
 use crate::config::Config;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -97,6 +97,8 @@ pub struct AgentsApp {
     pub picker_changes: HashMap<String, bool>, // agent_id -> new tracked state
     // Detail panel scroll
     pub detail_scroll: u16,
+    // Loading state for async GitHub fetches
+    pub loading_github: bool,
 }
 
 impl AgentsApp {
@@ -115,6 +117,24 @@ impl AgentsApp {
                 }
             })
             .collect();
+
+        // Add custom agents from config
+        for custom in &config.agents.custom {
+            let id = custom.name.to_lowercase().replace(' ', "-");
+            // Skip if already exists (curated agent takes precedence)
+            if entries.iter().any(|e| e.id == id) {
+                continue;
+            }
+            let agent = custom.to_agent();
+            let installed = detect_installed(&agent);
+            entries.push(AgentEntry {
+                id,
+                agent,
+                github: GitHubData::default(),
+                installed,
+                tracked: true, // Custom agents are tracked by default
+            });
+        }
 
         // Sort by name
         entries.sort_by(|a, b| a.agent.name.cmp(&b.agent.name));
@@ -136,6 +156,7 @@ impl AgentsApp {
             picker_selected: 0,
             picker_changes: HashMap::new(),
             detail_scroll: 0,
+            loading_github: true, // GitHub data starts loading immediately
         };
 
         app.update_filtered();
@@ -161,8 +182,10 @@ impl AgentsApp {
                 };
 
                 // Additional filters
-                let filter_match = (!self.filters.installed_only || entry.installed.version.is_some())
-                    && (!self.filters.cli_only || entry.agent.categories.contains(&"cli".to_string()))
+                let filter_match = (!self.filters.installed_only
+                    || entry.installed.version.is_some())
+                    && (!self.filters.cli_only
+                        || entry.agent.categories.contains(&"cli".to_string()))
                     && (!self.filters.open_source_only || entry.agent.open_source)
                     && (!self.filters.tracked_only || entry.tracked);
 
@@ -334,7 +357,11 @@ impl AgentsApp {
 
     pub fn picker_toggle_current(&mut self) {
         if let Some(entry) = self.entries.get(self.picker_selected) {
-            let current = self.picker_changes.get(&entry.id).copied().unwrap_or(entry.tracked);
+            let current = self
+                .picker_changes
+                .get(&entry.id)
+                .copied()
+                .unwrap_or(entry.tracked);
             self.picker_changes.insert(entry.id.clone(), !current);
         }
     }
@@ -365,7 +392,7 @@ impl AgentsApp {
         }
 
         self.close_picker();
-        self.update_filtered();  // Re-filter in case tracked_only is active
+        self.update_filtered(); // Re-filter in case tracked_only is active
         Ok(())
     }
 

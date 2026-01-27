@@ -156,7 +156,11 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(providers_map: ProvidersMap, agents_file: Option<&AgentsFile>, config: Option<Config>) -> Self {
+    pub fn new(
+        providers_map: ProvidersMap,
+        agents_file: Option<&AgentsFile>,
+        config: Option<Config>,
+    ) -> Self {
         let mut providers: Vec<(String, Provider)> = providers_map.into_iter().collect();
         providers.sort_by(|a, b| a.0.cmp(&b.0));
 
@@ -402,7 +406,10 @@ impl App {
                     agents_app.toggle_tracked_filter();
                 }
             }
-            Message::OpenAgentRepo | Message::OpenAgentDocs | Message::CopyAgentName | Message::CopyUpdateCommand => {
+            Message::OpenAgentRepo
+            | Message::OpenAgentDocs
+            | Message::CopyAgentName
+            | Message::CopyUpdateCommand => {
                 // Handled in main loop
             }
             Message::OpenPicker => {
@@ -460,6 +467,15 @@ impl App {
                         entry.github = data;
                     }
                     agents_app.apply_sort(); // Re-sort after data arrives
+
+                    // Check if all entries have GitHub data, clear loading flag
+                    let all_loaded = agents_app
+                        .entries
+                        .iter()
+                        .all(|e| e.github.latest_version.is_some());
+                    if all_loaded {
+                        agents_app.loading_github = false;
+                    }
                 }
             }
         }

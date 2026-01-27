@@ -18,10 +18,10 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1),  // Header
-            main_constraint,        // Main content
-            detail_constraint,      // Detail panel (Models only)
-            Constraint::Length(1),  // Footer/search
+            Constraint::Length(1), // Header
+            main_constraint,       // Main content
+            detail_constraint,     // Detail panel (Models only)
+            Constraint::Length(1), // Footer/search
         ])
         .split(f.area());
 
@@ -279,17 +279,48 @@ fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut App) {
 
     // Filter toggles row
     let filter_line = Line::from(vec![
-        Span::styled(" [1]", Style::default().fg(if agents_app.filters.installed_only { Color::Green } else { Color::DarkGray })),
+        Span::styled(
+            " [1]",
+            Style::default().fg(if agents_app.filters.installed_only {
+                Color::Green
+            } else {
+                Color::DarkGray
+            }),
+        ),
         Span::raw(" Inst "),
-        Span::styled("[2]", Style::default().fg(if agents_app.filters.cli_only { Color::Green } else { Color::DarkGray })),
+        Span::styled(
+            "[2]",
+            Style::default().fg(if agents_app.filters.cli_only {
+                Color::Green
+            } else {
+                Color::DarkGray
+            }),
+        ),
         Span::raw(" CLI "),
-        Span::styled("[3]", Style::default().fg(if agents_app.filters.open_source_only { Color::Green } else { Color::DarkGray })),
+        Span::styled(
+            "[3]",
+            Style::default().fg(if agents_app.filters.open_source_only {
+                Color::Green
+            } else {
+                Color::DarkGray
+            }),
+        ),
         Span::raw(" OSS "),
-        Span::styled("[4]", Style::default().fg(if agents_app.filters.tracked_only { Color::Green } else { Color::DarkGray })),
+        Span::styled(
+            "[4]",
+            Style::default().fg(if agents_app.filters.tracked_only {
+                Color::Green
+            } else {
+                Color::DarkGray
+            }),
+        ),
         Span::raw(" Track"),
     ]);
-    let filter_para = Paragraph::new(filter_line)
-        .block(Block::default().borders(Borders::TOP | Borders::LEFT | Borders::RIGHT).border_style(border_style));
+    let filter_para = Paragraph::new(filter_line).block(
+        Block::default()
+            .borders(Borders::TOP | Borders::LEFT | Borders::RIGHT)
+            .border_style(border_style),
+    );
     f.render_widget(filter_para, chunks[0]);
 
     // Agent list
@@ -331,9 +362,18 @@ fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut App) {
     let sort_indicator = format!(" \u{2193}{}", agents_app.sort_order.label());
     let filter_indicator = agents_app.format_active_filters();
     let title = if filter_indicator.is_empty() {
-        format!(" Agents ({}){} ", agents_app.filtered_entries.len(), sort_indicator)
+        format!(
+            " Agents ({}){} ",
+            agents_app.filtered_entries.len(),
+            sort_indicator
+        )
     } else {
-        format!(" Agents ({}) [{}]{} ", agents_app.filtered_entries.len(), filter_indicator, sort_indicator)
+        format!(
+            " Agents ({}) [{}]{} ",
+            agents_app.filtered_entries.len(),
+            filter_indicator,
+            sort_indicator
+        )
     };
 
     let list = List::new(items)
@@ -411,13 +451,20 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &App) {
         detail_lines.push(Line::from(vec![
             Span::styled(&entry.agent.repo, Style::default().fg(Color::DarkGray)),
             Span::raw("  "),
-            Span::styled(format!("★ {}", stars_str), Style::default().fg(Color::Yellow)),
+            Span::styled(
+                format!("★ {}", stars_str),
+                Style::default().fg(Color::Yellow),
+            ),
         ]));
 
         detail_lines.push(Line::from(""));
 
         // Installed vs Latest
-        let installed_str = entry.installed.version.as_deref().unwrap_or("Not installed");
+        let installed_str = entry
+            .installed
+            .version
+            .as_deref()
+            .unwrap_or("Not installed");
         let status = if entry.update_available() {
             Span::styled(" (update available)", Style::default().fg(Color::Yellow))
         } else if entry.installed.version.is_some() {
@@ -437,8 +484,19 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &App) {
             detail_lines.push(Line::from(vec![
                 Span::styled("Latest:    ", Style::default().fg(Color::DarkGray)),
                 Span::raw(format!("v{}", latest)),
-                Span::styled(format!(" ({})", release_date), Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    format!(" ({})", release_date),
+                    Style::default().fg(Color::DarkGray),
+                ),
             ]));
+        }
+
+        // Show loading indicator if GitHub data not yet loaded
+        if agents_app.loading_github && entry.github.latest_version.is_none() {
+            detail_lines.push(Line::from(Span::styled(
+                "Loading GitHub data...",
+                Style::default().fg(Color::DarkGray),
+            )));
         }
 
         detail_lines.push(Line::from(""));
@@ -461,7 +519,10 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &App) {
                     continue;
                 }
                 // Basic bullet point detection
-                let formatted = if let Some(rest) = trimmed.strip_prefix("- ").or_else(|| trimmed.strip_prefix("* ")) {
+                let formatted = if let Some(rest) = trimmed
+                    .strip_prefix("- ")
+                    .or_else(|| trimmed.strip_prefix("* "))
+                {
                     format!("  \u{2022} {}", rest)
                 } else if let Some(rest) = trimmed.strip_prefix("## ") {
                     rest.to_string()

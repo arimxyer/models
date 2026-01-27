@@ -48,7 +48,9 @@ fn handle_normal_mode(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Opti
     // Global keys (work on any tab)
     match code {
         KeyCode::Char('q') => return Some(Message::Quit),
-        KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => return Some(Message::Quit),
+        KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => {
+            return Some(Message::Quit)
+        }
         KeyCode::Char('[') => return Some(Message::PrevTab),
         KeyCode::Char(']') => return Some(Message::NextTab),
         KeyCode::Char('?') => return Some(Message::ToggleHelp),

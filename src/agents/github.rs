@@ -113,7 +113,10 @@ impl AsyncGitHubClient {
         }
 
         if let Ok(release) = release_result {
-            let version = release.tag_name.strip_prefix('v').unwrap_or(&release.tag_name);
+            let version = release
+                .tag_name
+                .strip_prefix('v')
+                .unwrap_or(&release.tag_name);
             data.latest_version = Some(version.to_string());
             data.release_date = release.published_at.map(|s| format_relative_time(&s));
             data.changelog = release.body;

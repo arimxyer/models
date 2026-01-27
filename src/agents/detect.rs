@@ -22,7 +22,11 @@ pub fn detect_installed(agent: &Agent) -> InstalledInfo {
     }
 
     // Try to get version
-    let version = get_version(binary, &agent.version_command, agent.version_regex.as_deref());
+    let version = get_version(
+        binary,
+        &agent.version_command,
+        agent.version_regex.as_deref(),
+    );
 
     InstalledInfo {
         version,
@@ -70,15 +74,16 @@ fn which_binary(name: &str) -> Option<PathBuf> {
     None
 }
 
-fn get_version(binary: &str, version_cmd: &[String], version_regex: Option<&str>) -> Option<String> {
+fn get_version(
+    binary: &str,
+    version_cmd: &[String],
+    version_regex: Option<&str>,
+) -> Option<String> {
     if version_cmd.is_empty() {
         return None;
     }
 
-    let output = Command::new(binary)
-        .args(version_cmd)
-        .output()
-        .ok()?;
+    let output = Command::new(binary).args(version_cmd).output().ok()?;
 
     let output_str = if output.status.success() {
         String::from_utf8_lossy(&output.stdout).to_string()

@@ -56,7 +56,9 @@ impl Agent {
             }
             Some("ide") => {
                 // IDEs typically auto-update or have their own update mechanism
-                self.homepage.as_ref().map(|h| format!("Visit {} for download", h))
+                self.homepage
+                    .as_ref()
+                    .map(|h| format!("Visit {} for download", h))
             }
             _ => None,
         }
@@ -113,7 +115,10 @@ impl AgentEntry {
         match (&self.installed.version, &self.github.latest_version) {
             (Some(installed), Some(latest)) => {
                 // Try semver comparison, fallback to string
-                match (semver::Version::parse(installed), semver::Version::parse(latest)) {
+                match (
+                    semver::Version::parse(installed),
+                    semver::Version::parse(latest),
+                ) {
                     (Ok(i), Ok(l)) => l > i,
                     _ => latest != installed,
                 }
@@ -121,5 +126,4 @@ impl AgentEntry {
             _ => false,
         }
     }
-
 }

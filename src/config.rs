@@ -15,12 +15,51 @@ pub struct Config {
     pub display: DisplayConfig,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CustomAgent {
+    pub name: String,
+    pub repo: String,
+    #[serde(default)]
+    pub agent_type: Option<String>, // "cli" or "ide"
+    #[serde(default)]
+    pub binary: Option<String>,
+    #[serde(default)]
+    pub version_command: Option<Vec<String>>,
+}
+
+impl CustomAgent {
+    pub fn to_agent(&self) -> crate::agents::Agent {
+        crate::agents::Agent {
+            name: self.name.clone(),
+            repo: self.repo.clone(),
+            categories: self
+                .agent_type
+                .as_ref()
+                .map(|t| vec![t.clone()])
+                .unwrap_or_default(),
+            cli_binary: self.binary.clone(),
+            version_command: self.version_command.clone().unwrap_or_default(),
+            installation_method: self.agent_type.clone(),
+            pricing: None,
+            supported_providers: vec![],
+            platform_support: vec![],
+            open_source: true,
+            version_regex: None,
+            config_files: vec![],
+            homepage: None,
+            docs: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct AgentsConfig {
     #[serde(default)]
     pub tracked: HashSet<String>,
     #[serde(default)]
     pub excluded: HashSet<String>,
+    #[serde(default)]
+    pub custom: Vec<CustomAgent>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
