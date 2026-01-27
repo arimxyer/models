@@ -485,6 +485,7 @@ impl App {
                 if let Some(ref mut agents_app) = self.agents_app {
                     if let Some(entry) = agents_app.entries.iter_mut().find(|e| e.id == agent_id) {
                         entry.github = data;
+                        entry.fetch_status = FetchStatus::Loaded;
                     }
                     agents_app.apply_sort(); // Re-sort after data arrives
 
