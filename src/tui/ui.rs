@@ -491,8 +491,9 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &App) {
             ]));
         }
 
-        // Show loading indicator if GitHub data not yet loaded
-        if agents_app.loading_github && entry.github.latest_version.is_none() {
+        // Show loading indicator if GitHub data not yet loaded for this agent
+        // Use stars as indicator since it's set for any successfully fetched repo
+        if agents_app.loading_github && entry.github.stars.is_none() {
             detail_lines.push(Line::from(Span::styled(
                 "Loading GitHub data...",
                 Style::default().fg(Color::DarkGray),
@@ -1018,6 +1019,10 @@ fn draw_help_popup(f: &mut Frame, scroll: u16) {
         Line::from(vec![
             Span::styled("  3             ", Style::default().fg(Color::Yellow)),
             Span::raw("Toggle open source filter"),
+        ]),
+        Line::from(vec![
+            Span::styled("  4             ", Style::default().fg(Color::Yellow)),
+            Span::raw("Toggle tracked filter"),
         ]),
         Line::from(vec![
             Span::styled("  a             ", Style::default().fg(Color::Yellow)),

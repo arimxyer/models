@@ -166,31 +166,6 @@ pub fn format_relative_time(iso_date: &str) -> String {
     }
 }
 
-// Sync wrapper for backward compatibility (used by existing TUI code)
-pub struct GitHubClient {
-    _async_client: AsyncGitHubClient,
-}
-
-impl Default for GitHubClient {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl GitHubClient {
-    pub fn new() -> Self {
-        Self {
-            _async_client: AsyncGitHubClient::new(None),
-        }
-    }
-
-    // Note: These methods will be removed when we fully migrate to async
-    pub fn fetch(&self, _repo: &str) -> Result<GitHubData> {
-        // Return empty data for now - will be populated by async fetches
-        Ok(GitHubData::default())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

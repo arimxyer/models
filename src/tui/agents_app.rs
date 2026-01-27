@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use ratatui::widgets::ListState;
 
-use crate::agents::{detect_installed, AgentEntry, AgentsFile, GitHubClient, GitHubData};
+use crate::agents::{detect_installed, AgentEntry, AgentsFile, GitHubData};
 use crate::config::Config;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -99,6 +99,7 @@ pub struct AgentsApp {
     pub detail_scroll: u16,
     // Loading state for async GitHub fetches
     pub loading_github: bool,
+    pub pending_github_fetches: usize,
 }
 
 impl AgentsApp {
@@ -142,6 +143,7 @@ impl AgentsApp {
         let mut agent_list_state = ListState::default();
         agent_list_state.select(Some(0));
 
+        let pending_fetches = entries.len();
         let mut app = Self {
             entries,
             filtered_entries: Vec::new(),
@@ -156,7 +158,8 @@ impl AgentsApp {
             picker_selected: 0,
             picker_changes: HashMap::new(),
             detail_scroll: 0,
-            loading_github: true, // GitHub data starts loading immediately
+            loading_github: true,
+            pending_github_fetches: pending_fetches,
         };
 
         app.update_filtered();
@@ -302,41 +305,6 @@ impl AgentsApp {
         self.filters.tracked_only = !self.filters.tracked_only;
         self.selected_agent = 0;
         self.update_filtered();
-    }
-
-    /// Refresh GitHub data for all agents (sync version, kept for potential CLI use)
-    /// Errors are logged but don't crash the app
-    #[allow(dead_code)]
-    pub fn refresh_github_data(&mut self, client: &GitHubClient) {
-        for entry in &mut self.entries {
-            match client.fetch(&entry.agent.repo) {
-                Ok(github_data) => {
-                    entry.github = github_data;
-                }
-                Err(_e) => {
-                    // Silently continue - GitHub data is optional
-                    // In debug builds, we could log: eprintln!("GitHub fetch failed for {}: {}", entry.id, e);
-                }
-            }
-        }
-    }
-
-    /// Refresh GitHub data for a single agent by ID
-    /// Returns true if the agent was found and refreshed
-    #[allow(dead_code)]
-    pub fn refresh_agent_github(&mut self, client: &GitHubClient, agent_id: &str) -> bool {
-        if let Some(entry) = self.entries.iter_mut().find(|e| e.id == agent_id) {
-            match client.fetch(&entry.agent.repo) {
-                Ok(github_data) => {
-                    entry.github = github_data;
-                    return true;
-                }
-                Err(_e) => {
-                    // Silently continue - GitHub data is optional
-                }
-            }
-        }
-        false
     }
 
     // Picker modal methods

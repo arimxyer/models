@@ -1,6 +1,9 @@
 use ratatui::widgets::ListState;
 
 use super::agents_app::AgentsApp;
+
+/// Page size for page up/down navigation
+const PAGE_SIZE: usize = 10;
 use crate::agents::{AgentsFile, GitHubData};
 use crate::config::Config;
 use crate::data::{Model, Provider, ProvidersMap};
@@ -256,7 +259,7 @@ impl App {
                 }
             }
             Message::PageDownProvider => {
-                let page_size = 10;
+                let page_size = PAGE_SIZE;
                 let last_index = self.provider_list_len().saturating_sub(1);
                 let next = (self.selected_provider + page_size).min(last_index);
                 if next != self.selected_provider {
@@ -264,14 +267,14 @@ impl App {
                 }
             }
             Message::PageUpProvider => {
-                let page_size = 10;
+                let page_size = PAGE_SIZE;
                 let next = self.selected_provider.saturating_sub(page_size);
                 if next != self.selected_provider {
                     self.select_provider_at_index(next);
                 }
             }
             Message::PageDownModel => {
-                let page_size = 10;
+                let page_size = PAGE_SIZE;
                 let last_index = self.filtered_models.len().saturating_sub(1);
                 let next = (self.selected_model + page_size).min(last_index);
                 if next != self.selected_model {
@@ -280,7 +283,7 @@ impl App {
                 }
             }
             Message::PageUpModel => {
-                let page_size = 10;
+                let page_size = PAGE_SIZE;
                 let next = self.selected_model.saturating_sub(page_size);
                 if next != self.selected_model {
                     self.selected_model = next;
@@ -468,12 +471,10 @@ impl App {
                     }
                     agents_app.apply_sort(); // Re-sort after data arrives
 
-                    // Check if all entries have GitHub data, clear loading flag
-                    let all_loaded = agents_app
-                        .entries
-                        .iter()
-                        .all(|e| e.github.latest_version.is_some());
-                    if all_loaded {
+                    // Decrement pending fetches and clear loading flag when all complete
+                    agents_app.pending_github_fetches =
+                        agents_app.pending_github_fetches.saturating_sub(1);
+                    if agents_app.pending_github_fetches == 0 {
                         agents_app.loading_github = false;
                     }
                 }
