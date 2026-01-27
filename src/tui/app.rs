@@ -1,7 +1,7 @@
 use ratatui::widgets::ListState;
 
 use super::agents_app::AgentsApp;
-use crate::agents::{AgentsFile, GitHubClient};
+use crate::agents::{AgentsFile, GitHubClient, GitHubData};
 use crate::config::Config;
 use crate::data::{Model, Provider, ProvidersMap};
 
@@ -123,6 +123,8 @@ pub enum Message {
     ScrollDetailDown,
     // Agent sort
     CycleAgentSort,
+    // Async data messages
+    GitHubDataReceived(String, GitHubData),
 }
 
 #[derive(Debug, Clone)]
@@ -452,6 +454,14 @@ impl App {
             Message::CycleAgentSort => {
                 if let Some(ref mut agents_app) = self.agents_app {
                     agents_app.cycle_sort();
+                }
+            }
+            Message::GitHubDataReceived(agent_id, data) => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    if let Some(entry) = agents_app.entries.iter_mut().find(|e| e.id == agent_id) {
+                        entry.github = data;
+                    }
+                    agents_app.apply_sort(); // Re-sort after data arrives
                 }
             }
         }
