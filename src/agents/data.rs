@@ -1,6 +1,16 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[allow(dead_code)]
+pub enum FetchStatus {
+    #[default]
+    NotStarted,
+    Loading,
+    Loaded,
+    Failed(String),
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AgentsFile {
     pub schema_version: u32,
@@ -102,6 +112,7 @@ pub struct AgentEntry {
     pub github: GitHubData,
     pub installed: InstalledInfo,
     pub tracked: bool,
+    pub fetch_status: FetchStatus,
 }
 
 impl AgentEntry {
