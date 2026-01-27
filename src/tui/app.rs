@@ -108,6 +108,7 @@ pub enum Message {
     ToggleInstalledFilter,
     ToggleCliFilter,
     ToggleOpenSourceFilter,
+    ToggleTrackedFilter,
     OpenAgentRepo,
     OpenAgentDocs,
     CopyAgentName,
@@ -401,6 +402,11 @@ impl App {
             Message::ToggleOpenSourceFilter => {
                 if let Some(ref mut agents_app) = self.agents_app {
                     agents_app.toggle_open_source_filter();
+                }
+            }
+            Message::ToggleTrackedFilter => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.toggle_tracked_filter();
                 }
             }
             Message::OpenAgentRepo | Message::OpenAgentDocs | Message::CopyAgentName | Message::CopyUpdateCommand => {
