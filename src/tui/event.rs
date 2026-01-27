@@ -165,7 +165,6 @@ fn handle_agents_keys(app: &App, code: KeyCode, _modifiers: KeyModifiers) -> Opt
         KeyCode::Char('1') => Some(Message::ToggleInstalledFilter),
         KeyCode::Char('2') => Some(Message::ToggleCliFilter),
         KeyCode::Char('3') => Some(Message::ToggleOpenSourceFilter),
-        KeyCode::Char('4') => Some(Message::ToggleTrackedFilter),
 
         // Picker
         KeyCode::Char('a') => Some(Message::OpenPicker),

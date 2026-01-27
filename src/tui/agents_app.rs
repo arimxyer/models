@@ -78,7 +78,6 @@ pub struct AgentFilters {
     pub installed_only: bool,
     pub cli_only: bool,
     pub open_source_only: bool,
-    pub tracked_only: bool,
 }
 
 pub struct AgentsApp {
@@ -143,7 +142,8 @@ impl AgentsApp {
         let mut agent_list_state = ListState::default();
         agent_list_state.select(Some(0));
 
-        let pending_fetches = entries.len();
+        // Only count tracked agents for pending fetches
+        let pending_fetches = entries.iter().filter(|e| e.tracked).count();
         let mut app = Self {
             entries,
             filtered_entries: Vec::new(),
@@ -184,13 +184,17 @@ impl AgentsApp {
                     AgentCategory::OpenSource => entry.agent.open_source,
                 };
 
+                // Tracked agents only (primary filter)
+                if !entry.tracked {
+                    return false;
+                }
+
                 // Additional filters
                 let filter_match = (!self.filters.installed_only
                     || entry.installed.version.is_some())
                     && (!self.filters.cli_only
                         || entry.agent.categories.contains(&"cli".to_string()))
-                    && (!self.filters.open_source_only || entry.agent.open_source)
-                    && (!self.filters.tracked_only || entry.tracked);
+                    && (!self.filters.open_source_only || entry.agent.open_source);
 
                 // Search filter
                 let search_match = query_lower.is_empty()
@@ -301,12 +305,6 @@ impl AgentsApp {
         self.update_filtered();
     }
 
-    pub fn toggle_tracked_filter(&mut self) {
-        self.filters.tracked_only = !self.filters.tracked_only;
-        self.selected_agent = 0;
-        self.update_filtered();
-    }
-
     // Picker modal methods
     pub fn open_picker(&mut self) {
         self.show_picker = true;
@@ -383,9 +381,6 @@ impl AgentsApp {
         }
         if self.filters.open_source_only {
             active.push("open".to_string());
-        }
-        if self.filters.tracked_only {
-            active.push("tracked".to_string());
         }
 
         if !self.search_query.is_empty() {

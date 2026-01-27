@@ -256,6 +256,11 @@ fn draw_agents_main(f: &mut Frame, area: Rect, app: &mut App) {
     draw_agent_detail(f, chunks[1], app);
 }
 
+/// Calculate visible height for detail panel (area height minus borders)
+fn detail_visible_height(area: Rect) -> u16 {
+    area.height.saturating_sub(2) // 2 for top and bottom borders
+}
+
 fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut App) {
     use super::agents_app::AgentFocus;
 
@@ -271,16 +276,42 @@ fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut App) {
         Style::default().fg(Color::DarkGray)
     };
 
-    // Split into filter row + list
+    // Build title with count and sort indicator
+    let sort_indicator = format!(" \u{2193}{}", agents_app.sort_order.label());
+    let filter_indicator = agents_app.format_active_filters();
+    let title = if filter_indicator.is_empty() {
+        format!(
+            " Agents ({}){} ",
+            agents_app.filtered_entries.len(),
+            sort_indicator
+        )
+    } else {
+        format!(
+            " Agents ({}) [{}]{} ",
+            agents_app.filtered_entries.len(),
+            filter_indicator,
+            sort_indicator
+        )
+    };
+
+    // Outer block with title at top
+    let outer_block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(border_style)
+        .title(title);
+    let inner_area = outer_block.inner(area);
+    f.render_widget(outer_block, area);
+
+    // Split inner area into filter row + list
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(2), Constraint::Min(0)])
-        .split(area);
+        .constraints([Constraint::Length(1), Constraint::Min(0)])
+        .split(inner_area);
 
     // Filter toggles row
     let filter_line = Line::from(vec![
         Span::styled(
-            " [1]",
+            "[1]",
             Style::default().fg(if agents_app.filters.installed_only {
                 Color::Green
             } else {
@@ -305,22 +336,9 @@ fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut App) {
                 Color::DarkGray
             }),
         ),
-        Span::raw(" OSS "),
-        Span::styled(
-            "[4]",
-            Style::default().fg(if agents_app.filters.tracked_only {
-                Color::Green
-            } else {
-                Color::DarkGray
-            }),
-        ),
-        Span::raw(" Track"),
+        Span::raw(" OSS"),
     ]);
-    let filter_para = Paragraph::new(filter_line).block(
-        Block::default()
-            .borders(Borders::TOP | Borders::LEFT | Borders::RIGHT)
-            .border_style(border_style),
-    );
+    let filter_para = Paragraph::new(filter_line);
     f.render_widget(filter_para, chunks[0]);
 
     // Agent list
@@ -359,30 +377,7 @@ fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut App) {
         }
     }
 
-    let sort_indicator = format!(" \u{2193}{}", agents_app.sort_order.label());
-    let filter_indicator = agents_app.format_active_filters();
-    let title = if filter_indicator.is_empty() {
-        format!(
-            " Agents ({}){} ",
-            agents_app.filtered_entries.len(),
-            sort_indicator
-        )
-    } else {
-        format!(
-            " Agents ({}) [{}]{} ",
-            agents_app.filtered_entries.len(),
-            filter_indicator,
-            sort_indicator
-        )
-    };
-
     let list = List::new(items)
-        .block(
-            Block::default()
-                .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
-                .border_style(border_style)
-                .title(title),
-        )
         .highlight_style(
             Style::default()
                 .fg(Color::Yellow)
@@ -430,26 +425,30 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &App) {
     let lines: Vec<Line> = if let Some(entry) = agents_app.current_entry() {
         let mut detail_lines = Vec::new();
 
-        // Header: Name + Version
-        let version_str = entry.github.latest_version.as_deref().unwrap_or("-");
+        // Header: Name + Version (clone to avoid borrow issues with scroll clamping)
+        let name = entry.agent.name.clone();
+        let version_str = entry
+            .github
+            .latest_version
+            .as_deref()
+            .unwrap_or("-")
+            .to_string();
         detail_lines.push(Line::from(vec![
             Span::styled(
-                &entry.agent.name,
+                name,
                 Style::default()
                     .fg(Color::White)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::raw("  "),
-            Span::styled(
-                format!("v{}", version_str),
-                Style::default().fg(Color::Cyan),
-            ),
+            Span::styled(format!("v{}", version_str), Style::default().fg(Color::Cyan)),
         ]));
 
         // Repo + Stars
+        let repo = entry.agent.repo.clone();
         let stars_str = entry.github.stars.map(format_stars).unwrap_or_default();
         detail_lines.push(Line::from(vec![
-            Span::styled(&entry.agent.repo, Style::default().fg(Color::DarkGray)),
+            Span::styled(repo, Style::default().fg(Color::DarkGray)),
             Span::raw("  "),
             Span::styled(
                 format!("★ {}", stars_str),
@@ -514,7 +513,8 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &App) {
             )));
 
             // Light parsing: split by newlines, render each line
-            for line in changelog.lines().take(15) {
+            // Lines will wrap naturally via Paragraph's Wrap setting
+            for line in changelog.lines() {
                 let trimmed = line.trim();
                 if trimmed.is_empty() {
                     continue;
@@ -530,7 +530,7 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &App) {
                 } else {
                     format!("  {}", trimmed)
                 };
-                detail_lines.push(Line::from(truncate(&formatted, 60)));
+                detail_lines.push(Line::from(formatted));
             }
         } else {
             detail_lines.push(Line::from(Span::styled(
@@ -547,6 +547,12 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &App) {
         ))]
     };
 
+    // Clamp scroll to content bounds (calculate clamped value without mutating)
+    let visible_height = detail_visible_height(area);
+    let content_lines = lines.len() as u16;
+    let max_scroll = content_lines.saturating_sub(visible_height);
+    let scroll_pos = agents_app.detail_scroll.min(max_scroll);
+
     let paragraph = Paragraph::new(lines)
         .block(
             Block::default()
@@ -555,7 +561,7 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &App) {
                 .title(" Details "),
         )
         .wrap(Wrap { trim: false })
-        .scroll((agents_app.detail_scroll, 0));
+        .scroll((scroll_pos, 0));
 
     f.render_widget(paragraph, area);
 }
@@ -1019,10 +1025,6 @@ fn draw_help_popup(f: &mut Frame, scroll: u16) {
         Line::from(vec![
             Span::styled("  3             ", Style::default().fg(Color::Yellow)),
             Span::raw("Toggle open source filter"),
-        ]),
-        Line::from(vec![
-            Span::styled("  4             ", Style::default().fg(Color::Yellow)),
-            Span::raw("Toggle tracked filter"),
         ]),
         Line::from(vec![
             Span::styled("  a             ", Style::default().fg(Color::Yellow)),
