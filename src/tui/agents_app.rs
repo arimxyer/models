@@ -6,6 +6,35 @@ use crate::agents::{AgentEntry, AgentsFile, GitHubClient, GitHubData, detect_ins
 use crate::config::Config;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AgentSortOrder {
+    #[default]
+    Name,
+    Updated,
+    Stars,
+    Status,
+}
+
+impl AgentSortOrder {
+    pub fn next(self) -> Self {
+        match self {
+            AgentSortOrder::Name => AgentSortOrder::Updated,
+            AgentSortOrder::Updated => AgentSortOrder::Stars,
+            AgentSortOrder::Stars => AgentSortOrder::Status,
+            AgentSortOrder::Status => AgentSortOrder::Name,
+        }
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            AgentSortOrder::Name => "name",
+            AgentSortOrder::Updated => "updated",
+            AgentSortOrder::Stars => "stars",
+            AgentSortOrder::Status => "status",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AgentCategory {
     #[default]
     All,
@@ -57,11 +86,11 @@ pub struct AgentsApp {
     pub filtered_entries: Vec<usize>, // indices into entries
     pub selected_category: usize,
     pub selected_agent: usize,
-    pub category_list_state: ListState,
     pub agent_list_state: ListState,
     pub focus: AgentFocus,
     pub filters: AgentFilters,
     pub search_query: String,
+    pub sort_order: AgentSortOrder,
     // Picker modal state
     pub show_picker: bool,
     pub picker_selected: usize,
@@ -90,8 +119,6 @@ impl AgentsApp {
         // Sort by name
         entries.sort_by(|a, b| a.agent.name.cmp(&b.agent.name));
 
-        let mut category_list_state = ListState::default();
-        category_list_state.select(Some(0));
         let mut agent_list_state = ListState::default();
         agent_list_state.select(Some(0));
 
@@ -100,11 +127,11 @@ impl AgentsApp {
             filtered_entries: Vec::new(),
             selected_category: 0,
             selected_agent: 0,
-            category_list_state,
             agent_list_state,
             focus: AgentFocus::default(),
             filters: AgentFilters::default(),
             search_query: String::new(),
+            sort_order: AgentSortOrder::default(),
             show_picker: false,
             picker_selected: 0,
             picker_changes: HashMap::new(),
@@ -149,6 +176,8 @@ impl AgentsApp {
             .map(|(i, _)| i)
             .collect();
 
+        self.apply_sort();
+
         // Reset selection if out of bounds
         if self.selected_agent >= self.filtered_entries.len() {
             self.selected_agent = 0;
@@ -156,42 +185,53 @@ impl AgentsApp {
         self.agent_list_state.select(Some(self.selected_agent));
     }
 
+    pub fn cycle_sort(&mut self) {
+        self.sort_order = self.sort_order.next();
+        self.apply_sort();
+    }
+
+    fn apply_sort(&mut self) {
+        let entries = &self.entries;
+        self.filtered_entries.sort_by(|&a, &b| {
+            let ea = &entries[a];
+            let eb = &entries[b];
+            match self.sort_order {
+                AgentSortOrder::Name => ea.agent.name.cmp(&eb.agent.name),
+                AgentSortOrder::Updated => {
+                    let da = ea.github.release_date.as_deref().unwrap_or("");
+                    let db = eb.github.release_date.as_deref().unwrap_or("");
+                    db.cmp(da) // Descending (newest first)
+                }
+                AgentSortOrder::Stars => {
+                    let sa = ea.github.stars.unwrap_or(0);
+                    let sb = eb.github.stars.unwrap_or(0);
+                    sb.cmp(&sa) // Descending (most stars first)
+                }
+                AgentSortOrder::Status => {
+                    let status_a = if ea.update_available() {
+                        0
+                    } else if ea.installed.version.is_some() {
+                        1
+                    } else {
+                        2
+                    };
+                    let status_b = if eb.update_available() {
+                        0
+                    } else if eb.installed.version.is_some() {
+                        1
+                    } else {
+                        2
+                    };
+                    status_a.cmp(&status_b)
+                }
+            }
+        });
+    }
+
     pub fn current_entry(&self) -> Option<&AgentEntry> {
         self.filtered_entries
             .get(self.selected_agent)
             .and_then(|&i| self.entries.get(i))
-    }
-
-    pub fn category_count(&self, category: AgentCategory) -> usize {
-        self.entries
-            .iter()
-            .filter(|e| match category {
-                AgentCategory::All => true,
-                AgentCategory::Installed => e.installed.version.is_some(),
-                AgentCategory::Cli => e.agent.categories.contains(&"cli".to_string()),
-                AgentCategory::Ide => e.agent.categories.contains(&"ide".to_string()),
-                AgentCategory::OpenSource => e.agent.open_source,
-            })
-            .count()
-    }
-
-    pub fn next_category(&mut self) {
-        let max = AgentCategory::variants().len() - 1;
-        if self.selected_category < max {
-            self.selected_category += 1;
-            self.category_list_state.select(Some(self.selected_category));
-            self.selected_agent = 0;
-            self.update_filtered();
-        }
-    }
-
-    pub fn prev_category(&mut self) {
-        if self.selected_category > 0 {
-            self.selected_category -= 1;
-            self.category_list_state.select(Some(self.selected_category));
-            self.selected_agent = 0;
-            self.update_filtered();
-        }
     }
 
     pub fn next_agent(&mut self) {

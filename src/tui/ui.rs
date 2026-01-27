@@ -328,11 +328,12 @@ fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut App) {
         }
     }
 
+    let sort_indicator = format!(" \u{2193}{}", agents_app.sort_order.label());
     let filter_indicator = agents_app.format_active_filters();
     let title = if filter_indicator.is_empty() {
-        format!(" Agents ({}) ", agents_app.filtered_entries.len())
+        format!(" Agents ({}){} ", agents_app.filtered_entries.len(), sort_indicator)
     } else {
-        format!(" Agents ({}) [{}] ", agents_app.filtered_entries.len(), filter_indicator)
+        format!(" Agents ({}) [{}]{} ", agents_app.filtered_entries.len(), filter_indicator, sort_indicator)
     };
 
     let list = List::new(items)
@@ -460,10 +461,10 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &App) {
                     continue;
                 }
                 // Basic bullet point detection
-                let formatted = if trimmed.starts_with("- ") || trimmed.starts_with("* ") {
-                    format!("  • {}", &trimmed[2..])
-                } else if trimmed.starts_with("## ") {
-                    trimmed[3..].to_string()
+                let formatted = if let Some(rest) = trimmed.strip_prefix("- ").or_else(|| trimmed.strip_prefix("* ")) {
+                    format!("  \u{2022} {}", rest)
+                } else if let Some(rest) = trimmed.strip_prefix("## ") {
+                    rest.to_string()
                 } else {
                     format!("  {}", trimmed)
                 };

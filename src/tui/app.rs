@@ -100,8 +100,6 @@ pub enum Message {
     NextTab,
     PrevTab,
     // Agents tab messages
-    NextCategory,
-    PrevCategory,
     NextAgent,
     PrevAgent,
     SwitchAgentFocus,
@@ -123,6 +121,8 @@ pub enum Message {
     // Detail panel scrolling
     ScrollDetailUp,
     ScrollDetailDown,
+    // Agent sort
+    CycleAgentSort,
 }
 
 #[derive(Debug, Clone)]
@@ -367,16 +367,6 @@ impl App {
             Message::PrevTab => {
                 self.current_tab = self.current_tab.prev();
             }
-            Message::NextCategory => {
-                if let Some(ref mut agents_app) = self.agents_app {
-                    agents_app.next_category();
-                }
-            }
-            Message::PrevCategory => {
-                if let Some(ref mut agents_app) = self.agents_app {
-                    agents_app.prev_category();
-                }
-            }
             Message::NextAgent => {
                 if let Some(ref mut agents_app) = self.agents_app {
                     agents_app.next_agent();
@@ -457,6 +447,11 @@ impl App {
             Message::ScrollDetailDown => {
                 if let Some(ref mut agents_app) = self.agents_app {
                     agents_app.detail_scroll = agents_app.detail_scroll.saturating_add(1);
+                }
+            }
+            Message::CycleAgentSort => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.cycle_sort();
                 }
             }
         }

@@ -171,6 +171,9 @@ fn handle_agents_keys(app: &App, code: KeyCode, _modifiers: KeyModifiers) -> Opt
         // Search
         KeyCode::Char('/') => Some(Message::EnterSearch),
 
+        // Sort
+        KeyCode::Char('s') => Some(Message::CycleAgentSort),
+
         _ => None,
     }
 }

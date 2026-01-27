@@ -122,13 +122,4 @@ impl AgentEntry {
         }
     }
 
-    pub fn status_str(&self) -> &'static str {
-        if self.installed.version.is_none() {
-            "Not Inst"
-        } else if self.update_available() {
-            "⬆ Update"
-        } else {
-            "✓ Latest"
-        }
-    }
 }
