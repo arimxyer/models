@@ -131,18 +131,24 @@ fn handle_agents_keys(app: &App, code: KeyCode, _modifiers: KeyModifiers) -> Opt
         .agents_app
         .as_ref()
         .map(|a| a.focus)
-        .unwrap_or(AgentFocus::Categories);
+        .unwrap_or(AgentFocus::List);
 
     match code {
-        // Navigation
-        KeyCode::Char('j') | KeyCode::Down => match focus {
-            AgentFocus::Categories => Some(Message::NextCategory),
-            AgentFocus::Agents => Some(Message::NextAgent),
-        },
-        KeyCode::Char('k') | KeyCode::Up => match focus {
-            AgentFocus::Categories => Some(Message::PrevCategory),
-            AgentFocus::Agents => Some(Message::PrevAgent),
-        },
+        // Navigation - works in List focus
+        KeyCode::Char('j') | KeyCode::Down => {
+            if focus == AgentFocus::List {
+                Some(Message::NextAgent)
+            } else {
+                Some(Message::ScrollDetailDown)
+            }
+        }
+        KeyCode::Char('k') | KeyCode::Up => {
+            if focus == AgentFocus::List {
+                Some(Message::PrevAgent)
+            } else {
+                Some(Message::ScrollDetailUp)
+            }
+        }
         KeyCode::Char('h') | KeyCode::Left => Some(Message::SwitchAgentFocus),
         KeyCode::Char('l') | KeyCode::Right => Some(Message::SwitchAgentFocus),
         KeyCode::Tab | KeyCode::BackTab => Some(Message::SwitchAgentFocus),
@@ -161,6 +167,9 @@ fn handle_agents_keys(app: &App, code: KeyCode, _modifiers: KeyModifiers) -> Opt
 
         // Picker
         KeyCode::Char('a') => Some(Message::OpenPicker),
+
+        // Search
+        KeyCode::Char('/') => Some(Message::EnterSearch),
 
         _ => None,
     }

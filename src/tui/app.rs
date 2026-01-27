@@ -120,6 +120,9 @@ pub enum Message {
     PickerPrev,
     PickerToggle,
     PickerSave,
+    // Detail panel scrolling
+    ScrollDetailUp,
+    ScrollDetailDown,
 }
 
 #[derive(Debug, Clone)]
@@ -444,6 +447,16 @@ impl App {
                     } else {
                         self.set_status("Tracked agents saved".to_string());
                     }
+                }
+            }
+            Message::ScrollDetailUp => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.detail_scroll = agents_app.detail_scroll.saturating_sub(1);
+                }
+            }
+            Message::ScrollDetailDown => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.detail_scroll = agents_app.detail_scroll.saturating_add(1);
                 }
             }
         }

@@ -66,6 +66,8 @@ pub struct AgentsApp {
     pub show_picker: bool,
     pub picker_selected: usize,
     pub picker_changes: HashMap<String, bool>, // agent_id -> new tracked state
+    // Detail panel scroll
+    pub detail_scroll: u16,
 }
 
 impl AgentsApp {
@@ -106,6 +108,7 @@ impl AgentsApp {
             show_picker: false,
             picker_selected: 0,
             picker_changes: HashMap::new(),
+            detail_scroll: 0,
         };
 
         app.update_filtered();
@@ -195,6 +198,7 @@ impl AgentsApp {
         if self.selected_agent < self.filtered_entries.len().saturating_sub(1) {
             self.selected_agent += 1;
             self.agent_list_state.select(Some(self.selected_agent));
+            self.detail_scroll = 0;
         }
     }
 
@@ -202,6 +206,7 @@ impl AgentsApp {
         if self.selected_agent > 0 {
             self.selected_agent -= 1;
             self.agent_list_state.select(Some(self.selected_agent));
+            self.detail_scroll = 0;
         }
     }
 

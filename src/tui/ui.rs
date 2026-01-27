@@ -491,7 +491,8 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &App) {
                 .border_style(border_style)
                 .title(" Details "),
         )
-        .wrap(Wrap { trim: false });
+        .wrap(Wrap { trim: false })
+        .scroll((agents_app.detail_scroll, 0));
 
     f.render_widget(paragraph, area);
 }
