@@ -433,7 +433,11 @@ impl App {
             }
             Message::PickerSave => {
                 if let Some(ref mut agents_app) = self.agents_app {
-                    agents_app.picker_save(&mut self.config);
+                    if let Err(e) = agents_app.picker_save(&mut self.config) {
+                        self.set_status(e);
+                    } else {
+                        self.set_status("Tracked agents saved".to_string());
+                    }
                 }
             }
         }

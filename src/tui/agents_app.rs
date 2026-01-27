@@ -305,14 +305,21 @@ impl AgentsApp {
         }
     }
 
-    pub fn picker_save(&mut self, config: &mut Config) {
+    pub fn picker_save(&mut self, config: &mut Config) -> Result<(), String> {
         for (agent_id, tracked) in &self.picker_changes {
             config.set_tracked(agent_id, *tracked);
             if let Some(entry) = self.entries.iter_mut().find(|e| e.id == *agent_id) {
                 entry.tracked = *tracked;
             }
         }
-        let _ = config.save();
+
+        if let Err(e) = config.save() {
+            self.close_picker();
+            return Err(format!("Failed to save config: {}", e));
+        }
+
         self.close_picker();
+        self.update_filtered();  // Re-filter in case tracked_only is active
+        Ok(())
     }
 }
