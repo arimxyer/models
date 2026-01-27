@@ -1046,7 +1046,13 @@ fn draw_help_popup(f: &mut Frame, scroll: u16) {
         .border_style(Style::default().fg(Color::Cyan))
         .title(" Help - press ? or Esc to close (j/k to scroll) ");
 
-    let paragraph = Paragraph::new(help_text).block(block).scroll((scroll, 0));
+    // Clamp scroll to content bounds
+    let visible_height = area.height.saturating_sub(2); // 2 for borders
+    let content_lines = help_text.len() as u16;
+    let max_scroll = content_lines.saturating_sub(visible_height);
+    let scroll_pos = scroll.min(max_scroll);
+
+    let paragraph = Paragraph::new(help_text).block(block).scroll((scroll_pos, 0));
     f.render_widget(paragraph, area);
 }
 
