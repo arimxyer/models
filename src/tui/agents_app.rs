@@ -49,6 +49,7 @@ pub struct AgentFilters {
     pub installed_only: bool,
     pub cli_only: bool,
     pub open_source_only: bool,
+    pub tracked_only: bool,
 }
 
 pub struct AgentsApp {
@@ -132,7 +133,8 @@ impl AgentsApp {
                 // Additional filters
                 let filter_match = (!self.filters.installed_only || entry.installed.version.is_some())
                     && (!self.filters.cli_only || entry.agent.categories.contains(&"cli".to_string()))
-                    && (!self.filters.open_source_only || entry.agent.open_source);
+                    && (!self.filters.open_source_only || entry.agent.open_source)
+                    && (!self.filters.tracked_only || entry.tracked);
 
                 // Search filter
                 let search_match = query_lower.is_empty()
@@ -224,6 +226,12 @@ impl AgentsApp {
 
     pub fn toggle_open_source_filter(&mut self) {
         self.filters.open_source_only = !self.filters.open_source_only;
+        self.selected_agent = 0;
+        self.update_filtered();
+    }
+
+    pub fn toggle_tracked_filter(&mut self) {
+        self.filters.tracked_only = !self.filters.tracked_only;
         self.selected_agent = 0;
         self.update_filtered();
     }
