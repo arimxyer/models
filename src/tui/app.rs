@@ -124,6 +124,8 @@ pub enum Message {
     // Detail panel scrolling
     ScrollDetailUp,
     ScrollDetailDown,
+    PageScrollDetailUp,
+    PageScrollDetailDown,
     // Agent sort
     CycleAgentSort,
     // Async data messages
@@ -459,6 +461,18 @@ impl App {
             Message::ScrollDetailDown => {
                 if let Some(ref mut agents_app) = self.agents_app {
                     agents_app.detail_scroll = agents_app.detail_scroll.saturating_add(1);
+                }
+            }
+            Message::PageScrollDetailUp => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.detail_scroll =
+                        agents_app.detail_scroll.saturating_sub(PAGE_SIZE as u16);
+                }
+            }
+            Message::PageScrollDetailDown => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.detail_scroll =
+                        agents_app.detail_scroll.saturating_add(PAGE_SIZE as u16);
                 }
             }
             Message::CycleAgentSort => {

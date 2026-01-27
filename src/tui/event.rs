@@ -156,28 +156,28 @@ fn handle_agents_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Opti
             if focus == AgentFocus::List {
                 Some(Message::PageDownAgent)
             } else {
-                None
+                Some(Message::PageScrollDetailDown)
             }
         }
         KeyCode::Char('u') if modifiers.contains(KeyModifiers::CONTROL) => {
             if focus == AgentFocus::List {
                 Some(Message::PageUpAgent)
             } else {
-                None
+                Some(Message::PageScrollDetailUp)
             }
         }
         KeyCode::PageDown => {
             if focus == AgentFocus::List {
                 Some(Message::PageDownAgent)
             } else {
-                None
+                Some(Message::PageScrollDetailDown)
             }
         }
         KeyCode::PageUp => {
             if focus == AgentFocus::List {
                 Some(Message::PageUpAgent)
             } else {
-                None
+                Some(Message::PageScrollDetailUp)
             }
         }
         KeyCode::Char('h') | KeyCode::Left => Some(Message::SwitchAgentFocus),
