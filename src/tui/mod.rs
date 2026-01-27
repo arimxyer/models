@@ -18,12 +18,21 @@ use crate::agents::{load_agents, AgentEntry, AsyncGitHubClient, GitHubData};
 use crate::config::Config;
 use crate::data::ProvidersMap;
 
+/// Result of a GitHub fetch operation for an agent.
+#[derive(Debug)]
+pub enum FetchResult {
+    /// Successful fetch: (agent_id, github_data)
+    Success(String, GitHubData),
+    /// Failed fetch: (agent_id, error_message)
+    Failure(String, String),
+}
+
 /// Spawn background GitHub fetches for tracked agent entries only.
 /// Returns a receiver and the join handles for cleanup.
 fn spawn_github_fetches(
     entries: &[AgentEntry],
     client: AsyncGitHubClient,
-) -> (mpsc::Receiver<(String, GitHubData)>, Vec<JoinHandle<()>>) {
+) -> (mpsc::Receiver<FetchResult>, Vec<JoinHandle<()>>) {
     let (tx, rx) = mpsc::channel(100);
     let tracked_entries: Vec<_> = entries.iter().filter(|e| e.tracked).collect();
     let mut handles = Vec::with_capacity(tracked_entries.len());
@@ -35,9 +44,11 @@ fn spawn_github_fetches(
         let repo = entry.agent.repo.clone();
 
         let handle = tokio::spawn(async move {
-            if let Ok(data) = client.fetch(&repo).await {
-                let _ = tx.send((id, data)).await;
-            }
+            let result = match client.fetch(&repo).await {
+                Ok(data) => FetchResult::Success(id, data),
+                Err(e) => FetchResult::Failure(id, e.to_string()),
+            };
+            let _ = tx.send(result).await;
         });
         handles.push(handle);
     }
@@ -92,7 +103,7 @@ pub async fn run(providers: ProvidersMap) -> Result<()> {
 fn run_app(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     app: &mut app::App,
-    mut github_rx: Option<mpsc::Receiver<(String, GitHubData)>>,
+    mut github_rx: Option<mpsc::Receiver<FetchResult>>,
 ) -> Result<()> {
     let mut last_status_time: Option<std::time::Instant> = None;
 
@@ -109,8 +120,15 @@ fn run_app(
 
         // Check for GitHub updates (non-blocking)
         if let Some(ref mut rx) = github_rx {
-            while let Ok((id, data)) = rx.try_recv() {
-                app.update(app::Message::GitHubDataReceived(id, data));
+            while let Ok(result) = rx.try_recv() {
+                match result {
+                    FetchResult::Success(id, data) => {
+                        app.update(app::Message::GitHubDataReceived(id, data));
+                    }
+                    FetchResult::Failure(id, error) => {
+                        app.update(app::Message::GitHubFetchFailed(id, error));
+                    }
+                }
             }
         }
 

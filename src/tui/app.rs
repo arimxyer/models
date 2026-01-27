@@ -130,6 +130,7 @@ pub enum Message {
     CycleAgentSort,
     // Async data messages
     GitHubDataReceived(String, GitHubData),
+    GitHubFetchFailed(String, String), // (agent_id, error_message)
 }
 
 #[derive(Debug, Clone)]
@@ -494,6 +495,10 @@ impl App {
                         agents_app.loading_github = false;
                     }
                 }
+            }
+            Message::GitHubFetchFailed(_agent_id, _error) => {
+                // TODO: Task 3 will implement setting fetch_status = FetchStatus::Failed(error)
+                // and decrementing pending_github_fetches
             }
         }
         true
