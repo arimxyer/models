@@ -347,7 +347,12 @@ fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut super::agents_app::Agent
         }
     }
 
-    let title = format!(" Agents ({}) ", app.filtered_entries.len());
+    let filter_indicator = app.format_active_filters();
+    let title = if filter_indicator.is_empty() {
+        format!(" Agents ({}) ", app.filtered_entries.len())
+    } else {
+        format!(" Agents ({}) [{}] ", app.filtered_entries.len(), filter_indicator)
+    };
 
     let list = List::new(items)
         .block(
