@@ -4,7 +4,7 @@ use super::agents_app::AgentsApp;
 
 /// Page size for page up/down navigation
 const PAGE_SIZE: usize = 10;
-use crate::agents::{AgentsFile, GitHubData};
+use crate::agents::{AgentsFile, FetchStatus, GitHubData};
 use crate::config::Config;
 use crate::data::{Model, Provider, ProvidersMap};
 
@@ -496,9 +496,19 @@ impl App {
                     }
                 }
             }
-            Message::GitHubFetchFailed(_agent_id, _error) => {
-                // TODO: Task 3 will implement setting fetch_status = FetchStatus::Failed(error)
-                // and decrementing pending_github_fetches
+            Message::GitHubFetchFailed(agent_id, error) => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    if let Some(entry) = agents_app.entries.iter_mut().find(|e| e.id == agent_id) {
+                        entry.fetch_status = FetchStatus::Failed(error);
+                    }
+
+                    // Decrement pending fetches and clear loading flag when all complete
+                    agents_app.pending_github_fetches =
+                        agents_app.pending_github_fetches.saturating_sub(1);
+                    if agents_app.pending_github_fetches == 0 {
+                        agents_app.loading_github = false;
+                    }
+                }
             }
         }
         true
