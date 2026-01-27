@@ -10,12 +10,17 @@ use super::app::{App, Filters, Focus, Mode, SortOrder, Tab};
 use crate::agents::format_stars;
 
 pub fn draw(f: &mut Frame, app: &mut App) {
+    let (main_constraint, detail_constraint) = match app.current_tab {
+        Tab::Models => (Constraint::Min(0), Constraint::Length(14)),
+        Tab::Agents => (Constraint::Min(0), Constraint::Length(0)), // No bottom detail for Agents
+    };
+
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(1),  // Header
-            Constraint::Min(0),     // Main content
-            Constraint::Length(14), // Detail panel (expanded)
+            main_constraint,        // Main content
+            detail_constraint,      // Detail panel (Models only)
             Constraint::Length(1),  // Footer/search
         ])
         .split(f.area());
@@ -29,7 +34,6 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         }
         Tab::Agents => {
             draw_agents_main(f, chunks[1], app);
-            draw_agent_detail(f, chunks[2], app);
         }
     }
 
@@ -368,20 +372,25 @@ fn format_smart_version(entry: &crate::agents::AgentEntry) -> String {
 }
 
 fn draw_agent_detail(f: &mut Frame, area: Rect, app: &App) {
+    use super::agents_app::AgentFocus;
+
     let agents_app = match &app.agents_app {
         Some(a) => a,
-        None => {
-            let msg = Paragraph::new("No agent data")
-                .block(Block::default().borders(Borders::ALL).title(" Details "));
-            f.render_widget(msg, area);
-            return;
-        }
+        None => return,
+    };
+
+    let is_focused = agents_app.focus == AgentFocus::Details;
+    let border_style = if is_focused {
+        Style::default().fg(Color::Cyan)
+    } else {
+        Style::default().fg(Color::DarkGray)
     };
 
     let lines: Vec<Line> = if let Some(entry) = agents_app.current_entry() {
         let mut detail_lines = Vec::new();
 
-        // Row 1: Header - Agent name (bold) + repo name (gray)
+        // Header: Name + Version
+        let version_str = entry.github.latest_version.as_deref().unwrap_or("-");
         detail_lines.push(Line::from(vec![
             Span::styled(
                 &entry.agent.name,
@@ -390,125 +399,75 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &App) {
                     .add_modifier(Modifier::BOLD),
             ),
             Span::raw("  "),
+            Span::styled(
+                format!("v{}", version_str),
+                Style::default().fg(Color::Cyan),
+            ),
+        ]));
+
+        // Repo + Stars
+        let stars_str = entry.github.stars.map(format_stars).unwrap_or_default();
+        detail_lines.push(Line::from(vec![
             Span::styled(&entry.agent.repo, Style::default().fg(Color::DarkGray)),
-        ]));
-
-        // Row 2: Version comparison with status indicator
-        let installed = entry.installed.version.as_deref();
-        let latest = entry.github.latest_version.as_deref().unwrap_or("Unknown");
-
-        let version_line = if let Some(inst_ver) = installed {
-            let status_span = if entry.update_available() {
-                Span::styled(
-                    " \u{2B06} UPDATE AVAILABLE",
-                    Style::default().fg(Color::Yellow),
-                )
-            } else {
-                Span::styled(" \u{2713} Up to date", Style::default().fg(Color::Green))
-            };
-
-            Line::from(vec![
-                Span::styled("Installed: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(inst_ver),
-                Span::styled(" \u{2192} ", Style::default().fg(Color::DarkGray)),
-                Span::styled("Latest: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(latest),
-                status_span,
-            ])
-        } else {
-            Line::from(vec![
-                Span::styled("Latest: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(latest),
-            ])
-        };
-        detail_lines.push(version_line);
-
-        // Row 3: Release date
-        let release_date = entry
-            .github
-            .release_date
-            .as_deref()
-            .unwrap_or("-");
-        detail_lines.push(Line::from(vec![
-            Span::styled("Released: ", Style::default().fg(Color::DarkGray)),
-            Span::raw(release_date),
-        ]));
-
-        // Row 4: Badge row - Stars | License | Pricing | Category
-        let stars = entry
-            .github
-            .stars
-            .map(format_stars)
-            .unwrap_or_else(|| "-".to_string());
-        let license = entry
-            .github
-            .license
-            .as_deref()
-            .unwrap_or("-");
-        let pricing = entry
-            .agent
-            .pricing
-            .as_ref()
-            .map(|p| {
-                if p.free_tier {
-                    format!("{} (free)", p.model)
-                } else {
-                    p.model.clone()
-                }
-            })
-            .unwrap_or_else(|| "-".to_string());
-        let category = entry
-            .agent
-            .categories
-            .first()
-            .map(|c| c.as_str())
-            .unwrap_or("-");
-
-        detail_lines.push(Line::from(vec![
-            Span::styled("\u{2605} ", Style::default().fg(Color::Yellow)),
-            Span::raw(format!("{:<8}", stars)),
-            Span::styled(" \u{2502} ", Style::default().fg(Color::DarkGray)),
-            Span::raw(format!("{:<12}", license)),
-            Span::styled(" \u{2502} ", Style::default().fg(Color::DarkGray)),
-            Span::raw(format!("{:<16}", pricing)),
-            Span::styled(" \u{2502} ", Style::default().fg(Color::DarkGray)),
-            Span::raw(category),
+            Span::raw("  "),
+            Span::styled(format!("★ {}", stars_str), Style::default().fg(Color::Yellow)),
         ]));
 
         detail_lines.push(Line::from(""));
 
-        // Row 5+: Changelog section
+        // Installed vs Latest
+        let installed_str = entry.installed.version.as_deref().unwrap_or("Not installed");
+        let status = if entry.update_available() {
+            Span::styled(" (update available)", Style::default().fg(Color::Yellow))
+        } else if entry.installed.version.is_some() {
+            Span::styled(" (up to date)", Style::default().fg(Color::Green))
+        } else {
+            Span::raw("")
+        };
+
+        detail_lines.push(Line::from(vec![
+            Span::styled("Installed: ", Style::default().fg(Color::DarkGray)),
+            Span::raw(installed_str),
+            status,
+        ]));
+
+        if let Some(latest) = &entry.github.latest_version {
+            let release_date = entry.github.release_date.as_deref().unwrap_or("unknown");
+            detail_lines.push(Line::from(vec![
+                Span::styled("Latest:    ", Style::default().fg(Color::DarkGray)),
+                Span::raw(format!("v{}", latest)),
+                Span::styled(format!(" ({})", release_date), Style::default().fg(Color::DarkGray)),
+            ]));
+        }
+
+        detail_lines.push(Line::from(""));
+
+        // Changelog
         if let Some(changelog) = &entry.github.changelog {
-            let version_header = entry
-                .github
-                .latest_version
-                .as_deref()
-                .unwrap_or("Latest");
             detail_lines.push(Line::from(Span::styled(
-                format!("v{} Changelog:", version_header),
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD),
+                "Changelog:",
+                Style::default().add_modifier(Modifier::BOLD),
+            )));
+            detail_lines.push(Line::from(Span::styled(
+                "───────────────────────────────────",
+                Style::default().fg(Color::DarkGray),
             )));
 
-            // Truncate changelog to first 5 non-empty lines
-            let changelog_lines: Vec<&str> = changelog
-                .lines()
-                .filter(|line| !line.trim().is_empty())
-                .take(5)
-                .collect();
-
-            for line in changelog_lines {
-                // Truncate long lines to fit in the detail pane
-                let truncated = if line.len() > 80 {
-                    format!("{}...", &line[..77])
+            // Light parsing: split by newlines, render each line
+            for line in changelog.lines().take(15) {
+                let trimmed = line.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+                // Basic bullet point detection
+                let formatted = if trimmed.starts_with("- ") || trimmed.starts_with("* ") {
+                    format!("  • {}", &trimmed[2..])
+                } else if trimmed.starts_with("## ") {
+                    trimmed[3..].to_string()
                 } else {
-                    line.to_string()
+                    format!("  {}", trimmed)
                 };
-                detail_lines.push(Line::from(Span::styled(
-                    format!("  {}", truncated),
-                    Style::default().fg(Color::White),
-                )));
+                detail_lines.push(Line::from(truncate(&formatted, 60)));
             }
         } else {
             detail_lines.push(Line::from(Span::styled(
@@ -517,29 +476,22 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &App) {
             )));
         }
 
-        detail_lines.push(Line::from(""));
-
-        // Keybinding hints row
-        detail_lines.push(Line::from(vec![
-            Span::styled("o ", Style::default().fg(Color::Yellow)),
-            Span::raw("open docs  "),
-            Span::styled("r ", Style::default().fg(Color::Yellow)),
-            Span::raw("open repo  "),
-            Span::styled("c ", Style::default().fg(Color::Yellow)),
-            Span::raw("copy name"),
-        ]));
-
         detail_lines
     } else {
         vec![Line::from(Span::styled(
-            "No agent selected",
+            "Select an agent to view details",
             Style::default().fg(Color::DarkGray),
         ))]
     };
 
     let paragraph = Paragraph::new(lines)
-        .block(Block::default().borders(Borders::ALL).title(" Details "))
-        .wrap(Wrap { trim: true });
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(border_style)
+                .title(" Details "),
+        )
+        .wrap(Wrap { trim: false });
 
     f.render_widget(paragraph, area);
 }
