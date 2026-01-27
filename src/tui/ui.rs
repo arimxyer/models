@@ -235,15 +235,12 @@ fn draw_details_row(f: &mut Frame, area: Rect, app: &App) {
 }
 
 fn draw_agents_main(f: &mut Frame, area: Rect, app: &mut App) {
-    let agents_app = match &mut app.agents_app {
-        Some(a) => a,
-        None => {
-            let msg = Paragraph::new("Failed to load agents data")
-                .block(Block::default().borders(Borders::ALL).title(" Agents "));
-            f.render_widget(msg, area);
-            return;
-        }
-    };
+    if app.agents_app.is_none() {
+        let msg = Paragraph::new("Failed to load agents data")
+            .block(Block::default().borders(Borders::ALL).title(" Agents "));
+        f.render_widget(msg, area);
+        return;
+    }
 
     // Two-panel layout: List (35%) | Details (65%)
     let chunks = Layout::default()
@@ -255,23 +252,47 @@ fn draw_agents_main(f: &mut Frame, area: Rect, app: &mut App) {
     draw_agent_detail(f, chunks[1], app);
 }
 
-fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut super::agents_app::AgentsApp) {
+fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut App) {
     use super::agents_app::AgentFocus;
 
-    let is_focused = app.focus == AgentFocus::Agents;
+    let agents_app = match &mut app.agents_app {
+        Some(a) => a,
+        None => return,
+    };
+
+    let is_focused = agents_app.focus == AgentFocus::List;
     let border_style = if is_focused {
         Style::default().fg(Color::Cyan)
     } else {
         Style::default().fg(Color::DarkGray)
     };
 
+    // Split into filter row + list
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(2), Constraint::Min(0)])
+        .split(area);
+
+    // Filter toggles row
+    let filter_line = Line::from(vec![
+        Span::styled(" [1]", Style::default().fg(if agents_app.filters.installed_only { Color::Green } else { Color::DarkGray })),
+        Span::raw(" Inst "),
+        Span::styled("[2]", Style::default().fg(if agents_app.filters.cli_only { Color::Green } else { Color::DarkGray })),
+        Span::raw(" CLI "),
+        Span::styled("[3]", Style::default().fg(if agents_app.filters.open_source_only { Color::Green } else { Color::DarkGray })),
+        Span::raw(" OSS "),
+        Span::styled("[4]", Style::default().fg(if agents_app.filters.tracked_only { Color::Green } else { Color::DarkGray })),
+        Span::raw(" Track"),
+    ]);
+    let filter_para = Paragraph::new(filter_line)
+        .block(Block::default().borders(Borders::TOP | Borders::LEFT | Borders::RIGHT).border_style(border_style));
+    f.render_widget(filter_para, chunks[0]);
+
+    // Agent list
     let mut items: Vec<ListItem> = Vec::new();
 
     // Header row
-    let header = format!(
-        "{:<25} {:>10} {:>10} {:>8} {:>8}",
-        "Agent", "Installed", "Latest", "Stars", "Status"
-    );
+    let header = format!("{:<20} {:>6} {:>12}", "Agent", "Type", "Version");
     items.push(
         ListItem::new(header).style(
             Style::default()
@@ -281,48 +302,39 @@ fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut super::agents_app::Agent
     );
 
     // Agent rows
-    for &idx in &app.filtered_entries {
-        if let Some(entry) = app.entries.get(idx) {
-            let installed = entry
-                .installed
-                .version
-                .as_deref()
-                .unwrap_or("-");
-            let latest = entry
-                .github
-                .latest_version
-                .as_deref()
-                .unwrap_or("-");
-            let stars = entry
-                .github
-                .stars
-                .map(format_stars)
-                .unwrap_or_else(|| "-".to_string());
-            let status = entry.status_str();
+    for &idx in &agents_app.filtered_entries {
+        if let Some(entry) = agents_app.entries.get(idx) {
+            let agent_type = if entry.agent.categories.contains(&"cli".to_string()) {
+                "CLI"
+            } else if entry.agent.categories.contains(&"ide".to_string()) {
+                "IDE"
+            } else {
+                "-"
+            };
+
+            let version = format_smart_version(entry);
 
             let row = format!(
-                "{:<25} {:>10} {:>10} {:>8} {:>8}",
-                truncate(&entry.agent.name, 25),
-                truncate(installed, 10),
-                truncate(latest, 10),
-                truncate(&stars, 8),
-                status
+                "{:<20} {:>6} {:>12}",
+                truncate(&entry.agent.name, 20),
+                agent_type,
+                truncate(&version, 12),
             );
             items.push(ListItem::new(row));
         }
     }
 
-    let filter_indicator = app.format_active_filters();
+    let filter_indicator = agents_app.format_active_filters();
     let title = if filter_indicator.is_empty() {
-        format!(" Agents ({}) ", app.filtered_entries.len())
+        format!(" Agents ({}) ", agents_app.filtered_entries.len())
     } else {
-        format!(" Agents ({}) [{}] ", app.filtered_entries.len(), filter_indicator)
+        format!(" Agents ({}) [{}] ", agents_app.filtered_entries.len(), filter_indicator)
     };
 
     let list = List::new(items)
         .block(
             Block::default()
-                .borders(Borders::ALL)
+                .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
                 .border_style(border_style)
                 .title(title),
         )
@@ -334,11 +346,25 @@ fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut super::agents_app::Agent
         .highlight_symbol("> ");
 
     // Offset by 1 for header row
-    let mut state = app.agent_list_state.clone();
+    let mut state = agents_app.agent_list_state.clone();
     if let Some(selected) = state.selected() {
         state.select(Some(selected + 1));
     }
-    f.render_stateful_widget(list, area, &mut state);
+    f.render_stateful_widget(list, chunks[1], &mut state);
+}
+
+fn format_smart_version(entry: &crate::agents::AgentEntry) -> String {
+    match (&entry.installed.version, &entry.github.latest_version) {
+        (None, _) => "-".to_string(),
+        (Some(installed), None) => format!("v{}", installed),
+        (Some(installed), Some(latest)) => {
+            if entry.update_available() {
+                format!("{} -> {}", installed, latest)
+            } else {
+                format!("v{} ✓", installed)
+            }
+        }
+    }
 }
 
 fn draw_agent_detail(f: &mut Frame, area: Rect, app: &App) {
