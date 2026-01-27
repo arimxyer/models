@@ -54,17 +54,35 @@ pub struct Pricing {
     pub usage_notes: Option<String>,
 }
 
-/// GitHub API data - fetched live and cached (fields for future use)
+/// A single release from GitHub
+#[derive(Debug, Clone, Default)]
+pub struct Release {
+    pub version: String,
+    pub date: Option<String>,
+    pub changelog: Option<String>,
+}
+
+/// GitHub API data - fetched live and cached
 #[derive(Debug, Clone, Default)]
 #[allow(dead_code)]
 pub struct GitHubData {
-    pub latest_version: Option<String>,
-    pub release_date: Option<String>,
-    pub changelog: Option<String>,
+    pub releases: Vec<Release>,
     pub stars: Option<u64>,
     pub open_issues: Option<u64>,
     pub license: Option<String>,
     pub last_commit: Option<String>,
+}
+
+impl GitHubData {
+    /// Get the latest release (first in the list)
+    pub fn latest_release(&self) -> Option<&Release> {
+        self.releases.first()
+    }
+
+    /// Get the latest version string
+    pub fn latest_version(&self) -> Option<&str> {
+        self.latest_release().map(|r| r.version.as_str())
+    }
 }
 
 /// Installed CLI info - path field for future use
@@ -88,7 +106,7 @@ pub struct AgentEntry {
 
 impl AgentEntry {
     pub fn update_available(&self) -> bool {
-        match (&self.installed.version, &self.github.latest_version) {
+        match (&self.installed.version, self.github.latest_version()) {
             (Some(installed), Some(latest)) => {
                 // Try semver comparison, fallback to string
                 match (
@@ -101,5 +119,19 @@ impl AgentEntry {
             }
             _ => false,
         }
+    }
+
+    /// Find releases between installed version and latest (exclusive of installed)
+    pub fn new_releases(&self) -> Vec<&Release> {
+        let installed = match &self.installed.version {
+            Some(v) => v,
+            None => return self.github.releases.iter().collect(), // All releases are "new" if not installed
+        };
+
+        self.github
+            .releases
+            .iter()
+            .take_while(|r| r.version != *installed)
+            .collect()
     }
 }

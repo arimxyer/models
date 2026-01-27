@@ -228,8 +228,16 @@ impl AgentsApp {
             match self.sort_order {
                 AgentSortOrder::Name => ea.agent.name.cmp(&eb.agent.name),
                 AgentSortOrder::Updated => {
-                    let da = ea.github.release_date.as_deref().unwrap_or("");
-                    let db = eb.github.release_date.as_deref().unwrap_or("");
+                    let da = ea
+                        .github
+                        .latest_release()
+                        .and_then(|r| r.date.as_deref())
+                        .unwrap_or("");
+                    let db = eb
+                        .github
+                        .latest_release()
+                        .and_then(|r| r.date.as_deref())
+                        .unwrap_or("");
                     db.cmp(da) // Descending (newest first)
                 }
                 AgentSortOrder::Stars => {

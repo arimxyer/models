@@ -415,12 +415,11 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &App) {
     let lines: Vec<Line> = if let Some(entry) = agents_app.current_entry() {
         let mut detail_lines = Vec::new();
 
-        // Header: Name + Version (clone to avoid borrow issues with scroll clamping)
+        // Header: Name + Version
         let name = entry.agent.name.clone();
         let version_str = entry
             .github
-            .latest_version
-            .as_deref()
+            .latest_version()
             .unwrap_or("-")
             .to_string();
         detail_lines.push(Line::from(vec![
@@ -448,7 +447,7 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &App) {
 
         detail_lines.push(Line::from(""));
 
-        // Installed vs Latest
+        // Installed status
         let installed_str = entry
             .installed
             .version
@@ -468,20 +467,7 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &App) {
             status,
         ]));
 
-        if let Some(latest) = &entry.github.latest_version {
-            let release_date = entry.github.release_date.as_deref().unwrap_or("unknown");
-            detail_lines.push(Line::from(vec![
-                Span::styled("Latest:    ", Style::default().fg(Color::DarkGray)),
-                Span::raw(format!("v{}", latest)),
-                Span::styled(
-                    format!(" ({})", release_date),
-                    Style::default().fg(Color::DarkGray),
-                ),
-            ]));
-        }
-
         // Show loading indicator if GitHub data not yet loaded for this agent
-        // Use stars as indicator since it's set for any successfully fetched repo
         if agents_app.loading_github && entry.github.stars.is_none() {
             detail_lines.push(Line::from(Span::styled(
                 "Loading GitHub data...",
@@ -491,10 +477,15 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &App) {
 
         detail_lines.push(Line::from(""));
 
-        // Changelog
-        if let Some(changelog) = &entry.github.changelog {
+        // Release history
+        if entry.github.releases.is_empty() {
             detail_lines.push(Line::from(Span::styled(
-                "Changelog:",
+                "No releases available",
+                Style::default().fg(Color::DarkGray),
+            )));
+        } else {
+            detail_lines.push(Line::from(Span::styled(
+                "Release History:",
                 Style::default().add_modifier(Modifier::BOLD),
             )));
             detail_lines.push(Line::from(Span::styled(
@@ -502,31 +493,69 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &App) {
                 Style::default().fg(Color::DarkGray),
             )));
 
-            // Light parsing: split by newlines, render each line
-            // Lines will wrap naturally via Paragraph's Wrap setting
-            for line in changelog.lines() {
-                let trimmed = line.trim();
-                if trimmed.is_empty() {
-                    continue;
+            let installed_version = entry.installed.version.as_deref();
+            let new_releases = entry.new_releases();
+
+            for release in &entry.github.releases {
+                let is_installed = installed_version == Some(release.version.as_str());
+                let is_new = new_releases.iter().any(|r| r.version == release.version);
+
+                // Version header with markers
+                let mut version_spans = vec![Span::styled(
+                    format!("v{}", release.version),
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                )];
+
+                if let Some(date) = &release.date {
+                    version_spans.push(Span::styled(
+                        format!("  {}", date),
+                        Style::default().fg(Color::DarkGray),
+                    ));
                 }
-                // Basic bullet point detection
-                let formatted = if let Some(rest) = trimmed
-                    .strip_prefix("- ")
-                    .or_else(|| trimmed.strip_prefix("* "))
-                {
-                    format!("  \u{2022} {}", rest)
-                } else if let Some(rest) = trimmed.strip_prefix("## ") {
-                    rest.to_string()
-                } else {
-                    format!("  {}", trimmed)
-                };
-                detail_lines.push(Line::from(formatted));
+
+                if is_installed {
+                    version_spans.push(Span::styled(
+                        "  ← INSTALLED",
+                        Style::default().fg(Color::Green),
+                    ));
+                } else if is_new {
+                    version_spans.push(Span::styled(
+                        "  ← NEW",
+                        Style::default().fg(Color::Yellow),
+                    ));
+                }
+
+                detail_lines.push(Line::from(version_spans));
+
+                // Changelog for this release
+                if let Some(changelog) = &release.changelog {
+                    for line in changelog.lines() {
+                        let trimmed = line.trim();
+                        if trimmed.is_empty() {
+                            continue;
+                        }
+                        // Basic bullet point detection
+                        let formatted = if let Some(rest) = trimmed
+                            .strip_prefix("- ")
+                            .or_else(|| trimmed.strip_prefix("* "))
+                        {
+                            format!("  \u{2022} {}", rest)
+                        } else if let Some(rest) = trimmed.strip_prefix("## ") {
+                            rest.to_string()
+                        } else if trimmed.starts_with('#') {
+                            // Skip other headers like "# What's Changed"
+                            continue;
+                        } else {
+                            format!("  {}", trimmed)
+                        };
+                        detail_lines.push(Line::from(formatted));
+                    }
+                }
+
+                detail_lines.push(Line::from("")); // Space between releases
             }
-        } else {
-            detail_lines.push(Line::from(Span::styled(
-                "No changelog available",
-                Style::default().fg(Color::DarkGray),
-            )));
         }
 
         detail_lines
