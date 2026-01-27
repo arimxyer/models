@@ -190,7 +190,7 @@ impl AgentsApp {
         self.apply_sort();
     }
 
-    fn apply_sort(&mut self) {
+    pub fn apply_sort(&mut self) {
         let entries = &self.entries;
         self.filtered_entries.sort_by(|&a, &b| {
             let ea = &entries[a];
