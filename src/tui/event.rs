@@ -126,7 +126,7 @@ fn handle_models_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Opti
     }
 }
 
-fn handle_agents_keys(app: &App, code: KeyCode, _modifiers: KeyModifiers) -> Option<Message> {
+fn handle_agents_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Option<Message> {
     use super::agents_app::AgentFocus;
 
     let focus = app
@@ -149,6 +149,35 @@ fn handle_agents_keys(app: &App, code: KeyCode, _modifiers: KeyModifiers) -> Opt
                 Some(Message::PrevAgent)
             } else {
                 Some(Message::ScrollDetailUp)
+            }
+        }
+        // Page navigation (Ctrl+d/u or PageDown/PageUp)
+        KeyCode::Char('d') if modifiers.contains(KeyModifiers::CONTROL) => {
+            if focus == AgentFocus::List {
+                Some(Message::PageDownAgent)
+            } else {
+                None
+            }
+        }
+        KeyCode::Char('u') if modifiers.contains(KeyModifiers::CONTROL) => {
+            if focus == AgentFocus::List {
+                Some(Message::PageUpAgent)
+            } else {
+                None
+            }
+        }
+        KeyCode::PageDown => {
+            if focus == AgentFocus::List {
+                Some(Message::PageDownAgent)
+            } else {
+                None
+            }
+        }
+        KeyCode::PageUp => {
+            if focus == AgentFocus::List {
+                Some(Message::PageUpAgent)
+            } else {
+                None
             }
         }
         KeyCode::Char('h') | KeyCode::Left => Some(Message::SwitchAgentFocus),

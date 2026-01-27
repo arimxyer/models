@@ -288,6 +288,19 @@ impl AgentsApp {
         }
     }
 
+    pub fn page_down(&mut self, page_size: usize) {
+        let last_index = self.filtered_entries.len().saturating_sub(1);
+        self.selected_agent = (self.selected_agent + page_size).min(last_index);
+        self.agent_list_state.select(Some(self.selected_agent));
+        self.detail_scroll = 0;
+    }
+
+    pub fn page_up(&mut self, page_size: usize) {
+        self.selected_agent = self.selected_agent.saturating_sub(page_size);
+        self.agent_list_state.select(Some(self.selected_agent));
+        self.detail_scroll = 0;
+    }
+
     pub fn switch_focus(&mut self) {
         self.focus = match self.focus {
             AgentFocus::List => AgentFocus::Details,

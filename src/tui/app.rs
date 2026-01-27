@@ -105,6 +105,8 @@ pub enum Message {
     // Agents tab messages
     NextAgent,
     PrevAgent,
+    PageDownAgent,
+    PageUpAgent,
     SwitchAgentFocus,
     ToggleInstalledFilter,
     ToggleCliFilter,
@@ -380,6 +382,16 @@ impl App {
             Message::PrevAgent => {
                 if let Some(ref mut agents_app) = self.agents_app {
                     agents_app.prev_agent();
+                }
+            }
+            Message::PageDownAgent => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.page_down(PAGE_SIZE);
+                }
+            }
+            Message::PageUpAgent => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.page_up(PAGE_SIZE);
                 }
             }
             Message::SwitchAgentFocus => {
