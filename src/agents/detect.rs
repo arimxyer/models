@@ -5,15 +5,11 @@ use std::process::Command;
 use super::data::{Agent, InstalledInfo};
 
 pub fn detect_installed(agent: &Agent) -> InstalledInfo {
+    // Detect any agent with a cli_binary (CLI tools, IDEs with launchers, etc.)
     let binary = match &agent.cli_binary {
         Some(b) => b,
         None => return InstalledInfo::default(),
     };
-
-    // Only detect CLI tools
-    if agent.installation_method.as_deref() != Some("cli") {
-        return InstalledInfo::default();
-    }
 
     // Try to find the binary
     let path = find_binary(binary);
