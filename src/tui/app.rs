@@ -159,6 +159,8 @@ pub struct App {
     pub agents_app: Option<AgentsApp>,
     pub config: Config,
     filtered_models: Vec<ModelEntry>,
+    /// Agents newly tracked that need GitHub fetches (agent_id, repo)
+    pub pending_fetches: Vec<(String, String)>,
 }
 
 impl App {
@@ -196,6 +198,7 @@ impl App {
             agents_app,
             config,
             filtered_models: Vec::new(),
+            pending_fetches: Vec::new(),
         };
 
         app.update_filtered_models();
@@ -480,10 +483,21 @@ impl App {
             }
             Message::PickerSave => {
                 if let Some(ref mut agents_app) = self.agents_app {
-                    if let Err(e) = agents_app.picker_save(&mut self.config) {
-                        self.set_status(e);
-                    } else {
-                        self.set_status("Tracked agents saved".to_string());
+                    match agents_app.picker_save(&mut self.config) {
+                        Ok(newly_tracked) => {
+                            if newly_tracked.is_empty() {
+                                self.set_status("Tracked agents saved".to_string());
+                            } else {
+                                self.set_status(format!(
+                                    "Tracked agents saved, fetching {} new...",
+                                    newly_tracked.len()
+                                ));
+                                self.pending_fetches = newly_tracked;
+                            }
+                        }
+                        Err(e) => {
+                            self.set_status(e);
+                        }
                     }
                 }
             }

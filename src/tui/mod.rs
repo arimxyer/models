@@ -7,7 +7,6 @@ use crossterm::{
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
 use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
 
 pub mod agents_app;
 pub mod app;
@@ -15,7 +14,7 @@ pub mod event;
 pub mod ui;
 
 use crate::agents::{
-    load_agents, AgentEntry, AsyncGitHubClient, ConditionalFetchResult, GitHubCache, GitHubData,
+    load_agents, AsyncGitHubClient, ConditionalFetchResult, GitHubCache, GitHubData,
 };
 use crate::config::Config;
 use crate::data::ProvidersMap;
@@ -43,82 +42,6 @@ pub enum FetchResult {
     /// Failed fetch: (agent_id, error_message)
     Failure(String, String),
 }
-
-/// Spawn background GitHub fetches for tracked agent entries only.
-/// Returns a receiver and the join handles for cleanup.
-#[allow(dead_code)]
-fn spawn_github_fetches(
-    entries: &[AgentEntry],
-    client: AsyncGitHubClient,
-) -> (mpsc::Receiver<FetchResult>, Vec<JoinHandle<()>>) {
-    let (tx, rx) = mpsc::channel(100);
-    let tracked_entries: Vec<_> = entries.iter().filter(|e| e.tracked).collect();
-    let mut handles = Vec::with_capacity(tracked_entries.len());
-
-    for entry in tracked_entries {
-        let tx = tx.clone();
-        let client = client.clone();
-        let id = entry.id.clone();
-        let repo = entry.agent.repo.clone();
-
-        let handle = tokio::spawn(async move {
-            let result = match client.fetch(&repo).await {
-                Ok(data) => FetchResult::Success(id, data),
-                Err(e) => FetchResult::Failure(id, e.to_string()),
-            };
-            let _ = tx.send(result).await;
-        });
-        handles.push(handle);
-    }
-
-    (rx, handles)
-}
-
-/// Spawn background GitHub fetches using conditional requests (ETag-based).
-/// Uses cached data when GitHub returns 304 Not Modified.
-/// Returns a receiver and the join handles for cleanup.
-fn spawn_github_fetches_conditional(
-    entries: &[AgentEntry],
-    client: AsyncGitHubClient,
-    disk_cache: Arc<RwLock<GitHubCache>>,
-) -> (mpsc::Receiver<FetchResult>, Vec<JoinHandle<()>>) {
-    let (tx, rx) = mpsc::channel(100);
-    let tracked_entries: Vec<_> = entries.iter().filter(|e| e.tracked).collect();
-    let mut handles = Vec::with_capacity(tracked_entries.len());
-
-    for entry in tracked_entries {
-        let tx = tx.clone();
-        let client = client.clone();
-        let id = entry.id.clone();
-        let repo = entry.agent.repo.clone();
-        let cache = disk_cache.clone();
-
-        let handle = tokio::spawn(async move {
-            let result = match client.fetch_conditional(&repo).await {
-                ConditionalFetchResult::Fresh(data, _etag) => FetchResult::Success(id, data),
-                ConditionalFetchResult::NotModified => {
-                    // Retrieve cached data and send as success
-                    let cache_guard = cache.read().await;
-                    if let Some(cached) = cache_guard.get(&repo) {
-                        FetchResult::Success(id, cached.data.clone().into())
-                    } else {
-                        // Cache miss despite NotModified - shouldn't happen, treat as error
-                        FetchResult::Failure(
-                            id,
-                            "Cache miss on NotModified response".to_string(),
-                        )
-                    }
-                }
-                ConditionalFetchResult::Error(e) => FetchResult::Failure(id, e),
-            };
-            let _ = tx.send(result).await;
-        });
-        handles.push(handle);
-    }
-
-    (rx, handles)
-}
-
 pub async fn run(providers: ProvidersMap) -> Result<()> {
     use crate::agents::FetchStatus;
 
@@ -166,19 +89,47 @@ pub async fn run(providers: ProvidersMap) -> Result<()> {
     // Now wrap cache in Arc<RwLock> for async sharing
     let disk_cache = Arc::new(RwLock::new(disk_cache));
 
+    // Create GitHub client and channel for fetch results
+    let client = AsyncGitHubClient::with_disk_cache(None, disk_cache.clone());
+    let (tx, rx) = mpsc::channel(100);
+
     // Spawn background GitHub fetches for agents (non-blocking)
     // Uses conditional fetches with ETag to avoid re-downloading unchanged data
-    let (github_rx, fetch_handles) = if let Some(ref agents_app) = app.agents_app {
-        let client = AsyncGitHubClient::with_disk_cache(None, disk_cache.clone());
-        let (rx, handles) =
-            spawn_github_fetches_conditional(&agents_app.entries, client, disk_cache.clone());
-        (Some(rx), handles)
+    let fetch_handles = if let Some(ref agents_app) = app.agents_app {
+        let tracked_entries: Vec<_> = agents_app.entries.iter().filter(|e| e.tracked).collect();
+        let mut handles = Vec::with_capacity(tracked_entries.len());
+
+        for entry in tracked_entries {
+            let tx = tx.clone();
+            let client = client.clone();
+            let id = entry.id.clone();
+            let repo = entry.agent.repo.clone();
+            let cache = disk_cache.clone();
+
+            let handle = tokio::spawn(async move {
+                let result = match client.fetch_conditional(&repo).await {
+                    ConditionalFetchResult::Fresh(data, _etag) => FetchResult::Success(id, data),
+                    ConditionalFetchResult::NotModified => {
+                        let cache_guard = cache.read().await;
+                        if let Some(cached) = cache_guard.get(&repo) {
+                            FetchResult::Success(id, cached.data.clone().into())
+                        } else {
+                            FetchResult::Failure(id, "Cache miss on NotModified".to_string())
+                        }
+                    }
+                    ConditionalFetchResult::Error(e) => FetchResult::Failure(id, e),
+                };
+                let _ = tx.send(result).await;
+            });
+            handles.push(handle);
+        }
+        handles
     } else {
-        (None, Vec::new())
+        Vec::new()
     };
 
-    // Main loop
-    let result = run_app(&mut terminal, &mut app, github_rx);
+    // Main loop - pass client and sender for dynamic fetches
+    let result = run_app(&mut terminal, &mut app, rx, tx, client, disk_cache.clone());
 
     // Abort any remaining fetch tasks to allow clean shutdown
     for handle in fetch_handles {
@@ -207,7 +158,10 @@ pub async fn run(providers: ProvidersMap) -> Result<()> {
 fn run_app(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     app: &mut app::App,
-    mut github_rx: Option<mpsc::Receiver<FetchResult>>,
+    mut github_rx: mpsc::Receiver<FetchResult>,
+    github_tx: mpsc::Sender<FetchResult>,
+    client: AsyncGitHubClient,
+    disk_cache: Arc<RwLock<GitHubCache>>,
 ) -> Result<()> {
     let mut last_status_time: Option<std::time::Instant> = None;
 
@@ -222,16 +176,45 @@ fn run_app(
             }
         }
 
+        // Spawn fetches for newly tracked agents
+        if !app.pending_fetches.is_empty() {
+            let fetches = std::mem::take(&mut app.pending_fetches);
+            for (agent_id, repo) in fetches {
+                let tx = github_tx.clone();
+                let client = client.clone();
+                let cache = disk_cache.clone();
+
+                tokio::spawn(async move {
+                    let result = match client.fetch_conditional(&repo).await {
+                        ConditionalFetchResult::Fresh(data, _etag) => {
+                            FetchResult::Success(agent_id, data)
+                        }
+                        ConditionalFetchResult::NotModified => {
+                            let cache_guard = cache.read().await;
+                            if let Some(cached) = cache_guard.get(&repo) {
+                                FetchResult::Success(agent_id, cached.data.clone().into())
+                            } else {
+                                FetchResult::Failure(
+                                    agent_id,
+                                    "Cache miss on NotModified".to_string(),
+                                )
+                            }
+                        }
+                        ConditionalFetchResult::Error(e) => FetchResult::Failure(agent_id, e),
+                    };
+                    let _ = tx.send(result).await;
+                });
+            }
+        }
+
         // Check for GitHub updates (non-blocking)
-        if let Some(ref mut rx) = github_rx {
-            while let Ok(result) = rx.try_recv() {
-                match result {
-                    FetchResult::Success(id, data) => {
-                        app.update(app::Message::GitHubDataReceived(id, data));
-                    }
-                    FetchResult::Failure(id, error) => {
-                        app.update(app::Message::GitHubFetchFailed(id, error));
-                    }
+        while let Ok(result) = github_rx.try_recv() {
+            match result {
+                FetchResult::Success(id, data) => {
+                    app.update(app::Message::GitHubDataReceived(id, data));
+                }
+                FetchResult::Failure(id, error) => {
+                    app.update(app::Message::GitHubFetchFailed(id, error));
                 }
             }
         }

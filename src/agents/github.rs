@@ -9,9 +9,11 @@ use tokio::sync::{Mutex, RwLock};
 use super::cache::{CachedGitHubData, GitHubCache, SerializableGitHubData};
 use super::{GitHubData, Release};
 
+#[allow(dead_code)]
 const CACHE_TTL: Duration = Duration::from_secs(60 * 60);
 const GITHUB_API_BASE: &str = "https://api.github.com";
 
+#[allow(dead_code)]
 struct CacheEntry {
     data: GitHubData,
     fetched_at: Instant,
@@ -69,6 +71,7 @@ fn extract_version(tag: &str) -> String {
 #[derive(Clone)]
 pub struct AsyncGitHubClient {
     client: reqwest::Client,
+    #[allow(dead_code)]
     cache: Arc<Mutex<HashMap<String, CacheEntry>>>,
     #[allow(dead_code)]
     disk_cache: Arc<RwLock<GitHubCache>>,
@@ -106,6 +109,7 @@ impl AsyncGitHubClient {
         &self.disk_cache
     }
 
+    #[allow(dead_code)]
     pub async fn fetch(&self, repo: &str) -> Result<GitHubData> {
         // Check cache
         {
@@ -134,6 +138,7 @@ impl AsyncGitHubClient {
         Ok(data)
     }
 
+    #[allow(dead_code)]
     pub async fn fetch_fresh(&self, repo: &str) -> Result<GitHubData> {
         let mut data = GitHubData::default();
 
