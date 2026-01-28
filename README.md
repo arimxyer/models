@@ -141,12 +141,6 @@ models
 | `r` | Open GitHub repo |
 | `c` | Copy agent name |
 
-**Other**
-| Key | Action |
-|-----|--------|
-| `?` | Show help popup |
-| `q` | Quit |
-
 ### Customizing Tracked Agents
 
 By default, models tracks 4 popular agents: Claude Code, Codex, Gemini CLI, and OpenCode.
@@ -240,9 +234,11 @@ models show claude-opus-4-5 --json
 models search "llama" --json
 ```
 
-## Data Source
+## Data Sources
 
-Model data is fetched from [models.dev](https://models.dev), an open-source database of AI models maintained by [SST](https://github.com/sst/models.dev).
+- **Model data**: Fetched from [models.dev](https://models.dev), an open-source database of AI models maintained by [SST](https://github.com/sst/models.dev)
+- **Agent data**: Curated catalog in [`data/agents.json`](data/agents.json) — contributions welcome!
+- **GitHub data**: Fetched from GitHub API (stars, releases, changelogs)
 
 ## License
 
