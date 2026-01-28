@@ -33,6 +33,7 @@ pub enum FetchResult {
 
 /// Spawn background GitHub fetches for tracked agent entries only.
 /// Returns a receiver and the join handles for cleanup.
+#[allow(dead_code)]
 fn spawn_github_fetches(
     entries: &[AgentEntry],
     client: AsyncGitHubClient,
@@ -63,7 +64,6 @@ fn spawn_github_fetches(
 /// Spawn background GitHub fetches using conditional requests (ETag-based).
 /// Uses cached data when GitHub returns 304 Not Modified.
 /// Returns a receiver and the join handles for cleanup.
-#[allow(dead_code)]
 fn spawn_github_fetches_conditional(
     entries: &[AgentEntry],
     client: AsyncGitHubClient,
@@ -107,9 +107,14 @@ fn spawn_github_fetches_conditional(
 }
 
 pub async fn run(providers: ProvidersMap) -> Result<()> {
+    use crate::agents::FetchStatus;
+
     // Load remaining data
     let agents_file = load_agents().ok();
     let config = Config::load().ok();
+
+    // Load disk cache for GitHub data
+    let disk_cache = Arc::new(RwLock::new(GitHubCache::load()));
 
     // Setup terminal
     enable_raw_mode()?;
@@ -121,10 +126,28 @@ pub async fn run(providers: ProvidersMap) -> Result<()> {
     // Create app
     let mut app = app::App::new(providers, agents_file.as_ref(), config);
 
+    // Pre-populate agent entries from disk cache for instant display
+    if let Some(ref mut agents_app) = app.agents_app {
+        let cache_guard = disk_cache.blocking_read();
+        for entry in &mut agents_app.entries {
+            if entry.tracked {
+                // Look up cached data by repo (cache keys are repos)
+                if let Some(cached) = cache_guard.get(&entry.agent.repo) {
+                    entry.github = cached.data.clone().into();
+                    entry.fetch_status = FetchStatus::Loaded;
+                }
+            }
+        }
+        // Re-apply sorting after populating cache data (in case sorted by stars/updated)
+        agents_app.apply_sort();
+    }
+
     // Spawn background GitHub fetches for agents (non-blocking)
+    // Uses conditional fetches with ETag to avoid re-downloading unchanged data
     let (github_rx, fetch_handles) = if let Some(ref agents_app) = app.agents_app {
-        let client = AsyncGitHubClient::new(None);
-        let (rx, handles) = spawn_github_fetches(&agents_app.entries, client);
+        let client = AsyncGitHubClient::with_disk_cache(None, disk_cache.clone());
+        let (rx, handles) =
+            spawn_github_fetches_conditional(&agents_app.entries, client, disk_cache.clone());
         (Some(rx), handles)
     } else {
         (None, Vec::new())
