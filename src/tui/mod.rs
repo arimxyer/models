@@ -116,6 +116,15 @@ pub async fn run(providers: ProvidersMap) -> Result<()> {
     // Load disk cache for GitHub data (load before wrapping to avoid blocking in async)
     let disk_cache = GitHubCache::load();
 
+    // Install panic hook to restore terminal on crash
+    let original_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |panic_info| {
+        // Restore terminal before printing panic message
+        let _ = disable_raw_mode();
+        let _ = execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture);
+        original_hook(panic_info);
+    }));
+
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
