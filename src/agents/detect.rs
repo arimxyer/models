@@ -1,4 +1,3 @@
-use std::env;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -11,50 +10,19 @@ pub fn detect_installed(agent: &Agent) -> InstalledInfo {
         None => return InstalledInfo::default(),
     };
 
-    // Try to find the binary
-    let path = find_binary(binary);
-    if path.is_none() {
-        return InstalledInfo::default();
-    }
-
-    // Try to get version
-    let version = get_version(
+    // Try to get version directly - this also confirms the binary exists
+    // Skip the separate `which` call since --version tells us if it's installed
+    let (version, path) = get_version_and_path(
         binary,
         &agent.version_command,
         agent.version_regex.as_deref(),
     );
 
-    InstalledInfo {
-        version,
-        path: path.map(|p| p.to_string_lossy().to_string()),
-    }
-}
-
-fn find_binary(name: &str) -> Option<PathBuf> {
-    // First try which/where
-    if let Some(path) = which_binary(name) {
-        return Some(path);
+    if version.is_none() && path.is_none() {
+        return InstalledInfo::default();
     }
 
-    // Check common locations
-    let home = env::var("HOME").ok()?;
-    let common_paths = [
-        format!("/opt/homebrew/bin/{}", name),
-        format!("/usr/local/bin/{}", name),
-        format!("{}/.local/bin/{}", home, name),
-        format!("{}/.cargo/bin/{}", home, name),
-        format!("{}/.npm-global/bin/{}", home, name),
-        format!("/usr/bin/{}", name),
-    ];
-
-    for path_str in common_paths {
-        let path = PathBuf::from(&path_str);
-        if path.exists() {
-            return Some(path);
-        }
-    }
-
-    None
+    InstalledInfo { version, path }
 }
 
 fn which_binary(name: &str) -> Option<PathBuf> {
@@ -70,16 +38,21 @@ fn which_binary(name: &str) -> Option<PathBuf> {
     None
 }
 
-fn get_version(
+/// Get version and path in one operation - avoids separate `which` call
+fn get_version_and_path(
     binary: &str,
     version_cmd: &[String],
     version_regex: Option<&str>,
-) -> Option<String> {
+) -> (Option<String>, Option<String>) {
     if version_cmd.is_empty() {
-        return None;
+        return (None, None);
     }
 
-    let output = Command::new(binary).args(version_cmd).output().ok()?;
+    // Try to run the version command - if it works, the binary exists
+    let output = match Command::new(binary).args(version_cmd).output() {
+        Ok(o) => o,
+        Err(_) => return (None, None), // Binary not found or not executable
+    };
 
     let output_str = if output.status.success() {
         String::from_utf8_lossy(&output.stdout).to_string()
@@ -88,7 +61,16 @@ fn get_version(
         String::from_utf8_lossy(&output.stderr).to_string()
     };
 
-    extract_version(&output_str, version_regex)
+    let version = extract_version(&output_str, version_regex);
+
+    // Only look up path if we found a version (binary definitely exists)
+    let path = if version.is_some() {
+        which_binary(binary).map(|p| p.to_string_lossy().to_string())
+    } else {
+        None
+    };
+
+    (version, path)
 }
 
 fn extract_version(output: &str, regex_pattern: Option<&str>) -> Option<String> {

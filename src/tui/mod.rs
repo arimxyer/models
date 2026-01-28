@@ -52,6 +52,9 @@ pub async fn run(providers: ProvidersMap) -> Result<()> {
     // Load disk cache for GitHub data (load before wrapping to avoid blocking in async)
     let disk_cache = GitHubCache::load();
 
+    // Create app BEFORE entering alternate screen
+    let mut app = app::App::new(providers, agents_file.as_ref(), config);
+
     // Install panic hook to restore terminal on crash
     let original_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic_info| {
@@ -67,9 +70,6 @@ pub async fn run(providers: ProvidersMap) -> Result<()> {
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
-
-    // Create app
-    let mut app = app::App::new(providers, agents_file.as_ref(), config);
 
     // Pre-populate agent entries from disk cache for instant display
     if let Some(ref mut agents_app) = app.agents_app {
