@@ -593,6 +593,17 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &App) {
             }
         }
 
+        // Keybinding hints at the bottom
+        detail_lines.push(Line::from(""));
+        detail_lines.push(Line::from(vec![
+            Span::styled(" o ", Style::default().fg(Color::Yellow)),
+            Span::raw("open docs  "),
+            Span::styled(" r ", Style::default().fg(Color::Yellow)),
+            Span::raw("open repo  "),
+            Span::styled(" c ", Style::default().fg(Color::Yellow)),
+            Span::raw("copy name"),
+        ]));
+
         detail_lines
     } else {
         vec![Line::from(Span::styled(
@@ -868,7 +879,11 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
                     Span::styled(" s ", Style::default().fg(Color::Yellow)),
                     Span::raw("sort  "),
                     Span::styled(" a ", Style::default().fg(Color::Yellow)),
-                    Span::raw("track"),
+                    Span::raw("track  "),
+                    Span::styled(" o ", Style::default().fg(Color::Yellow)),
+                    Span::raw("docs  "),
+                    Span::styled(" r ", Style::default().fg(Color::Yellow)),
+                    Span::raw("repo"),
                 ]),
             };
 
