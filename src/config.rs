@@ -52,14 +52,32 @@ impl CustomAgent {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+/// Default starter agents for new users
+fn default_tracked_agents() -> HashSet<String> {
+    ["claude-code", "codex", "gemini-cli", "opencode"]
+        .iter()
+        .map(|s| s.to_string())
+        .collect()
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AgentsConfig {
-    #[serde(default)]
+    #[serde(default = "default_tracked_agents")]
     pub tracked: HashSet<String>,
     #[serde(default)]
     pub excluded: HashSet<String>,
     #[serde(default)]
     pub custom: Vec<CustomAgent>,
+}
+
+impl Default for AgentsConfig {
+    fn default() -> Self {
+        Self {
+            tracked: default_tracked_agents(),
+            excluded: HashSet::new(),
+            custom: Vec::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -131,7 +149,7 @@ impl Config {
         if self.agents.excluded.contains(agent_id) {
             return false;
         }
-        self.agents.tracked.is_empty() || self.agents.tracked.contains(agent_id)
+        self.agents.tracked.contains(agent_id)
     }
 
     /// Set agent tracking status (for future add/remove picker)
@@ -155,21 +173,32 @@ mod tests {
     fn test_default_config() {
         let config = Config::default();
         assert_eq!(config.cache.github_ttl_seconds, 3600);
-        assert!(config.agents.tracked.is_empty());
+        // Default includes starter agents
+        assert_eq!(config.agents.tracked.len(), 4);
+        assert!(config.agents.tracked.contains("claude-code"));
+        assert!(config.agents.tracked.contains("codex"));
+        assert!(config.agents.tracked.contains("gemini-cli"));
+        assert!(config.agents.tracked.contains("opencode"));
     }
 
     #[test]
-    fn test_is_tracked_empty() {
+    fn test_is_tracked_default() {
         let config = Config::default();
-        // Empty tracked list means all are tracked by default
+        // Default tracked agents
         assert!(config.is_tracked("claude-code"));
+        assert!(config.is_tracked("codex"));
+        // Not in default list
+        assert!(!config.is_tracked("aider"));
+        assert!(!config.is_tracked("cursor"));
     }
 
     #[test]
     fn test_is_tracked_excluded() {
         let mut config = Config::default();
-        config.agents.excluded.insert("aider".to_string());
-        assert!(!config.is_tracked("aider"));
-        assert!(config.is_tracked("claude-code"));
+        config.agents.excluded.insert("claude-code".to_string());
+        // Excluded even though in tracked list
+        assert!(!config.is_tracked("claude-code"));
+        // Still tracked
+        assert!(config.is_tracked("codex"));
     }
 }
