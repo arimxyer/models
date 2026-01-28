@@ -95,6 +95,7 @@ models
 | `Ctrl+d` / `PageDown` | Page down |
 | `Ctrl+u` / `PageUp` | Page up |
 | `Tab` / `Shift+Tab` | Switch panels |
+| `←` / `→` | Switch panels |
 
 **Search**
 | Key | Action |
@@ -103,7 +104,7 @@ models
 | `Enter` / `Esc` | Exit search mode |
 | `Esc` | Clear search (in normal mode) |
 
-#### Models Tab
+### Models Tab
 
 **Filters & Sort**
 | Key | Action |
@@ -122,7 +123,7 @@ models
 | `D` | Copy provider docs URL |
 | `A` | Copy provider API URL |
 
-#### Agents Tab
+### Agents Tab
 
 **Filters & Sort**
 | Key | Action |
@@ -139,6 +140,12 @@ models
 | `o` | Open docs in browser |
 | `r` | Open GitHub repo |
 | `c` | Copy agent name |
+
+**Other**
+| Key | Action |
+|-----|--------|
+| `?` | Show help popup |
+| `q` | Quit |
 
 ### Customizing Tracked Agents
 
