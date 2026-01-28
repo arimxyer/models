@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use regex::Regex;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -46,6 +47,23 @@ pub enum ConditionalFetchResult {
     NotModified,
     /// Fetch failed with error message
     Error(String),
+}
+
+/// Extract version number from various tag formats.
+/// Handles: "v1.2.3", "1.2.3", "rust-v0.92.0", "release-1.2.3", etc.
+fn extract_version(tag: &str) -> String {
+    // Try to find a semver-like pattern (X.Y.Z with optional pre-release)
+    let re = Regex::new(r"(\d+\.\d+\.\d+(?:-[\w.]+)?)").unwrap();
+    if let Some(captures) = re.captures(tag) {
+        if let Some(m) = captures.get(1) {
+            return m.as_str().to_string();
+        }
+    }
+    // Fallback: strip common prefixes
+    tag.strip_prefix('v')
+        .or_else(|| tag.strip_prefix("release-"))
+        .unwrap_or(tag)
+        .to_string()
 }
 
 #[derive(Clone)]
@@ -141,17 +159,10 @@ impl AsyncGitHubClient {
         if let Ok(releases) = releases_result {
             data.releases = releases
                 .into_iter()
-                .map(|r| {
-                    let version = r
-                        .tag_name
-                        .strip_prefix('v')
-                        .unwrap_or(&r.tag_name)
-                        .to_string();
-                    Release {
-                        version,
-                        date: r.published_at.map(|s| format_relative_time(&s)),
-                        changelog: r.body,
-                    }
+                .map(|r| Release {
+                    version: extract_version(&r.tag_name),
+                    date: r.published_at.map(|s| format_relative_time(&s)),
+                    changelog: r.body,
                 })
                 .collect();
         }
@@ -259,17 +270,10 @@ impl AsyncGitHubClient {
             last_commit: repo_info.pushed_at.map(|s| format_relative_time(&s)),
             releases: releases
                 .into_iter()
-                .map(|r| {
-                    let version = r
-                        .tag_name
-                        .strip_prefix('v')
-                        .unwrap_or(&r.tag_name)
-                        .to_string();
-                    Release {
-                        version,
-                        date: r.published_at.map(|s| format_relative_time(&s)),
-                        changelog: r.body,
-                    }
+                .map(|r| Release {
+                    version: extract_version(&r.tag_name),
+                    date: r.published_at.map(|s| format_relative_time(&s)),
+                    changelog: r.body,
                 })
                 .collect(),
         };
@@ -331,5 +335,19 @@ mod tests {
     #[test]
     fn test_format_relative_time() {
         assert_eq!(format_relative_time("2024-01-15T10:30:00Z"), "2024-01-15");
+    }
+
+    #[test]
+    fn test_extract_version() {
+        // Standard v-prefixed
+        assert_eq!(extract_version("v1.2.3"), "1.2.3");
+        // No prefix
+        assert_eq!(extract_version("1.2.3"), "1.2.3");
+        // Rust-prefixed (like openai/codex)
+        assert_eq!(extract_version("rust-v0.92.0"), "0.92.0");
+        // Release-prefixed
+        assert_eq!(extract_version("release-2.0.0"), "2.0.0");
+        // With prerelease
+        assert_eq!(extract_version("v1.0.0-beta.1"), "1.0.0-beta.1");
     }
 }
