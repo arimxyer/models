@@ -103,12 +103,38 @@ pub struct AgentsApp {
 
 impl AgentsApp {
     pub fn new(agents_file: &AgentsFile, config: &Config) -> Self {
+        use std::sync::mpsc;
+        use std::thread;
+
+        // Collect agents that need version detection (tracked only)
+        let agents_to_detect: Vec<_> = agents_file
+            .agents
+            .iter()
+            .filter(|(id, _)| config.is_tracked(id))
+            .map(|(id, agent)| (id.clone(), agent.clone()))
+            .collect();
+
+        // Run version detection in parallel using threads
+        let (tx, rx) = mpsc::channel();
+        for (id, agent) in agents_to_detect {
+            let tx = tx.clone();
+            thread::spawn(move || {
+                let installed = detect_installed(&agent);
+                let _ = tx.send((id, installed));
+            });
+        }
+        drop(tx); // Close sender so rx.iter() terminates
+
+        // Collect results
+        let detected: std::collections::HashMap<String, _> = rx.iter().collect();
+
+        // Build entries with detected versions
         let mut entries: Vec<AgentEntry> = agents_file
             .agents
             .iter()
             .map(|(id, agent)| {
-                let installed = detect_installed(agent);
                 let tracked = config.is_tracked(id);
+                let installed = detected.get(id).cloned().unwrap_or_default();
                 AgentEntry {
                     id: id.clone(),
                     agent: agent.clone(),
