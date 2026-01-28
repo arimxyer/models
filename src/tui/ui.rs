@@ -41,7 +41,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
 
     // Draw help popup on top if visible
     if app.show_help {
-        draw_help_popup(f, app.help_scroll);
+        draw_help_popup(f, app.help_scroll, app.current_tab);
     }
 
     // Draw picker modal on top if visible (agents tab only)
@@ -934,13 +934,14 @@ fn format_filters(filters: &Filters) -> String {
     active.join(", ")
 }
 
-fn draw_help_popup(f: &mut Frame, scroll: u16) {
+fn draw_help_popup(f: &mut Frame, scroll: u16, current_tab: Tab) {
     let area = centered_rect(50, 70, f.area());
 
     // Clear the area behind the popup
     f.render_widget(Clear, area);
 
-    let help_text = vec![
+    let mut help_text = vec![
+        // Common: Navigation
         Line::from(Span::styled(
             "Navigation",
             Style::default()
@@ -972,6 +973,7 @@ fn draw_help_popup(f: &mut Frame, scroll: u16) {
             Span::raw("Page up"),
         ]),
         Line::from(""),
+        // Common: Panels
         Line::from(Span::styled(
             "Panels",
             Style::default()
@@ -987,6 +989,7 @@ fn draw_help_popup(f: &mut Frame, scroll: u16) {
             Span::raw("Switch panels"),
         ]),
         Line::from(""),
+        // Common: Search
         Line::from(Span::styled(
             "Search",
             Style::default()
@@ -1006,56 +1009,145 @@ fn draw_help_popup(f: &mut Frame, scroll: u16) {
             Span::raw("Clear search (in normal mode)"),
         ]),
         Line::from(""),
-        Line::from(Span::styled(
-            "Filters & Sort",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )),
-        Line::from(vec![
-            Span::styled("  s             ", Style::default().fg(Color::Yellow)),
-            Span::raw("Cycle sort (name → date → cost → context)"),
-        ]),
-        Line::from(vec![
-            Span::styled("  1             ", Style::default().fg(Color::Yellow)),
-            Span::raw("Toggle reasoning filter"),
-        ]),
-        Line::from(vec![
-            Span::styled("  2             ", Style::default().fg(Color::Yellow)),
-            Span::raw("Toggle tools filter"),
-        ]),
-        Line::from(vec![
-            Span::styled("  3             ", Style::default().fg(Color::Yellow)),
-            Span::raw("Toggle open weights filter"),
-        ]),
-        Line::from(""),
-        Line::from(Span::styled(
-            "Copy & Open",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )),
-        Line::from(vec![
-            Span::styled("  c             ", Style::default().fg(Color::Yellow)),
-            Span::raw("Copy provider/model"),
-        ]),
-        Line::from(vec![
-            Span::styled("  C             ", Style::default().fg(Color::Yellow)),
-            Span::raw("Copy model only"),
-        ]),
-        Line::from(vec![
-            Span::styled("  o             ", Style::default().fg(Color::Yellow)),
-            Span::raw("Open provider docs in browser"),
-        ]),
-        Line::from(vec![
-            Span::styled("  D             ", Style::default().fg(Color::Yellow)),
-            Span::raw("Copy provider docs URL"),
-        ]),
-        Line::from(vec![
-            Span::styled("  A             ", Style::default().fg(Color::Yellow)),
-            Span::raw("Copy provider API URL"),
-        ]),
-        Line::from(""),
+    ];
+
+    // Tab-specific sections
+    match current_tab {
+        Tab::Models => {
+            help_text.extend(vec![
+                Line::from(Span::styled(
+                    "Filters & Sort",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                )),
+                Line::from(vec![
+                    Span::styled("  s             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Cycle sort (name → date → cost → context)"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  1             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Toggle reasoning filter"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  2             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Toggle tools filter"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  3             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Toggle open weights filter"),
+                ]),
+                Line::from(""),
+                Line::from(Span::styled(
+                    "Copy & Open",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                )),
+                Line::from(vec![
+                    Span::styled("  c             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Copy provider/model"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  C             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Copy model only"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  o             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Open provider docs in browser"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  D             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Copy provider docs URL"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  A             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Copy provider API URL"),
+                ]),
+                Line::from(""),
+            ]);
+        }
+        Tab::Agents => {
+            help_text.extend(vec![
+                Line::from(Span::styled(
+                    "Filters & Sort",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                )),
+                Line::from(vec![
+                    Span::styled("  s             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Cycle sort (name → stars → updated)"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  1             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Toggle installed filter"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  2             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Toggle CLI filter"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  3             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Toggle open source filter"),
+                ]),
+                Line::from(""),
+                Line::from(Span::styled(
+                    "Actions",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                )),
+                Line::from(vec![
+                    Span::styled("  o             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Open docs in browser"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  r             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Open GitHub repo in browser"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  c             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Copy agent name"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  a             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Add/remove tracked agents"),
+                ]),
+                Line::from(""),
+                Line::from(Span::styled(
+                    "Status Indicators",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                )),
+                Line::from(vec![
+                    Span::styled("  ○             ", Style::default().fg(Color::DarkGray)),
+                    Span::raw("Not tracked"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  ◐             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Loading GitHub data"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  ●             ", Style::default().fg(Color::Green)),
+                    Span::raw("Up to date"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  ●             ", Style::default().fg(Color::Blue)),
+                    Span::raw("Update available"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  ✗             ", Style::default().fg(Color::Red)),
+                    Span::raw("Fetch failed"),
+                ]),
+                Line::from(""),
+            ]);
+        }
+    }
+
+    // Common: Tabs and Other
+    help_text.extend(vec![
         Line::from(Span::styled(
             "Tabs",
             Style::default()
@@ -1072,33 +1164,6 @@ fn draw_help_popup(f: &mut Frame, scroll: u16) {
         ]),
         Line::from(""),
         Line::from(Span::styled(
-            "Agents Tab",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )),
-        Line::from(vec![
-            Span::styled("  r             ", Style::default().fg(Color::Yellow)),
-            Span::raw("Open GitHub repo"),
-        ]),
-        Line::from(vec![
-            Span::styled("  1             ", Style::default().fg(Color::Yellow)),
-            Span::raw("Toggle installed filter"),
-        ]),
-        Line::from(vec![
-            Span::styled("  2             ", Style::default().fg(Color::Yellow)),
-            Span::raw("Toggle CLI filter"),
-        ]),
-        Line::from(vec![
-            Span::styled("  3             ", Style::default().fg(Color::Yellow)),
-            Span::raw("Toggle open source filter"),
-        ]),
-        Line::from(vec![
-            Span::styled("  a             ", Style::default().fg(Color::Yellow)),
-            Span::raw("Add/remove tracked agents"),
-        ]),
-        Line::from(""),
-        Line::from(Span::styled(
             "Other",
             Style::default()
                 .fg(Color::Cyan)
@@ -1108,12 +1173,21 @@ fn draw_help_popup(f: &mut Frame, scroll: u16) {
             Span::styled("  q             ", Style::default().fg(Color::Yellow)),
             Span::raw("Quit"),
         ]),
-    ];
+        Line::from(vec![
+            Span::styled("  ?             ", Style::default().fg(Color::Yellow)),
+            Span::raw("Toggle this help"),
+        ]),
+    ]);
+
+    let title = match current_tab {
+        Tab::Models => " Models Help - ? or Esc to close (j/k to scroll) ",
+        Tab::Agents => " Agents Help - ? or Esc to close (j/k to scroll) ",
+    };
 
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Cyan))
-        .title(" Help - press ? or Esc to close (j/k to scroll) ");
+        .title(title);
 
     // Clamp scroll to content bounds
     let visible_height = area.height.saturating_sub(2); // 2 for borders
