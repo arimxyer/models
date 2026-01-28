@@ -7,19 +7,28 @@
   <a href="https://awesome.re"><img src="https://awesome.re/mentioned-badge.svg" alt="Mentioned in Awesome"></a>
 </p>
 
-A fast CLI and TUI for browsing AI model information from [models.dev](https://models.dev).
+A fast CLI and TUI for browsing AI models and coding agents.
 
-Quickly look up context windows, pricing, capabilities, and more for 2000+ models across 75+ providers.
+- **Models Tab**: Browse 2000+ models across 75+ providers from [models.dev](https://models.dev)
+- **Agents Tab**: Track AI coding assistants (Claude Code, Aider, Cursor, etc.) with version detection and GitHub integration
 
 <video src="https://github.com/user-attachments/assets/f4c33f15-8ae7-4997-bb9f-240b79b0b562" controls width="100%"></video>
 
 ## Features
 
+### Models Tab
 - **CLI commands** for scripting and quick lookups
 - **Interactive TUI** for browsing and comparing models
 - **Cross-provider search** to compare the same model across different providers
 - **Copy to clipboard** with a single keypress
 - **JSON output** for scripting and automation
+
+### Agents Tab
+- **Curated catalog** of 12+ AI coding assistants
+- **Version detection** — automatically detects installed agents
+- **GitHub integration** — stars, releases, changelogs, update availability
+- **Persistent cache** — instant startup with ETag-based conditional fetching
+- **Customizable tracking** — choose which agents to monitor
 
 ## Installation
 
@@ -69,6 +78,13 @@ models
 
 ### TUI Keybindings
 
+**Global**
+| Key | Action |
+|-----|--------|
+| `]` / `[` | Switch tabs (Models / Agents) |
+| `?` | Show context-aware help |
+| `q` | Quit |
+
 **Navigation**
 | Key | Action |
 |-----|--------|
@@ -78,11 +94,6 @@ models
 | `G` | Jump to last item |
 | `Ctrl+d` / `PageDown` | Page down |
 | `Ctrl+u` / `PageUp` | Page up |
-
-**Panels**
-| Key | Action |
-|-----|--------|
-| `h` / `←` / `l` / `→` | Switch panels |
 | `Tab` / `Shift+Tab` | Switch panels |
 
 **Search**
@@ -91,6 +102,8 @@ models
 | `/` | Enter search mode |
 | `Enter` / `Esc` | Exit search mode |
 | `Esc` | Clear search (in normal mode) |
+
+#### Models Tab
 
 **Filters & Sort**
 | Key | Action |
@@ -109,11 +122,40 @@ models
 | `D` | Copy provider docs URL |
 | `A` | Copy provider API URL |
 
-**Other**
+#### Agents Tab
+
+**Filters & Sort**
 | Key | Action |
 |-----|--------|
-| `?` | Show help popup |
-| `q` | Quit |
+| `s` | Cycle sort (name → updated → stars → status) |
+| `1` | Toggle installed filter |
+| `2` | Toggle CLI tools filter |
+| `3` | Toggle open source filter |
+
+**Actions**
+| Key | Action |
+|-----|--------|
+| `a` | Open tracked agents picker |
+| `o` | Open docs in browser |
+| `r` | Open GitHub repo |
+| `c` | Copy agent name |
+
+### Customizing Tracked Agents
+
+By default, models tracks 4 popular agents: Claude Code, Codex, Gemini CLI, and OpenCode.
+
+Press `a` in the Agents tab to open the picker and customize which agents you track. Your preferences are saved to `~/.config/models/config.toml`.
+
+You can also add custom agents not in the catalog:
+
+```toml
+# ~/.config/models/config.toml
+[[agents.custom]]
+name = "My Agent"
+repo = "owner/repo"
+binary = "my-agent"
+version_command = ["--version"]
+```
 
 ### CLI Commands
 
