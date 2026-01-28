@@ -428,11 +428,7 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &App) {
 
         // Header: Name + Version
         let name = entry.agent.name.clone();
-        let version_str = entry
-            .github
-            .latest_version()
-            .unwrap_or("-")
-            .to_string();
+        let version_str = entry.github.latest_version().unwrap_or("-").to_string();
         detail_lines.push(Line::from(vec![
             Span::styled(
                 name,
@@ -441,7 +437,10 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &App) {
                     .add_modifier(Modifier::BOLD),
             ),
             Span::raw("  "),
-            Span::styled(format!("v{}", version_str), Style::default().fg(Color::Cyan)),
+            Span::styled(
+                format!("v{}", version_str),
+                Style::default().fg(Color::Cyan),
+            ),
         ]));
 
         // Repo + Stars
@@ -554,10 +553,7 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &App) {
                         Style::default().fg(Color::Green),
                     ));
                 } else if is_new {
-                    version_spans.push(Span::styled(
-                        "  ← NEW",
-                        Style::default().fg(Color::Yellow),
-                    ));
+                    version_spans.push(Span::styled("  ← NEW", Style::default().fg(Color::Yellow)));
                 }
 
                 detail_lines.push(Line::from(version_spans));
@@ -1104,7 +1100,9 @@ fn draw_help_popup(f: &mut Frame, scroll: u16) {
     let max_scroll = content_lines.saturating_sub(visible_height);
     let scroll_pos = scroll.min(max_scroll);
 
-    let paragraph = Paragraph::new(help_text).block(block).scroll((scroll_pos, 0));
+    let paragraph = Paragraph::new(help_text)
+        .block(block)
+        .scroll((scroll_pos, 0));
     f.render_widget(paragraph, area);
 }
 
