@@ -36,16 +36,42 @@ pub fn handle_events(app: &App) -> Result<Option<Message>> {
 }
 
 fn handle_normal_mode(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Option<Message> {
-    match code {
-        KeyCode::Char('q') => Some(Message::Quit),
-        KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => Some(Message::Quit),
+    // Check for picker mode (intercepts before normal handling)
+    if app.current_tab == super::app::Tab::Agents {
+        if let Some(ref agents_app) = app.agents_app {
+            if agents_app.show_picker {
+                return handle_picker_keys(code);
+            }
+        }
+    }
 
+    // Global keys (work on any tab)
+    match code {
+        KeyCode::Char('q') => return Some(Message::Quit),
+        KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => {
+            return Some(Message::Quit)
+        }
+        KeyCode::Char('[') => return Some(Message::PrevTab),
+        KeyCode::Char(']') => return Some(Message::NextTab),
+        KeyCode::Char('?') => return Some(Message::ToggleHelp),
+        _ => {}
+    }
+
+    // Tab-specific keys
+    match app.current_tab {
+        super::app::Tab::Models => handle_models_keys(app, code, modifiers),
+        super::app::Tab::Agents => handle_agents_keys(app, code, modifiers),
+    }
+}
+
+fn handle_models_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Option<Message> {
+    match code {
         // Copy shortcuts
-        KeyCode::Char('c') => Some(Message::CopyFull), // c = copy provider/model-id
-        KeyCode::Char('C') => Some(Message::CopyModelId), // C = copy model-id only
-        KeyCode::Char('D') => Some(Message::CopyProviderDoc), // D = copy provider docs URL
-        KeyCode::Char('A') => Some(Message::CopyProviderApi), // A = copy provider API URL
-        KeyCode::Char('o') => Some(Message::OpenProviderDoc), // o = open provider docs in browser
+        KeyCode::Char('c') => Some(Message::CopyFull),
+        KeyCode::Char('C') => Some(Message::CopyModelId),
+        KeyCode::Char('D') => Some(Message::CopyProviderDoc),
+        KeyCode::Char('A') => Some(Message::CopyProviderApi),
+        KeyCode::Char('o') => Some(Message::OpenProviderDoc),
 
         // Navigation
         KeyCode::Char('j') | KeyCode::Down => match app.focus {
@@ -96,9 +122,98 @@ fn handle_normal_mode(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Opti
         KeyCode::Char('2') => Some(Message::ToggleTools),
         KeyCode::Char('3') => Some(Message::ToggleOpenWeights),
 
-        // Help
-        KeyCode::Char('?') => Some(Message::ToggleHelp),
+        _ => None,
+    }
+}
 
+fn handle_agents_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Option<Message> {
+    use super::agents_app::AgentFocus;
+
+    let focus = app
+        .agents_app
+        .as_ref()
+        .map(|a| a.focus)
+        .unwrap_or(AgentFocus::List);
+
+    match code {
+        // Navigation - works in List focus
+        KeyCode::Char('j') | KeyCode::Down => {
+            if focus == AgentFocus::List {
+                Some(Message::NextAgent)
+            } else {
+                Some(Message::ScrollDetailDown)
+            }
+        }
+        KeyCode::Char('k') | KeyCode::Up => {
+            if focus == AgentFocus::List {
+                Some(Message::PrevAgent)
+            } else {
+                Some(Message::ScrollDetailUp)
+            }
+        }
+        // Page navigation (Ctrl+d/u or PageDown/PageUp)
+        KeyCode::Char('d') if modifiers.contains(KeyModifiers::CONTROL) => {
+            if focus == AgentFocus::List {
+                Some(Message::PageDownAgent)
+            } else {
+                Some(Message::PageScrollDetailDown)
+            }
+        }
+        KeyCode::Char('u') if modifiers.contains(KeyModifiers::CONTROL) => {
+            if focus == AgentFocus::List {
+                Some(Message::PageUpAgent)
+            } else {
+                Some(Message::PageScrollDetailUp)
+            }
+        }
+        KeyCode::PageDown => {
+            if focus == AgentFocus::List {
+                Some(Message::PageDownAgent)
+            } else {
+                Some(Message::PageScrollDetailDown)
+            }
+        }
+        KeyCode::PageUp => {
+            if focus == AgentFocus::List {
+                Some(Message::PageUpAgent)
+            } else {
+                Some(Message::PageScrollDetailUp)
+            }
+        }
+        KeyCode::Char('h') | KeyCode::Left => Some(Message::SwitchAgentFocus),
+        KeyCode::Char('l') | KeyCode::Right => Some(Message::SwitchAgentFocus),
+        KeyCode::Tab | KeyCode::BackTab => Some(Message::SwitchAgentFocus),
+
+        // Actions
+        KeyCode::Char('o') => Some(Message::OpenAgentDocs),
+        KeyCode::Char('r') => Some(Message::OpenAgentRepo),
+        KeyCode::Char('c') => Some(Message::CopyAgentName),
+
+        // Filters
+        KeyCode::Char('1') => Some(Message::ToggleInstalledFilter),
+        KeyCode::Char('2') => Some(Message::ToggleCliFilter),
+        KeyCode::Char('3') => Some(Message::ToggleOpenSourceFilter),
+
+        // Picker
+        KeyCode::Char('a') => Some(Message::OpenPicker),
+
+        // Search
+        KeyCode::Char('/') => Some(Message::EnterSearch),
+
+        // Sort
+        KeyCode::Char('s') => Some(Message::CycleAgentSort),
+
+        _ => None,
+    }
+}
+
+fn handle_picker_keys(code: KeyCode) -> Option<Message> {
+    match code {
+        KeyCode::Char('j') | KeyCode::Down => Some(Message::PickerNext),
+        KeyCode::Char('k') | KeyCode::Up => Some(Message::PickerPrev),
+        KeyCode::Char(' ') => Some(Message::PickerToggle),
+        KeyCode::Enter => Some(Message::PickerSave),
+        KeyCode::Esc => Some(Message::ClosePicker),
         _ => None,
     }
 }

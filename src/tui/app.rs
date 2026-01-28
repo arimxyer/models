@@ -1,5 +1,11 @@
 use ratatui::widgets::ListState;
 
+use super::agents_app::AgentsApp;
+
+/// Page size for page up/down navigation
+const PAGE_SIZE: usize = 10;
+use crate::agents::{AgentsFile, FetchStatus, GitHubData};
+use crate::config::Config;
 use crate::data::{Model, Provider, ProvidersMap};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,6 +37,26 @@ impl SortOrder {
             SortOrder::Cost => SortOrder::Context,
             SortOrder::Context => SortOrder::Default,
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Tab {
+    #[default]
+    Models,
+    Agents,
+}
+
+impl Tab {
+    pub fn next(self) -> Self {
+        match self {
+            Tab::Models => Tab::Agents,
+            Tab::Agents => Tab::Models,
+        }
+    }
+
+    pub fn prev(self) -> Self {
+        self.next() // Only two tabs, so prev == next
     }
 }
 
@@ -74,6 +100,37 @@ pub enum Message {
     ToggleHelp,        // Toggle help popup
     ScrollHelpUp,      // Scroll help popup up
     ScrollHelpDown,    // Scroll help popup down
+    NextTab,
+    PrevTab,
+    // Agents tab messages
+    NextAgent,
+    PrevAgent,
+    PageDownAgent,
+    PageUpAgent,
+    SwitchAgentFocus,
+    ToggleInstalledFilter,
+    ToggleCliFilter,
+    ToggleOpenSourceFilter,
+    OpenAgentRepo,
+    OpenAgentDocs,
+    CopyAgentName,
+    // Picker modal messages
+    OpenPicker,
+    ClosePicker,
+    PickerNext,
+    PickerPrev,
+    PickerToggle,
+    PickerSave,
+    // Detail panel scrolling
+    ScrollDetailUp,
+    ScrollDetailDown,
+    PageScrollDetailUp,
+    PageScrollDetailDown,
+    // Agent sort
+    CycleAgentSort,
+    // Async data messages
+    GitHubDataReceived(String, GitHubData),
+    GitHubFetchFailed(String, String), // (agent_id, error_message)
 }
 
 #[derive(Debug, Clone)]
@@ -98,11 +155,20 @@ pub struct App {
     pub status_message: Option<String>,
     pub show_help: bool,
     pub help_scroll: u16,
+    pub current_tab: Tab,
+    pub agents_app: Option<AgentsApp>,
+    pub config: Config,
     filtered_models: Vec<ModelEntry>,
+    /// Agents newly tracked that need GitHub fetches (agent_id, repo)
+    pub pending_fetches: Vec<(String, String)>,
 }
 
 impl App {
-    pub fn new(providers_map: ProvidersMap) -> Self {
+    pub fn new(
+        providers_map: ProvidersMap,
+        agents_file: Option<&AgentsFile>,
+        config: Option<Config>,
+    ) -> Self {
         let mut providers: Vec<(String, Provider)> = providers_map.into_iter().collect();
         providers.sort_by(|a, b| a.0.cmp(&b.0));
 
@@ -110,6 +176,9 @@ impl App {
         provider_list_state.select(Some(0));
         let mut model_list_state = ListState::default();
         model_list_state.select(Some(1)); // +1 for header row
+
+        let config = config.unwrap_or_default();
+        let agents_app = agents_file.map(|af| AgentsApp::new(af, &config));
 
         let mut app = Self {
             providers,
@@ -125,7 +194,11 @@ impl App {
             status_message: None,
             show_help: false,
             help_scroll: 0,
+            current_tab: Tab::default(),
+            agents_app,
+            config,
             filtered_models: Vec::new(),
+            pending_fetches: Vec::new(),
         };
 
         app.update_filtered_models();
@@ -192,7 +265,7 @@ impl App {
                 }
             }
             Message::PageDownProvider => {
-                let page_size = 10;
+                let page_size = PAGE_SIZE;
                 let last_index = self.provider_list_len().saturating_sub(1);
                 let next = (self.selected_provider + page_size).min(last_index);
                 if next != self.selected_provider {
@@ -200,14 +273,14 @@ impl App {
                 }
             }
             Message::PageUpProvider => {
-                let page_size = 10;
+                let page_size = PAGE_SIZE;
                 let next = self.selected_provider.saturating_sub(page_size);
                 if next != self.selected_provider {
                     self.select_provider_at_index(next);
                 }
             }
             Message::PageDownModel => {
-                let page_size = 10;
+                let page_size = PAGE_SIZE;
                 let last_index = self.filtered_models.len().saturating_sub(1);
                 let next = (self.selected_model + page_size).min(last_index);
                 if next != self.selected_model {
@@ -216,7 +289,7 @@ impl App {
                 }
             }
             Message::PageUpModel => {
-                let page_size = 10;
+                let page_size = PAGE_SIZE;
                 let next = self.selected_model.saturating_sub(page_size);
                 if next != self.selected_model {
                     self.selected_model = next;
@@ -236,22 +309,55 @@ impl App {
                 self.mode = Mode::Normal;
             }
             Message::SearchInput(c) => {
-                self.search_query.push(c);
-                self.selected_model = 0;
-                self.update_filtered_models();
-                self.model_list_state.select(Some(self.selected_model + 1)); // +1 for header
+                match self.current_tab {
+                    Tab::Models => {
+                        self.search_query.push(c);
+                        self.selected_model = 0;
+                        self.update_filtered_models();
+                        self.model_list_state.select(Some(self.selected_model + 1)); // +1 for header
+                    }
+                    Tab::Agents => {
+                        if let Some(ref mut agents_app) = self.agents_app {
+                            agents_app.search_query.push(c);
+                            agents_app.selected_agent = 0;
+                            agents_app.update_filtered();
+                        }
+                    }
+                }
             }
             Message::SearchBackspace => {
-                self.search_query.pop();
-                self.selected_model = 0;
-                self.update_filtered_models();
-                self.model_list_state.select(Some(self.selected_model + 1)); // +1 for header
+                match self.current_tab {
+                    Tab::Models => {
+                        self.search_query.pop();
+                        self.selected_model = 0;
+                        self.update_filtered_models();
+                        self.model_list_state.select(Some(self.selected_model + 1)); // +1 for header
+                    }
+                    Tab::Agents => {
+                        if let Some(ref mut agents_app) = self.agents_app {
+                            agents_app.search_query.pop();
+                            agents_app.selected_agent = 0;
+                            agents_app.update_filtered();
+                        }
+                    }
+                }
             }
             Message::ClearSearch => {
-                self.search_query.clear();
-                self.selected_model = 0;
-                self.update_filtered_models();
-                self.model_list_state.select(Some(self.selected_model + 1)); // +1 for header
+                match self.current_tab {
+                    Tab::Models => {
+                        self.search_query.clear();
+                        self.selected_model = 0;
+                        self.update_filtered_models();
+                        self.model_list_state.select(Some(self.selected_model + 1)); // +1 for header
+                    }
+                    Tab::Agents => {
+                        if let Some(ref mut agents_app) = self.agents_app {
+                            agents_app.search_query.clear();
+                            agents_app.selected_agent = 0;
+                            agents_app.update_filtered();
+                        }
+                    }
+                }
             }
             // Copy and open messages are handled in the main loop
             Message::CopyFull
@@ -293,12 +399,163 @@ impl App {
                 self.help_scroll = self.help_scroll.saturating_sub(1);
             }
             Message::ScrollHelpDown => {
-                // Help content is 34 lines, cap scroll to prevent scrolling past content
-                const HELP_LINES: u16 = 35;
+                // Help content is 44 lines, cap scroll to prevent scrolling past content
+                const HELP_LINES: u16 = 47;
                 const MIN_VISIBLE: u16 = 5;
                 let max_scroll = HELP_LINES.saturating_sub(MIN_VISIBLE);
                 if self.help_scroll < max_scroll {
                     self.help_scroll = self.help_scroll.saturating_add(1);
+                }
+            }
+            Message::NextTab => {
+                self.current_tab = self.current_tab.next();
+            }
+            Message::PrevTab => {
+                self.current_tab = self.current_tab.prev();
+            }
+            Message::NextAgent => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.next_agent();
+                }
+            }
+            Message::PrevAgent => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.prev_agent();
+                }
+            }
+            Message::PageDownAgent => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.page_down(PAGE_SIZE);
+                }
+            }
+            Message::PageUpAgent => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.page_up(PAGE_SIZE);
+                }
+            }
+            Message::SwitchAgentFocus => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.switch_focus();
+                }
+            }
+            Message::ToggleInstalledFilter => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.toggle_installed_filter();
+                }
+            }
+            Message::ToggleCliFilter => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.toggle_cli_filter();
+                }
+            }
+            Message::ToggleOpenSourceFilter => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.toggle_open_source_filter();
+                }
+            }
+            Message::OpenAgentRepo | Message::OpenAgentDocs | Message::CopyAgentName => {
+                // Handled in main loop
+            }
+            Message::OpenPicker => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.open_picker();
+                }
+            }
+            Message::ClosePicker => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.close_picker();
+                }
+            }
+            Message::PickerNext => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.picker_next();
+                }
+            }
+            Message::PickerPrev => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.picker_prev();
+                }
+            }
+            Message::PickerToggle => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.picker_toggle_current();
+                }
+            }
+            Message::PickerSave => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    match agents_app.picker_save(&mut self.config) {
+                        Ok(newly_tracked) => {
+                            if newly_tracked.is_empty() {
+                                self.set_status("Tracked agents saved".to_string());
+                            } else {
+                                self.set_status(format!(
+                                    "Tracked agents saved, fetching {} new...",
+                                    newly_tracked.len()
+                                ));
+                                self.pending_fetches = newly_tracked;
+                            }
+                        }
+                        Err(e) => {
+                            self.set_status(e);
+                        }
+                    }
+                }
+            }
+            Message::ScrollDetailUp => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.detail_scroll = agents_app.detail_scroll.saturating_sub(1);
+                }
+            }
+            Message::ScrollDetailDown => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.detail_scroll = agents_app.detail_scroll.saturating_add(1);
+                }
+            }
+            Message::PageScrollDetailUp => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.detail_scroll =
+                        agents_app.detail_scroll.saturating_sub(PAGE_SIZE as u16);
+                }
+            }
+            Message::PageScrollDetailDown => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.detail_scroll =
+                        agents_app.detail_scroll.saturating_add(PAGE_SIZE as u16);
+                }
+            }
+            Message::CycleAgentSort => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.cycle_sort();
+                }
+            }
+            Message::GitHubDataReceived(agent_id, data) => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    if let Some(entry) = agents_app.entries.iter_mut().find(|e| e.id == agent_id) {
+                        entry.github = data;
+                        entry.fetch_status = FetchStatus::Loaded;
+                    }
+                    agents_app.apply_sort(); // Re-sort after data arrives
+
+                    // Decrement pending fetches and clear loading flag when all complete
+                    agents_app.pending_github_fetches =
+                        agents_app.pending_github_fetches.saturating_sub(1);
+                    if agents_app.pending_github_fetches == 0 {
+                        agents_app.loading_github = false;
+                    }
+                }
+            }
+            Message::GitHubFetchFailed(agent_id, error) => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    if let Some(entry) = agents_app.entries.iter_mut().find(|e| e.id == agent_id) {
+                        entry.fetch_status = FetchStatus::Failed(error);
+                    }
+
+                    // Decrement pending fetches and clear loading flag when all complete
+                    agents_app.pending_github_fetches =
+                        agents_app.pending_github_fetches.saturating_sub(1);
+                    if agents_app.pending_github_fetches == 0 {
+                        agents_app.loading_github = false;
+                    }
                 }
             }
         }
