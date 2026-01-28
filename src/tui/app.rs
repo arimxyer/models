@@ -314,7 +314,8 @@ impl App {
                         self.search_query.push(c);
                         self.selected_model = 0;
                         self.update_filtered_models();
-                        self.model_list_state.select(Some(self.selected_model + 1)); // +1 for header
+                        self.model_list_state.select(Some(self.selected_model + 1));
+                        // +1 for header
                     }
                     Tab::Agents => {
                         if let Some(ref mut agents_app) = self.agents_app {
@@ -331,7 +332,8 @@ impl App {
                         self.search_query.pop();
                         self.selected_model = 0;
                         self.update_filtered_models();
-                        self.model_list_state.select(Some(self.selected_model + 1)); // +1 for header
+                        self.model_list_state.select(Some(self.selected_model + 1));
+                        // +1 for header
                     }
                     Tab::Agents => {
                         if let Some(ref mut agents_app) = self.agents_app {
@@ -348,7 +350,8 @@ impl App {
                         self.search_query.clear();
                         self.selected_model = 0;
                         self.update_filtered_models();
-                        self.model_list_state.select(Some(self.selected_model + 1)); // +1 for header
+                        self.model_list_state.select(Some(self.selected_model + 1));
+                        // +1 for header
                     }
                     Tab::Agents => {
                         if let Some(ref mut agents_app) = self.agents_app {

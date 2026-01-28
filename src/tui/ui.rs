@@ -388,7 +388,7 @@ fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut App) {
             // Status indicator based on fetch_status and update availability
             let (status_indicator, status_style) = match &entry.fetch_status {
                 FetchStatus::NotStarted => ("\u{25CB}", Style::default().fg(Color::DarkGray)), // ○ gray
-                FetchStatus::Loading => ("\u{25D0}", Style::default().fg(Color::Yellow)),      // ◐ yellow
+                FetchStatus::Loading => ("\u{25D0}", Style::default().fg(Color::Yellow)), // ◐ yellow
                 FetchStatus::Loaded => {
                     if entry.update_available() {
                         ("\u{25CF}", Style::default().fg(Color::Blue)) // ● blue = update available
