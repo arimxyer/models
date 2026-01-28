@@ -14,9 +14,13 @@ pub mod app;
 pub mod event;
 pub mod ui;
 
-use crate::agents::{load_agents, AgentEntry, AsyncGitHubClient, GitHubData};
+use crate::agents::{
+    load_agents, AgentEntry, AsyncGitHubClient, ConditionalFetchResult, GitHubCache, GitHubData,
+};
 use crate::config::Config;
 use crate::data::ProvidersMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 /// Result of a GitHub fetch operation for an agent.
 #[derive(Debug)]
@@ -47,6 +51,52 @@ fn spawn_github_fetches(
             let result = match client.fetch(&repo).await {
                 Ok(data) => FetchResult::Success(id, data),
                 Err(e) => FetchResult::Failure(id, e.to_string()),
+            };
+            let _ = tx.send(result).await;
+        });
+        handles.push(handle);
+    }
+
+    (rx, handles)
+}
+
+/// Spawn background GitHub fetches using conditional requests (ETag-based).
+/// Uses cached data when GitHub returns 304 Not Modified.
+/// Returns a receiver and the join handles for cleanup.
+#[allow(dead_code)]
+fn spawn_github_fetches_conditional(
+    entries: &[AgentEntry],
+    client: AsyncGitHubClient,
+    disk_cache: Arc<RwLock<GitHubCache>>,
+) -> (mpsc::Receiver<FetchResult>, Vec<JoinHandle<()>>) {
+    let (tx, rx) = mpsc::channel(100);
+    let tracked_entries: Vec<_> = entries.iter().filter(|e| e.tracked).collect();
+    let mut handles = Vec::with_capacity(tracked_entries.len());
+
+    for entry in tracked_entries {
+        let tx = tx.clone();
+        let client = client.clone();
+        let id = entry.id.clone();
+        let repo = entry.agent.repo.clone();
+        let cache = disk_cache.clone();
+
+        let handle = tokio::spawn(async move {
+            let result = match client.fetch_conditional(&repo).await {
+                ConditionalFetchResult::Fresh(data, _etag) => FetchResult::Success(id, data),
+                ConditionalFetchResult::NotModified => {
+                    // Retrieve cached data and send as success
+                    let cache_guard = cache.read().await;
+                    if let Some(cached) = cache_guard.get(&repo) {
+                        FetchResult::Success(id, cached.data.clone().into())
+                    } else {
+                        // Cache miss despite NotModified - shouldn't happen, treat as error
+                        FetchResult::Failure(
+                            id,
+                            "Cache miss on NotModified response".to_string(),
+                        )
+                    }
+                }
+                ConditionalFetchResult::Error(e) => FetchResult::Failure(id, e),
             };
             let _ = tx.send(result).await;
         });
