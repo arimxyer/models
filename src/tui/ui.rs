@@ -371,12 +371,18 @@ fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut App) {
                 "-"
             };
 
-            // Status indicator based on fetch_status
+            // Status indicator based on fetch_status and update availability
             let (status_indicator, status_style) = match &entry.fetch_status {
-                FetchStatus::NotStarted => ("\u{25CB}", Style::default().fg(Color::DarkGray)), // ○
-                FetchStatus::Loading => ("\u{25D0}", Style::default().fg(Color::Yellow)),      // ◐
-                FetchStatus::Loaded => ("\u{25CF}", Style::default().fg(Color::Green)),        // ●
-                FetchStatus::Failed(_) => ("\u{2717}", Style::default().fg(Color::Red)),       // ✗
+                FetchStatus::NotStarted => ("\u{25CB}", Style::default().fg(Color::DarkGray)), // ○ gray
+                FetchStatus::Loading => ("\u{25D0}", Style::default().fg(Color::Yellow)),      // ◐ yellow
+                FetchStatus::Loaded => {
+                    if entry.update_available() {
+                        ("\u{25CF}", Style::default().fg(Color::Blue)) // ● blue = update available
+                    } else {
+                        ("\u{25CF}", Style::default().fg(Color::Green)) // ● green = up to date
+                    }
+                }
+                FetchStatus::Failed(_) => ("\u{2717}", Style::default().fg(Color::Red)), // ✗ red
             };
 
             let row = Line::from(vec![
