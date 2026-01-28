@@ -306,22 +306,55 @@ impl App {
                 self.mode = Mode::Normal;
             }
             Message::SearchInput(c) => {
-                self.search_query.push(c);
-                self.selected_model = 0;
-                self.update_filtered_models();
-                self.model_list_state.select(Some(self.selected_model + 1)); // +1 for header
+                match self.current_tab {
+                    Tab::Models => {
+                        self.search_query.push(c);
+                        self.selected_model = 0;
+                        self.update_filtered_models();
+                        self.model_list_state.select(Some(self.selected_model + 1)); // +1 for header
+                    }
+                    Tab::Agents => {
+                        if let Some(ref mut agents_app) = self.agents_app {
+                            agents_app.search_query.push(c);
+                            agents_app.selected_agent = 0;
+                            agents_app.update_filtered();
+                        }
+                    }
+                }
             }
             Message::SearchBackspace => {
-                self.search_query.pop();
-                self.selected_model = 0;
-                self.update_filtered_models();
-                self.model_list_state.select(Some(self.selected_model + 1)); // +1 for header
+                match self.current_tab {
+                    Tab::Models => {
+                        self.search_query.pop();
+                        self.selected_model = 0;
+                        self.update_filtered_models();
+                        self.model_list_state.select(Some(self.selected_model + 1)); // +1 for header
+                    }
+                    Tab::Agents => {
+                        if let Some(ref mut agents_app) = self.agents_app {
+                            agents_app.search_query.pop();
+                            agents_app.selected_agent = 0;
+                            agents_app.update_filtered();
+                        }
+                    }
+                }
             }
             Message::ClearSearch => {
-                self.search_query.clear();
-                self.selected_model = 0;
-                self.update_filtered_models();
-                self.model_list_state.select(Some(self.selected_model + 1)); // +1 for header
+                match self.current_tab {
+                    Tab::Models => {
+                        self.search_query.clear();
+                        self.selected_model = 0;
+                        self.update_filtered_models();
+                        self.model_list_state.select(Some(self.selected_model + 1)); // +1 for header
+                    }
+                    Tab::Agents => {
+                        if let Some(ref mut agents_app) = self.agents_app {
+                            agents_app.search_query.clear();
+                            agents_app.selected_agent = 0;
+                            agents_app.update_filtered();
+                        }
+                    }
+                }
             }
             // Copy and open messages are handled in the main loop
             Message::CopyFull

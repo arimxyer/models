@@ -22,6 +22,19 @@ use crate::data::ProvidersMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+/// Copy text to clipboard, keeping it alive on Linux.
+/// On Linux, the clipboard is selection-based and needs the source app to stay alive.
+/// We spawn a thread to hold the clipboard for a few seconds.
+fn copy_to_clipboard(text: String) {
+    std::thread::spawn(move || {
+        if let Ok(mut clipboard) = arboard::Clipboard::new() {
+            let _ = clipboard.set_text(&text);
+            // Keep clipboard alive for other apps to read on Linux
+            std::thread::sleep(std::time::Duration::from_secs(2));
+        }
+    });
+}
+
 /// Result of a GitHub fetch operation for an agent.
 #[derive(Debug)]
 pub enum FetchResult {
@@ -228,38 +241,30 @@ fn run_app(
             match &msg {
                 app::Message::CopyFull => {
                     if let Some(text) = app.get_copy_full() {
-                        if let Ok(mut clipboard) = arboard::Clipboard::new() {
-                            let _ = clipboard.set_text(&text);
-                            app.set_status(format!("Copied: {}", text));
-                            last_status_time = Some(std::time::Instant::now());
-                        }
+                        copy_to_clipboard(text.clone());
+                        app.set_status(format!("Copied: {}", text));
+                        last_status_time = Some(std::time::Instant::now());
                     }
                 }
                 app::Message::CopyModelId => {
                     if let Some(text) = app.get_copy_model_id() {
-                        if let Ok(mut clipboard) = arboard::Clipboard::new() {
-                            let _ = clipboard.set_text(&text);
-                            app.set_status(format!("Copied: {}", text));
-                            last_status_time = Some(std::time::Instant::now());
-                        }
+                        copy_to_clipboard(text.clone());
+                        app.set_status(format!("Copied: {}", text));
+                        last_status_time = Some(std::time::Instant::now());
                     }
                 }
                 app::Message::CopyProviderDoc => {
                     if let Some(text) = app.get_provider_doc() {
-                        if let Ok(mut clipboard) = arboard::Clipboard::new() {
-                            let _ = clipboard.set_text(&text);
-                            app.set_status(format!("Copied: {}", text));
-                            last_status_time = Some(std::time::Instant::now());
-                        }
+                        copy_to_clipboard(text.clone());
+                        app.set_status(format!("Copied: {}", text));
+                        last_status_time = Some(std::time::Instant::now());
                     }
                 }
                 app::Message::CopyProviderApi => {
                     if let Some(text) = app.get_provider_api() {
-                        if let Ok(mut clipboard) = arboard::Clipboard::new() {
-                            let _ = clipboard.set_text(&text);
-                            app.set_status(format!("Copied: {}", text));
-                            last_status_time = Some(std::time::Instant::now());
-                        }
+                        copy_to_clipboard(text.clone());
+                        app.set_status(format!("Copied: {}", text));
+                        last_status_time = Some(std::time::Instant::now());
                     }
                 }
                 app::Message::OpenProviderDoc => {
@@ -297,11 +302,9 @@ fn run_app(
                 app::Message::CopyAgentName => {
                     if let Some(ref agents_app) = app.agents_app {
                         if let Some(entry) = agents_app.current_entry() {
-                            if let Ok(mut clipboard) = arboard::Clipboard::new() {
-                                let _ = clipboard.set_text(&entry.agent.name);
-                                app.set_status(format!("Copied: {}", entry.agent.name));
-                                last_status_time = Some(std::time::Instant::now());
-                            }
+                            copy_to_clipboard(entry.agent.name.clone());
+                            app.set_status(format!("Copied: {}", entry.agent.name));
+                            last_status_time = Some(std::time::Instant::now());
                         }
                     }
                 }

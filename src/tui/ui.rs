@@ -899,9 +899,18 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
             );
         }
         Mode::Search => {
+            // Get the correct search query based on current tab
+            let search_query = match app.current_tab {
+                Tab::Models => &app.search_query,
+                Tab::Agents => app
+                    .agents_app
+                    .as_ref()
+                    .map(|a| &a.search_query)
+                    .unwrap_or(&app.search_query),
+            };
             let content = Line::from(vec![
                 Span::styled(" Search: ", Style::default().fg(Color::Cyan)),
-                Span::raw(&app.search_query),
+                Span::raw(search_query),
                 Span::styled("_", Style::default().add_modifier(Modifier::SLOW_BLINK)),
                 Span::raw("  "),
                 Span::styled(" Enter/Esc ", Style::default().fg(Color::Yellow)),
