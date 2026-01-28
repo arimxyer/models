@@ -258,11 +258,31 @@ impl AsyncGitHubClient {
         };
 
         // Fetch releases separately (they have their own ETag, but for simplicity we bundle them)
+        // If fetch fails, try to preserve cached releases
         let releases_url = format!("{}/repos/{}/releases", GITHUB_API_BASE, repo);
-        let releases: Vec<ReleaseResponse> = self
+        let releases: Vec<ReleaseResponse> = match self
             .get_json::<Vec<ReleaseResponse>>(&releases_url)
             .await
-            .unwrap_or_default();
+        {
+            Ok(r) => r,
+            Err(_) => {
+                // Fetch failed - try to preserve cached releases
+                let cache = self.disk_cache.read().await;
+                if let Some(cached) = cache.get(repo) {
+                    // Return cached data with updated repo info but preserved releases
+                    let mut data: GitHubData = cached.data.clone().into();
+                    data.stars = Some(repo_info.stargazers_count);
+                    data.open_issues = Some(repo_info.open_issues_count);
+                    data.license = repo_info
+                        .license
+                        .and_then(|l| l.spdx_id)
+                        .filter(|s| s != "NOASSERTION");
+                    data.last_commit = repo_info.pushed_at.map(|s| format_relative_time(&s));
+                    return ConditionalFetchResult::Fresh(data, new_etag);
+                }
+                Vec::new() // No cache, return empty
+            }
+        };
 
         // Build the GitHubData
         let data = GitHubData {
