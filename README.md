@@ -125,6 +125,8 @@ models
 
 ### Agents Tab
 
+![Agents tab screenshot](public/assets/agents-screenshot.png)
+
 **Filters & Sort**
 | Key | Action |
 |-----|--------|
