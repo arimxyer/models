@@ -4,7 +4,6 @@
   <a href="https://crates.io/crates/modelsdev"><img src="https://img.shields.io/crates/v/modelsdev.svg?label=version" alt="Version"></a>
   <a href="https://github.com/arimxyer/models/actions/workflows/ci.yml"><img src="https://github.com/arimxyer/models/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
-  <a href="https://awesome.re"><img src="https://awesome.re/mentioned-badge.svg" alt="Mentioned in Awesome"></a>
 </p>
 
 A fast CLI and TUI for browsing AI models and coding agents.
