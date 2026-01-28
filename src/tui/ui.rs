@@ -276,22 +276,36 @@ fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut App) {
         Style::default().fg(Color::DarkGray)
     };
 
-    // Build title with count and sort indicator
+    // Build title with count, search query, filter, and sort indicators
     let sort_indicator = format!(" \u{2193}{}", agents_app.sort_order.label());
     let filter_indicator = agents_app.format_active_filters();
-    let title = if filter_indicator.is_empty() {
-        format!(
+    let search_query = &agents_app.search_query;
+
+    let title = match (search_query.is_empty(), filter_indicator.is_empty()) {
+        (true, true) => format!(
             " Agents ({}){} ",
             agents_app.filtered_entries.len(),
             sort_indicator
-        )
-    } else {
-        format!(
+        ),
+        (true, false) => format!(
             " Agents ({}) [{}]{} ",
             agents_app.filtered_entries.len(),
             filter_indicator,
             sort_indicator
-        )
+        ),
+        (false, true) => format!(
+            " Agents ({}) [/{}]{} ",
+            agents_app.filtered_entries.len(),
+            search_query,
+            sort_indicator
+        ),
+        (false, false) => format!(
+            " Agents ({}) [/{}] [{}]{} ",
+            agents_app.filtered_entries.len(),
+            search_query,
+            filter_indicator,
+            sort_indicator
+        ),
     };
 
     // Outer block with title at top
@@ -874,12 +888,10 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
                     Span::raw("quit  "),
                     Span::styled(" ↑/↓ ", Style::default().fg(Color::Yellow)),
                     Span::raw("nav  "),
-                    Span::styled(" Tab ", Style::default().fg(Color::Yellow)),
-                    Span::raw("switch  "),
+                    Span::styled(" / ", Style::default().fg(Color::Yellow)),
+                    Span::raw("search  "),
                     Span::styled(" s ", Style::default().fg(Color::Yellow)),
                     Span::raw("sort  "),
-                    Span::styled(" a ", Style::default().fg(Color::Yellow)),
-                    Span::raw("track  "),
                     Span::styled(" o ", Style::default().fg(Color::Yellow)),
                     Span::raw("docs  "),
                     Span::styled(" r ", Style::default().fg(Color::Yellow)),
@@ -1086,7 +1098,7 @@ fn draw_help_popup(f: &mut Frame, scroll: u16, current_tab: Tab) {
                 )),
                 Line::from(vec![
                     Span::styled("  s             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Cycle sort (name → stars → updated)"),
+                    Span::raw("Cycle sort (name → updated → stars → status)"),
                 ]),
                 Line::from(vec![
                     Span::styled("  1             ", Style::default().fg(Color::Yellow)),
