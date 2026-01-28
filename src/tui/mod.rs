@@ -1,37 +1,147 @@
-mod app;
-mod event;
-mod ui;
-
-use std::io::stdout;
-use std::time::Instant;
-
 use anyhow::Result;
-use arboard::Clipboard;
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use ratatui::prelude::*;
+use ratatui::{backend::CrosstermBackend, Terminal};
+use std::io;
+use tokio::sync::mpsc;
 
-use crate::api;
-use app::{App, Message};
+pub mod agents_app;
+pub mod app;
+pub mod event;
+pub mod ui;
 
-pub fn run() -> Result<()> {
-    // Fetch data before setting up terminal
-    eprintln!("Fetching model data...");
-    let providers = api::fetch_providers()?;
+use crate::agents::{
+    load_agents, AsyncGitHubClient, ConditionalFetchResult, GitHubCache, GitHubData,
+};
+use crate::config::Config;
+use crate::data::ProvidersMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+
+/// Copy text to clipboard, keeping it alive on Linux.
+/// On Linux, the clipboard is selection-based and needs the source app to stay alive.
+/// We spawn a thread to hold the clipboard for a few seconds.
+fn copy_to_clipboard(text: String) {
+    std::thread::spawn(move || {
+        if let Ok(mut clipboard) = arboard::Clipboard::new() {
+            let _ = clipboard.set_text(&text);
+            // Keep clipboard alive for other apps to read on Linux
+            std::thread::sleep(std::time::Duration::from_secs(2));
+        }
+    });
+}
+
+/// Result of a GitHub fetch operation for an agent.
+#[derive(Debug)]
+pub enum FetchResult {
+    /// Successful fetch: (agent_id, github_data)
+    Success(String, GitHubData),
+    /// Failed fetch: (agent_id, error_message)
+    Failure(String, String),
+}
+pub async fn run(providers: ProvidersMap) -> Result<()> {
+    use crate::agents::FetchStatus;
+
+    // Load remaining data
+    let agents_file = load_agents().ok();
+    let config = Config::load().ok();
+
+    // Load disk cache for GitHub data (load before wrapping to avoid blocking in async)
+    let disk_cache = GitHubCache::load();
+
+    // Create app BEFORE entering alternate screen
+    let mut app = app::App::new(providers, agents_file.as_ref(), config);
+
+    // Install panic hook to restore terminal on crash
+    let original_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |panic_info| {
+        // Restore terminal before printing panic message
+        let _ = disable_raw_mode();
+        let _ = execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture);
+        original_hook(panic_info);
+    }));
 
     // Setup terminal
     enable_raw_mode()?;
-    let mut stdout = stdout();
+    let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    // Create app and run
-    let mut app = App::new(providers);
-    let result = run_app(&mut terminal, &mut app);
+    // Pre-populate agent entries from disk cache for instant display
+    if let Some(ref mut agents_app) = app.agents_app {
+        for entry in &mut agents_app.entries {
+            if entry.tracked {
+                // Look up cached data by repo (cache keys are repos)
+                if let Some(cached) = disk_cache.get(&entry.agent.repo) {
+                    entry.github = cached.data.clone().into();
+                    entry.fetch_status = FetchStatus::Loaded;
+                }
+            }
+        }
+        // Re-apply sorting after populating cache data (in case sorted by stars/updated)
+        agents_app.apply_sort();
+    }
+
+    // Now wrap cache in Arc<RwLock> for async sharing
+    let disk_cache = Arc::new(RwLock::new(disk_cache));
+
+    // Create GitHub client and channel for fetch results
+    let client = AsyncGitHubClient::with_disk_cache(None, disk_cache.clone());
+    let (tx, rx) = mpsc::channel(100);
+
+    // Spawn background GitHub fetches for agents (non-blocking)
+    // Uses conditional fetches with ETag to avoid re-downloading unchanged data
+    let fetch_handles = if let Some(ref agents_app) = app.agents_app {
+        let tracked_entries: Vec<_> = agents_app.entries.iter().filter(|e| e.tracked).collect();
+        let mut handles = Vec::with_capacity(tracked_entries.len());
+
+        for entry in tracked_entries {
+            let tx = tx.clone();
+            let client = client.clone();
+            let id = entry.id.clone();
+            let repo = entry.agent.repo.clone();
+            let cache = disk_cache.clone();
+
+            let handle = tokio::spawn(async move {
+                let result = match client.fetch_conditional(&repo).await {
+                    ConditionalFetchResult::Fresh(data, _etag) => FetchResult::Success(id, data),
+                    ConditionalFetchResult::NotModified => {
+                        let cache_guard = cache.read().await;
+                        if let Some(cached) = cache_guard.get(&repo) {
+                            FetchResult::Success(id, cached.data.clone().into())
+                        } else {
+                            FetchResult::Failure(id, "Cache miss on NotModified".to_string())
+                        }
+                    }
+                    ConditionalFetchResult::Error(e) => FetchResult::Failure(id, e),
+                };
+                let _ = tx.send(result).await;
+            });
+            handles.push(handle);
+        }
+        handles
+    } else {
+        Vec::new()
+    };
+
+    // Main loop - pass client and sender for dynamic fetches
+    let result = run_app(&mut terminal, &mut app, rx, tx, client, disk_cache.clone());
+
+    // Abort any remaining fetch tasks to allow clean shutdown
+    for handle in fetch_handles {
+        handle.abort();
+    }
+
+    // Save cache to disk before exiting (best-effort, don't crash on failure)
+    // Use try_read() to avoid blocking in async context
+    if let Ok(cache_guard) = disk_cache.try_read() {
+        // Ignore save errors - cache is not critical and we don't want to crash on exit
+        let _ = cache_guard.save();
+    }
 
     // Restore terminal
     disable_raw_mode()?;
@@ -45,112 +155,151 @@ pub fn run() -> Result<()> {
     result
 }
 
-fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()> {
-    let mut clipboard = Clipboard::new().ok();
-    let mut status_clear_time: Option<Instant> = None;
+fn run_app(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    app: &mut app::App,
+    mut github_rx: mpsc::Receiver<FetchResult>,
+    github_tx: mpsc::Sender<FetchResult>,
+    client: AsyncGitHubClient,
+    disk_cache: Arc<RwLock<GitHubCache>>,
+) -> Result<()> {
+    let mut last_status_time: Option<std::time::Instant> = None;
 
     loop {
-        // Clear status message after 2 seconds
-        if let Some(clear_time) = status_clear_time {
-            if clear_time.elapsed().as_secs() >= 2 {
+        terminal.draw(|f| ui::draw(f, app))?;
+
+        // Clear status after 2 seconds
+        if let Some(time) = last_status_time {
+            if time.elapsed() > std::time::Duration::from_secs(2) {
                 app.clear_status();
-                status_clear_time = None;
+                last_status_time = None;
             }
         }
 
-        terminal.draw(|f| ui::draw(f, app))?; // app is &mut App
+        // Spawn fetches for newly tracked agents
+        if !app.pending_fetches.is_empty() {
+            let fetches = std::mem::take(&mut app.pending_fetches);
+            for (agent_id, repo) in fetches {
+                let tx = github_tx.clone();
+                let client = client.clone();
+                let cache = disk_cache.clone();
+
+                tokio::spawn(async move {
+                    let result = match client.fetch_conditional(&repo).await {
+                        ConditionalFetchResult::Fresh(data, _etag) => {
+                            FetchResult::Success(agent_id, data)
+                        }
+                        ConditionalFetchResult::NotModified => {
+                            let cache_guard = cache.read().await;
+                            if let Some(cached) = cache_guard.get(&repo) {
+                                FetchResult::Success(agent_id, cached.data.clone().into())
+                            } else {
+                                FetchResult::Failure(
+                                    agent_id,
+                                    "Cache miss on NotModified".to_string(),
+                                )
+                            }
+                        }
+                        ConditionalFetchResult::Error(e) => FetchResult::Failure(agent_id, e),
+                    };
+                    let _ = tx.send(result).await;
+                });
+            }
+        }
+
+        // Check for GitHub updates (non-blocking)
+        while let Ok(result) = github_rx.try_recv() {
+            match result {
+                FetchResult::Success(id, data) => {
+                    app.update(app::Message::GitHubDataReceived(id, data));
+                }
+                FetchResult::Failure(id, error) => {
+                    app.update(app::Message::GitHubFetchFailed(id, error));
+                }
+            }
+        }
 
         if let Some(msg) = event::handle_events(app)? {
-            match msg {
-                Message::CopyFull => {
+            // Handle clipboard operations and set status with timer
+            match &msg {
+                app::Message::CopyFull => {
                     if let Some(text) = app.get_copy_full() {
-                        if let Some(ref mut cb) = clipboard {
-                            if cb.set_text(&text).is_ok() {
-                                app.set_status(format!("Copied: {}", text));
-                                status_clear_time = Some(Instant::now());
-                            } else {
-                                app.set_status("Failed to copy".to_string());
-                                status_clear_time = Some(Instant::now());
-                            }
-                        } else {
-                            app.set_status("Clipboard unavailable".to_string());
-                            status_clear_time = Some(Instant::now());
-                        }
+                        copy_to_clipboard(text.clone());
+                        app.set_status(format!("Copied: {}", text));
+                        last_status_time = Some(std::time::Instant::now());
                     }
                 }
-                Message::CopyModelId => {
+                app::Message::CopyModelId => {
                     if let Some(text) = app.get_copy_model_id() {
-                        if let Some(ref mut cb) = clipboard {
-                            if cb.set_text(&text).is_ok() {
-                                app.set_status(format!("Copied: {}", text));
-                                status_clear_time = Some(Instant::now());
-                            } else {
-                                app.set_status("Failed to copy".to_string());
-                                status_clear_time = Some(Instant::now());
-                            }
-                        } else {
-                            app.set_status("Clipboard unavailable".to_string());
-                            status_clear_time = Some(Instant::now());
-                        }
+                        copy_to_clipboard(text.clone());
+                        app.set_status(format!("Copied: {}", text));
+                        last_status_time = Some(std::time::Instant::now());
                     }
                 }
-                Message::CopyProviderDoc => {
+                app::Message::CopyProviderDoc => {
                     if let Some(text) = app.get_provider_doc() {
-                        if let Some(ref mut cb) = clipboard {
-                            if cb.set_text(&text).is_ok() {
-                                app.set_status(format!("Copied docs: {}", text));
-                                status_clear_time = Some(Instant::now());
-                            } else {
-                                app.set_status("Failed to copy".to_string());
-                                status_clear_time = Some(Instant::now());
-                            }
-                        } else {
-                            app.set_status("Clipboard unavailable".to_string());
-                            status_clear_time = Some(Instant::now());
-                        }
-                    } else {
-                        app.set_status("No documentation URL available".to_string());
-                        status_clear_time = Some(Instant::now());
+                        copy_to_clipboard(text.clone());
+                        app.set_status(format!("Copied: {}", text));
+                        last_status_time = Some(std::time::Instant::now());
                     }
                 }
-                Message::CopyProviderApi => {
+                app::Message::CopyProviderApi => {
                     if let Some(text) = app.get_provider_api() {
-                        if let Some(ref mut cb) = clipboard {
-                            if cb.set_text(&text).is_ok() {
-                                app.set_status(format!("Copied API: {}", text));
-                                status_clear_time = Some(Instant::now());
-                            } else {
-                                app.set_status("Failed to copy".to_string());
-                                status_clear_time = Some(Instant::now());
-                            }
-                        } else {
-                            app.set_status("Clipboard unavailable".to_string());
-                            status_clear_time = Some(Instant::now());
-                        }
-                    } else {
-                        app.set_status("No API URL available".to_string());
-                        status_clear_time = Some(Instant::now());
+                        copy_to_clipboard(text.clone());
+                        app.set_status(format!("Copied: {}", text));
+                        last_status_time = Some(std::time::Instant::now());
                     }
                 }
-                Message::OpenProviderDoc => {
+                app::Message::OpenProviderDoc => {
                     if let Some(url) = app.get_provider_doc() {
-                        if open::that(&url).is_ok() {
-                            app.set_status(format!("Opened: {}", url));
-                            status_clear_time = Some(Instant::now());
-                        } else {
-                            app.set_status("Failed to open browser".to_string());
-                            status_clear_time = Some(Instant::now());
+                        let _ = open::that(&url);
+                        app.set_status(format!("Opened: {}", url));
+                        last_status_time = Some(std::time::Instant::now());
+                    }
+                }
+                app::Message::OpenAgentDocs => {
+                    if let Some(ref agents_app) = app.agents_app {
+                        if let Some(entry) = agents_app.current_entry() {
+                            if let Some(ref url) = entry.agent.docs {
+                                let _ = open::that(url);
+                                app.set_status(format!("Opened: {}", url));
+                                last_status_time = Some(std::time::Instant::now());
+                            } else if let Some(ref url) = entry.agent.homepage {
+                                let _ = open::that(url);
+                                app.set_status(format!("Opened: {}", url));
+                                last_status_time = Some(std::time::Instant::now());
+                            }
                         }
-                    } else {
-                        app.set_status("No documentation URL available".to_string());
-                        status_clear_time = Some(Instant::now());
                     }
                 }
-                _ => {
-                    if !app.update(msg) {
-                        return Ok(());
+                app::Message::OpenAgentRepo => {
+                    if let Some(ref agents_app) = app.agents_app {
+                        if let Some(entry) = agents_app.current_entry() {
+                            let url = format!("https://github.com/{}", entry.agent.repo);
+                            let _ = open::that(&url);
+                            app.set_status(format!("Opened: {}", url));
+                            last_status_time = Some(std::time::Instant::now());
+                        }
                     }
                 }
+                app::Message::CopyAgentName => {
+                    if let Some(ref agents_app) = app.agents_app {
+                        if let Some(entry) = agents_app.current_entry() {
+                            copy_to_clipboard(entry.agent.name.clone());
+                            app.set_status(format!("Copied: {}", entry.agent.name));
+                            last_status_time = Some(std::time::Instant::now());
+                        }
+                    }
+                }
+                app::Message::PickerSave => {
+                    // Picker save sets its own status message via app.update
+                    last_status_time = Some(std::time::Instant::now());
+                }
+                _ => {}
+            }
+
+            if !app.update(msg) {
+                return Ok(());
             }
         }
     }
