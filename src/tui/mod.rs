@@ -156,6 +156,13 @@ pub async fn run(providers: ProvidersMap) -> Result<()> {
     // Main loop
     let result = run_app(&mut terminal, &mut app, github_rx);
 
+    // Save cache to disk before exiting (best-effort, don't crash on failure)
+    {
+        let cache_guard = disk_cache.blocking_read();
+        // Ignore save errors - cache is not critical and we don't want to crash on exit
+        let _ = cache_guard.save();
+    }
+
     // Abort any remaining fetch tasks to allow clean shutdown
     for handle in fetch_handles {
         handle.abort();
