@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use super::app::{App, Filters, Focus, Mode, SortOrder, Tab};
-use crate::agents::format_stars;
+use crate::agents::{format_stars, FetchStatus};
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let (main_constraint, detail_constraint) = match app.current_tab {
@@ -344,8 +344,8 @@ fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut App) {
     // Agent list
     let mut items: Vec<ListItem> = Vec::new();
 
-    // Header row
-    let header = format!("{:<22} {:>6} {:>8}", "Agent", "Type", "Installed");
+    // Header row (with status column)
+    let header = format!("{:<22} {:>6} {:>8} {:>3}", "Agent", "Type", "Installed", "");
     items.push(
         ListItem::new(header).style(
             Style::default()
@@ -366,17 +366,28 @@ fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut App) {
             };
 
             let installed = if entry.installed.version.is_some() {
-                "✓"
+                "\u{2713}" // checkmark
             } else {
                 "-"
             };
 
-            let row = format!(
-                "{:<22} {:>6} {:>8}",
-                truncate(&entry.agent.name, 22),
-                agent_type,
-                installed,
-            );
+            // Status indicator based on fetch_status
+            let (status_indicator, status_style) = match &entry.fetch_status {
+                FetchStatus::NotStarted => ("\u{25CB}", Style::default().fg(Color::DarkGray)), // ○
+                FetchStatus::Loading => ("\u{25D0}", Style::default().fg(Color::Yellow)),      // ◐
+                FetchStatus::Loaded => ("\u{25CF}", Style::default().fg(Color::Green)),        // ●
+                FetchStatus::Failed(_) => ("\u{2717}", Style::default().fg(Color::Red)),       // ✗
+            };
+
+            let row = Line::from(vec![
+                Span::raw(format!(
+                    "{:<22} {:>6} {:>8} ",
+                    truncate(&entry.agent.name, 22),
+                    agent_type,
+                    installed,
+                )),
+                Span::styled(status_indicator, status_style),
+            ]);
             items.push(ListItem::new(row));
         }
     }
@@ -467,12 +478,34 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &App) {
             status,
         ]));
 
-        // Show loading indicator if GitHub data not yet loaded for this agent
-        if agents_app.loading_github && entry.github.stars.is_none() {
-            detail_lines.push(Line::from(Span::styled(
-                "Loading GitHub data...",
-                Style::default().fg(Color::DarkGray),
-            )));
+        // Show status indicator based on fetch_status
+        match &entry.fetch_status {
+            FetchStatus::Loading => {
+                detail_lines.push(Line::from(Span::styled(
+                    "Loading GitHub data...",
+                    Style::default().fg(Color::Yellow),
+                )));
+            }
+            FetchStatus::Failed(error) => {
+                detail_lines.push(Line::from(vec![
+                    Span::styled("\u{2717} ", Style::default().fg(Color::Red)), // ✗
+                    Span::styled(
+                        format!("Failed to fetch: {}", error),
+                        Style::default().fg(Color::Red),
+                    ),
+                ]));
+            }
+            FetchStatus::NotStarted => {
+                if entry.tracked {
+                    detail_lines.push(Line::from(Span::styled(
+                        "Waiting to fetch GitHub data...",
+                        Style::default().fg(Color::DarkGray),
+                    )));
+                }
+            }
+            FetchStatus::Loaded => {
+                // No indicator needed when data is loaded
+            }
         }
 
         detail_lines.push(Line::from(""));
