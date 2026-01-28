@@ -2,7 +2,7 @@
 name = "modelsdev"
 version = "0.6.0"
 edition = "2021"
-description = "CLI/TUI tool for querying AI model information from models.dev"
+description = "CLI/TUI tool for browsing AI models and tracking coding agents"
 license = "MIT"
 repository = "https://github.com/arimxyer/models"
 readme = "README.md"
