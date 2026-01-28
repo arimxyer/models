@@ -113,8 +113,8 @@ pub async fn run(providers: ProvidersMap) -> Result<()> {
     let agents_file = load_agents().ok();
     let config = Config::load().ok();
 
-    // Load disk cache for GitHub data
-    let disk_cache = Arc::new(RwLock::new(GitHubCache::load()));
+    // Load disk cache for GitHub data (load before wrapping to avoid blocking in async)
+    let disk_cache = GitHubCache::load();
 
     // Setup terminal
     enable_raw_mode()?;
@@ -128,11 +128,10 @@ pub async fn run(providers: ProvidersMap) -> Result<()> {
 
     // Pre-populate agent entries from disk cache for instant display
     if let Some(ref mut agents_app) = app.agents_app {
-        let cache_guard = disk_cache.blocking_read();
         for entry in &mut agents_app.entries {
             if entry.tracked {
                 // Look up cached data by repo (cache keys are repos)
-                if let Some(cached) = cache_guard.get(&entry.agent.repo) {
+                if let Some(cached) = disk_cache.get(&entry.agent.repo) {
                     entry.github = cached.data.clone().into();
                     entry.fetch_status = FetchStatus::Loaded;
                 }
@@ -141,6 +140,9 @@ pub async fn run(providers: ProvidersMap) -> Result<()> {
         // Re-apply sorting after populating cache data (in case sorted by stars/updated)
         agents_app.apply_sort();
     }
+
+    // Now wrap cache in Arc<RwLock> for async sharing
+    let disk_cache = Arc::new(RwLock::new(disk_cache));
 
     // Spawn background GitHub fetches for agents (non-blocking)
     // Uses conditional fetches with ETag to avoid re-downloading unchanged data
@@ -156,16 +158,16 @@ pub async fn run(providers: ProvidersMap) -> Result<()> {
     // Main loop
     let result = run_app(&mut terminal, &mut app, github_rx);
 
-    // Save cache to disk before exiting (best-effort, don't crash on failure)
-    {
-        let cache_guard = disk_cache.blocking_read();
-        // Ignore save errors - cache is not critical and we don't want to crash on exit
-        let _ = cache_guard.save();
-    }
-
     // Abort any remaining fetch tasks to allow clean shutdown
     for handle in fetch_handles {
         handle.abort();
+    }
+
+    // Save cache to disk before exiting (best-effort, don't crash on failure)
+    // Use try_read() to avoid blocking in async context
+    if let Ok(cache_guard) = disk_cache.try_read() {
+        // Ignore save errors - cache is not critical and we don't want to crash on exit
+        let _ = cache_guard.save();
     }
 
     // Restore terminal
