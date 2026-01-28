@@ -372,10 +372,18 @@ impl AgentsApp {
         }
     }
 
-    pub fn picker_save(&mut self, config: &mut Config) -> Result<(), String> {
+    /// Save picker changes and return list of newly tracked agents (id, repo) for fetching
+    pub fn picker_save(&mut self, config: &mut Config) -> Result<Vec<(String, String)>, String> {
+        let mut newly_tracked = Vec::new();
+
         for (agent_id, tracked) in &self.picker_changes {
             config.set_tracked(agent_id, *tracked);
             if let Some(entry) = self.entries.iter_mut().find(|e| e.id == *agent_id) {
+                // Track if this is a newly tracked agent (was not tracked, now is)
+                if *tracked && !entry.tracked {
+                    newly_tracked.push((agent_id.clone(), entry.agent.repo.clone()));
+                    entry.fetch_status = FetchStatus::Loading;
+                }
                 entry.tracked = *tracked;
             }
         }
@@ -387,7 +395,7 @@ impl AgentsApp {
 
         self.close_picker();
         self.update_filtered(); // Re-filter in case tracked_only is active
-        Ok(())
+        Ok(newly_tracked)
     }
 
     /// Format active filters for display in block title
