@@ -65,26 +65,6 @@
       "homepage": "https://cursor.com",
       "docs": "https://docs.cursor.com"
     },
-    "windsurf": {
-      "name": "Windsurf",
-      "repo": "codeium/windsurf",
-      "categories": ["ide"],
-      "installation_method": "ide",
-      "pricing": {
-        "model": "hybrid",
-        "free_tier": true,
-        "usage_notes": "Free tier available, Pro subscription for more features"
-      },
-      "supported_providers": ["openai", "anthropic", "google"],
-      "platform_support": ["macos", "linux", "windows"],
-      "open_source": false,
-      "cli_binary": "windsurf",
-      "version_command": ["--version"],
-      "version_regex": "([0-9]+\\.[0-9]+\\.[0-9]+)",
-      "config_files": [],
-      "homepage": "https://windsurf.com",
-      "docs": "https://docs.windsurf.com"
-    },
     "goose": {
       "name": "Goose",
       "repo": "block/goose",
@@ -124,6 +104,126 @@
       "config_files": ["~/.config/zed/"],
       "homepage": "https://zed.dev",
       "docs": "https://zed.dev/docs"
+    },
+    "gemini-cli": {
+      "name": "Gemini CLI",
+      "repo": "google-gemini/gemini-cli",
+      "categories": ["cli"],
+      "installation_method": "cli",
+      "pricing": {
+        "model": "usage",
+        "free_tier": true,
+        "usage_notes": "Free tier with limits, pay for higher usage via Google AI"
+      },
+      "supported_providers": ["google"],
+      "platform_support": ["macos", "linux", "windows"],
+      "open_source": true,
+      "cli_binary": "gemini",
+      "version_command": ["--version"],
+      "version_regex": "([0-9]+\\.[0-9]+\\.[0-9]+)",
+      "config_files": ["~/.gemini/"],
+      "homepage": "https://geminicli.com",
+      "docs": "https://ai.google.dev/gemini-api/docs"
+    },
+    "opencode": {
+      "name": "OpenCode",
+      "repo": "anomalyco/opencode",
+      "categories": ["cli"],
+      "installation_method": "cli",
+      "pricing": {
+        "model": "free",
+        "free_tier": true,
+        "usage_notes": "Free tool, pay for underlying model API"
+      },
+      "supported_providers": ["openai", "anthropic", "google", "openrouter", "ollama"],
+      "platform_support": ["macos", "linux", "windows"],
+      "open_source": true,
+      "cli_binary": "opencode",
+      "version_command": ["--version"],
+      "version_regex": "([0-9]+\\.[0-9]+\\.[0-9]+)",
+      "config_files": ["~/.opencode/"],
+      "homepage": "https://opencode.ai",
+      "docs": "https://opencode.ai/docs"
+    },
+    "codex": {
+      "name": "Codex",
+      "repo": "openai/codex",
+      "categories": ["cli"],
+      "installation_method": "cli",
+      "pricing": {
+        "model": "usage",
+        "free_tier": false,
+        "usage_notes": "Included with ChatGPT Plus/Pro/Business/Enterprise"
+      },
+      "supported_providers": ["openai"],
+      "platform_support": ["macos", "linux", "windows"],
+      "open_source": true,
+      "cli_binary": "codex",
+      "version_command": ["--version"],
+      "version_regex": "([0-9]+\\.[0-9]+\\.[0-9]+)",
+      "config_files": [],
+      "homepage": "https://developers.openai.com/codex/cli/",
+      "docs": "https://developers.openai.com/codex/cli/"
+    },
+    "cline": {
+      "name": "Cline",
+      "repo": "cline/cline",
+      "categories": ["extension"],
+      "installation_method": "extension",
+      "pricing": {
+        "model": "free",
+        "free_tier": true,
+        "usage_notes": "Free tool, pay for underlying model API"
+      },
+      "supported_providers": ["openai", "anthropic", "google", "openrouter", "ollama"],
+      "platform_support": ["macos", "linux", "windows"],
+      "open_source": true,
+      "cli_binary": "cline",
+      "version_command": ["version"],
+      "version_regex": "([0-9]+\\.[0-9]+\\.[0-9]+)",
+      "config_files": ["~/.cline/"],
+      "homepage": "https://cline.bot",
+      "docs": "https://docs.cline.bot"
+    },
+    "qwen-code": {
+      "name": "Qwen Code",
+      "repo": "QwenLM/qwen-code",
+      "categories": ["cli"],
+      "installation_method": "cli",
+      "pricing": {
+        "model": "free",
+        "free_tier": true,
+        "usage_notes": "Free tool, pay for underlying model API or use Qwen models"
+      },
+      "supported_providers": ["qwen", "openai", "anthropic", "ollama"],
+      "platform_support": ["macos", "linux", "windows"],
+      "open_source": true,
+      "cli_binary": "qwen",
+      "version_command": ["--version"],
+      "version_regex": "([0-9]+\\.[0-9]+\\.[0-9]+)",
+      "config_files": [],
+      "homepage": "https://qwenlm.github.io/qwen-code-docs/en/users/overview",
+      "docs": "https://qwenlm.github.io/qwen-code-docs/en/users/overview"
+    },
+    "kimi-cli": {
+      "name": "Kimi CLI",
+      "repo": "MoonshotAI/kimi-cli",
+      "categories": ["cli"],
+      "installation_method": "cli",
+      "pricing": {
+        "model": "usage",
+        "free_tier": true,
+        "usage_notes": "Free tier available via Moonshot AI"
+      },
+      "supported_providers": ["moonshot", "openai", "anthropic"],
+      "platform_support": ["macos", "linux", "windows"],
+      "open_source": true,
+      "cli_binary": "kimi",
+      "version_command": ["--version"],
+      "version_regex": "([0-9]+\\.[0-9]+\\.[0-9]+)",
+      "config_files": [],
+      "homepage": "https://moonshotai.github.io/kimi-cli/",
+      "docs": "https://moonshotai.github.io/kimi-cli/"
     }
   }
 }
