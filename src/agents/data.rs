@@ -65,7 +65,7 @@ pub struct Pricing {
 }
 
 /// A single release from GitHub
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Release {
     pub version: String,
     pub date: Option<String>,
