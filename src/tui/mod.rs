@@ -252,7 +252,7 @@ fn run_app(
                 }
                 app::Message::OpenProviderDoc => {
                     if let Some(url) = app.get_provider_doc() {
-                        let _ = open::that(&url);
+                        let _ = open::that_in_background(&url);
                         app.set_status(format!("Opened: {}", url));
                         last_status_time = Some(std::time::Instant::now());
                     }
@@ -261,11 +261,11 @@ fn run_app(
                     if let Some(ref agents_app) = app.agents_app {
                         if let Some(entry) = agents_app.current_entry() {
                             if let Some(ref url) = entry.agent.docs {
-                                let _ = open::that(url);
+                                let _ = open::that_in_background(url);
                                 app.set_status(format!("Opened: {}", url));
                                 last_status_time = Some(std::time::Instant::now());
                             } else if let Some(ref url) = entry.agent.homepage {
-                                let _ = open::that(url);
+                                let _ = open::that_in_background(url);
                                 app.set_status(format!("Opened: {}", url));
                                 last_status_time = Some(std::time::Instant::now());
                             }
@@ -276,7 +276,7 @@ fn run_app(
                     if let Some(ref agents_app) = app.agents_app {
                         if let Some(entry) = agents_app.current_entry() {
                             let url = format!("https://github.com/{}", entry.agent.repo);
-                            let _ = open::that(&url);
+                            let _ = open::that_in_background(&url);
                             app.set_status(format!("Opened: {}", url));
                             last_status_time = Some(std::time::Instant::now());
                         }
