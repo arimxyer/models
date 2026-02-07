@@ -72,27 +72,65 @@ impl ProviderCategory {
 pub fn provider_category(id: &str) -> ProviderCategory {
     match id {
         // Origin (26): Provider created these models
-        "anthropic" | "openai" | "google" | "deepseek" | "mistral" | "cohere" | "xai"
-        | "llama" | "inception" | "upstage" | "zhipuai" | "minimax" | "moonshotai" | "xiaomi"
-        | "alibaba" | "perplexity" | "lucidquery" | "bailing" | "nova" | "alibaba-cn"
-        | "minimax-cn" | "minimax-cn-coding-plan" | "minimax-coding-plan" | "moonshotai-cn"
-        | "zhipuai-coding-plan" | "zai-coding-plan" => ProviderCategory::Origin,
+        "anthropic"
+        | "openai"
+        | "google"
+        | "deepseek"
+        | "mistral"
+        | "cohere"
+        | "xai"
+        | "llama"
+        | "inception"
+        | "upstage"
+        | "zhipuai"
+        | "minimax"
+        | "moonshotai"
+        | "xiaomi"
+        | "alibaba"
+        | "perplexity"
+        | "lucidquery"
+        | "bailing"
+        | "nova"
+        | "alibaba-cn"
+        | "minimax-cn"
+        | "minimax-cn-coding-plan"
+        | "minimax-coding-plan"
+        | "moonshotai-cn"
+        | "zhipuai-coding-plan"
+        | "zai-coding-plan" => ProviderCategory::Origin,
 
         // Cloud (11): Runs models on broader cloud infra
-        "amazon-bedrock" | "azure" | "azure-cognitive-services" | "google-vertex"
-        | "google-vertex-anthropic" | "nvidia" | "ovhcloud" | "scaleway" | "vultr"
-        | "sap-ai-core" | "cloudflare-workers-ai" => ProviderCategory::Cloud,
+        "amazon-bedrock"
+        | "azure"
+        | "azure-cognitive-services"
+        | "google-vertex"
+        | "google-vertex-anthropic"
+        | "nvidia"
+        | "ovhcloud"
+        | "scaleway"
+        | "vultr"
+        | "sap-ai-core"
+        | "cloudflare-workers-ai" => ProviderCategory::Cloud,
 
         // Inference (21): Specialized inference hosting
         "deepinfra" | "togetherai" | "fireworks-ai" | "groq" | "cerebras" | "baseten"
-        | "novita-ai" | "friendli" | "nebius" | "chutes" | "io-net" | "siliconflow"
-        | "cortecs" | "moark" | "berget" | "inference" | "privatemode-ai" | "synthetic"
-        | "venice" | "vivgrid" | "siliconflow-cn" => ProviderCategory::Inference,
+        | "novita-ai" | "friendli" | "nebius" | "chutes" | "io-net" | "siliconflow" | "cortecs"
+        | "moark" | "berget" | "inference" | "privatemode-ai" | "synthetic" | "venice"
+        | "vivgrid" | "siliconflow-cn" => ProviderCategory::Inference,
 
         // Gateway (12): Routes to other providers
-        "openrouter" | "helicone" | "requesty" | "302ai" | "aihubmix"
-        | "cloudflare-ai-gateway" | "fastrouter" | "zenmux" | "submodel" | "vercel"
-        | "nano-gpt" | "poe" => ProviderCategory::Gateway,
+        "openrouter"
+        | "helicone"
+        | "requesty"
+        | "302ai"
+        | "aihubmix"
+        | "cloudflare-ai-gateway"
+        | "fastrouter"
+        | "zenmux"
+        | "submodel"
+        | "vercel"
+        | "nano-gpt"
+        | "poe" => ProviderCategory::Gateway,
 
         // Tool (16): Dev tools/platforms wrapping model access
         "github-copilot" | "github-models" | "gitlab" | "v0" | "huggingface" | "lmstudio"
@@ -116,42 +154,21 @@ mod tests {
         assert_eq!(provider_category("deepseek"), ProviderCategory::Origin);
         assert_eq!(provider_category("alibaba-cn"), ProviderCategory::Origin);
 
-        assert_eq!(
-            provider_category("amazon-bedrock"),
-            ProviderCategory::Cloud
-        );
+        assert_eq!(provider_category("amazon-bedrock"), ProviderCategory::Cloud);
         assert_eq!(provider_category("azure"), ProviderCategory::Cloud);
-        assert_eq!(
-            provider_category("google-vertex"),
-            ProviderCategory::Cloud
-        );
+        assert_eq!(provider_category("google-vertex"), ProviderCategory::Cloud);
         assert_eq!(provider_category("nvidia"), ProviderCategory::Cloud);
 
-        assert_eq!(
-            provider_category("deepinfra"),
-            ProviderCategory::Inference
-        );
+        assert_eq!(provider_category("deepinfra"), ProviderCategory::Inference);
         assert_eq!(provider_category("groq"), ProviderCategory::Inference);
-        assert_eq!(
-            provider_category("togetherai"),
-            ProviderCategory::Inference
-        );
-        assert_eq!(
-            provider_category("cerebras"),
-            ProviderCategory::Inference
-        );
+        assert_eq!(provider_category("togetherai"), ProviderCategory::Inference);
+        assert_eq!(provider_category("cerebras"), ProviderCategory::Inference);
 
-        assert_eq!(
-            provider_category("openrouter"),
-            ProviderCategory::Gateway
-        );
+        assert_eq!(provider_category("openrouter"), ProviderCategory::Gateway);
         assert_eq!(provider_category("helicone"), ProviderCategory::Gateway);
         assert_eq!(provider_category("vercel"), ProviderCategory::Gateway);
 
-        assert_eq!(
-            provider_category("github-copilot"),
-            ProviderCategory::Tool
-        );
+        assert_eq!(provider_category("github-copilot"), ProviderCategory::Tool);
         assert_eq!(provider_category("ollama-cloud"), ProviderCategory::Tool);
         assert_eq!(provider_category("huggingface"), ProviderCategory::Tool);
     }
@@ -174,10 +191,7 @@ mod tests {
         assert_eq!(start.next(), ProviderCategory::Origin);
         assert_eq!(start.next().next(), ProviderCategory::Cloud);
         assert_eq!(start.next().next().next(), ProviderCategory::Inference);
-        assert_eq!(
-            start.next().next().next().next(),
-            ProviderCategory::Gateway
-        );
+        assert_eq!(start.next().next().next().next(), ProviderCategory::Gateway);
         assert_eq!(
             start.next().next().next().next().next(),
             ProviderCategory::Tool
@@ -211,15 +225,11 @@ mod tests {
     fn test_display_order() {
         assert!(ProviderCategory::Origin.display_order() < ProviderCategory::Cloud.display_order());
         assert!(
-            ProviderCategory::Cloud.display_order()
-                < ProviderCategory::Inference.display_order()
+            ProviderCategory::Cloud.display_order() < ProviderCategory::Inference.display_order()
         );
         assert!(
-            ProviderCategory::Inference.display_order()
-                < ProviderCategory::Gateway.display_order()
+            ProviderCategory::Inference.display_order() < ProviderCategory::Gateway.display_order()
         );
-        assert!(
-            ProviderCategory::Gateway.display_order() < ProviderCategory::Tool.display_order()
-        );
+        assert!(ProviderCategory::Gateway.display_order() < ProviderCategory::Tool.display_order());
     }
 }
