@@ -8,7 +8,7 @@
 
 A fast CLI and TUI for browsing AI models and coding agents.
 
-- **Models Tab**: Browse 2000+ models across 75+ providers from [models.dev](https://models.dev)
+- **Models Tab**: Browse 2000+ models across 85+ providers from [models.dev](https://models.dev), categorized by type (Origin, Cloud, Inference, Gateway, Dev Tool)
 - **Agents Tab**: Track AI coding assistants (Claude Code, Aider, Cursor, etc.) with version detection and GitHub integration
 
 <video src="https://github.com/user-attachments/assets/f4c33f15-8ae7-4997-bb9f-240b79b0b562" controls width="100%"></video>
@@ -18,6 +18,7 @@ A fast CLI and TUI for browsing AI models and coding agents.
 ### Models Tab
 - **CLI commands** for scripting and quick lookups
 - **Interactive TUI** for browsing and comparing models
+- **Provider categories** — filter and group providers by type (Origin, Cloud, Inference, Gateway, Dev Tool)
 - **Cross-provider search** to compare the same model across different providers
 - **Copy to clipboard** with a single keypress
 - **JSON output** for scripting and automation
@@ -112,6 +113,8 @@ models
 | `1` | Toggle reasoning filter |
 | `2` | Toggle tools filter |
 | `3` | Toggle open weights filter |
+| `4` | Cycle provider category filter (All → Origin → Cloud → Inference → Gateway → Tool) |
+| `5` | Toggle category grouping |
 
 **Copy & Open**
 | Key | Action |
