@@ -6,12 +6,13 @@ use ratatui::{
     Frame,
 };
 
-use super::app::{App, Filters, Focus, Mode, SortOrder, Tab};
+use super::app::{App, Filters, Focus, Mode, ProviderListItem, SortOrder, Tab};
 use crate::agents::{format_stars, FetchStatus};
+use crate::provider_category::{provider_category, ProviderCategory};
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let (main_constraint, detail_constraint) = match app.current_tab {
-        Tab::Models => (Constraint::Min(0), Constraint::Length(14)),
+        Tab::Models => (Constraint::Min(0), Constraint::Length(15)),
         Tab::Agents => (Constraint::Min(0), Constraint::Length(0)), // No bottom detail for Agents
     };
 
@@ -99,27 +100,92 @@ fn draw_providers(f: &mut Frame, area: Rect, app: &mut App) {
         Style::default().fg(Color::DarkGray)
     };
 
-    // Build items list with "All" at the top
-    let mut items: Vec<ListItem> = Vec::with_capacity(app.providers.len() + 1);
+    let outer_block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(border_style)
+        .title(" Providers ");
+    let inner_area = outer_block.inner(area);
+    f.render_widget(outer_block, area);
 
-    // "All" option
-    let all_style = Style::default().fg(Color::Green);
-    let all_text = format!("All ({})", app.total_model_count());
-    items.push(ListItem::new(all_text).style(all_style));
+    // Split inner area into filter row + list
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(1), Constraint::Min(0)])
+        .split(inner_area);
 
-    // Individual providers
-    for (id, provider) in app.providers.iter() {
-        let text = format!("{} ({})", id, provider.models.len());
-        items.push(ListItem::new(text));
+    // Filter toggles row
+    let cat_active = app.provider_category_filter != ProviderCategory::All;
+    let cat_color = if cat_active {
+        app.provider_category_filter.color()
+    } else {
+        Color::DarkGray
+    };
+    let grp_color = if app.group_by_category {
+        Color::Green
+    } else {
+        Color::DarkGray
+    };
+
+    let cat_label = if cat_active {
+        app.provider_category_filter.short_label()
+    } else {
+        "Cat"
+    };
+
+    let filter_line = Line::from(vec![
+        Span::styled("[4]", Style::default().fg(cat_color)),
+        Span::raw(format!(" {} ", cat_label)),
+        Span::styled("[5]", Style::default().fg(grp_color)),
+        Span::raw(" Grp"),
+    ]);
+    f.render_widget(Paragraph::new(filter_line), chunks[0]);
+
+    // Build items list from provider_list_items
+    let mut items: Vec<ListItem> = Vec::with_capacity(app.provider_list_items.len());
+
+    for item in &app.provider_list_items {
+        match item {
+            ProviderListItem::All => {
+                let count = app.filtered_model_count();
+                let text = format!("All ({})", count);
+                items.push(ListItem::new(text).style(Style::default().fg(Color::Green)));
+            }
+            ProviderListItem::CategoryHeader(cat) => {
+                let label = cat.label();
+                let color = cat.color();
+                // Create a separator line like "── Origin ──────"
+                let avail = inner_area.width.saturating_sub(2) as usize; // account for highlight symbol space
+                let label_len = label.len() + 4; // "── " + label + " "
+                let trailing = if avail > label_len {
+                    "\u{2500}".repeat(avail - label_len)
+                } else {
+                    String::new()
+                };
+                let text = format!("\u{2500}\u{2500} {} {}", label, trailing);
+                items.push(
+                    ListItem::new(text).style(
+                        Style::default()
+                            .fg(color)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                );
+            }
+            ProviderListItem::Provider(idx) => {
+                if let Some((id, provider)) = app.providers.get(*idx) {
+                    let cat = provider_category(id);
+                    let short = cat.short_label();
+                    let color = cat.color();
+                    let line = Line::from(vec![
+                        Span::raw(format!("{} ({}) ", id, provider.models.len())),
+                        Span::styled(short, Style::default().fg(color)),
+                    ]);
+                    items.push(ListItem::new(line));
+                }
+            }
+        }
     }
 
     let list = List::new(items)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(border_style)
-                .title(" Providers "),
-        )
         .highlight_style(
             Style::default()
                 .fg(Color::Yellow)
@@ -127,7 +193,7 @@ fn draw_providers(f: &mut Frame, area: Rect, app: &mut App) {
         )
         .highlight_symbol("> ");
 
-    f.render_stateful_widget(list, area, &mut app.provider_list_state);
+    f.render_stateful_widget(list, chunks[1], &mut app.provider_list_state);
 }
 
 fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
@@ -183,7 +249,7 @@ fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
         SortOrder::Context => " ↓ctx",
     };
 
-    let filter_indicator = format_filters(&app.filters);
+    let filter_indicator = format_filters(&app.filters, app.provider_category_filter);
 
     let title = if app.search_query.is_empty() && filter_indicator.is_empty() {
         format!(" Models ({}){} ", models.len(), sort_indicator)
@@ -697,6 +763,7 @@ fn draw_provider_detail(f: &mut Frame, area: Rect, app: &App) {
             .map(|(_, p)| p);
 
         if let Some(provider) = provider {
+            let cat = provider_category(&entry.provider_id);
             vec![
                 Line::from(vec![Span::styled(
                     &provider.name,
@@ -705,6 +772,10 @@ fn draw_provider_detail(f: &mut Frame, area: Rect, app: &App) {
                         .add_modifier(Modifier::BOLD),
                 )]),
                 Line::from(""),
+                Line::from(vec![
+                    Span::styled("Category: ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(cat.label(), Style::default().fg(cat.color())),
+                ]),
                 Line::from(vec![
                     Span::styled("Docs: ", Style::default().fg(Color::DarkGray)),
                     Span::raw(provider.doc.as_deref().unwrap_or("-")),
@@ -922,6 +993,8 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
                     Span::raw("search  "),
                     Span::styled(" s ", Style::default().fg(Color::Yellow)),
                     Span::raw("sort  "),
+                    Span::styled(" 4 ", Style::default().fg(Color::Yellow)),
+                    Span::raw("category  "),
                     Span::styled(" c ", Style::default().fg(Color::Yellow)),
                     Span::raw("copy"),
                 ]),
@@ -983,7 +1056,7 @@ fn truncate(s: &str, max_len: usize) -> String {
     }
 }
 
-fn format_filters(filters: &Filters) -> String {
+fn format_filters(filters: &Filters, category: ProviderCategory) -> String {
     let mut active = Vec::new();
     if filters.reasoning {
         active.push("reasoning");
@@ -993,6 +1066,9 @@ fn format_filters(filters: &Filters) -> String {
     }
     if filters.open_weights {
         active.push("open");
+    }
+    if category != ProviderCategory::All {
+        active.push(category.label());
     }
     active.join(", ")
 }
@@ -1099,6 +1175,14 @@ fn draw_help_popup(f: &mut Frame, scroll: u16, current_tab: Tab) {
                 Line::from(vec![
                     Span::styled("  3             ", Style::default().fg(Color::Yellow)),
                     Span::raw("Toggle open weights filter"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  4             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Cycle provider category filter"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  5             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Toggle category grouping"),
                 ]),
                 Line::from(""),
                 Line::from(Span::styled(

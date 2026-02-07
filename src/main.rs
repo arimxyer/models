@@ -3,6 +3,7 @@ mod api;
 mod cli;
 mod config;
 mod data;
+mod provider_category;
 mod tui;
 
 use anyhow::Result;

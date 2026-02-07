@@ -7,6 +7,7 @@ const PAGE_SIZE: usize = 10;
 use crate::agents::{AgentsFile, FetchStatus, GitHubData};
 use crate::config::Config;
 use crate::data::{Model, Provider, ProvidersMap};
+use crate::provider_category::{provider_category, ProviderCategory};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Focus {
@@ -65,6 +66,13 @@ pub struct Filters {
     pub reasoning: bool,
     pub tools: bool,
     pub open_weights: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProviderListItem {
+    All,
+    CategoryHeader(ProviderCategory),
+    Provider(usize), // Index into self.providers
 }
 
 #[derive(Debug)]
@@ -128,6 +136,9 @@ pub enum Message {
     PageScrollDetailDown,
     // Agent sort
     CycleAgentSort,
+    // Provider categories
+    CycleProviderCategory,
+    ToggleGrouping,
     // Async data messages
     GitHubDataReceived(String, GitHubData),
     GitHubFetchFailed(String, String), // (agent_id, error_message)
@@ -142,7 +153,7 @@ pub struct ModelEntry {
 
 pub struct App {
     pub providers: Vec<(String, Provider)>,
-    /// 0 = "All", 1+ = actual provider index + 1
+    /// Index into provider_list_items
     pub selected_provider: usize,
     pub selected_model: usize,
     pub provider_list_state: ListState,
@@ -161,6 +172,9 @@ pub struct App {
     filtered_models: Vec<ModelEntry>,
     /// Agents newly tracked that need GitHub fetches (agent_id, repo)
     pub pending_fetches: Vec<(String, String)>,
+    pub provider_category_filter: ProviderCategory,
+    pub group_by_category: bool,
+    pub provider_list_items: Vec<ProviderListItem>,
 }
 
 impl App {
@@ -199,19 +213,121 @@ impl App {
             config,
             filtered_models: Vec::new(),
             pending_fetches: Vec::new(),
+            provider_category_filter: ProviderCategory::All,
+            group_by_category: false,
+            provider_list_items: Vec::new(),
         };
 
+        app.update_provider_list();
         app.update_filtered_models();
         app
     }
 
     pub fn is_all_selected(&self) -> bool {
-        self.selected_provider == 0
+        matches!(
+            self.provider_list_items.get(self.selected_provider),
+            Some(ProviderListItem::All)
+        )
     }
 
-    /// Returns the number of items in the provider list (including "All")
+    /// Returns the number of items in the provider list
     pub fn provider_list_len(&self) -> usize {
-        self.providers.len() + 1
+        self.provider_list_items.len()
+    }
+
+    /// Get the selected provider data (id, Provider) if a provider is selected
+    pub fn selected_provider_data(&self) -> Option<&(String, Provider)> {
+        match self.provider_list_items.get(self.selected_provider) {
+            Some(ProviderListItem::Provider(idx)) => self.providers.get(*idx),
+            _ => None,
+        }
+    }
+
+    /// Rebuild the provider_list_items based on current filter and grouping
+    pub fn update_provider_list(&mut self) {
+        self.provider_list_items.clear();
+        self.provider_list_items.push(ProviderListItem::All);
+
+        if self.group_by_category {
+            // Group by category, sorted by display_order then alphabetical within
+            let categories = [
+                ProviderCategory::Origin,
+                ProviderCategory::Cloud,
+                ProviderCategory::Inference,
+                ProviderCategory::Gateway,
+                ProviderCategory::Tool,
+            ];
+
+            for cat in &categories {
+                if self.provider_category_filter != ProviderCategory::All
+                    && self.provider_category_filter != *cat
+                {
+                    continue;
+                }
+
+                let mut indices: Vec<usize> = self
+                    .providers
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, (id, _))| provider_category(id) == *cat)
+                    .map(|(idx, _)| idx)
+                    .collect();
+
+                if indices.is_empty() {
+                    continue;
+                }
+
+                indices.sort_by(|a, b| self.providers[*a].0.cmp(&self.providers[*b].0));
+
+                self.provider_list_items
+                    .push(ProviderListItem::CategoryHeader(*cat));
+                for idx in indices {
+                    self.provider_list_items
+                        .push(ProviderListItem::Provider(idx));
+                }
+            }
+        } else {
+            // Flat list, filtered by category
+            for (idx, (id, _)) in self.providers.iter().enumerate() {
+                if self.provider_category_filter != ProviderCategory::All
+                    && provider_category(id) != self.provider_category_filter
+                {
+                    continue;
+                }
+                self.provider_list_items
+                    .push(ProviderListItem::Provider(idx));
+            }
+        }
+    }
+
+    /// Find the next selectable index (skipping CategoryHeader items)
+    fn find_selectable_index(&self, from: usize, forward: bool) -> usize {
+        let len = self.provider_list_items.len();
+        if len == 0 {
+            return 0;
+        }
+
+        let mut idx = from;
+        loop {
+            if !matches!(
+                self.provider_list_items.get(idx),
+                Some(ProviderListItem::CategoryHeader(_))
+            ) {
+                return idx;
+            }
+            if forward {
+                if idx >= len - 1 {
+                    // Can't go further forward, search backwards from original
+                    return self.find_selectable_index(from.saturating_sub(1), false);
+                }
+                idx += 1;
+            } else {
+                if idx == 0 {
+                    return 0;
+                }
+                idx -= 1;
+            }
+        }
     }
 
     pub fn update(&mut self, msg: Message) -> bool {
@@ -219,12 +335,19 @@ impl App {
             Message::Quit => return false,
             Message::NextProvider => {
                 if self.selected_provider < self.provider_list_len().saturating_sub(1) {
-                    self.select_provider_at_index(self.selected_provider + 1);
+                    let next = self.find_selectable_index(self.selected_provider + 1, true);
+                    if next != self.selected_provider {
+                        self.select_provider_at_index(next);
+                    }
                 }
             }
             Message::PrevProvider => {
                 if self.selected_provider > 0 {
-                    self.select_provider_at_index(self.selected_provider - 1);
+                    let prev =
+                        self.find_selectable_index(self.selected_provider - 1, false);
+                    if prev != self.selected_provider {
+                        self.select_provider_at_index(prev);
+                    }
                 }
             }
             Message::NextModel => {
@@ -242,14 +365,16 @@ impl App {
                 }
             }
             Message::SelectFirstProvider => {
-                if self.selected_provider > 0 {
-                    self.select_provider_at_index(0);
+                let first = self.find_selectable_index(0, true);
+                if first != self.selected_provider {
+                    self.select_provider_at_index(first);
                 }
             }
             Message::SelectLastProvider => {
-                let last_index = self.provider_list_len().saturating_sub(1);
-                if self.selected_provider < last_index {
-                    self.select_provider_at_index(last_index);
+                let last_raw = self.provider_list_len().saturating_sub(1);
+                let last = self.find_selectable_index(last_raw, false);
+                if last != self.selected_provider {
+                    self.select_provider_at_index(last);
                 }
             }
             Message::SelectFirstModel => {
@@ -265,16 +390,16 @@ impl App {
                 }
             }
             Message::PageDownProvider => {
-                let page_size = PAGE_SIZE;
                 let last_index = self.provider_list_len().saturating_sub(1);
-                let next = (self.selected_provider + page_size).min(last_index);
+                let raw = (self.selected_provider + PAGE_SIZE).min(last_index);
+                let next = self.find_selectable_index(raw, true);
                 if next != self.selected_provider {
                     self.select_provider_at_index(next);
                 }
             }
             Message::PageUpProvider => {
-                let page_size = PAGE_SIZE;
-                let next = self.selected_provider.saturating_sub(page_size);
+                let raw = self.selected_provider.saturating_sub(PAGE_SIZE);
+                let next = self.find_selectable_index(raw, false);
                 if next != self.selected_provider {
                     self.select_provider_at_index(next);
                 }
@@ -402,8 +527,8 @@ impl App {
                 self.help_scroll = self.help_scroll.saturating_sub(1);
             }
             Message::ScrollHelpDown => {
-                // Help content is 44 lines, cap scroll to prevent scrolling past content
-                const HELP_LINES: u16 = 47;
+                // Help content lines, cap scroll to prevent scrolling past content
+                const HELP_LINES: u16 = 49;
                 const MIN_VISIBLE: u16 = 5;
                 let max_scroll = HELP_LINES.saturating_sub(MIN_VISIBLE);
                 if self.help_scroll < max_scroll {
@@ -531,6 +656,26 @@ impl App {
                     agents_app.cycle_sort();
                 }
             }
+            Message::CycleProviderCategory => {
+                self.provider_category_filter = self.provider_category_filter.next();
+                self.update_provider_list();
+                self.selected_provider = self.find_selectable_index(0, true);
+                self.provider_list_state
+                    .select(Some(self.selected_provider));
+                self.selected_model = 0;
+                self.update_filtered_models();
+                self.model_list_state.select(Some(self.selected_model + 1));
+            }
+            Message::ToggleGrouping => {
+                self.group_by_category = !self.group_by_category;
+                self.update_provider_list();
+                self.selected_provider = self.find_selectable_index(0, true);
+                self.provider_list_state
+                    .select(Some(self.selected_provider));
+                self.selected_model = 0;
+                self.update_filtered_models();
+                self.model_list_state.select(Some(self.selected_model + 1));
+            }
             Message::GitHubDataReceived(agent_id, data) => {
                 if let Some(ref mut agents_app) = self.agents_app {
                     if let Some(entry) = agents_app.entries.iter_mut().find(|e| e.id == agent_id) {
@@ -580,12 +725,17 @@ impl App {
 
     fn update_filtered_models(&mut self) {
         let query_lower = self.search_query.to_lowercase();
+        let cat_filter = self.provider_category_filter;
 
         self.filtered_models = if self.is_all_selected() {
-            // Show all models from all providers
+            // Show all models from providers matching the category filter
             let mut entries: Vec<ModelEntry> = self
                 .providers
                 .iter()
+                .filter(|(id, _)| {
+                    cat_filter == ProviderCategory::All
+                        || provider_category(id) == cat_filter
+                })
                 .flat_map(|(provider_id, provider)| {
                     provider.models.iter().filter_map(|(model_id, model)| {
                         let search_matches = query_lower.is_empty()
@@ -610,8 +760,8 @@ impl App {
             entries
         } else {
             // Show models for selected provider only
-            let provider_idx = self.selected_provider - 1;
-            if let Some((provider_id, provider)) = self.providers.get(provider_idx) {
+            let provider_data = self.selected_provider_data().cloned();
+            if let Some((provider_id, provider)) = provider_data {
                 let mut entries: Vec<ModelEntry> = provider
                     .models
                     .iter()
@@ -708,6 +858,19 @@ impl App {
 
     pub fn total_model_count(&self) -> usize {
         self.providers.iter().map(|(_, p)| p.models.len()).sum()
+    }
+
+    /// Model count respecting the active category filter
+    pub fn filtered_model_count(&self) -> usize {
+        if self.provider_category_filter == ProviderCategory::All {
+            self.total_model_count()
+        } else {
+            self.providers
+                .iter()
+                .filter(|(id, _)| provider_category(id) == self.provider_category_filter)
+                .map(|(_, p)| p.models.len())
+                .sum()
+        }
     }
 
     /// Get the full provider/model-id string for copying

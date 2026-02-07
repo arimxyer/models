@@ -121,6 +121,8 @@ fn handle_models_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Opti
         KeyCode::Char('1') => Some(Message::ToggleReasoning),
         KeyCode::Char('2') => Some(Message::ToggleTools),
         KeyCode::Char('3') => Some(Message::ToggleOpenWeights),
+        KeyCode::Char('4') => Some(Message::CycleProviderCategory),
+        KeyCode::Char('5') => Some(Message::ToggleGrouping),
 
         _ => None,
     }
