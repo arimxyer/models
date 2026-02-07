@@ -163,11 +163,8 @@ fn draw_providers(f: &mut Frame, area: Rect, app: &mut App) {
                 };
                 let text = format!("\u{2500}\u{2500} {} {}", label, trailing);
                 items.push(
-                    ListItem::new(text).style(
-                        Style::default()
-                            .fg(color)
-                            .add_modifier(Modifier::BOLD),
-                    ),
+                    ListItem::new(text)
+                        .style(Style::default().fg(color).add_modifier(Modifier::BOLD)),
                 );
             }
             ProviderListItem::Provider(idx) => {

@@ -343,8 +343,7 @@ impl App {
             }
             Message::PrevProvider => {
                 if self.selected_provider > 0 {
-                    let prev =
-                        self.find_selectable_index(self.selected_provider - 1, false);
+                    let prev = self.find_selectable_index(self.selected_provider - 1, false);
                     if prev != self.selected_provider {
                         self.select_provider_at_index(prev);
                     }
@@ -733,8 +732,7 @@ impl App {
                 .providers
                 .iter()
                 .filter(|(id, _)| {
-                    cat_filter == ProviderCategory::All
-                        || provider_category(id) == cat_filter
+                    cat_filter == ProviderCategory::All || provider_category(id) == cat_filter
                 })
                 .flat_map(|(provider_id, provider)| {
                     provider.models.iter().filter_map(|(model_id, model)| {
