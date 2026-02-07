@@ -246,10 +246,25 @@ fn draw_agents_main(f: &mut Frame, area: Rect, app: &mut App) {
         return;
     }
 
-    // Two-panel layout: List (35%) | Details (65%)
+    // Compute list panel width from content
+    let max_name_len = app
+        .agents_app
+        .as_ref()
+        .and_then(|a| {
+            a.filtered_entries
+                .iter()
+                .filter_map(|&idx| a.entries.get(idx))
+                .map(|e| e.agent.name.len())
+                .max()
+        })
+        .unwrap_or(5)
+        .max(5);
+    // 2 borders + 2 highlight + 2 (dot+space) + name + 2 gap + 6 type + 4 padding
+    let list_width = (max_name_len + 18) as u16;
+
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(35), Constraint::Percentage(65)])
+        .constraints([Constraint::Length(list_width), Constraint::Min(0)])
         .split(area);
 
     draw_agent_list(f, chunks[0], app);
@@ -358,8 +373,24 @@ fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut App) {
     // Agent list
     let mut items: Vec<ListItem> = Vec::new();
 
-    // Header row (with status column)
-    let header = format!("{:<22} {:>6} {:>8} {:>3}", "Agent", "Type", "Installed", "");
+    // Compute dynamic agent name column width
+    let max_name_len = agents_app
+        .filtered_entries
+        .iter()
+        .filter_map(|&idx| agents_app.entries.get(idx))
+        .map(|e| e.agent.name.len())
+        .max()
+        .unwrap_or(5)
+        .max(5); // minimum width of 5 for "Agent" header
+
+    // Header row (leading spaces match the "> " / "  " prefix)
+    let header = format!(
+        "  {:<2} {:<width$}  {:>6}",
+        "St",
+        "Agent",
+        "Type",
+        width = max_name_len,
+    );
     items.push(
         ListItem::new(header).style(
             Style::default()
@@ -368,9 +399,13 @@ fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut App) {
         ),
     );
 
-    // Agent rows
-    for &idx in &agents_app.filtered_entries {
+    // Agent rows (manual highlight to preserve status dot color)
+    let selected = agents_app.agent_list_state.selected();
+
+    for (row_idx, &idx) in agents_app.filtered_entries.iter().enumerate() {
         if let Some(entry) = agents_app.entries.get(idx) {
+            let is_selected = selected == Some(row_idx);
+
             let agent_type = if entry.agent.categories.contains(&"cli".to_string()) {
                 "CLI"
             } else if entry.agent.categories.contains(&"ide".to_string()) {
@@ -379,46 +414,53 @@ fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut App) {
                 "-"
             };
 
-            let installed = if entry.installed.version.is_some() {
-                "\u{2713}" // checkmark
+            // Status indicator: colored dot for installed agents, dash for others
+            let (status_indicator, status_style) = if entry.installed.version.is_some() {
+                match &entry.fetch_status {
+                    FetchStatus::NotStarted => ("\u{25CB}", Style::default().fg(Color::DarkGray)), // ○ gray
+                    FetchStatus::Loading => ("\u{25D0}", Style::default().fg(Color::Yellow)), // ◐ yellow
+                    FetchStatus::Loaded => {
+                        if entry.update_available() {
+                            ("\u{25CF}", Style::default().fg(Color::Blue)) // ● blue = update available
+                        } else {
+                            ("\u{25CF}", Style::default().fg(Color::Green)) // ● green = up to date
+                        }
+                    }
+                    FetchStatus::Failed(_) => ("\u{2717}", Style::default().fg(Color::Red)), // ✗ red
+                }
             } else {
-                "-"
+                ("-", Style::default().fg(Color::DarkGray))
             };
 
-            // Status indicator based on fetch_status and update availability
-            let (status_indicator, status_style) = match &entry.fetch_status {
-                FetchStatus::NotStarted => ("\u{25CB}", Style::default().fg(Color::DarkGray)), // ○ gray
-                FetchStatus::Loading => ("\u{25D0}", Style::default().fg(Color::Yellow)), // ◐ yellow
-                FetchStatus::Loaded => {
-                    if entry.update_available() {
-                        ("\u{25CF}", Style::default().fg(Color::Blue)) // ● blue = update available
-                    } else {
-                        ("\u{25CF}", Style::default().fg(Color::Green)) // ● green = up to date
-                    }
-                }
-                FetchStatus::Failed(_) => ("\u{2717}", Style::default().fg(Color::Red)), // ✗ red
+            let (prefix, text_style) = if is_selected {
+                (
+                    "> ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                )
+            } else {
+                ("  ", Style::default())
             };
 
             let row = Line::from(vec![
-                Span::raw(format!(
-                    "{:<22} {:>6} {:>8} ",
-                    truncate(&entry.agent.name, 22),
-                    agent_type,
-                    installed,
-                )),
+                Span::styled(prefix, text_style),
                 Span::styled(status_indicator, status_style),
+                Span::styled(
+                    format!(
+                        " {:<width$}  {:>6}",
+                        truncate(&entry.agent.name, max_name_len),
+                        agent_type,
+                        width = max_name_len,
+                    ),
+                    text_style,
+                ),
             ]);
             items.push(ListItem::new(row));
         }
     }
 
-    let list = List::new(items)
-        .highlight_style(
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD),
-        )
-        .highlight_symbol("> ");
+    let list = List::new(items);
 
     // Offset by 1 for header row
     let mut state = agents_app.agent_list_state.clone();
