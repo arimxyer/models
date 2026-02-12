@@ -5,6 +5,7 @@ use super::agents_app::AgentsApp;
 /// Page size for page up/down navigation
 const PAGE_SIZE: usize = 10;
 use crate::agents::{AgentsFile, FetchStatus, GitHubData};
+use crate::benchmarks::BenchmarkStore;
 use crate::config::Config;
 use crate::data::{Model, Provider, ProvidersMap};
 use crate::provider_category::{provider_category, ProviderCategory};
@@ -175,6 +176,7 @@ pub struct App {
     pub provider_category_filter: ProviderCategory,
     pub group_by_category: bool,
     pub provider_list_items: Vec<ProviderListItem>,
+    pub benchmark_store: BenchmarkStore,
 }
 
 impl App {
@@ -182,6 +184,7 @@ impl App {
         providers_map: ProvidersMap,
         agents_file: Option<&AgentsFile>,
         config: Option<Config>,
+        benchmark_store: BenchmarkStore,
     ) -> Self {
         let mut providers: Vec<(String, Provider)> = providers_map.into_iter().collect();
         providers.sort_by(|a, b| a.0.cmp(&b.0));
@@ -216,6 +219,7 @@ impl App {
             provider_category_filter: ProviderCategory::All,
             group_by_category: false,
             provider_list_items: Vec::new(),
+            benchmark_store,
         };
 
         app.update_provider_list();

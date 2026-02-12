@@ -1,5 +1,6 @@
 mod agents;
 mod api;
+mod benchmarks;
 mod cli;
 mod config;
 mod data;

@@ -16,6 +16,7 @@ pub mod ui;
 use crate::agents::{
     load_agents, AsyncGitHubClient, ConditionalFetchResult, GitHubCache, GitHubData,
 };
+use crate::benchmarks::BenchmarkStore;
 use crate::config::Config;
 use crate::data::ProvidersMap;
 use std::sync::Arc;
@@ -48,12 +49,13 @@ pub async fn run(providers: ProvidersMap) -> Result<()> {
     // Load remaining data
     let agents_file = load_agents().ok();
     let config = Config::load().ok();
+    let benchmark_store = BenchmarkStore::load();
 
     // Load disk cache for GitHub data (load before wrapping to avoid blocking in async)
     let disk_cache = GitHubCache::load();
 
     // Create app BEFORE entering alternate screen
-    let mut app = app::App::new(providers, agents_file.as_ref(), config);
+    let mut app = app::App::new(providers, agents_file.as_ref(), config, benchmark_store);
 
     // Install panic hook to restore terminal on crash
     let original_hook = std::panic::take_hook();

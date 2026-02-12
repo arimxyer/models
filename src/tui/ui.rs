@@ -12,7 +12,7 @@ use crate::provider_category::{provider_category, ProviderCategory};
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let (main_constraint, detail_constraint) = match app.current_tab {
-        Tab::Models => (Constraint::Min(0), Constraint::Length(15)),
+        Tab::Models => (Constraint::Min(0), Constraint::Length(22)),
         Tab::Agents => (Constraint::Min(0), Constraint::Length(0)), // No bottom detail for Agents
     };
 
@@ -941,6 +941,84 @@ fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
                 Span::styled("Updated: ", Style::default().fg(Color::DarkGray)),
                 Span::raw(updated),
             ]));
+        }
+
+        // Benchmarks section (Artificial Analysis)
+        detail_lines.push(Line::from(""));
+        if let Some(bench) = app.benchmark_store.find_for_model(&entry.id, &model.name) {
+            if bench.has_any_score() {
+                detail_lines.push(Line::from(Span::styled(
+                    "── Benchmarks (Artificial Analysis) ──",
+                    Style::default()
+                        .fg(Color::DarkGray)
+                        .add_modifier(Modifier::BOLD),
+                )));
+
+                // Format index scores (already 0-100 scale)
+                let fmt_idx = |v: Option<f64>| {
+                    v.map(|s| format!("{:.1}", s))
+                        .unwrap_or_else(|| "-".to_string())
+                };
+                // Format decimal scores as percentages (0-1 -> 0-100%)
+                let fmt_pct = |v: Option<f64>| {
+                    v.map(|s| format!("{:.1}%", s * 100.0))
+                        .unwrap_or_else(|| "-".to_string())
+                };
+
+                // Row 1: Composite indexes
+                detail_lines.push(Line::from(vec![
+                    Span::styled("Intelligence: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(format!("{:<8}", fmt_idx(bench.intelligence_index))),
+                    Span::styled("Coding: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(format!("{:<8}", fmt_idx(bench.coding_index))),
+                    Span::styled("Math: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(fmt_idx(bench.math_index)),
+                ]));
+
+                // Row 2: Individual benchmarks
+                detail_lines.push(Line::from(vec![
+                    Span::styled("GPQA: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(format!("{:<12}", fmt_pct(bench.gpqa))),
+                    Span::styled("MMLU-Pro: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(fmt_pct(bench.mmlu_pro)),
+                ]));
+
+                // Row 3: More benchmarks
+                detail_lines.push(Line::from(vec![
+                    Span::styled("HLE: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(format!("{:<13}", fmt_pct(bench.hle))),
+                    Span::styled("LiveCode: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(fmt_pct(bench.livecodebench)),
+                ]));
+
+                // Row 4: Performance metrics
+                let tps = bench
+                    .output_tps
+                    .filter(|&v| v > 0.0)
+                    .map(|v| format!("{:.0} tok/s", v))
+                    .unwrap_or_else(|| "-".to_string());
+                let ttft = bench
+                    .ttft
+                    .filter(|&v| v > 0.0)
+                    .map(|v| format!("{:.1}s", v))
+                    .unwrap_or_else(|| "-".to_string());
+                detail_lines.push(Line::from(vec![
+                    Span::styled("Speed: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(format!("{:<11}", tps)),
+                    Span::styled("TTFT: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(ttft),
+                ]));
+            } else {
+                detail_lines.push(Line::from(Span::styled(
+                    "No benchmark scores available",
+                    Style::default().fg(Color::DarkGray),
+                )));
+            }
+        } else {
+            detail_lines.push(Line::from(Span::styled(
+                "No benchmark data available",
+                Style::default().fg(Color::DarkGray),
+            )));
         }
 
         detail_lines
