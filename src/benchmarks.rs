@@ -65,10 +65,10 @@ impl BenchmarkEntry {
 
 pub struct BenchmarkStore {
     entries: Vec<BenchmarkEntry>,
-    /// Tier 1: normalized slug -> entry index (first match wins)
-    by_slug: HashMap<String, usize>,
-    /// Tier 2: normalized name -> entry index (first match wins)
-    by_name: HashMap<String, usize>,
+    /// Tier 1: normalized slug -> entry indices
+    by_slug: HashMap<String, Vec<usize>>,
+    /// Tier 2: normalized name -> entry indices
+    by_name: HashMap<String, Vec<usize>>,
     /// Tier 3: stripped qualifiers -> entry indices (may have multiple variants)
     by_stripped: HashMap<String, Vec<usize>>,
     /// Tier 4: sorted tokens -> entry indices (handles word order differences)
@@ -80,17 +80,17 @@ impl BenchmarkStore {
         let entries: Vec<BenchmarkEntry> =
             serde_json::from_str(BENCHMARKS_JSON).unwrap_or_default();
 
-        let mut by_slug = HashMap::new();
-        let mut by_name = HashMap::new();
+        let mut by_slug: HashMap<String, Vec<usize>> = HashMap::new();
+        let mut by_name: HashMap<String, Vec<usize>> = HashMap::new();
         let mut by_stripped: HashMap<String, Vec<usize>> = HashMap::new();
         let mut by_sorted: HashMap<String, Vec<usize>> = HashMap::new();
 
         for (idx, entry) in entries.iter().enumerate() {
             // Tier 1: normalized slug
-            by_slug.entry(normalize(&entry.slug)).or_insert(idx);
+            by_slug.entry(normalize(&entry.slug)).or_default().push(idx);
 
             // Tier 2: normalized name
-            by_name.entry(normalize(&entry.name)).or_insert(idx);
+            by_name.entry(normalize(&entry.name)).or_default().push(idx);
 
             // Tier 3: stripped qualifiers (both name and slug, deduped)
             let stripped_name = strip_qualifiers(&entry.name);
@@ -132,68 +132,58 @@ impl BenchmarkStore {
     ) -> Option<&BenchmarkEntry> {
         // Tier 0: Manual overrides (checked first, for known edge cases)
         if let Some(&slug) = MANUAL_OVERRIDES.get(model_id) {
-            if let Some(&idx) = self.by_slug.get(&normalize(slug)) {
-                return Some(&self.entries[idx]);
+            let key = normalize(slug);
+            if let Some(indices) = self.by_slug.get(&key) {
+                if indices.len() > 1 {
+                    return self.pick_variant(indices, reasoning);
+                }
+                return Some(&self.entries[indices[0]]);
             }
         }
 
         let normalized_id = normalize(model_id);
         let normalized_name = normalize(model_name);
-
-        // Tier 1: Exact normalized slug match (most reliable)
-        if let Some(&idx) = self.by_slug.get(&normalized_id) {
-            return Some(&self.entries[idx]);
-        }
-
-        // Tier 2: Normalized name match
-        if let Some(&idx) = self.by_name.get(&normalized_name) {
-            return Some(&self.entries[idx]);
-        }
-
-        // Tier 2b: Normalized model ID against name index
-        if let Some(&idx) = self.by_name.get(&normalized_id) {
-            return Some(&self.entries[idx]);
-        }
-
-        // Tier 3: Stripped qualifiers (handles provider prefixes, parentheticals)
         let stripped_name = strip_qualifiers(model_name);
         let stripped_id = strip_qualifiers(model_id);
-
-        if let Some(entry) = self.pick_from_index(&self.by_stripped, &stripped_name, reasoning) {
-            return Some(entry);
-        }
-        if stripped_id != stripped_name {
-            if let Some(entry) = self.pick_from_index(&self.by_stripped, &stripped_id, reasoning) {
-                return Some(entry);
-            }
-        }
-
-        // Tier 4: Sorted token match (handles word order differences)
         let sorted_name = sorted_tokens(model_name);
         let sorted_id = sorted_tokens(model_id);
 
-        if let Some(entry) = self.pick_from_index(&self.by_sorted, &sorted_name, reasoning) {
-            return Some(entry);
-        }
-        if sorted_id != sorted_name {
-            if let Some(entry) = self.pick_from_index(&self.by_sorted, &sorted_id, reasoning) {
-                return Some(entry);
+        // Search keys in priority order, paired with their index map.
+        // When a tier has multiple candidates, pick_variant selects the right one.
+        // When a tier has a single candidate whose reasoning flag doesn't match,
+        // save it as fallback and keep searching — a lower tier may group both
+        // reasoning variants under the same key and select correctly.
+        let searches: &[(&HashMap<String, Vec<usize>>, &str)] = &[
+            (&self.by_slug, &normalized_id),
+            (&self.by_name, &normalized_name),
+            (&self.by_name, &normalized_id),
+            (&self.by_stripped, &stripped_name),
+            (&self.by_stripped, &stripped_id),
+            (&self.by_sorted, &sorted_name),
+            (&self.by_sorted, &sorted_id),
+        ];
+
+        let mut fallback: Option<&BenchmarkEntry> = None;
+
+        for (index, key) in searches {
+            if let Some(indices) = index.get(*key) {
+                if indices.len() > 1 {
+                    // Multiple candidates — pick_variant handles reasoning selection
+                    return self.pick_variant(indices, reasoning);
+                }
+                // Single candidate
+                let entry = &self.entries[indices[0]];
+                if entry.is_reasoning_variant() == reasoning {
+                    return Some(entry);
+                }
+                // Reasoning mismatch — save as fallback, keep searching
+                if fallback.is_none() {
+                    fallback = Some(entry);
+                }
             }
         }
 
-        None
-    }
-
-    /// Look up a key in a multi-valued index and pick the best variant.
-    fn pick_from_index(
-        &self,
-        index: &HashMap<String, Vec<usize>>,
-        key: &str,
-        reasoning: bool,
-    ) -> Option<&BenchmarkEntry> {
-        index
-            .get(key)
-            .and_then(|indices| self.pick_variant(indices, reasoning))
+        fallback
     }
 
     /// From a set of candidate entry indices, pick the best variant based on the
@@ -358,6 +348,32 @@ mod tests {
             entry.is_reasoning_variant(),
             "Should prefer reasoning variant when reasoning=true, got: {}",
             entry.name
+        );
+    }
+
+    #[test]
+    fn test_slug_match_respects_reasoning_flag() {
+        let store = BenchmarkStore::load();
+        // Same model_id (exact slug match), different reasoning flag
+        let non_reasoning = store.find_for_model("claude-opus-4-6", "Claude Opus 4.6", false);
+        let reasoning = store.find_for_model("claude-opus-4-6", "Claude Opus 4.6", true);
+        assert!(non_reasoning.is_some());
+        assert!(reasoning.is_some());
+        // They should resolve to different AA entries
+        assert_ne!(
+            non_reasoning.unwrap().name,
+            reasoning.unwrap().name,
+            "reasoning=true and reasoning=false should return different variants"
+        );
+        assert!(
+            !non_reasoning.unwrap().is_reasoning_variant(),
+            "reasoning=false should get non-reasoning variant, got: {}",
+            non_reasoning.unwrap().name
+        );
+        assert!(
+            reasoning.unwrap().is_reasoning_variant(),
+            "reasoning=true should get reasoning variant, got: {}",
+            reasoning.unwrap().name
         );
     }
 
