@@ -1,3 +1,4 @@
+use regex::Regex;
 use serde::Deserialize;
 
 const BENCHMARKS_JSON: &str = include_str!("../data/benchmarks.json");
@@ -13,6 +14,11 @@ pub struct BenchmarkEntry {
     pub gpqa: Option<f64>,
     pub hle: Option<f64>,
     pub livecodebench: Option<f64>,
+    pub scicode: Option<f64>,
+    pub ifbench: Option<f64>,
+    pub lcr: Option<f64>,
+    pub terminalbench_hard: Option<f64>,
+    pub tau2: Option<f64>,
     pub output_tps: Option<f64>,
     pub ttft: Option<f64>,
 }
@@ -25,6 +31,14 @@ impl BenchmarkEntry {
             || self.math_index.is_some()
             || self.mmlu_pro.is_some()
             || self.gpqa.is_some()
+    }
+
+    /// Returns true if this is a reasoning/thinking variant.
+    fn is_reasoning_variant(&self) -> bool {
+        let lower = self.name.to_lowercase();
+        (lower.contains("reasoning") && !lower.contains("non-reasoning"))
+            || lower.contains("thinking")
+            || lower.contains("adaptive")
     }
 }
 
@@ -71,12 +85,57 @@ impl BenchmarkStore {
             return Some(entry);
         }
 
-        // Try slug substring matching (model ID contains the slug).
-        // Require slug to be at least 4 chars to avoid spurious matches.
-        if let Some(entry) = self.entries.iter().find(|e| {
-            let norm_slug = normalize(&e.slug);
-            norm_slug.len() >= 4 && normalized_id.contains(&norm_slug)
-        }) {
+        // Try matching with stripped names (removes provider prefixes, parenthetical
+        // suffixes, etc.) — prefer non-reasoning variants as the default match.
+        let stripped_name = strip_qualifiers(model_name);
+        let stripped_id = strip_qualifiers(model_id);
+
+        let stripped_matches = |e: &BenchmarkEntry| {
+            let s_name = strip_qualifiers(&e.name);
+            let s_slug = strip_qualifiers(&e.slug);
+            s_name == stripped_name
+                || s_name == stripped_id
+                || s_slug == stripped_name
+                || s_slug == stripped_id
+        };
+
+        // First pass: prefer non-reasoning entries
+        if let Some(entry) = self
+            .entries
+            .iter()
+            .find(|e| !e.is_reasoning_variant() && stripped_matches(e))
+        {
+            return Some(entry);
+        }
+
+        // Second pass: accept reasoning entries if no non-reasoning match
+        if let Some(entry) = self.entries.iter().find(|e| stripped_matches(e)) {
+            return Some(entry);
+        }
+
+        // Final pass: sorted-token matching handles word order differences
+        // e.g., "Claude Sonnet 4" (models.dev) vs "Claude 4 Sonnet" (AA)
+        let sorted_name = sorted_tokens(model_name);
+        let sorted_id = sorted_tokens(model_id);
+
+        let sorted_matches = |e: &BenchmarkEntry| {
+            let s_name = sorted_tokens(&e.name);
+            let s_slug = sorted_tokens(&e.slug);
+            s_name == sorted_name
+                || s_name == sorted_id
+                || s_slug == sorted_name
+                || s_slug == sorted_id
+        };
+
+        if let Some(entry) = self
+            .entries
+            .iter()
+            .find(|e| !e.is_reasoning_variant() && sorted_matches(e))
+        {
+            return Some(entry);
+        }
+
+        if let Some(entry) = self.entries.iter().find(|e| sorted_matches(e)) {
             return Some(entry);
         }
 
@@ -99,6 +158,51 @@ fn normalize(s: &str) -> String {
     } else {
         base
     }
+}
+
+/// Strip qualifiers, split into tokens, sort alphabetically, and rejoin.
+/// Handles word order differences: "Claude Sonnet 4" and "Claude 4 Sonnet" both
+/// become "4 claude sonnet".
+fn sorted_tokens(s: &str) -> String {
+    let lower = s.to_lowercase();
+    let re = Regex::new(
+        r"^(?:anthropic|openai|google|meta|mistral|cohere|xai|amazon|microsoft|nvidia)\s*[:/]?\s*",
+    )
+    .unwrap();
+    let stripped = re.replace(&lower, "");
+    let re_parens = Regex::new(r"\s*\([^)]*\)").unwrap();
+    let stripped = re_parens.replace_all(&stripped, "");
+    let mut tokens: Vec<&str> = stripped
+        .split(['-', '_', '.', ' '])
+        .filter(|t| !t.is_empty())
+        .collect();
+    tokens.sort();
+    tokens.join(" ")
+}
+
+/// Strip provider prefixes, parenthetical suffixes, and normalize for matching.
+/// "Anthropic: Claude Opus 4.5 (latest)" -> "claudeopus45"
+/// "Claude 3.5 Sonnet (Oct '24)" -> "claude35sonnet"
+/// "Claude 4 Opus (Non-reasoning)" -> "claude4opus"
+fn strip_qualifiers(s: &str) -> String {
+    let lower = s.to_lowercase();
+
+    // Strip provider prefixes like "Anthropic: ", "OpenAI: ", "OpenAI "
+    let re = Regex::new(
+        r"^(?:anthropic|openai|google|meta|mistral|cohere|xai|amazon|microsoft|nvidia)\s*[:/]?\s*",
+    )
+    .unwrap();
+    let stripped = re.replace(&lower, "");
+
+    // Strip all parenthetical content: "(latest)", "(US)", "(Non-reasoning)", etc.
+    let re_parens = Regex::new(r"\s*\([^)]*\)").unwrap();
+    let stripped = re_parens.replace_all(&stripped, "");
+
+    // Strip trailing qualifiers that aren't in parens
+    let stripped = stripped.trim();
+
+    // Normalize: strip separators and trailing dates
+    normalize(stripped)
 }
 
 #[cfg(test)]
@@ -142,12 +246,52 @@ mod tests {
     }
 
     #[test]
+    fn test_find_with_provider_prefix() {
+        let store = BenchmarkStore::load();
+        let result = store.find_for_model("claude-opus-4-5", "Anthropic: Claude Opus 4.5");
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_find_with_region_suffix() {
+        let store = BenchmarkStore::load();
+        let result = store.find_for_model("claude-opus-4-6", "Claude Opus 4.6 (US)");
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_find_prefers_non_reasoning() {
+        let store = BenchmarkStore::load();
+        let result = store.find_for_model("claude-sonnet-4", "Claude Sonnet 4");
+        assert!(result.is_some());
+        // Should match non-reasoning variant
+        assert!(
+            !result.unwrap().name.contains("Reasoning"),
+            "Should prefer non-reasoning variant, got: {}",
+            result.unwrap().name
+        );
+    }
+
+    #[test]
     fn test_normalize() {
         assert_eq!(normalize("GPT-4o"), "gpt4o");
         assert_eq!(normalize("claude-3-5-sonnet-20241022"), "claude35sonnet");
         assert_eq!(normalize("Llama 3.1 405B"), "llama31405b");
-        // Short trailing digits should NOT be stripped (model identifiers like o1, o3)
         assert_eq!(normalize("o1"), "o1");
         assert_eq!(normalize("o3-mini"), "o3mini");
+    }
+
+    #[test]
+    fn test_strip_qualifiers() {
+        assert_eq!(
+            strip_qualifiers("Anthropic: Claude Opus 4.5 (latest)"),
+            "claudeopus45"
+        );
+        assert_eq!(
+            strip_qualifiers("Claude 3.5 Sonnet (Oct '24)"),
+            "claude35sonnet"
+        );
+        assert_eq!(strip_qualifiers("OpenAI GPT-4o"), "gpt4o");
+        assert_eq!(strip_qualifiers("Claude Opus 4.6 (US)"), "claudeopus46");
     }
 }

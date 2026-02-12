@@ -12,7 +12,7 @@ use crate::provider_category::{provider_category, ProviderCategory};
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let (main_constraint, detail_constraint) = match app.current_tab {
-        Tab::Models => (Constraint::Min(0), Constraint::Length(22)),
+        Tab::Models => (Constraint::Min(0), Constraint::Length(25)),
         Tab::Agents => (Constraint::Min(0), Constraint::Length(0)), // No bottom detail for Agents
     };
 
@@ -947,12 +947,24 @@ fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
         detail_lines.push(Line::from(""));
         if let Some(bench) = app.benchmark_store.find_for_model(&entry.id, &model.name) {
             if bench.has_any_score() {
-                detail_lines.push(Line::from(Span::styled(
-                    "── Benchmarks (Artificial Analysis) ──",
-                    Style::default()
-                        .fg(Color::DarkGray)
-                        .add_modifier(Modifier::BOLD),
-                )));
+                detail_lines.push(Line::from(vec![
+                    Span::styled(
+                        "── Benchmarks ",
+                        Style::default()
+                            .fg(Color::DarkGray)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        "(indexes 0-100, scores %) ",
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                    Span::styled(
+                        "──",
+                        Style::default()
+                            .fg(Color::DarkGray)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                ]));
 
                 // Format index scores (already 0-100 scale)
                 let fmt_idx = |v: Option<f64>| {
@@ -975,7 +987,7 @@ fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
                     Span::raw(fmt_idx(bench.math_index)),
                 ]));
 
-                // Row 2: Individual benchmarks
+                // Row 2: Knowledge benchmarks
                 detail_lines.push(Line::from(vec![
                     Span::styled("GPQA: ", Style::default().fg(Color::DarkGray)),
                     Span::raw(format!("{:<12}", fmt_pct(bench.gpqa))),
@@ -983,15 +995,33 @@ fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
                     Span::raw(fmt_pct(bench.mmlu_pro)),
                 ]));
 
-                // Row 3: More benchmarks
+                // Row 3: Reasoning benchmarks
                 detail_lines.push(Line::from(vec![
                     Span::styled("HLE: ", Style::default().fg(Color::DarkGray)),
                     Span::raw(format!("{:<13}", fmt_pct(bench.hle))),
-                    Span::styled("LiveCode: ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(fmt_pct(bench.livecodebench)),
+                    Span::styled("IFBench: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(fmt_pct(bench.ifbench)),
                 ]));
 
-                // Row 4: Performance metrics
+                // Row 4: Coding and science
+                detail_lines.push(Line::from(vec![
+                    Span::styled("LiveCode: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(format!("{:<8}", fmt_pct(bench.livecodebench))),
+                    Span::styled("SciCode: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(format!("{:<8}", fmt_pct(bench.scicode))),
+                    Span::styled("Term: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(fmt_pct(bench.terminalbench_hard)),
+                ]));
+
+                // Row 5: Context and agent benchmarks
+                detail_lines.push(Line::from(vec![
+                    Span::styled("LCR: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(format!("{:<13}", fmt_pct(bench.lcr))),
+                    Span::styled("Tau2: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(fmt_pct(bench.tau2)),
+                ]));
+
+                // Row 6: Performance metrics
                 let tps = bench
                     .output_tps
                     .filter(|&v| v > 0.0)
