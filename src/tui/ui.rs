@@ -945,7 +945,10 @@ fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
 
         // Benchmarks section (Artificial Analysis)
         detail_lines.push(Line::from(""));
-        if let Some(bench) = app.benchmark_store.find_for_model(&entry.id, &model.name) {
+        if let Some(bench) =
+            app.benchmark_store
+                .find_for_model(&entry.id, &model.name, model.reasoning)
+        {
             if bench.has_any_score() {
                 detail_lines.push(Line::from(vec![
                     Span::styled(

@@ -1,7 +1,28 @@
 use regex::Regex;
 use serde::Deserialize;
+use std::collections::HashMap;
+use std::sync::LazyLock;
 
 const BENCHMARKS_JSON: &str = include_str!("../data/benchmarks.json");
+
+/// Regex to strip provider prefixes like "Anthropic: ", "OpenAI: ", etc.
+static RE_PROVIDER_PREFIX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"^(?:anthropic|openai|google|meta|mistral|cohere|xai|amazon|microsoft|nvidia)\s*[:/]?\s*",
+    )
+    .unwrap()
+});
+
+/// Regex to strip parenthetical content like "(latest)", "(US)", etc.
+static RE_PARENS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s*\([^)]*\)").unwrap());
+
+/// Manual overrides for edge cases where algorithmic matching fails.
+/// Maps normalized model_id -> AA entry slug.
+static MANUAL_OVERRIDES: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
+    HashMap::from([
+        // Example: ("some-edge-case-id", "correct-aa-slug"),
+    ])
+});
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct BenchmarkEntry {
@@ -44,102 +65,162 @@ impl BenchmarkEntry {
 
 pub struct BenchmarkStore {
     entries: Vec<BenchmarkEntry>,
+    /// Tier 1: normalized slug -> entry index (first match wins)
+    by_slug: HashMap<String, usize>,
+    /// Tier 2: normalized name -> entry index (first match wins)
+    by_name: HashMap<String, usize>,
+    /// Tier 3: stripped qualifiers -> entry indices (may have multiple variants)
+    by_stripped: HashMap<String, Vec<usize>>,
+    /// Tier 4: sorted tokens -> entry indices (handles word order differences)
+    by_sorted: HashMap<String, Vec<usize>>,
 }
 
 impl BenchmarkStore {
     pub fn load() -> Self {
         let entries: Vec<BenchmarkEntry> =
             serde_json::from_str(BENCHMARKS_JSON).unwrap_or_default();
-        Self { entries }
+
+        let mut by_slug = HashMap::new();
+        let mut by_name = HashMap::new();
+        let mut by_stripped: HashMap<String, Vec<usize>> = HashMap::new();
+        let mut by_sorted: HashMap<String, Vec<usize>> = HashMap::new();
+
+        for (idx, entry) in entries.iter().enumerate() {
+            // Tier 1: normalized slug
+            by_slug.entry(normalize(&entry.slug)).or_insert(idx);
+
+            // Tier 2: normalized name
+            by_name.entry(normalize(&entry.name)).or_insert(idx);
+
+            // Tier 3: stripped qualifiers (both name and slug, deduped)
+            let stripped_name = strip_qualifiers(&entry.name);
+            let stripped_slug = strip_qualifiers(&entry.slug);
+            by_stripped
+                .entry(stripped_name.clone())
+                .or_default()
+                .push(idx);
+            if stripped_slug != stripped_name {
+                by_stripped.entry(stripped_slug).or_default().push(idx);
+            }
+
+            // Tier 4: sorted tokens (both name and slug, deduped)
+            let sorted_name = sorted_tokens(&entry.name);
+            let sorted_slug = sorted_tokens(&entry.slug);
+            by_sorted.entry(sorted_name.clone()).or_default().push(idx);
+            if sorted_slug != sorted_name {
+                by_sorted.entry(sorted_slug).or_default().push(idx);
+            }
+        }
+
+        Self {
+            entries,
+            by_slug,
+            by_name,
+            by_stripped,
+            by_sorted,
+        }
     }
 
     /// Find benchmark data for a model by matching against model ID and name.
-    pub fn find_for_model(&self, model_id: &str, model_name: &str) -> Option<&BenchmarkEntry> {
+    /// The `reasoning` flag (from models.dev) selects the appropriate AA variant
+    /// when both reasoning and non-reasoning entries exist for the same model.
+    pub fn find_for_model(
+        &self,
+        model_id: &str,
+        model_name: &str,
+        reasoning: bool,
+    ) -> Option<&BenchmarkEntry> {
+        // Tier 0: Manual overrides (checked first, for known edge cases)
+        if let Some(&slug) = MANUAL_OVERRIDES.get(model_id) {
+            if let Some(&idx) = self.by_slug.get(&normalize(slug)) {
+                return Some(&self.entries[idx]);
+            }
+        }
+
         let normalized_id = normalize(model_id);
         let normalized_name = normalize(model_name);
 
-        // Try exact slug match first (most reliable)
-        if let Some(entry) = self
-            .entries
-            .iter()
-            .find(|e| normalize(&e.slug) == normalized_id)
-        {
-            return Some(entry);
+        // Tier 1: Exact normalized slug match (most reliable)
+        if let Some(&idx) = self.by_slug.get(&normalized_id) {
+            return Some(&self.entries[idx]);
         }
 
-        // Try matching normalized model name against entry name
-        if let Some(entry) = self
-            .entries
-            .iter()
-            .find(|e| normalize(&e.name) == normalized_name)
-        {
-            return Some(entry);
+        // Tier 2: Normalized name match
+        if let Some(&idx) = self.by_name.get(&normalized_name) {
+            return Some(&self.entries[idx]);
         }
 
-        // Try matching normalized model ID against entry name
-        if let Some(entry) = self
-            .entries
-            .iter()
-            .find(|e| normalize(&e.name) == normalized_id)
-        {
-            return Some(entry);
+        // Tier 2b: Normalized model ID against name index
+        if let Some(&idx) = self.by_name.get(&normalized_id) {
+            return Some(&self.entries[idx]);
         }
 
-        // Try matching with stripped names (removes provider prefixes, parenthetical
-        // suffixes, etc.) — prefer non-reasoning variants as the default match.
+        // Tier 3: Stripped qualifiers (handles provider prefixes, parentheticals)
         let stripped_name = strip_qualifiers(model_name);
         let stripped_id = strip_qualifiers(model_id);
 
-        let stripped_matches = |e: &BenchmarkEntry| {
-            let s_name = strip_qualifiers(&e.name);
-            let s_slug = strip_qualifiers(&e.slug);
-            s_name == stripped_name
-                || s_name == stripped_id
-                || s_slug == stripped_name
-                || s_slug == stripped_id
-        };
-
-        // First pass: prefer non-reasoning entries
-        if let Some(entry) = self
-            .entries
-            .iter()
-            .find(|e| !e.is_reasoning_variant() && stripped_matches(e))
-        {
+        if let Some(entry) = self.pick_from_index(&self.by_stripped, &stripped_name, reasoning) {
             return Some(entry);
         }
-
-        // Second pass: accept reasoning entries if no non-reasoning match
-        if let Some(entry) = self.entries.iter().find(|e| stripped_matches(e)) {
-            return Some(entry);
+        if stripped_id != stripped_name {
+            if let Some(entry) = self.pick_from_index(&self.by_stripped, &stripped_id, reasoning) {
+                return Some(entry);
+            }
         }
 
-        // Final pass: sorted-token matching handles word order differences
-        // e.g., "Claude Sonnet 4" (models.dev) vs "Claude 4 Sonnet" (AA)
+        // Tier 4: Sorted token match (handles word order differences)
         let sorted_name = sorted_tokens(model_name);
         let sorted_id = sorted_tokens(model_id);
 
-        let sorted_matches = |e: &BenchmarkEntry| {
-            let s_name = sorted_tokens(&e.name);
-            let s_slug = sorted_tokens(&e.slug);
-            s_name == sorted_name
-                || s_name == sorted_id
-                || s_slug == sorted_name
-                || s_slug == sorted_id
-        };
-
-        if let Some(entry) = self
-            .entries
-            .iter()
-            .find(|e| !e.is_reasoning_variant() && sorted_matches(e))
-        {
+        if let Some(entry) = self.pick_from_index(&self.by_sorted, &sorted_name, reasoning) {
             return Some(entry);
         }
-
-        if let Some(entry) = self.entries.iter().find(|e| sorted_matches(e)) {
-            return Some(entry);
+        if sorted_id != sorted_name {
+            if let Some(entry) = self.pick_from_index(&self.by_sorted, &sorted_id, reasoning) {
+                return Some(entry);
+            }
         }
 
         None
+    }
+
+    /// Look up a key in a multi-valued index and pick the best variant.
+    fn pick_from_index(
+        &self,
+        index: &HashMap<String, Vec<usize>>,
+        key: &str,
+        reasoning: bool,
+    ) -> Option<&BenchmarkEntry> {
+        index
+            .get(key)
+            .and_then(|indices| self.pick_variant(indices, reasoning))
+    }
+
+    /// From a set of candidate entry indices, pick the best variant based on the
+    /// `reasoning` flag from models.dev.
+    fn pick_variant(&self, indices: &[usize], reasoning: bool) -> Option<&BenchmarkEntry> {
+        if indices.len() == 1 {
+            return Some(&self.entries[indices[0]]);
+        }
+
+        // Try to match the reasoning preference first
+        if let Some(&idx) = indices
+            .iter()
+            .find(|&&idx| self.entries[idx].is_reasoning_variant() == reasoning)
+        {
+            return Some(&self.entries[idx]);
+        }
+
+        // Fall back to non-reasoning (the "standard" variant)
+        if let Some(&idx) = indices
+            .iter()
+            .find(|&&idx| !self.entries[idx].is_reasoning_variant())
+        {
+            return Some(&self.entries[idx]);
+        }
+
+        // Last resort: return the first
+        Some(&self.entries[indices[0]])
     }
 }
 
@@ -165,13 +246,8 @@ fn normalize(s: &str) -> String {
 /// become "4 claude sonnet".
 fn sorted_tokens(s: &str) -> String {
     let lower = s.to_lowercase();
-    let re = Regex::new(
-        r"^(?:anthropic|openai|google|meta|mistral|cohere|xai|amazon|microsoft|nvidia)\s*[:/]?\s*",
-    )
-    .unwrap();
-    let stripped = re.replace(&lower, "");
-    let re_parens = Regex::new(r"\s*\([^)]*\)").unwrap();
-    let stripped = re_parens.replace_all(&stripped, "");
+    let stripped = RE_PROVIDER_PREFIX.replace(&lower, "");
+    let stripped = RE_PARENS.replace_all(&stripped, "");
     let mut tokens: Vec<&str> = stripped
         .split(['-', '_', '.', ' '])
         .filter(|t| !t.is_empty())
@@ -186,22 +262,9 @@ fn sorted_tokens(s: &str) -> String {
 /// "Claude 4 Opus (Non-reasoning)" -> "claude4opus"
 fn strip_qualifiers(s: &str) -> String {
     let lower = s.to_lowercase();
-
-    // Strip provider prefixes like "Anthropic: ", "OpenAI: ", "OpenAI "
-    let re = Regex::new(
-        r"^(?:anthropic|openai|google|meta|mistral|cohere|xai|amazon|microsoft|nvidia)\s*[:/]?\s*",
-    )
-    .unwrap();
-    let stripped = re.replace(&lower, "");
-
-    // Strip all parenthetical content: "(latest)", "(US)", "(Non-reasoning)", etc.
-    let re_parens = Regex::new(r"\s*\([^)]*\)").unwrap();
-    let stripped = re_parens.replace_all(&stripped, "");
-
-    // Strip trailing qualifiers that aren't in parens
+    let stripped = RE_PROVIDER_PREFIX.replace(&lower, "");
+    let stripped = RE_PARENS.replace_all(&stripped, "");
     let stripped = stripped.trim();
-
-    // Normalize: strip separators and trailing dates
     normalize(stripped)
 }
 
@@ -216,9 +279,18 @@ mod tests {
     }
 
     #[test]
+    fn test_index_is_populated() {
+        let store = BenchmarkStore::load();
+        assert!(!store.by_slug.is_empty());
+        assert!(!store.by_name.is_empty());
+        assert!(!store.by_stripped.is_empty());
+        assert!(!store.by_sorted.is_empty());
+    }
+
+    #[test]
     fn test_find_gpt4o() {
         let store = BenchmarkStore::load();
-        let result = store.find_for_model("gpt-4o", "GPT-4o");
+        let result = store.find_for_model("gpt-4o", "GPT-4o", false);
         assert!(result.is_some());
         let entry = result.unwrap();
         assert!(entry.name.contains("GPT-4o"));
@@ -227,48 +299,65 @@ mod tests {
     #[test]
     fn test_find_gpt4o_with_date() {
         let store = BenchmarkStore::load();
-        let result = store.find_for_model("gpt-4o-2024-08-06", "GPT-4o");
+        let result = store.find_for_model("gpt-4o-2024-08-06", "GPT-4o", false);
         assert!(result.is_some());
     }
 
     #[test]
     fn test_find_claude() {
         let store = BenchmarkStore::load();
-        let result = store.find_for_model("claude-3-5-sonnet-20241022", "Claude 3.5 Sonnet (New)");
+        let result = store.find_for_model(
+            "claude-3-5-sonnet-20241022",
+            "Claude 3.5 Sonnet (New)",
+            false,
+        );
         assert!(result.is_some());
     }
 
     #[test]
     fn test_find_nonexistent() {
         let store = BenchmarkStore::load();
-        let result = store.find_for_model("some-unknown-model", "Unknown Model");
+        let result = store.find_for_model("some-unknown-model", "Unknown Model", false);
         assert!(result.is_none());
     }
 
     #[test]
     fn test_find_with_provider_prefix() {
         let store = BenchmarkStore::load();
-        let result = store.find_for_model("claude-opus-4-5", "Anthropic: Claude Opus 4.5");
+        let result = store.find_for_model("claude-opus-4-5", "Anthropic: Claude Opus 4.5", false);
         assert!(result.is_some());
     }
 
     #[test]
     fn test_find_with_region_suffix() {
         let store = BenchmarkStore::load();
-        let result = store.find_for_model("claude-opus-4-6", "Claude Opus 4.6 (US)");
+        let result = store.find_for_model("claude-opus-4-6", "Claude Opus 4.6 (US)", false);
         assert!(result.is_some());
     }
 
     #[test]
     fn test_find_prefers_non_reasoning() {
         let store = BenchmarkStore::load();
-        let result = store.find_for_model("claude-sonnet-4", "Claude Sonnet 4");
+        let result = store.find_for_model("claude-sonnet-4", "Claude Sonnet 4", false);
         assert!(result.is_some());
-        // Should match non-reasoning variant
+        let entry = result.unwrap();
         assert!(
-            !result.unwrap().name.contains("Reasoning"),
+            !entry.name.contains("Reasoning"),
             "Should prefer non-reasoning variant, got: {}",
-            result.unwrap().name
+            entry.name
+        );
+    }
+
+    #[test]
+    fn test_find_reasoning_variant_when_requested() {
+        let store = BenchmarkStore::load();
+        let result = store.find_for_model("claude-sonnet-4", "Claude Sonnet 4", true);
+        assert!(result.is_some());
+        let entry = result.unwrap();
+        assert!(
+            entry.is_reasoning_variant(),
+            "Should prefer reasoning variant when reasoning=true, got: {}",
+            entry.name
         );
     }
 
