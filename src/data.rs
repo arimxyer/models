@@ -80,6 +80,15 @@ pub struct Modalities {
 }
 
 impl Model {
+    /// Returns true if this model outputs text (or has no modalities specified).
+    /// Non-text models (image gen, video gen, embeddings) return false.
+    pub fn is_text_model(&self) -> bool {
+        match &self.modalities {
+            Some(m) => m.output.iter().any(|o| o == "text"),
+            None => true,
+        }
+    }
+
     pub fn context_str(&self) -> String {
         self.limit
             .as_ref()
@@ -173,3 +182,67 @@ fn format_tokens(n: u64) -> String {
 }
 
 pub type ProvidersMap = HashMap<String, Provider>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_model(output_modalities: Option<Vec<&str>>) -> Model {
+        Model {
+            id: "test".into(),
+            name: "Test".into(),
+            family: None,
+            reasoning: false,
+            tool_call: false,
+            attachment: false,
+            temperature: false,
+            modalities: output_modalities.map(|out| Modalities {
+                input: vec!["text".into()],
+                output: out.into_iter().map(|s| s.to_string()).collect(),
+            }),
+            cost: None,
+            limit: None,
+            release_date: None,
+            last_updated: None,
+            knowledge: None,
+            open_weights: false,
+            status: None,
+        }
+    }
+
+    #[test]
+    fn test_is_text_model_none_modalities() {
+        let m = make_model(None);
+        assert!(m.is_text_model(), "No modalities should default to text");
+    }
+
+    #[test]
+    fn test_is_text_model_text_output() {
+        let m = make_model(Some(vec!["text"]));
+        assert!(m.is_text_model());
+    }
+
+    #[test]
+    fn test_is_text_model_multimodal_with_text() {
+        let m = make_model(Some(vec!["text", "image"]));
+        assert!(m.is_text_model(), "Multimodal with text should be text");
+    }
+
+    #[test]
+    fn test_is_text_model_image_only() {
+        let m = make_model(Some(vec!["image"]));
+        assert!(!m.is_text_model(), "Image-only model is not text");
+    }
+
+    #[test]
+    fn test_is_text_model_video_only() {
+        let m = make_model(Some(vec!["video"]));
+        assert!(!m.is_text_model(), "Video-only model is not text");
+    }
+
+    #[test]
+    fn test_is_text_model_empty_output() {
+        let m = make_model(Some(vec![]));
+        assert!(!m.is_text_model(), "Empty output modalities is not text");
+    }
+}
