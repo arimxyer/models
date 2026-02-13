@@ -943,118 +943,113 @@ fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
             ]));
         }
 
-        // Benchmarks section (Artificial Analysis) — only for text-output models
-        if model.is_text_model() {
-            detail_lines.push(Line::from(""));
-            if let Some(bench) =
-                app.benchmark_store
-                    .find_for_model(&entry.id, &model.name, model.reasoning)
-            {
-                if bench.has_any_score() {
-                    detail_lines.push(Line::from(vec![
-                        Span::styled(
-                            "── Benchmarks ",
-                            Style::default()
-                                .fg(Color::DarkGray)
-                                .add_modifier(Modifier::BOLD),
-                        ),
-                        Span::styled(
-                            "(indexes 0-100, scores %) ",
-                            Style::default().fg(Color::DarkGray),
-                        ),
-                        Span::styled(
-                            "──",
-                            Style::default()
-                                .fg(Color::DarkGray)
-                                .add_modifier(Modifier::BOLD),
-                        ),
-                    ]));
-
-                    // Format index scores (already 0-100 scale)
-                    let fmt_idx = |v: Option<f64>| {
-                        v.map(|s| format!("{:.1}", s))
-                            .unwrap_or_else(|| "-".to_string())
-                    };
-                    // Format decimal scores as percentages (0-1 -> 0-100%)
-                    let fmt_pct = |v: Option<f64>| {
-                        v.map(|s| format!("{:.1}%", s * 100.0))
-                            .unwrap_or_else(|| "-".to_string())
-                    };
-
-                    // Row 1: Composite indexes
-                    detail_lines.push(Line::from(vec![
-                        Span::styled("Intelligence: ", Style::default().fg(Color::DarkGray)),
-                        Span::raw(format!("{:<8}", fmt_idx(bench.intelligence_index))),
-                        Span::styled("Coding: ", Style::default().fg(Color::DarkGray)),
-                        Span::raw(format!("{:<8}", fmt_idx(bench.coding_index))),
-                        Span::styled("Math: ", Style::default().fg(Color::DarkGray)),
-                        Span::raw(fmt_idx(bench.math_index)),
-                    ]));
-
-                    // Row 2: Knowledge benchmarks
-                    detail_lines.push(Line::from(vec![
-                        Span::styled("GPQA: ", Style::default().fg(Color::DarkGray)),
-                        Span::raw(format!("{:<12}", fmt_pct(bench.gpqa))),
-                        Span::styled("MMLU-Pro: ", Style::default().fg(Color::DarkGray)),
-                        Span::raw(fmt_pct(bench.mmlu_pro)),
-                    ]));
-
-                    // Row 3: Reasoning benchmarks
-                    detail_lines.push(Line::from(vec![
-                        Span::styled("HLE: ", Style::default().fg(Color::DarkGray)),
-                        Span::raw(format!("{:<13}", fmt_pct(bench.hle))),
-                        Span::styled("IFBench: ", Style::default().fg(Color::DarkGray)),
-                        Span::raw(fmt_pct(bench.ifbench)),
-                    ]));
-
-                    // Row 4: Coding and science
-                    detail_lines.push(Line::from(vec![
-                        Span::styled("LiveCode: ", Style::default().fg(Color::DarkGray)),
-                        Span::raw(format!("{:<8}", fmt_pct(bench.livecodebench))),
-                        Span::styled("SciCode: ", Style::default().fg(Color::DarkGray)),
-                        Span::raw(format!("{:<8}", fmt_pct(bench.scicode))),
-                        Span::styled("Term: ", Style::default().fg(Color::DarkGray)),
-                        Span::raw(fmt_pct(bench.terminalbench_hard)),
-                    ]));
-
-                    // Row 5: Context and agent benchmarks
-                    detail_lines.push(Line::from(vec![
-                        Span::styled("LCR: ", Style::default().fg(Color::DarkGray)),
-                        Span::raw(format!("{:<13}", fmt_pct(bench.lcr))),
-                        Span::styled("Tau2: ", Style::default().fg(Color::DarkGray)),
-                        Span::raw(fmt_pct(bench.tau2)),
-                    ]));
-
-                    // Row 6: Performance metrics
-                    let tps = bench
-                        .output_tps
-                        .filter(|&v| v > 0.0)
-                        .map(|v| format!("{:.0} tok/s", v))
-                        .unwrap_or_else(|| "-".to_string());
-                    let ttft = bench
-                        .ttft
-                        .filter(|&v| v > 0.0)
-                        .map(|v| format!("{:.1}s", v))
-                        .unwrap_or_else(|| "-".to_string());
-                    detail_lines.push(Line::from(vec![
-                        Span::styled("Speed: ", Style::default().fg(Color::DarkGray)),
-                        Span::raw(format!("{:<11}", tps)),
-                        Span::styled("TTFT: ", Style::default().fg(Color::DarkGray)),
-                        Span::raw(ttft),
-                    ]));
-                } else {
-                    detail_lines.push(Line::from(Span::styled(
-                        "No benchmark scores available",
+        // Benchmarks section (Artificial Analysis)
+        detail_lines.push(Line::from(""));
+        if let Some(bench) = app.benchmark_store.find_for_text_model(&entry.id, model) {
+            if bench.has_any_score() {
+                detail_lines.push(Line::from(vec![
+                    Span::styled(
+                        "── Benchmarks ",
+                        Style::default()
+                            .fg(Color::DarkGray)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        "(indexes 0-100, scores %) ",
                         Style::default().fg(Color::DarkGray),
-                    )));
-                }
+                    ),
+                    Span::styled(
+                        "──",
+                        Style::default()
+                            .fg(Color::DarkGray)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                ]));
+
+                // Format index scores (already 0-100 scale)
+                let fmt_idx = |v: Option<f64>| {
+                    v.map(|s| format!("{:.1}", s))
+                        .unwrap_or_else(|| "-".to_string())
+                };
+                // Format decimal scores as percentages (0-1 -> 0-100%)
+                let fmt_pct = |v: Option<f64>| {
+                    v.map(|s| format!("{:.1}%", s * 100.0))
+                        .unwrap_or_else(|| "-".to_string())
+                };
+
+                // Row 1: Composite indexes
+                detail_lines.push(Line::from(vec![
+                    Span::styled("Intelligence: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(format!("{:<8}", fmt_idx(bench.intelligence_index))),
+                    Span::styled("Coding: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(format!("{:<8}", fmt_idx(bench.coding_index))),
+                    Span::styled("Math: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(fmt_idx(bench.math_index)),
+                ]));
+
+                // Row 2: Knowledge benchmarks
+                detail_lines.push(Line::from(vec![
+                    Span::styled("GPQA: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(format!("{:<12}", fmt_pct(bench.gpqa))),
+                    Span::styled("MMLU-Pro: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(fmt_pct(bench.mmlu_pro)),
+                ]));
+
+                // Row 3: Reasoning benchmarks
+                detail_lines.push(Line::from(vec![
+                    Span::styled("HLE: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(format!("{:<13}", fmt_pct(bench.hle))),
+                    Span::styled("IFBench: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(fmt_pct(bench.ifbench)),
+                ]));
+
+                // Row 4: Coding and science
+                detail_lines.push(Line::from(vec![
+                    Span::styled("LiveCode: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(format!("{:<8}", fmt_pct(bench.livecodebench))),
+                    Span::styled("SciCode: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(format!("{:<8}", fmt_pct(bench.scicode))),
+                    Span::styled("Term: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(fmt_pct(bench.terminalbench_hard)),
+                ]));
+
+                // Row 5: Context and agent benchmarks
+                detail_lines.push(Line::from(vec![
+                    Span::styled("LCR: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(format!("{:<13}", fmt_pct(bench.lcr))),
+                    Span::styled("Tau2: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(fmt_pct(bench.tau2)),
+                ]));
+
+                // Row 6: Performance metrics
+                let tps = bench
+                    .output_tps
+                    .filter(|&v| v > 0.0)
+                    .map(|v| format!("{:.0} tok/s", v))
+                    .unwrap_or_else(|| "-".to_string());
+                let ttft = bench
+                    .ttft
+                    .filter(|&v| v > 0.0)
+                    .map(|v| format!("{:.1}s", v))
+                    .unwrap_or_else(|| "-".to_string());
+                detail_lines.push(Line::from(vec![
+                    Span::styled("Speed: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(format!("{:<11}", tps)),
+                    Span::styled("TTFT: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(ttft),
+                ]));
             } else {
                 detail_lines.push(Line::from(Span::styled(
-                    "No benchmark data available",
+                    "No benchmark scores available",
                     Style::default().fg(Color::DarkGray),
                 )));
             }
-        } // end is_text_model
+        } else {
+            detail_lines.push(Line::from(Span::styled(
+                "No benchmark data available",
+                Style::default().fg(Color::DarkGray),
+            )));
+        }
 
         detail_lines
     } else {

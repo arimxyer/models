@@ -64,6 +64,60 @@ static BRAND_TOKENS: LazyLock<HashSet<&str>> = LazyLock::new(|| {
     ])
 });
 
+/// Maps AA `creator` field to the brand tokens that creator owns.
+/// Used for authoritative cross-brand filtering in Tier 5 fuzzy matching.
+static CREATOR_BRANDS: LazyLock<HashMap<&str, &[&str]>> = LazyLock::new(|| {
+    HashMap::from([
+        ("openai", ["gpt", "o1", "o3", "o4"].as_slice()),
+        ("anthropic", &["claude"]),
+        ("google", &["gemini", "gemma"]),
+        ("meta", &["llama"]),
+        (
+            "mistral",
+            &[
+                "mistral",
+                "codestral",
+                "devstral",
+                "pixtral",
+                "magistral",
+                "ministral",
+                "mixtral",
+            ],
+        ),
+        ("alibaba", &["qwen"]),
+        ("xai", &["grok"]),
+        ("deepseek", &["deepseek"]),
+        ("microsoft", &["phi"]),
+        ("aws", &["nova", "titan"]),
+        ("cohere", &["command", "aya"]),
+        ("nvidia", &["nemotron"]),
+        ("ai21-labs", &["jamba"]),
+        ("databricks", &["dbrx"]),
+        ("tii-uae", &["falcon"]),
+        ("kimi", &["kimi"]),
+        ("xiaomi", &["mimo"]),
+        ("lg", &["exaone"]),
+        ("ibm", &["granite"]),
+        ("minimax", &["minimax"]),
+    ])
+});
+
+/// Tokens that indicate a non-LLM model (embeddings, code-gen, image-gen).
+/// If the query contains any of these and the AA entry does not, skip the match.
+/// Defense-in-depth for cases where modalities data is missing or incorrect.
+static NON_LLM_TOKENS: LazyLock<HashSet<&str>> = LazyLock::new(|| {
+    HashSet::from([
+        "embed",
+        "embedding",
+        "bge",
+        "e5",
+        "gte",
+        "nomic",
+        "rerank",
+        "reranker",
+    ])
+});
+
 /// Manual overrides for edge cases where algorithmic matching fails.
 /// Maps normalized model_id -> AA entry slug.
 static MANUAL_OVERRIDES: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
@@ -76,6 +130,8 @@ static MANUAL_OVERRIDES: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
 pub struct BenchmarkEntry {
     pub name: String,
     pub slug: String,
+    #[serde(default)]
+    pub creator: String,
     pub intelligence_index: Option<f64>,
     pub coding_index: Option<f64>,
     pub math_index: Option<f64>,
@@ -212,6 +268,19 @@ impl BenchmarkStore {
         }
     }
 
+    /// Find benchmark data for a text-output model. Returns `None` for non-text
+    /// models (image gen, video gen, embeddings) without attempting any matching.
+    pub fn find_for_text_model(
+        &self,
+        model_id: &str,
+        model: &crate::data::Model,
+    ) -> Option<&BenchmarkEntry> {
+        if !model.is_text_model() {
+            return None;
+        }
+        self.find_for_model(model_id, &model.name, model.reasoning)
+    }
+
     /// Find benchmark data for a model by matching against model ID and name.
     /// The `reasoning` flag (from models.dev) selects the appropriate AA variant
     /// when both reasoning and non-reasoning entries exist for the same model.
@@ -297,6 +366,14 @@ impl BenchmarkStore {
             .cloned()
             .collect();
 
+        // Early exit: if query contains non-LLM tokens, skip fuzzy matching entirely
+        if query_tokens
+            .iter()
+            .any(|t| NON_LLM_TOKENS.contains(t.as_str()))
+        {
+            return None;
+        }
+
         let query_norm: f64 = query_tokens
             .iter()
             .filter_map(|t| self.idf.get(t))
@@ -315,20 +392,24 @@ impl BenchmarkStore {
                 continue;
             }
 
-            // Brand-anchored filter: skip incompatible brands
-            if !brands_compatible(&query_tokens, aa_toks) {
+            // Creator-anchored filter: use structured AA creator data when available,
+            // fall back to heuristic brand token matching otherwise.
+            let entry_creator = &self.entries[idx].creator;
+            if !creator_compatible(&query_tokens, entry_creator, aa_toks) {
                 continue;
             }
 
-            // Require at least 2 shared tokens to avoid single-token false positives
-            // (e.g. "BGE Large" matching "Mistral Large" on just "large")
-            let shared: Vec<&String> = query_tokens.intersection(aa_toks).collect();
-            if shared.len() < 2 {
+            // Scaled shared-token minimum: require at least 2 shared tokens, or half
+            // the smaller set size, whichever is greater. Prevents sparse matches on
+            // long model names where 2 tokens is insufficient.
+            let shared_count = query_tokens.intersection(aa_toks).count();
+            let min_shared = 2.max(query_tokens.len().min(aa_toks.len()) / 2);
+            if shared_count < min_shared {
                 continue;
             }
 
-            let dot: f64 = shared
-                .iter()
+            let dot: f64 = query_tokens
+                .intersection(aa_toks)
                 .filter_map(|t| self.idf.get(t.as_str()))
                 .map(|w| w * w)
                 .sum();
@@ -458,21 +539,38 @@ fn fuzzy_tokenize(s: &str) -> HashSet<String> {
         .collect()
 }
 
-/// Returns true if two token sets are brand-compatible: either at least one
-/// brand token overlaps, or one/both sides have no brand tokens (allowing
-/// unknown models to match).
-fn brands_compatible(query: &HashSet<String>, entry: &HashSet<String>) -> bool {
+/// Returns true if a query is brand-compatible with an AA entry.
+/// Uses the structured `creator` field when available (authoritative),
+/// falling back to heuristic brand-token overlap otherwise.
+fn creator_compatible(
+    query: &HashSet<String>,
+    creator: &str,
+    entry_tokens: &HashSet<String>,
+) -> bool {
     let q_brands: HashSet<&str> = query
         .iter()
         .filter(|t| BRAND_TOKENS.contains(t.as_str()))
         .map(|s| s.as_str())
         .collect();
-    let e_brands: HashSet<&str> = entry
+
+    // If query has no recognized brand tokens, allow match (unknown model)
+    if q_brands.is_empty() {
+        return true;
+    }
+
+    // Prefer structured creator data when available
+    if let Some(creator_brand_list) = CREATOR_BRANDS.get(creator) {
+        // Query must contain at least one brand token owned by this creator
+        return q_brands.iter().any(|b| creator_brand_list.contains(b));
+    }
+
+    // Fallback: heuristic brand-token overlap (for creators not in CREATOR_BRANDS)
+    let e_brands: HashSet<&str> = entry_tokens
         .iter()
         .filter(|t| BRAND_TOKENS.contains(t.as_str()))
         .map(|s| s.as_str())
         .collect();
-    if q_brands.is_empty() || e_brands.is_empty() {
+    if e_brands.is_empty() {
         return true;
     }
     !q_brands.is_disjoint(&e_brands)
