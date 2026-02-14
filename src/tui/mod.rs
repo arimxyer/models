@@ -10,6 +10,7 @@ use tokio::sync::mpsc;
 
 pub mod agents_app;
 pub mod app;
+pub mod benchmarks_app;
 pub mod event;
 pub mod ui;
 
@@ -291,6 +292,24 @@ fn run_app(
                             app.set_status(format!("Copied: {}", entry.agent.name));
                             last_status_time = Some(std::time::Instant::now());
                         }
+                    }
+                }
+                app::Message::CopyBenchmarkName => {
+                    if let Some(entry) = app.benchmarks_app.current_entry(&app.benchmark_store) {
+                        copy_to_clipboard(entry.name.clone());
+                        app.set_status(format!("Copied: {}", entry.name));
+                        last_status_time = Some(std::time::Instant::now());
+                    }
+                }
+                app::Message::OpenBenchmarkUrl => {
+                    if let Some(entry) = app.benchmarks_app.current_entry(&app.benchmark_store) {
+                        let url = format!(
+                            "https://artificialanalysis.ai/leaderboards/models/{}",
+                            entry.slug
+                        );
+                        let _ = open::that_in_background(&url);
+                        app.set_status(format!("Opened: {}", url));
+                        last_status_time = Some(std::time::Instant::now());
                     }
                 }
                 app::Message::PickerSave => {

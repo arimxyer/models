@@ -186,6 +186,10 @@ pub struct BenchmarkStore {
 }
 
 impl BenchmarkStore {
+    pub fn entries(&self) -> &[BenchmarkEntry] {
+        &self.entries
+    }
+
     pub fn load() -> Self {
         let entries: Vec<BenchmarkEntry> =
             serde_json::from_str(BENCHMARKS_JSON).unwrap_or_default();
