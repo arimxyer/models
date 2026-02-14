@@ -669,16 +669,25 @@ fn fuzzy_tokenize(s: &str) -> HashSet<String> {
 /// Returns true if a query is brand-compatible with an AA entry.
 /// Uses the structured `creator` field when available (authoritative),
 /// falling back to heuristic brand-token overlap otherwise.
+/// Extract the brand prefix from a token if it starts with a known brand.
+/// e.g., "llama3" → Some("llama"), "qwen3" → Some("qwen"), "gpt4o" → Some("gpt")
+fn extract_brand(token: &str) -> Option<&'static str> {
+    BRAND_TOKENS
+        .iter()
+        .find(|&&brand| {
+            token.starts_with(brand)
+                && (token.len() == brand.len()
+                    || !token[brand.len()..].starts_with(|c: char| c.is_ascii_alphabetic()))
+        })
+        .copied()
+}
+
 fn creator_compatible(
     query: &HashSet<String>,
     creator: &str,
     entry_tokens: &HashSet<String>,
 ) -> bool {
-    let q_brands: HashSet<&str> = query
-        .iter()
-        .filter(|t| BRAND_TOKENS.contains(t.as_str()))
-        .map(|s| s.as_str())
-        .collect();
+    let q_brands: HashSet<&str> = query.iter().filter_map(|t| extract_brand(t)).collect();
 
     // If query has no recognized brand tokens, allow match (unknown model)
     if q_brands.is_empty() {
@@ -694,8 +703,7 @@ fn creator_compatible(
     // Fallback: heuristic brand-token overlap (for creators not in CREATOR_BRANDS)
     let e_brands: HashSet<&str> = entry_tokens
         .iter()
-        .filter(|t| BRAND_TOKENS.contains(t.as_str()))
-        .map(|s| s.as_str())
+        .filter_map(|t| extract_brand(t))
         .collect();
     if e_brands.is_empty() {
         return true;
