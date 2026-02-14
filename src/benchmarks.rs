@@ -1016,6 +1016,88 @@ mod tests {
             unmatched_with_scores
         );
         println!("Providers with unmatched: {}", providers_sorted.len());
+
+        // --- False negative analysis ---
+        // For each unmatched AA entry with scores, search for models.dev entries
+        // that likely refer to the same model but weren't connected.
+        println!(
+            "\n=== FALSE NEGATIVE ANALYSIS (unmatched AA with likely models.dev matches) ===\n"
+        );
+
+        let mut false_neg_count = 0;
+        for (_, aa_entry) in &unmatched_aa {
+            if !aa_entry.has_any_score() {
+                continue;
+            }
+            let aa_slug_norm = normalize(&aa_entry.slug);
+            let aa_name_norm = normalize(&aa_entry.name);
+            let aa_name_stripped = strip_qualifiers(&aa_entry.name);
+            let aa_slug_stripped = strip_qualifiers(&aa_entry.slug);
+
+            // Search all models.dev text models for potential matches
+            let mut candidates: Vec<(String, String, String, f64)> = Vec::new();
+            for (provider_id, provider) in &providers {
+                for (model_id, model) in &provider.models {
+                    if !model.is_text_model() {
+                        continue;
+                    }
+                    let id_norm = normalize(model_id);
+                    let name_norm = normalize(&model.name);
+                    let fam_norm = model.family.as_deref().map(normalize);
+
+                    // Check for partial overlaps that suggest these should match
+                    let mut score = 0.0;
+                    if id_norm.contains(&aa_slug_norm) || aa_slug_norm.contains(&id_norm) {
+                        score += 3.0;
+                    }
+                    if name_norm.contains(&aa_name_norm) || aa_name_norm.contains(&name_norm) {
+                        score += 2.0;
+                    }
+                    if let Some(ref fam) = fam_norm {
+                        if aa_slug_norm.contains(fam.as_str()) || fam.contains(&aa_slug_norm) {
+                            score += 1.5;
+                        }
+                    }
+                    // Stripped comparison
+                    let id_stripped = strip_qualifiers(model_id);
+                    let name_stripped = strip_qualifiers(&model.name);
+                    if id_stripped == aa_slug_stripped || name_stripped == aa_name_stripped {
+                        score += 4.0;
+                    }
+
+                    if score >= 1.5 {
+                        candidates.push((
+                            provider_id.clone(),
+                            model_id.clone(),
+                            model.name.clone(),
+                            score,
+                        ));
+                    }
+                }
+            }
+
+            if !candidates.is_empty() {
+                false_neg_count += 1;
+                candidates.sort_by(|a, b| b.3.partial_cmp(&a.3).unwrap());
+                println!(
+                    "AA: {} (slug={}, creator={}) — {} candidate(s)",
+                    aa_entry.name,
+                    aa_entry.slug,
+                    aa_entry.creator,
+                    candidates.len()
+                );
+                for c in candidates.iter().take(3) {
+                    println!("  -> {}/{} \"{}\" [relevance={:.1}]", c.0, c.1, c.2, c.3);
+                }
+                if candidates.len() > 3 {
+                    println!("  ... and {} more", candidates.len() - 3);
+                }
+            }
+        }
+        println!(
+            "\nFalse negatives found: {}/{} unmatched AA entries with scores have likely models.dev matches",
+            false_neg_count, unmatched_with_scores
+        );
     }
 
     /// Show how many matches come from each tier.
