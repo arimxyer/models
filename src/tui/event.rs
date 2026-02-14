@@ -61,6 +61,7 @@ fn handle_normal_mode(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Opti
     match app.current_tab {
         super::app::Tab::Models => handle_models_keys(app, code, modifiers),
         super::app::Tab::Agents => handle_agents_keys(app, code, modifiers),
+        super::app::Tab::Benchmarks => handle_benchmarks_keys(app, code, modifiers),
     }
 }
 
@@ -204,6 +205,75 @@ fn handle_agents_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Opti
 
         // Sort
         KeyCode::Char('s') => Some(Message::CycleAgentSort),
+
+        _ => None,
+    }
+}
+
+fn handle_benchmarks_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Option<Message> {
+    use super::benchmarks_app::BenchmarkFocus;
+
+    let focus = app.benchmarks_app.focus;
+
+    match code {
+        // Navigation
+        KeyCode::Char('j') | KeyCode::Down => {
+            if focus == BenchmarkFocus::List {
+                Some(Message::NextBenchmark)
+            } else {
+                Some(Message::ScrollBenchmarkDetailDown)
+            }
+        }
+        KeyCode::Char('k') | KeyCode::Up => {
+            if focus == BenchmarkFocus::List {
+                Some(Message::PrevBenchmark)
+            } else {
+                Some(Message::ScrollBenchmarkDetailUp)
+            }
+        }
+        KeyCode::Char('d') if modifiers.contains(KeyModifiers::CONTROL) => {
+            if focus == BenchmarkFocus::List {
+                Some(Message::PageDownBenchmark)
+            } else {
+                Some(Message::PageScrollBenchmarkDetailDown)
+            }
+        }
+        KeyCode::Char('u') if modifiers.contains(KeyModifiers::CONTROL) => {
+            if focus == BenchmarkFocus::List {
+                Some(Message::PageUpBenchmark)
+            } else {
+                Some(Message::PageScrollBenchmarkDetailUp)
+            }
+        }
+        KeyCode::PageDown => {
+            if focus == BenchmarkFocus::List {
+                Some(Message::PageDownBenchmark)
+            } else {
+                Some(Message::PageScrollBenchmarkDetailDown)
+            }
+        }
+        KeyCode::PageUp => {
+            if focus == BenchmarkFocus::List {
+                Some(Message::PageUpBenchmark)
+            } else {
+                Some(Message::PageScrollBenchmarkDetailUp)
+            }
+        }
+        KeyCode::Char('h') | KeyCode::Left => Some(Message::SwitchBenchmarkFocus),
+        KeyCode::Char('l') | KeyCode::Right => Some(Message::SwitchBenchmarkFocus),
+        KeyCode::Tab | KeyCode::BackTab => Some(Message::SwitchBenchmarkFocus),
+
+        // Sort
+        KeyCode::Char('s') => Some(Message::CycleBenchmarkSort),
+        KeyCode::Char('S') => Some(Message::ToggleBenchmarkSortDir),
+
+        // Actions
+        KeyCode::Char('c') => Some(Message::CopyBenchmarkName),
+        KeyCode::Char('o') => Some(Message::OpenBenchmarkUrl),
+
+        // Search
+        KeyCode::Char('/') => Some(Message::EnterSearch),
+        KeyCode::Esc => Some(Message::ClearSearch),
 
         _ => None,
     }

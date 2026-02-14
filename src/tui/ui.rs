@@ -13,7 +13,7 @@ use crate::provider_category::{provider_category, ProviderCategory};
 pub fn draw(f: &mut Frame, app: &mut App) {
     let (main_constraint, detail_constraint) = match app.current_tab {
         Tab::Models => (Constraint::Min(0), Constraint::Length(25)),
-        Tab::Agents => (Constraint::Min(0), Constraint::Length(0)), // No bottom detail for Agents
+        Tab::Agents | Tab::Benchmarks => (Constraint::Min(0), Constraint::Length(0)),
     };
 
     let chunks = Layout::default()
@@ -36,6 +36,9 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         Tab::Agents => {
             draw_agents_main(f, chunks[1], app);
         }
+        Tab::Benchmarks => {
+            draw_benchmarks_main(f, chunks[1], app);
+        }
     }
 
     draw_footer(f, chunks[3], app);
@@ -56,27 +59,23 @@ pub fn draw(f: &mut Frame, app: &mut App) {
 }
 
 fn draw_header(f: &mut Frame, area: Rect, app: &App) {
-    let models_style = if app.current_tab == Tab::Models {
-        Style::default()
-            .fg(Color::Cyan)
-            .add_modifier(Modifier::BOLD)
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
-
-    let agents_style = if app.current_tab == Tab::Agents {
-        Style::default()
-            .fg(Color::Cyan)
-            .add_modifier(Modifier::BOLD)
-    } else {
-        Style::default().fg(Color::DarkGray)
+    let tab_style = |tab: Tab| {
+        if app.current_tab == tab {
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::DarkGray)
+        }
     };
 
     let header = Paragraph::new(Line::from(vec![
         Span::raw(" "),
-        Span::styled("Models", models_style),
+        Span::styled("Models", tab_style(Tab::Models)),
         Span::raw(" | "),
-        Span::styled("Agents", agents_style),
+        Span::styled("Agents", tab_style(Tab::Agents)),
+        Span::raw(" | "),
+        Span::styled("Benchmarks", tab_style(Tab::Benchmarks)),
         Span::styled("  [/] switch tabs", Style::default().fg(Color::DarkGray)),
     ]));
     f.render_widget(header, area);
@@ -1066,6 +1065,245 @@ fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
     f.render_widget(paragraph, area);
 }
 
+fn draw_benchmarks_main(f: &mut Frame, area: Rect, app: &mut App) {
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(65), Constraint::Percentage(35)])
+        .split(area);
+
+    draw_benchmark_list(f, chunks[0], app);
+    draw_benchmark_detail(f, chunks[1], app);
+}
+
+fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
+    use super::benchmarks_app::BenchmarkFocus;
+
+    let bench_app = &mut app.benchmarks_app;
+    let store = &app.benchmark_store;
+
+    let is_focused = bench_app.focus == BenchmarkFocus::List;
+    let border_style = if is_focused {
+        Style::default().fg(Color::Cyan)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+
+    let sort_dir = if bench_app.sort_descending {
+        "\u{2193}"
+    } else {
+        "\u{2191}"
+    };
+    let sort_indicator = format!(" {}{}", sort_dir, bench_app.sort_column.label());
+
+    let title = if bench_app.search_query.is_empty() {
+        format!(
+            " Benchmarks ({}){} ",
+            bench_app.filtered_indices.len(),
+            sort_indicator
+        )
+    } else {
+        format!(
+            " Benchmarks ({}) [/{}]{} ",
+            bench_app.filtered_indices.len(),
+            bench_app.search_query,
+            sort_indicator
+        )
+    };
+
+    let outer_block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(border_style)
+        .title(title);
+    let inner_area = outer_block.inner(area);
+    f.render_widget(outer_block, area);
+
+    // Header row + data rows
+    let header_style = Style::default()
+        .fg(Color::Yellow)
+        .add_modifier(Modifier::BOLD);
+
+    let header = ListItem::new(Line::from(vec![
+        Span::styled(format!("{:<28}", "Name"), header_style),
+        Span::styled(format!("{:>6}", "Intel"), header_style),
+        Span::styled(format!("{:>6}", "Code"), header_style),
+        Span::styled(format!("{:>6}", "Math"), header_style),
+        Span::styled(format!("{:>6}", "GPQA"), header_style),
+        Span::styled(format!("{:>6}", "MMLU"), header_style),
+        Span::styled(format!("{:>6}", "HLE"), header_style),
+        Span::styled(format!("{:>7}", "Tok/s"), header_style),
+    ]));
+
+    let entries = store.entries();
+    let mut items: Vec<ListItem> = vec![header];
+
+    for (display_idx, &entry_idx) in bench_app.filtered_indices.iter().enumerate() {
+        let entry = &entries[entry_idx];
+        let is_selected = display_idx == bench_app.selected;
+
+        let name = truncate(&entry.name, 27);
+        let style = if is_selected {
+            Style::default()
+                .bg(Color::DarkGray)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default()
+        };
+
+        let row = ListItem::new(Line::from(vec![
+            Span::styled(format!("{:<28}", name), style),
+            Span::styled(fmt_score(entry.intelligence_index), style),
+            Span::styled(fmt_score(entry.coding_index), style),
+            Span::styled(fmt_score(entry.math_index), style),
+            Span::styled(fmt_score(entry.gpqa), style),
+            Span::styled(fmt_score(entry.mmlu_pro), style),
+            Span::styled(fmt_score(entry.hle), style),
+            Span::styled(fmt_speed(entry.output_tps), style),
+        ]));
+        items.push(row);
+    }
+
+    let list = List::new(items);
+    let mut state = bench_app.list_state.clone();
+    // Offset by 1 for the header row
+    state.select(Some(bench_app.selected + 1));
+    f.render_stateful_widget(list, inner_area, &mut state);
+}
+
+fn draw_benchmark_detail(f: &mut Frame, area: Rect, app: &App) {
+    use super::benchmarks_app::BenchmarkFocus;
+
+    let bench_app = &app.benchmarks_app;
+    let store = &app.benchmark_store;
+
+    let is_focused = bench_app.focus == BenchmarkFocus::Details;
+    let border_style = if is_focused {
+        Style::default().fg(Color::Cyan)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(border_style)
+        .title(" Details ");
+
+    let entry = match bench_app.current_entry(store) {
+        Some(e) => e,
+        None => {
+            let msg = Paragraph::new("No benchmark selected").block(block);
+            f.render_widget(msg, area);
+            return;
+        }
+    };
+
+    let mut lines: Vec<Line> = Vec::new();
+
+    // Name and metadata
+    lines.push(Line::from(Span::styled(
+        &entry.name,
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD),
+    )));
+    if !entry.slug.is_empty() {
+        lines.push(Line::from(vec![
+            Span::styled("Slug: ", Style::default().fg(Color::DarkGray)),
+            Span::raw(&entry.slug),
+        ]));
+    }
+    if !entry.creator.is_empty() {
+        lines.push(Line::from(vec![
+            Span::styled("Creator: ", Style::default().fg(Color::DarkGray)),
+            Span::raw(&entry.creator),
+        ]));
+    }
+
+    // Composite Indexes
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "\u{2500}\u{2500}\u{2500} Composite Indexes \u{2500}\u{2500}\u{2500}",
+        Style::default().fg(Color::DarkGray),
+    )));
+    push_score_line(&mut lines, "Intelligence", entry.intelligence_index);
+    push_score_line(&mut lines, "Coding", entry.coding_index);
+    push_score_line(&mut lines, "Math", entry.math_index);
+
+    // Benchmark Scores
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "\u{2500}\u{2500}\u{2500} Benchmark Scores \u{2500}\u{2500}\u{2500}",
+        Style::default().fg(Color::DarkGray),
+    )));
+    push_score_line(&mut lines, "GPQA Diamond", entry.gpqa);
+    push_score_line(&mut lines, "MMLU-Pro", entry.mmlu_pro);
+    push_score_line(&mut lines, "HLE", entry.hle);
+    push_score_line(&mut lines, "LiveCodeBench", entry.livecodebench);
+    push_score_line(&mut lines, "SciCode", entry.scicode);
+    push_score_line(&mut lines, "IFBench", entry.ifbench);
+    push_score_line(&mut lines, "LCR", entry.lcr);
+    push_score_line(&mut lines, "TerminalBench", entry.terminalbench_hard);
+    push_score_line(&mut lines, "Tau2", entry.tau2);
+
+    // Performance
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "\u{2500}\u{2500}\u{2500} Performance \u{2500}\u{2500}\u{2500}",
+        Style::default().fg(Color::DarkGray),
+    )));
+    push_score_line(&mut lines, "Speed (tok/s)", entry.output_tps);
+    push_score_line(&mut lines, "TTFT (ms)", entry.ttft);
+
+    // Keybinding hints
+    lines.push(Line::from(""));
+    lines.push(Line::from(vec![
+        Span::styled("c ", Style::default().fg(Color::Yellow)),
+        Span::styled("copy name  ", Style::default().fg(Color::DarkGray)),
+        Span::styled("o ", Style::default().fg(Color::Yellow)),
+        Span::styled("open AA page", Style::default().fg(Color::DarkGray)),
+    ]));
+
+    let visible_height = detail_visible_height(area);
+    let content_lines = lines.len() as u16;
+    let max_scroll = content_lines.saturating_sub(visible_height);
+    let scroll_pos = bench_app.detail_scroll.min(max_scroll);
+
+    let paragraph = Paragraph::new(lines)
+        .block(block)
+        .wrap(Wrap { trim: false })
+        .scroll((scroll_pos, 0));
+    f.render_widget(paragraph, area);
+}
+
+fn push_score_line(lines: &mut Vec<Line>, label: &str, value: Option<f64>) {
+    let val_str = match value {
+        Some(v) => format!("{:.1}", v),
+        None => "\u{2014}".to_string(), // em dash
+    };
+    let val_color = if value.is_some() {
+        Color::White
+    } else {
+        Color::DarkGray
+    };
+    lines.push(Line::from(vec![
+        Span::styled(format!("  {:<16}", label), Style::default().fg(Color::Gray)),
+        Span::styled(val_str, Style::default().fg(val_color)),
+    ]));
+}
+
+fn fmt_score(value: Option<f64>) -> String {
+    match value {
+        Some(v) => format!("{:>6.1}", v),
+        None => format!("{:>6}", "\u{2014}"),
+    }
+}
+
+fn fmt_speed(value: Option<f64>) -> String {
+    match value {
+        Some(v) => format!("{:>7.0}", v),
+        None => format!("{:>7}", "\u{2014}"),
+    }
+}
+
 fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
     // If there's a status message, show it instead of normal footer
     if let Some(status) = &app.status_message {
@@ -1117,6 +1355,20 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
                     Span::styled(" r ", Style::default().fg(Color::Yellow)),
                     Span::raw("repo"),
                 ]),
+                Tab::Benchmarks => Line::from(vec![
+                    Span::styled(" q ", Style::default().fg(Color::Yellow)),
+                    Span::raw("quit  "),
+                    Span::styled(" / ", Style::default().fg(Color::Yellow)),
+                    Span::raw("search  "),
+                    Span::styled(" s ", Style::default().fg(Color::Yellow)),
+                    Span::raw("sort  "),
+                    Span::styled(" S ", Style::default().fg(Color::Yellow)),
+                    Span::raw("dir  "),
+                    Span::styled(" c ", Style::default().fg(Color::Yellow)),
+                    Span::raw("copy  "),
+                    Span::styled(" o ", Style::default().fg(Color::Yellow)),
+                    Span::raw("open AA"),
+                ]),
             };
 
             let right_content = Line::from(vec![
@@ -1139,6 +1391,7 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
                     .as_ref()
                     .map(|a| &a.search_query)
                     .unwrap_or(&app.search_query),
+                Tab::Benchmarks => &app.benchmarks_app.search_query,
             };
             let content = Line::from(vec![
                 Span::styled(" Search: ", Style::default().fg(Color::Cyan)),
@@ -1396,6 +1649,40 @@ fn draw_help_popup(f: &mut Frame, scroll: u16, current_tab: Tab) {
                 Line::from(""),
             ]);
         }
+        Tab::Benchmarks => {
+            help_text.extend(vec![
+                Line::from(Span::styled(
+                    "Sort",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                )),
+                Line::from(vec![
+                    Span::styled("  s             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Cycle sort column"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  S             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Toggle sort direction"),
+                ]),
+                Line::from(""),
+                Line::from(Span::styled(
+                    "Actions",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                )),
+                Line::from(vec![
+                    Span::styled("  c             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Copy benchmark name"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  o             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Open Artificial Analysis page"),
+                ]),
+                Line::from(""),
+            ]);
+        }
     }
 
     // Common: Tabs and Other
@@ -1434,6 +1721,7 @@ fn draw_help_popup(f: &mut Frame, scroll: u16, current_tab: Tab) {
     let title = match current_tab {
         Tab::Models => " Models Help - ? or Esc to close (j/k to scroll) ",
         Tab::Agents => " Agents Help - ? or Esc to close (j/k to scroll) ",
+        Tab::Benchmarks => " Benchmarks Help - ? or Esc to close (j/k to scroll) ",
     };
 
     let block = Block::default()
