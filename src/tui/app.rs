@@ -1,6 +1,7 @@
 use ratatui::widgets::ListState;
 
 use super::agents_app::AgentsApp;
+use super::benchmarks_app::BenchmarksApp;
 
 /// Page size for page up/down navigation
 const PAGE_SIZE: usize = 10;
@@ -47,18 +48,24 @@ pub enum Tab {
     #[default]
     Models,
     Agents,
+    Benchmarks,
 }
 
 impl Tab {
     pub fn next(self) -> Self {
         match self {
             Tab::Models => Tab::Agents,
-            Tab::Agents => Tab::Models,
+            Tab::Agents => Tab::Benchmarks,
+            Tab::Benchmarks => Tab::Models,
         }
     }
 
     pub fn prev(self) -> Self {
-        self.next() // Only two tabs, so prev == next
+        match self {
+            Tab::Models => Tab::Benchmarks,
+            Tab::Agents => Tab::Models,
+            Tab::Benchmarks => Tab::Agents,
+        }
     }
 }
 
@@ -140,6 +147,20 @@ pub enum Message {
     // Provider categories
     CycleProviderCategory,
     ToggleGrouping,
+    // Benchmarks tab messages
+    NextBenchmark,
+    PrevBenchmark,
+    PageDownBenchmark,
+    PageUpBenchmark,
+    SwitchBenchmarkFocus,
+    CycleBenchmarkSort,
+    ToggleBenchmarkSortDir,
+    CopyBenchmarkName,
+    OpenBenchmarkUrl,
+    ScrollBenchmarkDetailUp,
+    ScrollBenchmarkDetailDown,
+    PageScrollBenchmarkDetailUp,
+    PageScrollBenchmarkDetailDown,
     // Async data messages
     GitHubDataReceived(String, GitHubData),
     GitHubFetchFailed(String, String), // (agent_id, error_message)
@@ -177,6 +198,7 @@ pub struct App {
     pub group_by_category: bool,
     pub provider_list_items: Vec<ProviderListItem>,
     pub benchmark_store: BenchmarkStore,
+    pub benchmarks_app: BenchmarksApp,
 }
 
 impl App {
@@ -196,6 +218,7 @@ impl App {
 
         let config = config.unwrap_or_default();
         let agents_app = agents_file.map(|af| AgentsApp::new(af, &config));
+        let benchmarks_app = BenchmarksApp::new(&benchmark_store);
 
         let mut app = Self {
             providers,
@@ -220,6 +243,7 @@ impl App {
             group_by_category: false,
             provider_list_items: Vec::new(),
             benchmark_store,
+            benchmarks_app,
         };
 
         app.update_provider_list();
@@ -452,6 +476,11 @@ impl App {
                             agents_app.update_filtered();
                         }
                     }
+                    Tab::Benchmarks => {
+                        self.benchmarks_app.search_query.push(c);
+                        self.benchmarks_app.selected = 0;
+                        self.benchmarks_app.update_filtered(&self.benchmark_store);
+                    }
                 }
             }
             Message::SearchBackspace => {
@@ -470,6 +499,11 @@ impl App {
                             agents_app.update_filtered();
                         }
                     }
+                    Tab::Benchmarks => {
+                        self.benchmarks_app.search_query.pop();
+                        self.benchmarks_app.selected = 0;
+                        self.benchmarks_app.update_filtered(&self.benchmark_store);
+                    }
                 }
             }
             Message::ClearSearch => {
@@ -487,6 +521,11 @@ impl App {
                             agents_app.selected_agent = 0;
                             agents_app.update_filtered();
                         }
+                    }
+                    Tab::Benchmarks => {
+                        self.benchmarks_app.search_query.clear();
+                        self.benchmarks_app.selected = 0;
+                        self.benchmarks_app.update_filtered(&self.benchmark_store);
                     }
                 }
             }
@@ -678,6 +717,52 @@ impl App {
                 self.selected_model = 0;
                 self.update_filtered_models();
                 self.model_list_state.select(Some(self.selected_model + 1));
+            }
+            // Benchmarks tab messages
+            Message::NextBenchmark => {
+                self.benchmarks_app.next();
+            }
+            Message::PrevBenchmark => {
+                self.benchmarks_app.prev();
+            }
+            Message::PageDownBenchmark => {
+                self.benchmarks_app.page_down();
+            }
+            Message::PageUpBenchmark => {
+                self.benchmarks_app.page_up();
+            }
+            Message::SwitchBenchmarkFocus => {
+                self.benchmarks_app.switch_focus();
+            }
+            Message::CycleBenchmarkSort => {
+                self.benchmarks_app.cycle_sort(&self.benchmark_store);
+            }
+            Message::ToggleBenchmarkSortDir => {
+                self.benchmarks_app
+                    .toggle_sort_direction(&self.benchmark_store);
+            }
+            Message::CopyBenchmarkName | Message::OpenBenchmarkUrl => {
+                // Handled in main loop
+            }
+            Message::ScrollBenchmarkDetailUp => {
+                self.benchmarks_app.detail_scroll =
+                    self.benchmarks_app.detail_scroll.saturating_sub(1);
+            }
+            Message::ScrollBenchmarkDetailDown => {
+                self.benchmarks_app.detail_scroll =
+                    self.benchmarks_app.detail_scroll.saturating_add(1);
+            }
+            Message::PageScrollBenchmarkDetailUp => {
+                self.benchmarks_app.detail_scroll = self
+                    .benchmarks_app
+                    .detail_scroll
+                    .saturating_sub(PAGE_SIZE as u16);
+            }
+            Message::PageScrollBenchmarkDetailDown => {
+                self.benchmarks_app.detail_scroll = self
+                    .benchmarks_app
+                    .detail_scroll
+                    .saturating_add(PAGE_SIZE as u16);
             }
             Message::GitHubDataReceived(agent_id, data) => {
                 if let Some(ref mut agents_app) = self.agents_app {
