@@ -29,3 +29,56 @@ run = "cargo test"
 [tasks.run]
 description = "Run the TUI application"
 run = "cargo run -- tui"
+
+[tasks.refresh-benchmarks]
+description = "Fetch latest benchmark data from Artificial Analysis API"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ ! -f .env ]; then
+  echo "Error: .env file not found. Create one with AA_API_KEY=your_key"
+  exit 1
+fi
+
+source .env
+
+if [ -z "${AA_API_KEY:-}" ]; then
+  echo "Error: AA_API_KEY not set in .env"
+  exit 1
+fi
+
+echo "Fetching from Artificial Analysis API..."
+xh GET https://artificialanalysis.ai/api/v2/data/llms/models X-API-Key:"$AA_API_KEY" \
+  | jq '[.data[] | {
+    name: .name,
+    slug: .slug,
+    creator: .model_creator.slug,
+    creator_name: .model_creator.name,
+    release_date: .release_date,
+    intelligence_index: .evaluations.artificial_analysis_intelligence_index,
+    coding_index: .evaluations.artificial_analysis_coding_index,
+    math_index: .evaluations.artificial_analysis_math_index,
+    mmlu_pro: .evaluations.mmlu_pro,
+    gpqa: .evaluations.gpqa,
+    hle: .evaluations.hle,
+    livecodebench: .evaluations.livecodebench,
+    scicode: .evaluations.scicode,
+    ifbench: .evaluations.ifbench,
+    lcr: .evaluations.lcr,
+    terminalbench_hard: .evaluations.terminalbench_hard,
+    tau2: .evaluations.tau2,
+    math_500: .evaluations.math_500,
+    aime_25: .evaluations.aime_25,
+    output_tps: .median_output_tokens_per_second,
+    ttft: .median_time_to_first_token_seconds,
+    price_input: .pricing.price_1m_input_tokens,
+    price_output: .pricing.price_1m_output_tokens,
+    price_blended: .pricing.price_1m_blended_3_to_1
+  }]' > data/benchmarks.json
+
+echo "Updated data/benchmarks.json ($(jq length data/benchmarks.json) entries)"
+"""
+
+[tools]
+xh = "latest"

@@ -1021,7 +1021,17 @@ fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
                     Span::raw(fmt_pct(bench.tau2)),
                 ]));
 
-                // Row 6: Performance metrics
+                // Row 6: Additional math benchmarks
+                if bench.math_500.is_some() || bench.aime_25.is_some() {
+                    detail_lines.push(Line::from(vec![
+                        Span::styled("MATH-500: ", Style::default().fg(Color::DarkGray)),
+                        Span::raw(format!("{:<8}", fmt_pct(bench.math_500))),
+                        Span::styled("AIME'25: ", Style::default().fg(Color::DarkGray)),
+                        Span::raw(fmt_pct(bench.aime_25)),
+                    ]));
+                }
+
+                // Row 7: Performance metrics
                 let tps = bench
                     .output_tps
                     .filter(|&v| v > 0.0)
@@ -1038,6 +1048,41 @@ fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
                     Span::styled("TTFT: ", Style::default().fg(Color::DarkGray)),
                     Span::raw(ttft),
                 ]));
+
+                // Row 8: Pricing
+                if bench.price_blended.is_some() {
+                    let fmt_price = |v: Option<f64>| {
+                        v.map(|p| format!("${:.3}", p))
+                            .unwrap_or_else(|| "-".to_string())
+                    };
+                    detail_lines.push(Line::from(vec![
+                        Span::styled("Input: ", Style::default().fg(Color::DarkGray)),
+                        Span::raw(format!("{:<10}", fmt_price(bench.price_input))),
+                        Span::styled("Output: ", Style::default().fg(Color::DarkGray)),
+                        Span::raw(format!("{:<10}", fmt_price(bench.price_output))),
+                    ]));
+                    detail_lines.push(Line::from(vec![
+                        Span::styled("Blended: ", Style::default().fg(Color::DarkGray)),
+                        Span::raw(format!("{}/M tokens", fmt_price(bench.price_blended))),
+                    ]));
+                }
+
+                // Row 9: Source info (creator, release date)
+                let mut source_spans = vec![
+                    Span::styled("Source: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(if bench.creator_name.is_empty() {
+                        bench.creator.clone()
+                    } else {
+                        bench.creator_name.clone()
+                    }),
+                ];
+                if let Some(ref date) = bench.release_date {
+                    source_spans.push(Span::styled(
+                        format!("  Released: {}", date),
+                        Style::default().fg(Color::DarkGray),
+                    ));
+                }
+                detail_lines.push(Line::from(source_spans));
             } else {
                 detail_lines.push(Line::from(Span::styled(
                     "No benchmark scores available",

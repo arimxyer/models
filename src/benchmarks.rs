@@ -132,6 +132,10 @@ pub struct BenchmarkEntry {
     pub slug: String,
     #[serde(default)]
     pub creator: String,
+    #[serde(default)]
+    pub creator_name: String,
+    #[serde(default)]
+    pub release_date: Option<String>,
     pub intelligence_index: Option<f64>,
     pub coding_index: Option<f64>,
     pub math_index: Option<f64>,
@@ -144,8 +148,13 @@ pub struct BenchmarkEntry {
     pub lcr: Option<f64>,
     pub terminalbench_hard: Option<f64>,
     pub tau2: Option<f64>,
+    pub math_500: Option<f64>,
+    pub aime_25: Option<f64>,
     pub output_tps: Option<f64>,
     pub ttft: Option<f64>,
+    pub price_input: Option<f64>,
+    pub price_output: Option<f64>,
+    pub price_blended: Option<f64>,
 }
 
 impl BenchmarkEntry {

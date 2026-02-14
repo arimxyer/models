@@ -2,3 +2,4 @@
 .worktrees/
 docs/plans/
 .claude/
+.env
