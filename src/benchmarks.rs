@@ -122,7 +122,12 @@ static NON_LLM_TOKENS: LazyLock<HashSet<&str>> = LazyLock::new(|| {
 /// Maps normalized model_id -> AA entry slug.
 static MANUAL_OVERRIDES: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
     HashMap::from([
-        // Example: ("some-edge-case-id", "correct-aa-slug"),
+        // Keys are normalized (lowercase, separators stripped) since the
+        // lookup normalizes model_id before checking.
+        //
+        // DeepSeek's reasoning model is "DeepSeek Reasoner" on many
+        // providers but AA tracks it under the R1 branding.
+        ("deepseekreasoner", "deepseek-r1"),
     ])
 });
 
@@ -291,24 +296,35 @@ impl BenchmarkStore {
         if !model.is_text_model() {
             return None;
         }
-        self.find_for_model(model_id, &model.name, model.reasoning)
+        self.find_for_model(
+            model_id,
+            &model.name,
+            model.reasoning,
+            model.family.as_deref(),
+            model.release_date.as_deref(),
+        )
     }
 
-    /// Find benchmark data for a model by matching against model ID and name.
-    /// The `reasoning` flag (from models.dev) selects the appropriate AA variant
-    /// when both reasoning and non-reasoning entries exist for the same model.
+    /// Find benchmark data for a model by matching against model ID, name, and
+    /// optional family/release_date fields from models.dev.
+    /// The `reasoning` flag selects the appropriate AA variant when both reasoning
+    /// and non-reasoning entries exist for the same model.
     pub fn find_for_model(
         &self,
         model_id: &str,
         model_name: &str,
         reasoning: bool,
+        family: Option<&str>,
+        release_date: Option<&str>,
     ) -> Option<&BenchmarkEntry> {
         // Tier 0: Manual overrides (checked first, for known edge cases)
-        if let Some(&slug) = MANUAL_OVERRIDES.get(model_id) {
+        // Normalize the lookup key so casing/separator variants all hit.
+        let normalized_override_key = normalize(model_id);
+        if let Some(&slug) = MANUAL_OVERRIDES.get(normalized_override_key.as_str()) {
             let key = normalize(slug);
             if let Some(indices) = self.by_slug.get(&key) {
                 if indices.len() > 1 {
-                    return self.pick_variant(indices, reasoning);
+                    return self.pick_variant(indices, reasoning, release_date);
                 }
                 return Some(&self.entries[indices[0]]);
             }
@@ -321,28 +337,46 @@ impl BenchmarkStore {
         let sorted_name = sorted_tokens(model_name);
         let sorted_id = sorted_tokens(model_id);
 
+        // Normalize family for slug/name lookups (family is a canonical model
+        // grouping like "claude-3.5-sonnet" that often matches AA slugs directly)
+        let normalized_family = family.map(normalize);
+        let stripped_family = family.map(strip_qualifiers);
+        let sorted_family = family.map(sorted_tokens);
+
         // Search keys in priority order, paired with their index map.
         // When a tier has multiple candidates, pick_variant selects the right one.
         // When a tier has a single candidate whose reasoning flag doesn't match,
         // save it as fallback and keep searching — a lower tier may group both
         // reasoning variants under the same key and select correctly.
-        let searches: &[(&HashMap<String, Vec<usize>>, &str)] = &[
-            (&self.by_slug, &normalized_id),
-            (&self.by_name, &normalized_name),
-            (&self.by_name, &normalized_id),
-            (&self.by_stripped, &stripped_name),
-            (&self.by_stripped, &stripped_id),
-            (&self.by_sorted, &sorted_name),
-            (&self.by_sorted, &sorted_id),
-        ];
+        let mut searches: Vec<(&HashMap<String, Vec<usize>>, &str)> =
+            vec![(&self.by_slug, &normalized_id)];
+        // Family-based slug lookup (family often matches AA slugs directly)
+        if let Some(ref fam) = normalized_family {
+            searches.push((&self.by_slug, fam));
+        }
+        searches.push((&self.by_name, &normalized_name));
+        searches.push((&self.by_name, &normalized_id));
+        if let Some(ref fam) = normalized_family {
+            searches.push((&self.by_name, fam));
+        }
+        searches.push((&self.by_stripped, &stripped_name));
+        searches.push((&self.by_stripped, &stripped_id));
+        if let Some(ref fam) = stripped_family {
+            searches.push((&self.by_stripped, fam));
+        }
+        searches.push((&self.by_sorted, &sorted_name));
+        searches.push((&self.by_sorted, &sorted_id));
+        if let Some(ref fam) = sorted_family {
+            searches.push((&self.by_sorted, fam));
+        }
 
         let mut fallback: Option<&BenchmarkEntry> = None;
 
-        for (index, key) in searches {
+        for (index, key) in &searches {
             if let Some(indices) = index.get(*key) {
                 if indices.len() > 1 {
-                    // Multiple candidates — pick_variant handles reasoning selection
-                    return self.pick_variant(indices, reasoning);
+                    // Multiple candidates — pick_variant handles reasoning + date selection
+                    return self.pick_variant(indices, reasoning, release_date);
                 }
                 // Single candidate
                 let entry = &self.entries[indices[0]];
@@ -373,6 +407,10 @@ impl BenchmarkStore {
         reasoning: bool,
     ) -> Option<&BenchmarkEntry> {
         const THRESHOLD: f64 = 0.65;
+        /// Minimum gap between top-1 and top-2 cosine scores to accept a match.
+        /// Prevents false positives in dense neighborhoods where multiple candidates
+        /// score similarly (ambiguity gating).
+        const MIN_GAP: f64 = 0.0;
 
         let query_tokens: HashSet<String> = fuzzy_tokenize(model_id)
             .union(&fuzzy_tokenize(model_name))
@@ -398,7 +436,9 @@ impl BenchmarkStore {
             return None;
         }
 
+        // Track top-1 and top-2 for ambiguity gating
         let mut best: Option<(f64, usize)> = None;
+        let mut second_best: Option<(f64, usize)> = None;
 
         for (idx, aa_toks) in self.aa_tokens.iter().enumerate() {
             if self.aa_norms[idx] == 0.0 {
@@ -431,7 +471,10 @@ impl BenchmarkStore {
             if cos >= THRESHOLD {
                 if let Some((best_score, _)) = best {
                     if cos > best_score {
+                        second_best = best;
                         best = Some((cos, idx));
+                    } else if second_best.is_none_or(|(s, _)| cos > s) {
+                        second_best = Some((cos, idx));
                     }
                 } else {
                     best = Some((cos, idx));
@@ -439,7 +482,22 @@ impl BenchmarkStore {
             }
         }
 
-        let (_, best_idx) = best?;
+        let (best_score, best_idx) = best?;
+
+        // Ambiguity gating: reject when top-2 is too close to top-1, UNLESS
+        // they are variants of the same model (same stripped name). Sibling
+        // variants like "GPT-4o" and "GPT-4o (Reasoning)" naturally score
+        // close but pick_variant resolves them correctly.
+        if let Some((second_score, second_idx)) = second_best {
+            let gap = best_score - second_score;
+            if gap < MIN_GAP {
+                let best_stripped = strip_qualifiers(&self.entries[best_idx].name);
+                let second_stripped = strip_qualifiers(&self.entries[second_idx].name);
+                if best_stripped != second_stripped {
+                    return None;
+                }
+            }
+        }
         let entry = &self.entries[best_idx];
 
         // If the best match's reasoning flag matches, return it directly.
@@ -452,7 +510,7 @@ impl BenchmarkStore {
         let stripped = strip_qualifiers(&entry.name);
         if let Some(indices) = self.by_stripped.get(&stripped) {
             if indices.len() > 1 {
-                return self.pick_variant(indices, reasoning);
+                return self.pick_variant(indices, reasoning, None);
             }
         }
 
@@ -460,30 +518,86 @@ impl BenchmarkStore {
     }
 
     /// From a set of candidate entry indices, pick the best variant based on the
-    /// `reasoning` flag from models.dev.
-    fn pick_variant(&self, indices: &[usize], reasoning: bool) -> Option<&BenchmarkEntry> {
+    /// `reasoning` flag and optional `release_date` from models.dev.
+    /// When multiple candidates match reasoning, prefer the one with the closest
+    /// release date.
+    fn pick_variant(
+        &self,
+        indices: &[usize],
+        reasoning: bool,
+        release_date: Option<&str>,
+    ) -> Option<&BenchmarkEntry> {
         if indices.len() == 1 {
             return Some(&self.entries[indices[0]]);
         }
 
-        // Try to match the reasoning preference first
-        if let Some(&idx) = indices
+        // Filter to candidates matching the reasoning preference
+        let reasoning_matches: Vec<usize> = indices
             .iter()
-            .find(|&&idx| self.entries[idx].is_reasoning_variant() == reasoning)
-        {
-            return Some(&self.entries[idx]);
+            .copied()
+            .filter(|&idx| self.entries[idx].is_reasoning_variant() == reasoning)
+            .collect();
+
+        let candidates = if reasoning_matches.is_empty() {
+            // No reasoning match — try non-reasoning variants as fallback
+            let non_reasoning: Vec<usize> = indices
+                .iter()
+                .copied()
+                .filter(|&idx| !self.entries[idx].is_reasoning_variant())
+                .collect();
+            if non_reasoning.is_empty() {
+                // Last resort: use all candidates
+                indices.to_vec()
+            } else {
+                non_reasoning
+            }
+        } else {
+            reasoning_matches
+        };
+
+        if candidates.len() == 1 {
+            return Some(&self.entries[candidates[0]]);
         }
 
-        // Fall back to non-reasoning (the "standard" variant)
-        if let Some(&idx) = indices
-            .iter()
-            .find(|&&idx| !self.entries[idx].is_reasoning_variant())
-        {
-            return Some(&self.entries[idx]);
+        // Multiple candidates remaining — use release_date to disambiguate
+        if let Some(model_date) = release_date {
+            if let Some(&best_idx) = candidates.iter().min_by_key(|&&idx| {
+                self.entries[idx]
+                    .release_date
+                    .as_deref()
+                    .map(|d| date_distance(model_date, d))
+                    .unwrap_or(u32::MAX)
+            }) {
+                // Only use date-based selection if at least one candidate has a date
+                if self.entries[best_idx].release_date.is_some() {
+                    return Some(&self.entries[best_idx]);
+                }
+            }
         }
 
-        // Last resort: return the first
-        Some(&self.entries[indices[0]])
+        // Fall back to the first candidate
+        Some(&self.entries[candidates[0]])
+    }
+}
+
+/// Compute the absolute distance in days between two YYYY-MM-DD date strings.
+/// Returns u32::MAX if either date is malformed.
+fn date_distance(a: &str, b: &str) -> u32 {
+    fn parse_days(s: &str) -> Option<i32> {
+        let parts: Vec<&str> = s.split('-').collect();
+        if parts.len() != 3 {
+            return None;
+        }
+        let y: i32 = parts[0].parse().ok()?;
+        let m: i32 = parts[1].parse().ok()?;
+        let d: i32 = parts[2].parse().ok()?;
+        // Approximate days since epoch (good enough for relative comparison)
+        Some(y * 365 + m * 30 + d)
+    }
+
+    match (parse_days(a), parse_days(b)) {
+        (Some(da), Some(db)) => da.abs_diff(db),
+        _ => u32::MAX,
     }
 }
 
@@ -611,7 +725,7 @@ mod tests {
     #[test]
     fn test_find_gpt4o() {
         let store = BenchmarkStore::load();
-        let result = store.find_for_model("gpt-4o", "GPT-4o", false);
+        let result = store.find_for_model("gpt-4o", "GPT-4o", false, None, None);
         assert!(result.is_some());
         let entry = result.unwrap();
         assert!(entry.name.contains("GPT-4o"));
@@ -620,7 +734,7 @@ mod tests {
     #[test]
     fn test_find_gpt4o_with_date() {
         let store = BenchmarkStore::load();
-        let result = store.find_for_model("gpt-4o-2024-08-06", "GPT-4o", false);
+        let result = store.find_for_model("gpt-4o-2024-08-06", "GPT-4o", false, None, None);
         assert!(result.is_some());
     }
 
@@ -631,6 +745,8 @@ mod tests {
             "claude-3-5-sonnet-20241022",
             "Claude 3.5 Sonnet (New)",
             false,
+            Some("claude-3.5-sonnet"),
+            Some("2024-10-22"),
         );
         assert!(result.is_some());
     }
@@ -638,28 +754,35 @@ mod tests {
     #[test]
     fn test_find_nonexistent() {
         let store = BenchmarkStore::load();
-        let result = store.find_for_model("some-unknown-model", "Unknown Model", false);
+        let result = store.find_for_model("some-unknown-model", "Unknown Model", false, None, None);
         assert!(result.is_none());
     }
 
     #[test]
     fn test_find_with_provider_prefix() {
         let store = BenchmarkStore::load();
-        let result = store.find_for_model("claude-opus-4-5", "Anthropic: Claude Opus 4.5", false);
+        let result = store.find_for_model(
+            "claude-opus-4-5",
+            "Anthropic: Claude Opus 4.5",
+            false,
+            None,
+            None,
+        );
         assert!(result.is_some());
     }
 
     #[test]
     fn test_find_with_region_suffix() {
         let store = BenchmarkStore::load();
-        let result = store.find_for_model("claude-opus-4-6", "Claude Opus 4.6 (US)", false);
+        let result =
+            store.find_for_model("claude-opus-4-6", "Claude Opus 4.6 (US)", false, None, None);
         assert!(result.is_some());
     }
 
     #[test]
     fn test_find_prefers_non_reasoning() {
         let store = BenchmarkStore::load();
-        let result = store.find_for_model("claude-sonnet-4", "Claude Sonnet 4", false);
+        let result = store.find_for_model("claude-sonnet-4", "Claude Sonnet 4", false, None, None);
         assert!(result.is_some());
         let entry = result.unwrap();
         assert!(
@@ -672,7 +795,7 @@ mod tests {
     #[test]
     fn test_find_reasoning_variant_when_requested() {
         let store = BenchmarkStore::load();
-        let result = store.find_for_model("claude-sonnet-4", "Claude Sonnet 4", true);
+        let result = store.find_for_model("claude-sonnet-4", "Claude Sonnet 4", true, None, None);
         assert!(result.is_some());
         let entry = result.unwrap();
         assert!(
@@ -686,8 +809,10 @@ mod tests {
     fn test_slug_match_respects_reasoning_flag() {
         let store = BenchmarkStore::load();
         // Same model_id (exact slug match), different reasoning flag
-        let non_reasoning = store.find_for_model("claude-opus-4-6", "Claude Opus 4.6", false);
-        let reasoning = store.find_for_model("claude-opus-4-6", "Claude Opus 4.6", true);
+        let non_reasoning =
+            store.find_for_model("claude-opus-4-6", "Claude Opus 4.6", false, None, None);
+        let reasoning =
+            store.find_for_model("claude-opus-4-6", "Claude Opus 4.6", true, None, None);
         assert!(non_reasoning.is_some());
         assert!(reasoning.is_some());
         // They should resolve to different AA entries
@@ -717,6 +842,8 @@ mod tests {
             "llama-4-maverick-17b-128e-instruct-fp8",
             "Llama 4 Maverick 17B 128E Instruct FP8",
             false,
+            None,
+            None,
         );
         assert!(
             result.is_some(),
@@ -731,10 +858,301 @@ mod tests {
     }
 
     #[test]
+    fn test_family_based_matching() {
+        let store = BenchmarkStore::load();
+        // model_id has extra qualifiers, but family matches the AA slug directly
+        let result = store.find_for_model(
+            "claude-3-5-sonnet-20241022",
+            "Claude 3.5 Sonnet (New)",
+            false,
+            Some("claude-3.5-sonnet"),
+            Some("2024-10-22"),
+        );
+        assert!(result.is_some());
+        let entry = result.unwrap();
+        assert!(
+            entry.name.contains("Claude 3.5 Sonnet") || entry.slug.contains("claude-3-5-sonnet"),
+            "family should help match, got: {}",
+            entry.name
+        );
+    }
+
+    /// Analyze unmatched models from both sides.
+    /// Run with: cargo test match_gap_analysis -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn match_gap_analysis() {
+        let store = BenchmarkStore::load();
+        let providers: crate::data::ProvidersMap =
+            reqwest::blocking::get("https://models.dev/api.json")
+                .unwrap()
+                .json()
+                .unwrap();
+
+        let mut matched_aa: HashSet<usize> = HashSet::new();
+        let mut unmatched_models: Vec<(String, String, String, Option<String>, Option<String>)> =
+            Vec::new();
+        let mut total_text = 0;
+
+        for (provider_id, provider) in &providers {
+            for (model_id, model) in &provider.models {
+                if !model.is_text_model() {
+                    continue;
+                }
+                total_text += 1;
+
+                if let Some(entry) = store.find_for_model(
+                    model_id,
+                    &model.name,
+                    model.reasoning,
+                    model.family.as_deref(),
+                    model.release_date.as_deref(),
+                ) {
+                    if let Some(idx) = store.entries.iter().position(|e| std::ptr::eq(e, entry)) {
+                        matched_aa.insert(idx);
+                    }
+                } else {
+                    unmatched_models.push((
+                        provider_id.clone(),
+                        model_id.clone(),
+                        model.name.clone(),
+                        model.family.clone(),
+                        model.release_date.clone(),
+                    ));
+                }
+            }
+        }
+
+        // --- Unmatched models.dev text models ---
+        println!(
+            "\n=== UNMATCHED MODELS.DEV TEXT MODELS ({}/{}) ===\n",
+            unmatched_models.len(),
+            total_text
+        );
+
+        // Group by provider
+        let mut by_provider: HashMap<
+            &str,
+            Vec<&(String, String, String, Option<String>, Option<String>)>,
+        > = HashMap::new();
+        for m in &unmatched_models {
+            by_provider.entry(&m.0).or_default().push(m);
+        }
+        let mut providers_sorted: Vec<_> = by_provider.iter().collect();
+        providers_sorted.sort_by(|a, b| b.1.len().cmp(&a.1.len()));
+
+        for (provider, models) in &providers_sorted {
+            println!("{} ({} unmatched):", provider, models.len());
+            for m in models.iter().take(5) {
+                println!("  id={} name=\"{}\" family={:?}", m.1, m.2, m.3);
+            }
+            if models.len() > 5 {
+                println!("  ... and {} more", models.len() - 5);
+            }
+        }
+
+        // --- Unmatched AA entries ---
+        let unmatched_aa: Vec<_> = store
+            .entries
+            .iter()
+            .enumerate()
+            .filter(|(idx, _)| !matched_aa.contains(idx))
+            .collect();
+
+        println!(
+            "\n=== UNMATCHED AA ENTRIES ({}/{}) ===\n",
+            unmatched_aa.len(),
+            store.entries.len()
+        );
+
+        // Group by creator
+        let mut by_creator: HashMap<&str, Vec<&BenchmarkEntry>> = HashMap::new();
+        for (_, entry) in &unmatched_aa {
+            by_creator.entry(&entry.creator).or_default().push(entry);
+        }
+        let mut creators_sorted: Vec<_> = by_creator.iter().collect();
+        creators_sorted.sort_by(|a, b| b.1.len().cmp(&a.1.len()));
+
+        for (creator, entries) in &creators_sorted {
+            println!("{} ({} unmatched AA entries):", creator, entries.len());
+            for e in entries.iter().take(8) {
+                let has_scores = if e.has_any_score() {
+                    "has scores"
+                } else {
+                    "no scores"
+                };
+                println!("  slug={} name=\"{}\" [{}]", e.slug, e.name, has_scores);
+            }
+            if entries.len() > 8 {
+                println!("  ... and {} more", entries.len() - 8);
+            }
+        }
+
+        // --- Summary stats ---
+        let unmatched_with_scores = unmatched_aa
+            .iter()
+            .filter(|(_, e)| e.has_any_score())
+            .count();
+        println!("\n=== SUMMARY ===");
+        println!(
+            "Text models: {} total, {} matched, {} unmatched",
+            total_text,
+            total_text - unmatched_models.len(),
+            unmatched_models.len()
+        );
+        println!(
+            "AA entries: {} total, {} hit, {} unhit ({} with scores)",
+            store.entries.len(),
+            matched_aa.len(),
+            unmatched_aa.len(),
+            unmatched_with_scores
+        );
+        println!("Providers with unmatched: {}", providers_sorted.len());
+    }
+
+    /// Show how many matches come from each tier.
+    /// Run with: cargo test tier_attribution -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn tier_attribution() {
+        let store = BenchmarkStore::load();
+        let providers: crate::data::ProvidersMap =
+            reqwest::blocking::get("https://models.dev/api.json")
+                .unwrap()
+                .json()
+                .unwrap();
+
+        // Tier labels matching the search order in find_for_model
+        let tier_labels = [
+            "T1: by_slug(id)",
+            "T1: by_slug(family)",
+            "T2: by_name(name)",
+            "T2: by_name(id)",
+            "T2: by_name(family)",
+            "T3: by_stripped(name)",
+            "T3: by_stripped(id)",
+            "T3: by_stripped(family)",
+            "T4: by_sorted(name)",
+            "T4: by_sorted(id)",
+            "T4: by_sorted(family)",
+        ];
+
+        let mut tier_counts = vec![0u32; tier_labels.len()];
+        let mut fuzzy_count = 0u32;
+        let mut fallback_count = 0u32;
+        let mut manual_count = 0u32;
+        let mut unmatched_count = 0u32;
+        let mut total_text = 0u32;
+
+        for (_provider_id, provider) in &providers {
+            for (model_id, model) in &provider.models {
+                if !model.is_text_model() {
+                    continue;
+                }
+                total_text += 1;
+
+                let family = model.family.as_deref();
+                let release_date = model.release_date.as_deref();
+
+                // Check manual overrides first (normalize key like find_for_model does)
+                let normalized_id = normalize(model_id);
+                if let Some(&slug) = MANUAL_OVERRIDES.get(normalized_id.as_str()) {
+                    let key = normalize(slug);
+                    if store.by_slug.get(&key).is_some() {
+                        manual_count += 1;
+                        continue;
+                    }
+                }
+
+                let normalized_name = normalize(&model.name);
+                let stripped_name = strip_qualifiers(&model.name);
+                let stripped_id = strip_qualifiers(model_id);
+                let sorted_name = sorted_tokens(&model.name);
+                let sorted_id = sorted_tokens(model_id);
+
+                let normalized_family = family.map(normalize);
+                let stripped_family = family.map(strip_qualifiers);
+                let sorted_family = family.map(sorted_tokens);
+
+                // Build the same search list as find_for_model
+                let mut searches: Vec<(&HashMap<String, Vec<usize>>, String)> = Vec::new();
+                searches.push((&store.by_slug, normalized_id.clone()));
+                if let Some(ref fam) = normalized_family {
+                    searches.push((&store.by_slug, fam.clone()));
+                }
+                searches.push((&store.by_name, normalized_name.clone()));
+                searches.push((&store.by_name, normalized_id));
+                if let Some(ref fam) = normalized_family {
+                    searches.push((&store.by_name, fam.clone()));
+                }
+                searches.push((&store.by_stripped, stripped_name));
+                searches.push((&store.by_stripped, stripped_id));
+                if let Some(ref fam) = stripped_family {
+                    searches.push((&store.by_stripped, fam.clone()));
+                }
+                searches.push((&store.by_sorted, sorted_name));
+                searches.push((&store.by_sorted, sorted_id));
+                if let Some(ref fam) = sorted_family {
+                    searches.push((&store.by_sorted, fam.clone()));
+                }
+
+                let mut matched = false;
+                let mut has_fallback = false;
+
+                for (i, (index, key)) in searches.iter().enumerate() {
+                    if let Some(indices) = index.get(key.as_str()) {
+                        if indices.len() > 1 {
+                            // Multi-candidate — pick_variant resolves, count as this tier
+                            tier_counts[i] += 1;
+                            matched = true;
+                            break;
+                        }
+                        let entry = &store.entries[indices[0]];
+                        if entry.is_reasoning_variant() == model.reasoning {
+                            tier_counts[i] += 1;
+                            matched = true;
+                            break;
+                        }
+                        if !has_fallback {
+                            has_fallback = true;
+                        }
+                    }
+                }
+
+                if !matched {
+                    if store
+                        .find_fuzzy(model_id, &model.name, model.reasoning)
+                        .is_some()
+                    {
+                        fuzzy_count += 1;
+                    } else if has_fallback {
+                        fallback_count += 1;
+                    } else {
+                        unmatched_count += 1;
+                    }
+                }
+            }
+        }
+
+        println!("\n=== TIER ATTRIBUTION ({total_text} text models) ===\n");
+        println!("Manual overrides: {manual_count}");
+        for (i, label) in tier_labels.iter().enumerate() {
+            if tier_counts[i] > 0 {
+                println!("{label}: {}", tier_counts[i]);
+            }
+        }
+        println!("T5: fuzzy (TF-IDF): {fuzzy_count}");
+        println!("Reasoning fallback: {fallback_count}");
+        println!("Unmatched: {unmatched_count}");
+        println!("Total matched: {}", total_text - unmatched_count);
+    }
+
+    #[test]
     fn test_fuzzy_rejects_cross_brand() {
         let store = BenchmarkStore::load();
         // "BGE Large EN v1.5" should NOT match "Mistral Large" via fuzzy
-        let result = store.find_for_model("bge-large-en-v1.5", "BGE Large EN v1.5", false);
+        let result =
+            store.find_for_model("bge-large-en-v1.5", "BGE Large EN v1.5", false, None, None);
         if let Some(entry) = result {
             assert!(
                 !entry.name.contains("Mistral"),
@@ -769,7 +1187,13 @@ mod tests {
                 total += 1;
 
                 // Check if full pipeline (with fuzzy) finds a match
-                let full_match = store.find_for_model(model_id, &model.name, model.reasoning);
+                let full_match = store.find_for_model(
+                    model_id,
+                    &model.name,
+                    model.reasoning,
+                    model.family.as_deref(),
+                    model.release_date.as_deref(),
+                );
                 if full_match.is_none() {
                     continue;
                 }
@@ -913,21 +1337,32 @@ mod tests {
                 .json()
                 .unwrap();
 
-        // Collect all models.dev entries (provider_id, model_id, name, reasoning, is_text)
-        let mut all_models: Vec<(&str, &str, &str, bool, bool)> = Vec::new();
+        // Collect all models.dev entries
+        struct ModelRef<'a> {
+            provider_id: &'a str,
+            model_id: &'a str,
+            name: &'a str,
+            reasoning: bool,
+            is_text: bool,
+            family: Option<&'a str>,
+            release_date: Option<&'a str>,
+        }
+        let mut all_models: Vec<ModelRef> = Vec::new();
         for (provider_id, provider) in &providers {
             for (model_id, model) in &provider.models {
-                all_models.push((
+                all_models.push(ModelRef {
                     provider_id,
                     model_id,
-                    &model.name,
-                    model.reasoning,
-                    model.is_text_model(),
-                ));
+                    name: &model.name,
+                    reasoning: model.reasoning,
+                    is_text: model.is_text_model(),
+                    family: model.family.as_deref(),
+                    release_date: model.release_date.as_deref(),
+                });
             }
         }
         let total = all_models.len();
-        let text_total = all_models.iter().filter(|m| m.4).count();
+        let text_total = all_models.iter().filter(|m| m.is_text).count();
         let non_text_total = total - text_total;
 
         // Pre-tokenize all AA entries
@@ -1043,10 +1478,12 @@ mod tests {
         let mut current_matched_text = 0;
         let mut current_aa_hit: HashSet<usize> = HashSet::new();
         let mut non_text_would_match = 0;
-        for &(_, model_id, model_name, reasoning, is_text) in &all_models {
-            if let Some(bench) = store.find_for_model(model_id, model_name, reasoning) {
+        for m in &all_models {
+            if let Some(bench) =
+                store.find_for_model(m.model_id, m.name, m.reasoning, m.family, m.release_date)
+            {
                 current_matched += 1;
-                if is_text {
+                if m.is_text {
                     current_matched_text += 1;
                 } else {
                     non_text_would_match += 1;
@@ -1097,12 +1534,12 @@ mod tests {
             let mut wj_m = 0usize;
             let mut bt_m = 0usize;
 
-            for &(_, model_id, model_name, _, is_text) in &all_models {
-                if !is_text {
+            for m in &all_models {
+                if !m.is_text {
                     continue;
                 }
-                let query_tokens: HashSet<String> = fuzzy_tokenize(model_id)
-                    .union(&fuzzy_tokenize(model_name))
+                let query_tokens: HashSet<String> = fuzzy_tokenize(m.model_id)
+                    .union(&fuzzy_tokenize(m.name))
                     .cloned()
                     .collect();
 
@@ -1206,10 +1643,10 @@ mod tests {
         let current_hits: HashSet<usize> = all_models
             .iter()
             .enumerate()
-            .filter(|(_, &(_, _, _, _, is_text))| is_text)
-            .filter_map(|(i, &(_, model_id, model_name, reasoning, _))| {
+            .filter(|(_, m)| m.is_text)
+            .filter_map(|(i, m)| {
                 store
-                    .find_for_model(model_id, model_name, reasoning)
+                    .find_for_model(m.model_id, m.name, m.reasoning, m.family, m.release_date)
                     .map(|_| i)
             })
             .collect();
@@ -1226,11 +1663,11 @@ mod tests {
         let unmatched_scores: Vec<(usize, FuzzyScores)> = all_models
             .iter()
             .enumerate()
-            .filter(|(_, &(_, _, _, _, is_text))| is_text)
+            .filter(|(_, m)| m.is_text)
             .filter(|(i, _)| !current_hits.contains(i))
-            .map(|(i, &(_, model_id, model_name, _, _))| {
-                let query_tokens: HashSet<String> = fuzzy_tokenize(model_id)
-                    .union(&fuzzy_tokenize(model_name))
+            .map(|(i, m)| {
+                let query_tokens: HashSet<String> = fuzzy_tokenize(m.model_id)
+                    .union(&fuzzy_tokenize(m.name))
                     .cloned()
                     .collect();
 
@@ -1432,12 +1869,12 @@ mod tests {
             }
             let (score, aa_idx) = scores.brand_tfidf;
             if score >= 0.60 {
-                let (provider, model_id, model_name, _, _) = all_models[model_idx];
+                let m = &all_models[model_idx];
                 let aa = &store.entries[aa_idx];
                 let (j_score, _) = scores.jaccard;
                 println!(
                     "  {}/{} \"{}\" -> \"{}\" [BT={:.2}, J={:.2}]",
-                    provider, model_id, model_name, aa.name, score, j_score
+                    m.provider_id, m.model_id, m.name, aa.name, score, j_score
                 );
                 samples += 1;
             }
