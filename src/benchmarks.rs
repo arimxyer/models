@@ -1321,7 +1321,7 @@ mod tests {
                 total_text += 1;
 
                 let family = model.family.as_deref();
-                let release_date = model.release_date.as_deref();
+                let _release_date = model.release_date.as_deref();
 
                 // Check manual overrides first (normalize key like find_for_model does)
                 let normalized_id = normalize(model_id);
@@ -2456,7 +2456,7 @@ mod tests {
 
         // Show reverse-only matches (models AA wants but forward didn't find)
         let mut reverse_only_count = 0;
-        for (aa_idx, rev_set) in reverse.iter().enumerate() {
+        for (_aa_idx, rev_set) in reverse.iter().enumerate() {
             for &mi in rev_set {
                 if forward[mi].is_none() {
                     reverse_only_count += 1;
@@ -2528,6 +2528,99 @@ mod tests {
         }
 
         println!("\n=== END BIDIRECTIONAL ANALYSIS ===");
+    }
+
+    /// Export all fuzzy matches (T5+T6) as JSON for LLM validation.
+    /// Run with: cargo test export_fuzzy_matches -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn export_fuzzy_matches() {
+        let store = BenchmarkStore::load();
+        let providers: crate::data::ProvidersMap =
+            reqwest::blocking::get("https://models.dev/api.json")
+                .unwrap()
+                .json()
+                .unwrap();
+
+        let mut pairs: Vec<serde_json::Value> = Vec::new();
+        // Deduplicate by (model_name, aa_name) to avoid reviewing the same
+        // logical match across 20 providers
+        let mut seen: HashSet<(String, String)> = HashSet::new();
+
+        for (provider_id, provider) in &providers {
+            for (model_id, model) in &provider.models {
+                if !model.is_text_model() {
+                    continue;
+                }
+
+                // Check if exact tiers would match (T0-T4)
+                let normalized_id = normalize(model_id);
+                let normalized_name = normalize(&model.name);
+                let override_key = normalize(model_id);
+                let normalized_family = model.family.as_deref().map(normalize);
+
+                let is_exact = MANUAL_OVERRIDES.contains_key(override_key.as_str())
+                    || store.by_slug.contains_key(&normalized_id)
+                    || normalized_family
+                        .as_ref()
+                        .is_some_and(|f| store.by_slug.contains_key(f))
+                    || store.by_name.contains_key(&normalized_name)
+                    || store.by_name.contains_key(&normalized_id)
+                    || normalized_family
+                        .as_ref()
+                        .is_some_and(|f| store.by_name.contains_key(f))
+                    || store
+                        .by_stripped
+                        .contains_key(&strip_qualifiers(&model.name))
+                    || store.by_stripped.contains_key(&strip_qualifiers(model_id))
+                    || model
+                        .family
+                        .as_deref()
+                        .is_some_and(|f| store.by_stripped.contains_key(&strip_qualifiers(f)))
+                    || store.by_sorted.contains_key(&sorted_tokens(&model.name))
+                    || store.by_sorted.contains_key(&sorted_tokens(model_id))
+                    || model
+                        .family
+                        .as_deref()
+                        .is_some_and(|f| store.by_sorted.contains_key(&sorted_tokens(f)));
+
+                if is_exact {
+                    continue;
+                }
+
+                if let Some(entry) = store.find_for_model(
+                    model_id,
+                    &model.name,
+                    model.reasoning,
+                    model.family.as_deref(),
+                    model.release_date.as_deref(),
+                ) {
+                    let key = (model.name.clone(), entry.name.clone());
+                    if seen.contains(&key) {
+                        continue;
+                    }
+                    seen.insert(key);
+
+                    pairs.push(serde_json::json!({
+                        "model_name": model.name,
+                        "model_id": model_id,
+                        "provider": provider_id,
+                        "aa_name": entry.name,
+                        "aa_slug": entry.slug,
+                        "aa_creator": entry.creator,
+                    }));
+                }
+            }
+        }
+
+        let output = serde_json::to_string_pretty(&pairs).unwrap();
+        let path = std::path::Path::new("data/fuzzy_matches_for_validation.json");
+        std::fs::write(path, &output).unwrap();
+        println!(
+            "Exported {} deduplicated fuzzy match pairs to {}",
+            pairs.len(),
+            path.display()
+        );
     }
 
     fn pct(n: usize, total: usize) -> f64 {
