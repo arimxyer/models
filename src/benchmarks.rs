@@ -125,9 +125,35 @@ static MANUAL_OVERRIDES: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
         // Keys are normalized (lowercase, separators stripped) since the
         // lookup normalizes model_id before checking.
         //
+        // ── DeepSeek brand/product name differences ──
+        //
         // DeepSeek's reasoning model is "DeepSeek Reasoner" on many
         // providers but AA tracks it under the R1 branding.
         ("deepseekreasoner", "deepseek-r1"),
+        // DeepSeek's non-reasoning API endpoint is "deepseek-chat" on the
+        // DeepSeek platform and several providers, but AA tracks the
+        // underlying model as "DeepSeek V3.2". Fuzzy fails because the
+        // only shared token is "deepseek" (1 < min_shared of 2).
+        ("deepseekchat", "deepseek-v3-2"),
+        //
+        // ── Alibaba Qwen product-line renames ──
+        //
+        // Alibaba's "qwen-max" API model maps to the latest Qwen3 Max on
+        // AA. "qwenmax" vs "qwen3max" — the generation number is absent
+        // from the provider model_id. Fuzzy fails (shared={"max"},
+        // min_shared=2).
+        ("qwenmax", "qwen3-max"),
+        // "qwq-plus" is the hosted QwQ model on Alibaba Cloud; AA tracks
+        // the open-weight release as "QwQ 32B". Fuzzy fails because the
+        // only shared token is "qwq" (1 < min_shared of 2).
+        ("qwqplus", "qwq-32b"),
+        //
+        // ── OpenAI ChatGPT-branded model IDs ──
+        //
+        // Poe and some providers expose ChatGPT-4o-latest; AA tracks it as
+        // "GPT-4o (ChatGPT)" with slug "gpt-4o-chatgpt". Fuzzy shares
+        // {"4o","chatgpt"} but "latest" and "gpt" diverge, cosine < 0.65.
+        ("chatgpt4olatest", "gpt-4o-chatgpt"),
     ])
 });
 
@@ -197,6 +223,10 @@ pub struct BenchmarkStore {
     aa_tokens: Vec<HashSet<String>>,
     /// Tier 5 (fuzzy): pre-computed L2 norms for each AA entry's IDF vector
     aa_norms: Vec<f64>,
+    /// Tier 6 (JW): pre-cleaned AA names for Jaro-Winkler comparison
+    aa_jw_names: Vec<String>,
+    /// Tier 6 (JW): pre-cleaned AA slugs for Jaro-Winkler comparison
+    aa_jw_slugs: Vec<String>,
 }
 
 impl BenchmarkStore {
@@ -274,6 +304,10 @@ impl BenchmarkStore {
             })
             .collect();
 
+        // Tier 6: Pre-clean AA names and slugs for Jaro-Winkler comparison
+        let aa_jw_names: Vec<String> = entries.iter().map(|e| clean_for_jw(&e.name)).collect();
+        let aa_jw_slugs: Vec<String> = entries.iter().map(|e| clean_for_jw(&e.slug)).collect();
+
         Self {
             entries,
             by_slug,
@@ -283,6 +317,8 @@ impl BenchmarkStore {
             idf,
             aa_tokens,
             aa_norms,
+            aa_jw_names,
+            aa_jw_slugs,
         }
     }
 
@@ -392,6 +428,11 @@ impl BenchmarkStore {
 
         // Tier 5: Brand-anchored TF-IDF cosine similarity (fuzzy fallback)
         if let Some(entry) = self.find_fuzzy(model_id, model_name, reasoning) {
+            return Some(entry);
+        }
+
+        // Tier 6: Jaro-Winkler character similarity (catches models TF-IDF misses)
+        if let Some(entry) = self.find_fuzzy_jw(model_id, model_name, reasoning) {
             return Some(entry);
         }
 
@@ -506,12 +547,113 @@ impl BenchmarkStore {
             return Some(entry);
         }
 
-        // Look for a sibling variant with matching reasoning (same stripped name)
+        // Look for a sibling variant with matching reasoning.
+        // AA often pairs entries like "Qwen3 235B A22B 2507 Instruct" (non-reasoning)
+        // and "Qwen3 235B A22B 2507 (Reasoning)". These have different stripped names
+        // because "Instruct" is a bare word while "(Reasoning)" is parenthetical.
+        // Search by_stripped with "instruct" removed to find the reasoning sibling,
+        // or with "instruct" appended to find the instruct sibling.
         let stripped = strip_qualifiers(&entry.name);
         if let Some(indices) = self.by_stripped.get(&stripped) {
             if indices.len() > 1 {
                 return self.pick_variant(indices, reasoning, None);
             }
+        }
+        // Try to find the sibling variant: if current is Instruct, look for the
+        // non-instruct stripped key; if current is Reasoning, look for instruct key.
+        let sibling_key = if stripped.contains("instruct") {
+            stripped.replace("instruct", "")
+        } else {
+            format!("{}instruct", stripped)
+        };
+        if let Some(indices) = self.by_stripped.get(&sibling_key) {
+            // Merge current entry with sibling candidates
+            let mut all_indices = indices.clone();
+            all_indices.push(best_idx);
+            return self.pick_variant(&all_indices, reasoning, None);
+        }
+
+        Some(entry)
+    }
+
+    /// Tier 6: Find the best fuzzy match using Jaro-Winkler character similarity.
+    /// Catches models that TF-IDF misses (e.g., "GPT-5 Chat" → "GPT-5 (ChatGPT)")
+    /// due to low token overlap. Uses the same brand filtering and non-LLM rejection
+    /// as T5, but compares full cleaned strings rather than token sets.
+    fn find_fuzzy_jw(
+        &self,
+        model_id: &str,
+        model_name: &str,
+        reasoning: bool,
+    ) -> Option<&BenchmarkEntry> {
+        const JW_THRESHOLD: f64 = 0.85;
+
+        let query_tokens: HashSet<String> = fuzzy_tokenize(model_id)
+            .union(&fuzzy_tokenize(model_name))
+            .cloned()
+            .collect();
+
+        if query_tokens
+            .iter()
+            .any(|t| NON_LLM_TOKENS.contains(t.as_str()))
+        {
+            return None;
+        }
+
+        let q_jw_id = clean_for_jw(model_id);
+        let q_jw_name = clean_for_jw(model_name);
+
+        let mut best: Option<(f64, usize)> = None;
+
+        for (idx, aa_toks) in self.aa_tokens.iter().enumerate() {
+            let entry_creator = &self.entries[idx].creator;
+            if !creator_compatible(&query_tokens, entry_creator, aa_toks) {
+                continue;
+            }
+
+            let shared_count = query_tokens.intersection(aa_toks).count();
+            let min_shared = 2.max(query_tokens.len().min(aa_toks.len()) / 2);
+            if shared_count < min_shared {
+                continue;
+            }
+
+            let jw = [
+                strsim::jaro_winkler(&q_jw_name, &self.aa_jw_names[idx]),
+                strsim::jaro_winkler(&q_jw_name, &self.aa_jw_slugs[idx]),
+                strsim::jaro_winkler(&q_jw_id, &self.aa_jw_names[idx]),
+                strsim::jaro_winkler(&q_jw_id, &self.aa_jw_slugs[idx]),
+            ]
+            .into_iter()
+            .fold(0.0_f64, f64::max);
+
+            if jw >= JW_THRESHOLD && best.is_none_or(|(s, _)| jw > s) {
+                best = Some((jw, idx));
+            }
+        }
+
+        let (_, best_idx) = best?;
+        let entry = &self.entries[best_idx];
+
+        if entry.is_reasoning_variant() == reasoning {
+            return Some(entry);
+        }
+
+        // Look for a sibling variant with matching reasoning
+        let stripped = strip_qualifiers(&entry.name);
+        if let Some(indices) = self.by_stripped.get(&stripped) {
+            if indices.len() > 1 {
+                return self.pick_variant(indices, reasoning, None);
+            }
+        }
+        let sibling_key = if stripped.contains("instruct") {
+            stripped.replace("instruct", "")
+        } else {
+            format!("{}instruct", stripped)
+        };
+        if let Some(indices) = self.by_stripped.get(&sibling_key) {
+            let mut all_indices = indices.clone();
+            all_indices.push(best_idx);
+            return self.pick_variant(&all_indices, reasoning, None);
         }
 
         Some(entry)
@@ -643,6 +785,17 @@ fn strip_qualifiers(s: &str) -> String {
     let stripped = RE_PARENS.replace_all(&stripped, "");
     let stripped = stripped.trim();
     normalize(stripped)
+}
+
+/// Clean a string for Jaro-Winkler comparison: lowercase, strip provider prefixes,
+/// parenthetical content, and variant suffixes. Preserves the full string structure
+/// (unlike fuzzy_tokenize which splits into token sets).
+fn clean_for_jw(s: &str) -> String {
+    let lower = s.to_lowercase();
+    let stripped = RE_PROVIDER_PREFIX.replace(&lower, "");
+    let stripped = RE_PARENS.replace_all(&stripped, "");
+    let stripped = RE_VARIANT_SUFFIX.replace_all(&stripped, "");
+    stripped.trim().to_string()
 }
 
 /// Tokenize a string for TF-IDF similarity: lowercase, strip provider prefixes,
@@ -838,6 +991,31 @@ mod tests {
             reasoning.unwrap().is_reasoning_variant(),
             "reasoning=true should get reasoning variant, got: {}",
             reasoning.unwrap().name
+        );
+    }
+
+    #[test]
+    fn test_fuzzy_thinking_maps_to_reasoning() {
+        let store = BenchmarkStore::load();
+        // "Thinking" in model name should resolve to the "(Reasoning)" AA variant
+        let result = store.find_for_model(
+            "qwen3-235b-a22b-thinking-2507",
+            "Qwen3 235B A22B Thinking 2507",
+            true,
+            None,
+            None,
+        );
+        assert!(result.is_some());
+        let entry = result.unwrap();
+        assert!(
+            entry.is_reasoning_variant(),
+            "Thinking model should map to reasoning variant, got: {}",
+            entry.name
+        );
+        assert!(
+            entry.name.contains("2507"),
+            "Should match the 2507 variant, got: {}",
+            entry.name
         );
     }
 
@@ -1129,6 +1307,7 @@ mod tests {
 
         let mut tier_counts = vec![0u32; tier_labels.len()];
         let mut fuzzy_count = 0u32;
+        let mut jw_count = 0u32;
         let mut fallback_count = 0u32;
         let mut manual_count = 0u32;
         let mut unmatched_count = 0u32;
@@ -1215,6 +1394,11 @@ mod tests {
                         .is_some()
                     {
                         fuzzy_count += 1;
+                    } else if store
+                        .find_fuzzy_jw(model_id, &model.name, model.reasoning)
+                        .is_some()
+                    {
+                        jw_count += 1;
                     } else if has_fallback {
                         fallback_count += 1;
                     } else {
@@ -1232,6 +1416,7 @@ mod tests {
             }
         }
         println!("T5: fuzzy (TF-IDF): {fuzzy_count}");
+        println!("T6: fuzzy (JW): {jw_count}");
         println!("Reasoning fallback: {fallback_count}");
         println!("Unmatched: {unmatched_count}");
         println!("Total matched: {}", total_text - unmatched_count);
@@ -1983,6 +2168,366 @@ mod tests {
         for (t, w) in idf_sorted.iter().take(20) {
             println!("  {:20} idf={:.2}  (df={})", t, w, df[*t]);
         }
+    }
+
+    /// Bidirectional matching analysis: forward (models.dev → AA), reverse (AA → models.dev),
+    /// and reciprocal best hit check. Also exports all fuzzy matches for validation.
+    ///
+    /// Run with: cargo test bidirectional_analysis -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn bidirectional_analysis() {
+        let store = BenchmarkStore::load();
+        let providers: crate::data::ProvidersMap =
+            reqwest::blocking::get("https://models.dev/api.json")
+                .unwrap()
+                .json()
+                .unwrap();
+
+        // Collect all text models
+        struct ModelRef {
+            provider_id: String,
+            model_id: String,
+            name: String,
+            reasoning: bool,
+            family: Option<String>,
+            release_date: Option<String>,
+        }
+
+        let mut text_models: Vec<ModelRef> = Vec::new();
+        for (provider_id, provider) in &providers {
+            for (model_id, model) in &provider.models {
+                if !model.is_text_model() {
+                    continue;
+                }
+                text_models.push(ModelRef {
+                    provider_id: provider_id.clone(),
+                    model_id: model_id.clone(),
+                    name: model.name.clone(),
+                    reasoning: model.reasoning,
+                    family: model.family.clone(),
+                    release_date: model.release_date.clone(),
+                });
+            }
+        }
+
+        println!(
+            "\n=== BIDIRECTIONAL ANALYSIS ({} text models, {} AA entries) ===\n",
+            text_models.len(),
+            store.entries.len()
+        );
+
+        // ── FORWARD: models.dev → AA ──
+        // Track which AA entry each model matched, and whether it was fuzzy
+        struct ForwardMatch {
+            aa_idx: usize,
+            is_fuzzy: bool, // true if matched via T5/T6 (not exact tiers)
+        }
+
+        let mut forward: Vec<Option<ForwardMatch>> = Vec::new();
+        let mut forward_aa_to_models: HashMap<usize, Vec<usize>> = HashMap::new(); // AA idx → model indices
+
+        for (mi, m) in text_models.iter().enumerate() {
+            let result = store.find_for_model(
+                &m.model_id,
+                &m.name,
+                m.reasoning,
+                m.family.as_deref(),
+                m.release_date.as_deref(),
+            );
+            if let Some(entry) = result {
+                let aa_idx = store
+                    .entries
+                    .iter()
+                    .position(|e| std::ptr::eq(e, entry))
+                    .unwrap();
+
+                // Determine if this was a fuzzy match (T5/T6) by checking if
+                // exact tiers would have found it
+                let normalized_id = normalize(&m.model_id);
+                let normalized_name = normalize(&m.name);
+                let stripped_name = strip_qualifiers(&m.name);
+                let stripped_id = strip_qualifiers(&m.model_id);
+                let sorted_name = sorted_tokens(&m.name);
+                let sorted_id = sorted_tokens(&m.model_id);
+                let normalized_family = m.family.as_deref().map(normalize);
+                let stripped_family = m.family.as_deref().map(strip_qualifiers);
+                let sorted_family = m.family.as_deref().map(sorted_tokens);
+                let override_key = normalize(&m.model_id);
+
+                let is_exact = MANUAL_OVERRIDES.contains_key(override_key.as_str())
+                    || store.by_slug.contains_key(&normalized_id)
+                    || normalized_family
+                        .as_ref()
+                        .is_some_and(|f| store.by_slug.contains_key(f))
+                    || store.by_name.contains_key(&normalized_name)
+                    || store.by_name.contains_key(&normalized_id)
+                    || normalized_family
+                        .as_ref()
+                        .is_some_and(|f| store.by_name.contains_key(f))
+                    || store.by_stripped.contains_key(&stripped_name)
+                    || store.by_stripped.contains_key(&stripped_id)
+                    || stripped_family
+                        .as_ref()
+                        .is_some_and(|f| store.by_stripped.contains_key(f))
+                    || store.by_sorted.contains_key(&sorted_name)
+                    || store.by_sorted.contains_key(&sorted_id)
+                    || sorted_family
+                        .as_ref()
+                        .is_some_and(|f| store.by_sorted.contains_key(f));
+
+                forward_aa_to_models.entry(aa_idx).or_default().push(mi);
+                forward.push(Some(ForwardMatch {
+                    aa_idx,
+                    is_fuzzy: !is_exact,
+                }));
+            } else {
+                forward.push(None);
+            }
+        }
+
+        let forward_matched = forward.iter().filter(|f| f.is_some()).count();
+        let forward_fuzzy = forward
+            .iter()
+            .filter(|f| f.as_ref().is_some_and(|m| m.is_fuzzy))
+            .count();
+        println!(
+            "Forward matches: {forward_matched}/{} ({:.1}%)",
+            text_models.len(),
+            pct(forward_matched, text_models.len())
+        );
+        println!("  Exact (T0-T4): {}", forward_matched - forward_fuzzy);
+        println!("  Fuzzy (T5-T6): {forward_fuzzy}");
+
+        // ── REVERSE: AA → best models.dev model ──
+        // For each AA entry, find the models.dev model with highest similarity
+        println!("\n--- Reverse matching (AA → models.dev) ---");
+
+        let mut reverse: Vec<HashSet<usize>> = Vec::new(); // all model indices above threshold per AA entry
+
+        for (aa_idx, aa_entry) in store.entries.iter().enumerate() {
+            let aa_tokens_set = &store.aa_tokens[aa_idx];
+            let aa_jw_name = &store.aa_jw_names[aa_idx];
+            let aa_jw_slug = &store.aa_jw_slugs[aa_idx];
+
+            let mut candidates: HashSet<usize> = HashSet::new(); // all models above threshold
+
+            for (mi, m) in text_models.iter().enumerate() {
+                let query_tokens: HashSet<String> = fuzzy_tokenize(&m.model_id)
+                    .union(&fuzzy_tokenize(&m.name))
+                    .cloned()
+                    .collect();
+
+                // Skip non-LLM
+                if query_tokens
+                    .iter()
+                    .any(|t| NON_LLM_TOKENS.contains(t.as_str()))
+                {
+                    continue;
+                }
+
+                // Brand filter
+                if !creator_compatible(&query_tokens, &aa_entry.creator, aa_tokens_set) {
+                    continue;
+                }
+
+                // TF-IDF cosine
+                let query_norm: f64 = query_tokens
+                    .iter()
+                    .filter_map(|t| store.idf.get(t))
+                    .map(|w| w * w)
+                    .sum::<f64>()
+                    .sqrt();
+                if query_norm > 0.0 && store.aa_norms[aa_idx] > 0.0 {
+                    let dot: f64 = query_tokens
+                        .intersection(aa_tokens_set)
+                        .filter_map(|t| store.idf.get(t))
+                        .map(|w| w * w)
+                        .sum();
+                    let cos = dot / (query_norm * store.aa_norms[aa_idx]);
+                    if cos >= 0.65 {
+                        candidates.insert(mi);
+                    }
+                }
+
+                // JW
+                let q_jw_name = clean_for_jw(&m.name);
+                let q_jw_id = clean_for_jw(&m.model_id);
+                let jw = [
+                    strsim::jaro_winkler(&q_jw_name, aa_jw_name),
+                    strsim::jaro_winkler(&q_jw_name, aa_jw_slug),
+                    strsim::jaro_winkler(&q_jw_id, aa_jw_name),
+                    strsim::jaro_winkler(&q_jw_id, aa_jw_slug),
+                ]
+                .into_iter()
+                .fold(0.0_f64, f64::max);
+                if jw >= 0.85 {
+                    candidates.insert(mi);
+                }
+            }
+
+            reverse.push(candidates);
+        }
+
+        let reverse_matched = reverse.iter().filter(|r| !r.is_empty()).count();
+        let aa_with_scores = store
+            .entries
+            .iter()
+            .filter(|e| e.intelligence_index.is_some())
+            .count();
+        println!(
+            "Reverse matches: {reverse_matched}/{} AA entries ({:.1}%)",
+            store.entries.len(),
+            pct(reverse_matched, store.entries.len())
+        );
+        println!("AA entries with benchmark scores: {aa_with_scores}");
+
+        // ── RECIPROCAL VALIDATION (1:many) ──
+        println!("\n--- Reciprocal validation (1:many reverse) ---");
+
+        let mut reciprocal_confirmed = 0; // forward match is in AA's reverse candidate set
+        let mut reciprocal_rejected = 0; // forward match is NOT in AA's reverse candidate set
+        let mut forward_no_reverse = 0; // AA entry has no reverse candidates at all
+        let mut no_forward = 0; // model had no forward match
+        let mut rejected_details: Vec<(usize, usize)> = Vec::new(); // (model_idx, aa_idx)
+
+        for (mi, fwd) in forward.iter().enumerate() {
+            match fwd {
+                Some(fwd_match) => {
+                    let aa_idx = fwd_match.aa_idx;
+                    let rev_set = &reverse[aa_idx];
+                    if rev_set.is_empty() {
+                        forward_no_reverse += 1;
+                    } else if rev_set.contains(&mi) {
+                        reciprocal_confirmed += 1;
+                    } else {
+                        reciprocal_rejected += 1;
+                        rejected_details.push((mi, aa_idx));
+                    }
+                }
+                None => no_forward += 1,
+            }
+        }
+
+        println!(
+            "Reciprocal confirmed (model is in AA's reverse candidate set): {reciprocal_confirmed}"
+        );
+        println!(
+            "Reciprocal rejected (model NOT in AA's reverse candidate set): {reciprocal_rejected}"
+        );
+        println!("Forward, no reverse (AA entry has no reverse candidates): {forward_no_reverse}");
+        println!("No forward match: {no_forward}");
+
+        // Break down by exact vs fuzzy
+        let rejected_exact = rejected_details
+            .iter()
+            .filter(|(mi, _)| forward[*mi].as_ref().is_some_and(|f| !f.is_fuzzy))
+            .count();
+        let rejected_fuzzy = rejected_details.len() - rejected_exact;
+        println!("\nRejected breakdown:");
+        println!("  Exact tier (T0-T4) rejected: {rejected_exact}");
+        println!("  Fuzzy tier (T5-T6) rejected: {rejected_fuzzy}");
+
+        // Show fuzzy rejections (most actionable — likely false positives)
+        let fuzzy_rejected: Vec<_> = rejected_details
+            .iter()
+            .filter(|(mi, _)| forward[*mi].as_ref().is_some_and(|f| f.is_fuzzy))
+            .collect();
+
+        if !fuzzy_rejected.is_empty() {
+            println!(
+                "\nFuzzy matches rejected by reverse (likely false positives): {}",
+                fuzzy_rejected.len()
+            );
+            for (count, &&(mi, aa_idx)) in fuzzy_rejected.iter().enumerate() {
+                if count >= 30 {
+                    println!("  ... and {} more", fuzzy_rejected.len() - 30);
+                    break;
+                }
+                let m = &text_models[mi];
+                let aa = &store.entries[aa_idx];
+                let rev_count = reverse[aa_idx].len();
+                println!(
+                    "  {}/{} \"{}\" → AA \"{}\" (AA has {} reverse candidates)",
+                    m.provider_id, m.model_id, m.name, aa.name, rev_count
+                );
+            }
+        }
+
+        // Show reverse-only matches (models AA wants but forward didn't find)
+        let mut reverse_only_count = 0;
+        for (aa_idx, rev_set) in reverse.iter().enumerate() {
+            for &mi in rev_set {
+                if forward[mi].is_none() {
+                    reverse_only_count += 1;
+                }
+            }
+        }
+        println!(
+            "\nReverse-only matches (AA found model, but forward missed it): {reverse_only_count}"
+        );
+
+        // ── MANY-TO-ONE ANALYSIS ──
+        // Which AA entries have the most models.dev models pointing to them?
+        println!("\n--- Many-to-one analysis (AA entries with most forward matches) ---");
+        let mut aa_fanin: Vec<(usize, usize)> = forward_aa_to_models
+            .iter()
+            .map(|(&aa_idx, models)| (models.len(), aa_idx))
+            .collect();
+        aa_fanin.sort_by(|a, b| b.0.cmp(&a.0));
+
+        println!("Top 15 most-matched AA entries:");
+        for &(count, aa_idx) in aa_fanin.iter().take(15) {
+            println!(
+                "  {} models → AA \"{}\" (slug={})",
+                count, store.entries[aa_idx].name, store.entries[aa_idx].slug
+            );
+        }
+
+        // ── FUZZY MATCH CONFIDENCE ──
+        println!("\n--- Fuzzy match confidence (T5+T6 with reciprocal status) ---");
+        let mut fuzzy_confirmed = 0;
+        let mut fuzzy_rejected_count = 0;
+        let mut fuzzy_no_reverse = 0;
+        for (mi, fwd) in forward.iter().enumerate() {
+            if let Some(fwd_match) = fwd {
+                if fwd_match.is_fuzzy {
+                    let rev_set = &reverse[fwd_match.aa_idx];
+                    if rev_set.is_empty() {
+                        fuzzy_no_reverse += 1;
+                    } else if rev_set.contains(&mi) {
+                        fuzzy_confirmed += 1;
+                    } else {
+                        fuzzy_rejected_count += 1;
+                    }
+                }
+            }
+        }
+        let total_fuzzy = fuzzy_confirmed + fuzzy_rejected_count + fuzzy_no_reverse;
+        println!("Total fuzzy matches: {total_fuzzy}");
+        println!("  Confirmed by reverse (model in AA's candidate set): {fuzzy_confirmed}");
+        println!("  Rejected by reverse (model NOT in AA's candidate set): {fuzzy_rejected_count}");
+        println!("  No reverse data (AA has no reverse candidates): {fuzzy_no_reverse}");
+
+        // Show sample of rejected fuzzy matches
+        let rejected_fuzzy_samples: Vec<_> = rejected_details
+            .iter()
+            .filter(|(mi, _)| forward[*mi].as_ref().is_some_and(|f| f.is_fuzzy))
+            .take(20)
+            .collect();
+        if !rejected_fuzzy_samples.is_empty() {
+            println!("\nSample rejected fuzzy matches (false positive candidates):");
+            for &&(mi, aa_idx) in &rejected_fuzzy_samples {
+                let m = &text_models[mi];
+                let aa = &store.entries[aa_idx];
+                println!(
+                    "  {}/{} \"{}\" → AA \"{}\"",
+                    m.provider_id, m.model_id, m.name, aa.name
+                );
+            }
+        }
+
+        println!("\n=== END BIDIRECTIONAL ANALYSIS ===");
     }
 
     fn pct(n: usize, total: usize) -> f64 {
