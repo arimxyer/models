@@ -274,6 +274,27 @@ models show claude-opus-4-5 --json
 models search "llama" --json
 ```
 
+## What's New (v0.8.0)
+
+### Benchmarks Tab (New)
+- **Dedicated Benchmarks tab** — browse 400+ model entries from Artificial Analysis with quality, speed, and pricing data
+- **Creator sidebar** with 40+ creators, each classified by source (Open/Closed/Mixed), region (US/China/Europe/Middle East/S. Korea/Canada/Other), and type (Startup/Big Tech/Research)
+- **Three filter dimensions** — `[4]` source, `[5]` region, `[6]` type — to slice the creator and benchmark lists
+- **Quick-sort keys** — `[1]` Intelligence, `[2]` Date, `[3]` Speed — press again to flip direction
+- **Dynamic column visibility** — list columns adapt based on the active sort group (knowledge, code, reasoning, math, performance)
+- **Detail panel** — non-scrollable flat layout with indexes, benchmark scores, performance metrics, and pricing
+- **Null-filtering** — entries missing data for the active sort column are hidden automatically
+
+### Benchmark Matching Pipeline
+- **7-tier entity resolution** matching models.dev entries to Artificial Analysis benchmarks (88.2% match rate)
+- TF-IDF and Jaro-Winkler fuzzy matching with brand-aware pre-filters
+- `fuzzy_compatible()` structural gates for size, version, vision, specialization, and product-tier mismatches
+
+### Other
+- **Provider categories** — filter and group providers by type (Origin, Cloud, Inference, Gateway, Dev Tool)
+- **OpenClaw agent** added to the agents catalog
+- **Responsive layouts** — models tab detail panel scales with terminal height
+
 ## Data Sources
 
 - **Model data**: Fetched from [models.dev](https://models.dev), an open-source database of AI models maintained by [SST](https://github.com/sst/models.dev)
