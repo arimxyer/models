@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use ratatui::style::Color;
 use ratatui::widgets::ListState;
 
 use crate::benchmarks::{BenchmarkEntry, BenchmarkStore};
@@ -102,13 +103,87 @@ pub enum BenchmarkFocus {
     Creators,
     #[default]
     List,
-    Details,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CreatorListItem {
     All,
     Creator(String), // creator slug
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CreatorOpenness {
+    Open,
+    Closed,
+    Mixed,
+}
+
+impl CreatorOpenness {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Open => "Open",
+            Self::Closed => "Closed",
+            Self::Mixed => "Mixed",
+        }
+    }
+
+    pub fn color(self) -> Color {
+        match self {
+            Self::Open => Color::Green,
+            Self::Closed => Color::Red,
+            Self::Mixed => Color::Yellow,
+        }
+    }
+
+    pub fn from_creator(slug: &str) -> Self {
+        match slug {
+            // Closed-source (API-only, no public weights)
+            "anthropic" | "aws" => Self::Closed,
+            // Mixed (both open-weight and proprietary models)
+            "openai" | "google" | "mistral" | "xai" | "cohere" | "perplexity" | "stepfun"
+            | "reka-ai" => Self::Mixed,
+            // Open-weight (default for most other creators)
+            _ => Self::Open,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum OpennessFilter {
+    #[default]
+    All,
+    Open,
+    Closed,
+    Mixed,
+}
+
+impl OpennessFilter {
+    pub fn next(self) -> Self {
+        match self {
+            Self::All => Self::Open,
+            Self::Open => Self::Closed,
+            Self::Closed => Self::Mixed,
+            Self::Mixed => Self::All,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::All => "All",
+            Self::Open => "Open",
+            Self::Closed => "Closed",
+            Self::Mixed => "Mixed",
+        }
+    }
+
+    pub fn matches(self, openness: CreatorOpenness) -> bool {
+        match self {
+            Self::All => true,
+            Self::Open => openness == CreatorOpenness::Open,
+            Self::Closed => openness == CreatorOpenness::Closed,
+            Self::Mixed => openness == CreatorOpenness::Mixed,
+        }
+    }
 }
 
 /// Pre-computed creator info: (display_name, entry_count)
@@ -125,11 +200,11 @@ pub struct BenchmarksApp {
     pub sort_column: BenchmarkSortColumn,
     pub sort_descending: bool,
     pub search_query: String,
-    pub detail_scroll: u16,
     // Creator sidebar
     pub creator_list_items: Vec<CreatorListItem>,
     pub selected_creator: usize,
     pub creator_list_state: ListState,
+    pub openness_filter: OpennessFilter,
     creator_info: HashMap<String, CreatorInfo>,
 }
 
@@ -149,10 +224,10 @@ impl BenchmarksApp {
             sort_column: BenchmarkSortColumn::default(),
             sort_descending: true,
             search_query: String::new(),
-            detail_scroll: 0,
             creator_list_items: Vec::new(),
             selected_creator: 0,
             creator_list_state,
+            openness_filter: OpennessFilter::default(),
             creator_info: HashMap::new(),
         };
 
@@ -180,7 +255,14 @@ impl BenchmarksApp {
                 });
         }
 
-        let mut creators: Vec<String> = info.keys().cloned().collect();
+        let mut creators: Vec<String> = info
+            .keys()
+            .filter(|slug| {
+                self.openness_filter
+                    .matches(CreatorOpenness::from_creator(slug))
+            })
+            .cloned()
+            .collect();
         creators.sort_by(|a, b| {
             let name_a = &info[a].display_name;
             let name_b = &info[b].display_name;
@@ -204,6 +286,11 @@ impl BenchmarksApp {
             .unwrap_or((slug, 0))
     }
 
+    /// Get the openness classification for a creator slug.
+    pub fn creator_openness(&self, slug: &str) -> CreatorOpenness {
+        CreatorOpenness::from_creator(slug)
+    }
+
     /// Get the currently selected creator slug, or None for "All".
     fn selected_creator_slug(&self) -> Option<&str> {
         match self.creator_list_items.get(self.selected_creator) {
@@ -215,12 +302,17 @@ impl BenchmarksApp {
     pub fn update_filtered(&mut self, store: &BenchmarkStore) {
         let query_lower = self.search_query.to_lowercase();
         let creator_slug = self.selected_creator_slug().map(|s| s.to_owned());
+        let openness_filter = self.openness_filter;
 
         self.filtered_indices = store
             .entries()
             .iter()
             .enumerate()
             .filter(|(_, entry)| {
+                // Openness filter (applies even when "All" creators selected)
+                if !openness_filter.matches(CreatorOpenness::from_creator(&entry.creator)) {
+                    return false;
+                }
                 // Creator filter
                 if let Some(ref slug) = creator_slug {
                     if entry.creator != *slug {
@@ -319,7 +411,6 @@ impl BenchmarksApp {
         if self.selected < self.filtered_indices.len().saturating_sub(1) {
             self.selected += 1;
             self.list_state.select(Some(self.selected));
-            self.detail_scroll = 0;
         }
     }
 
@@ -327,7 +418,6 @@ impl BenchmarksApp {
         if self.selected > 0 {
             self.selected -= 1;
             self.list_state.select(Some(self.selected));
-            self.detail_scroll = 0;
         }
     }
 
@@ -335,13 +425,19 @@ impl BenchmarksApp {
         let last_index = self.filtered_indices.len().saturating_sub(1);
         self.selected = (self.selected + PAGE_SIZE).min(last_index);
         self.list_state.select(Some(self.selected));
-        self.detail_scroll = 0;
     }
 
     pub fn page_up(&mut self) {
         self.selected = self.selected.saturating_sub(PAGE_SIZE);
         self.list_state.select(Some(self.selected));
-        self.detail_scroll = 0;
+    }
+
+    pub fn cycle_openness_filter(&mut self, store: &BenchmarkStore) {
+        self.openness_filter = self.openness_filter.next();
+        self.build_creator_list(store);
+        self.selected_creator = 0;
+        self.creator_list_state.select(Some(0));
+        self.update_filtered(store);
     }
 
     // --- Creator sidebar navigation ---
@@ -377,8 +473,7 @@ impl BenchmarksApp {
     pub fn switch_focus(&mut self) {
         self.focus = match self.focus {
             BenchmarkFocus::Creators => BenchmarkFocus::List,
-            BenchmarkFocus::List => BenchmarkFocus::Details,
-            BenchmarkFocus::Details => BenchmarkFocus::Creators,
+            BenchmarkFocus::List => BenchmarkFocus::Creators,
         };
     }
 }

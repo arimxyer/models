@@ -157,14 +157,11 @@ pub enum Message {
     PageDownBenchmarkCreator,
     PageUpBenchmarkCreator,
     SwitchBenchmarkFocus,
+    CycleBenchmarkOpenness,
     CycleBenchmarkSort,
     ToggleBenchmarkSortDir,
     CopyBenchmarkName,
     OpenBenchmarkUrl,
-    ScrollBenchmarkDetailUp,
-    ScrollBenchmarkDetailDown,
-    PageScrollBenchmarkDetailUp,
-    PageScrollBenchmarkDetailDown,
     // Async data messages
     GitHubDataReceived(String, GitHubData),
     GitHubFetchFailed(String, String), // (agent_id, error_message)
@@ -754,6 +751,10 @@ impl App {
             Message::SwitchBenchmarkFocus => {
                 self.benchmarks_app.switch_focus();
             }
+            Message::CycleBenchmarkOpenness => {
+                self.benchmarks_app
+                    .cycle_openness_filter(&self.benchmark_store);
+            }
             Message::CycleBenchmarkSort => {
                 self.benchmarks_app.cycle_sort(&self.benchmark_store);
             }
@@ -763,26 +764,6 @@ impl App {
             }
             Message::CopyBenchmarkName | Message::OpenBenchmarkUrl => {
                 // Handled in main loop
-            }
-            Message::ScrollBenchmarkDetailUp => {
-                self.benchmarks_app.detail_scroll =
-                    self.benchmarks_app.detail_scroll.saturating_sub(1);
-            }
-            Message::ScrollBenchmarkDetailDown => {
-                self.benchmarks_app.detail_scroll =
-                    self.benchmarks_app.detail_scroll.saturating_add(1);
-            }
-            Message::PageScrollBenchmarkDetailUp => {
-                self.benchmarks_app.detail_scroll = self
-                    .benchmarks_app
-                    .detail_scroll
-                    .saturating_sub(PAGE_SIZE as u16);
-            }
-            Message::PageScrollBenchmarkDetailDown => {
-                self.benchmarks_app.detail_scroll = self
-                    .benchmarks_app
-                    .detail_scroll
-                    .saturating_add(PAGE_SIZE as u16);
             }
             Message::GitHubDataReceived(agent_id, data) => {
                 if let Some(ref mut agents_app) = self.agents_app {

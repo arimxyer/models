@@ -958,10 +958,10 @@ fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
 }
 
 fn draw_benchmarks_main(f: &mut Frame, area: Rect, app: &mut App) {
-    // Horizontal split: creator sidebar (20%) | main content (80%)
+    // Horizontal split: creator sidebar (25%) | main content (75%)
     let h_chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(20), Constraint::Percentage(80)])
+        .constraints([Constraint::Percentage(25), Constraint::Percentage(75)])
         .split(area);
 
     draw_benchmark_creators(f, h_chunks[0], app);
@@ -977,7 +977,7 @@ fn draw_benchmarks_main(f: &mut Frame, area: Rect, app: &mut App) {
 }
 
 fn draw_benchmark_creators(f: &mut Frame, area: Rect, app: &mut App) {
-    use super::benchmarks_app::{BenchmarkFocus, CreatorListItem};
+    use super::benchmarks_app::{BenchmarkFocus, CreatorListItem, OpennessFilter};
 
     let bench_app = &mut app.benchmarks_app;
     let store = &app.benchmark_store;
@@ -996,17 +996,54 @@ fn draw_benchmark_creators(f: &mut Frame, area: Rect, app: &mut App) {
     let inner_area = outer_block.inner(area);
     f.render_widget(outer_block, area);
 
+    // Filter row
+    let filter_active = bench_app.openness_filter != OpennessFilter::All;
+    let filter_color = if filter_active {
+        match bench_app.openness_filter {
+            OpennessFilter::Open => Color::Green,
+            OpennessFilter::Closed => Color::Red,
+            OpennessFilter::Mixed => Color::Yellow,
+            OpennessFilter::All => Color::DarkGray,
+        }
+    } else {
+        Color::DarkGray
+    };
+    let filter_label = if filter_active {
+        bench_app.openness_filter.label()
+    } else {
+        "Src"
+    };
+    let filter_line = Line::from(vec![
+        Span::styled("[4]", Style::default().fg(filter_color)),
+        Span::raw(format!(" {}", filter_label)),
+    ]);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(1), Constraint::Min(0)])
+        .split(inner_area);
+
+    f.render_widget(Paragraph::new(filter_line), chunks[0]);
+
     let items: Vec<ListItem> = bench_app
         .creator_list_items
         .iter()
         .map(|item| match item {
             CreatorListItem::All => {
                 let count = store.entries().len();
-                ListItem::new(format!("All ({})", count)).style(Style::default().fg(Color::Green))
+                ListItem::new(Line::from(vec![
+                    Span::styled("All", Style::default().fg(Color::Green)),
+                    Span::raw(format!(" ({})", count)),
+                ]))
             }
             CreatorListItem::Creator(slug) => {
                 let (display_name, count) = bench_app.creator_display(slug);
-                ListItem::new(format!("{} ({})", display_name, count))
+                let openness = bench_app.creator_openness(slug);
+                ListItem::new(Line::from(vec![
+                    Span::raw(format!("{} ", display_name)),
+                    Span::styled(openness.label(), Style::default().fg(openness.color())),
+                    Span::styled(format!(" {}", count), Style::default().fg(Color::DarkGray)),
+                ]))
             }
         })
         .collect();
@@ -1020,7 +1057,7 @@ fn draw_benchmark_creators(f: &mut Frame, area: Rect, app: &mut App) {
         .highlight_symbol("> ");
 
     let mut state = bench_app.creator_list_state.clone();
-    f.render_stateful_widget(list, inner_area, &mut state);
+    f.render_stateful_widget(list, chunks[1], &mut state);
 }
 
 fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
@@ -1118,17 +1155,10 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
 }
 
 fn draw_benchmark_detail(f: &mut Frame, area: Rect, app: &App) {
-    use super::benchmarks_app::BenchmarkFocus;
-
     let bench_app = &app.benchmarks_app;
     let store = &app.benchmark_store;
 
-    let is_focused = bench_app.focus == BenchmarkFocus::Details;
-    let border_style = if is_focused {
-        Style::default().fg(Color::Cyan)
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
+    let border_style = Style::default().fg(Color::DarkGray);
 
     let block = Block::default()
         .borders(Borders::ALL)
@@ -1146,153 +1176,139 @@ fn draw_benchmark_detail(f: &mut Frame, area: Rect, app: &App) {
 
     let mut lines: Vec<Line> = Vec::new();
 
-    // Name and metadata
+    // Name + creator + metadata on first lines
+    let creator_display = if !entry.creator_name.is_empty() {
+        &entry.creator_name
+    } else {
+        &entry.creator
+    };
+    let openness = super::benchmarks_app::CreatorOpenness::from_creator(&entry.creator);
+
+    // Line 1: Name
     lines.push(Line::from(Span::styled(
         &entry.name,
         Style::default()
             .fg(Color::Cyan)
             .add_modifier(Modifier::BOLD),
     )));
-    if !entry.slug.is_empty() {
-        lines.push(Line::from(vec![
-            Span::styled("Slug: ", Style::default().fg(Color::DarkGray)),
-            Span::raw(&entry.slug),
-        ]));
-    }
-    if !entry.creator.is_empty() {
-        let creator_display = if !entry.creator_name.is_empty() {
-            &entry.creator_name
-        } else {
-            &entry.creator
-        };
-        lines.push(Line::from(vec![
-            Span::styled("Creator: ", Style::default().fg(Color::DarkGray)),
-            Span::raw(creator_display),
-        ]));
-    }
-    if let Some(ref date) = entry.release_date {
-        lines.push(Line::from(vec![
-            Span::styled("Released: ", Style::default().fg(Color::DarkGray)),
-            Span::raw(date.as_str()),
-        ]));
-    }
+    // Line 2: Creator
+    lines.push(Line::from(vec![
+        Span::styled("Creator  ", Style::default().fg(Color::DarkGray)),
+        Span::raw(creator_display),
+    ]));
+    // Line 3: Source + Release date
+    let em = "\u{2014}";
+    let date_str = entry.release_date.as_deref().unwrap_or(em);
+    lines.push(Line::from(vec![
+        Span::styled("Source   ", Style::default().fg(Color::DarkGray)),
+        Span::styled(openness.label(), Style::default().fg(openness.color())),
+        Span::styled("    Released  ", Style::default().fg(Color::DarkGray)),
+        Span::raw(date_str),
+    ]));
 
-    // Composite Indexes (0-100 scale, shown as-is)
+    // Composite Indexes (0-100 scale, higher is better)
     lines.push(Line::from(""));
-    push_section_header(&mut lines, "Composite Indexes");
-    push_two_col(
+    push_section_header(&mut lines, "Indexes (0\u{2013}100, \u{2191} better)");
+    push_three_col(
         &mut lines,
         "Intelligence",
         fmt_idx(entry.intelligence_index),
         "Coding",
         fmt_idx(entry.coding_index),
-    );
-    push_two_col(
-        &mut lines,
         "Math",
         fmt_idx(entry.math_index),
+    );
+
+    // Benchmark Scores (percentage, higher is better)
+    lines.push(Line::from(""));
+    push_section_header(&mut lines, "Benchmarks (%, \u{2191} better)");
+    push_three_col(
+        &mut lines,
+        "GPQA",
+        fmt_pct(entry.gpqa),
+        "MMLU-Pro",
+        fmt_pct(entry.mmlu_pro),
+        "HLE",
+        fmt_pct(entry.hle),
+    );
+    push_three_col(
+        &mut lines,
+        "LiveCode",
+        fmt_pct(entry.livecodebench),
+        "SciCode",
+        fmt_pct(entry.scicode),
+        "IFBench",
+        fmt_pct(entry.ifbench),
+    );
+    push_three_col(
+        &mut lines,
+        "Terminal",
+        fmt_pct(entry.terminalbench_hard),
+        "Tau2",
+        fmt_pct(entry.tau2),
+        "LCR",
+        fmt_pct(entry.lcr),
+    );
+    push_three_col(
+        &mut lines,
+        "MATH-500",
+        fmt_pct(entry.math_500),
+        "AIME'25",
+        fmt_pct(entry.aime_25),
         "",
         String::new(),
     );
 
-    // Benchmark Scores (0-1 decimal, shown as %)
+    // Performance (speed: higher better, TTFT: lower better)
     lines.push(Line::from(""));
-    push_section_header(&mut lines, "Benchmark Scores");
-    push_two_col(
-        &mut lines,
-        "GPQA Diamond",
-        fmt_pct(entry.gpqa),
-        "MMLU-Pro",
-        fmt_pct(entry.mmlu_pro),
-    );
-    push_two_col(
-        &mut lines,
-        "HLE",
-        fmt_pct(entry.hle),
-        "IFBench",
-        fmt_pct(entry.ifbench),
-    );
-    push_two_col(
-        &mut lines,
-        "LiveCodeBench",
-        fmt_pct(entry.livecodebench),
-        "SciCode",
-        fmt_pct(entry.scicode),
-    );
-    push_two_col(
-        &mut lines,
-        "TerminalBench",
-        fmt_pct(entry.terminalbench_hard),
-        "Tau2",
-        fmt_pct(entry.tau2),
-    );
-    push_two_col(&mut lines, "LCR", fmt_pct(entry.lcr), "", String::new());
-
-    // Math (0-1 decimal, shown as %)
-    if entry.math_500.is_some() || entry.aime_25.is_some() {
-        lines.push(Line::from(""));
-        push_section_header(&mut lines, "Math");
-        push_two_col(
-            &mut lines,
-            "MATH-500",
-            fmt_pct(entry.math_500),
-            "AIME'25",
-            fmt_pct(entry.aime_25),
-        );
-    }
-
-    // Performance
-    lines.push(Line::from(""));
-    push_section_header(&mut lines, "Performance");
+    push_section_header(&mut lines, "Performance (Speed \u{2191}, TTFT \u{2193})");
     let tps_str = entry
         .output_tps
         .map(|v| format!("{:.0} tok/s", v))
-        .unwrap_or_else(|| "\u{2014}".to_string());
+        .unwrap_or_else(|| em.to_string());
     let ttft_str = entry
         .ttft
         .map(|v| format!("{:.2}s", v))
-        .unwrap_or_else(|| "\u{2014}".to_string());
-    push_two_col(&mut lines, "Speed", tps_str, "TTFT", ttft_str);
+        .unwrap_or_else(|| em.to_string());
+    push_three_col(
+        &mut lines,
+        "Speed",
+        tps_str,
+        "TTFT",
+        ttft_str,
+        "",
+        String::new(),
+    );
 
-    // Pricing
-    if entry.price_input.is_some() || entry.price_output.is_some() || entry.price_blended.is_some()
-    {
-        lines.push(Line::from(""));
-        push_section_header(&mut lines, "Pricing ($/M tokens)");
-        push_two_col(
-            &mut lines,
-            "Input",
-            fmt_price(entry.price_input),
-            "Output",
-            fmt_price(entry.price_output),
-        );
-        push_two_col(
-            &mut lines,
-            "Blended",
-            fmt_price(entry.price_blended),
-            "",
-            String::new(),
-        );
-    }
+    // Pricing ($/M tokens, lower is better)
+    lines.push(Line::from(""));
+    push_section_header(&mut lines, "Pricing ($/M tokens, \u{2193} better)");
+    let blended_str = entry
+        .price_blended
+        .map(|v| format!("${:.2}", v))
+        .unwrap_or_else(|| em.to_string());
+    push_three_col(
+        &mut lines,
+        "Input",
+        fmt_price(entry.price_input),
+        "Output",
+        fmt_price(entry.price_output),
+        "Blended",
+        blended_str,
+    );
 
     // Keybinding hints
     lines.push(Line::from(""));
     lines.push(Line::from(vec![
         Span::styled("c ", Style::default().fg(Color::Yellow)),
-        Span::styled("copy name  ", Style::default().fg(Color::DarkGray)),
+        Span::styled("copy  ", Style::default().fg(Color::DarkGray)),
         Span::styled("o ", Style::default().fg(Color::Yellow)),
-        Span::styled("open AA page", Style::default().fg(Color::DarkGray)),
+        Span::styled("open AA", Style::default().fg(Color::DarkGray)),
     ]));
-
-    let visible_height = detail_visible_height(area);
-    let content_lines = lines.len() as u16;
-    let max_scroll = content_lines.saturating_sub(visible_height);
-    let scroll_pos = bench_app.detail_scroll.min(max_scroll);
 
     let paragraph = Paragraph::new(lines)
         .block(block)
-        .wrap(Wrap { trim: false })
-        .scroll((scroll_pos, 0));
+        .wrap(Wrap { trim: false });
     f.render_widget(paragraph, area);
 }
 
@@ -1307,8 +1323,15 @@ fn push_section_header(lines: &mut Vec<Line>, title: &str) {
     )));
 }
 
-/// Push a two-column row: "  Label1  Value1    Label2  Value2"
-fn push_two_col(lines: &mut Vec<Line>, label1: &str, val1: String, label2: &str, val2: String) {
+fn push_three_col(
+    lines: &mut Vec<Line>,
+    l1: &str,
+    v1: String,
+    l2: &str,
+    v2: String,
+    l3: &str,
+    v3: String,
+) {
     let em = "\u{2014}";
     let color = |s: &str| {
         if s == em {
@@ -1319,22 +1342,27 @@ fn push_two_col(lines: &mut Vec<Line>, label1: &str, val1: String, label2: &str,
     };
 
     let mut spans = vec![
-        Span::styled(
-            format!("  {:<14}", label1),
-            Style::default().fg(Color::Gray),
-        ),
-        Span::styled(format!("{:<10}", val1), Style::default().fg(color(&val1))),
+        Span::styled(format!("  {:<13}", l1), Style::default().fg(Color::Gray)),
+        Span::styled(format!("{:<10}", v1), Style::default().fg(color(&v1))),
     ];
 
-    if !label2.is_empty() {
+    if !l2.is_empty() {
         spans.push(Span::styled(
-            format!("{:<14}", label2),
+            format!("{:<13}", l2),
             Style::default().fg(Color::Gray),
         ));
         spans.push(Span::styled(
-            val2.clone(),
-            Style::default().fg(color(&val2)),
+            format!("{:<10}", v2),
+            Style::default().fg(color(&v2)),
         ));
+    }
+
+    if !l3.is_empty() {
+        spans.push(Span::styled(
+            format!("{:<13}", l3),
+            Style::default().fg(Color::Gray),
+        ));
+        spans.push(Span::styled(v3.clone(), Style::default().fg(color(&v3))));
     }
 
     lines.push(Line::from(spans));

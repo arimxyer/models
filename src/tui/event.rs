@@ -220,36 +220,33 @@ fn handle_benchmarks_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> 
         KeyCode::Char('j') | KeyCode::Down => match focus {
             BenchmarkFocus::Creators => Some(Message::NextBenchmarkCreator),
             BenchmarkFocus::List => Some(Message::NextBenchmark),
-            BenchmarkFocus::Details => Some(Message::ScrollBenchmarkDetailDown),
         },
         KeyCode::Char('k') | KeyCode::Up => match focus {
             BenchmarkFocus::Creators => Some(Message::PrevBenchmarkCreator),
             BenchmarkFocus::List => Some(Message::PrevBenchmark),
-            BenchmarkFocus::Details => Some(Message::ScrollBenchmarkDetailUp),
         },
         KeyCode::Char('d') if modifiers.contains(KeyModifiers::CONTROL) => match focus {
             BenchmarkFocus::Creators => Some(Message::PageDownBenchmarkCreator),
             BenchmarkFocus::List => Some(Message::PageDownBenchmark),
-            BenchmarkFocus::Details => Some(Message::PageScrollBenchmarkDetailDown),
         },
         KeyCode::Char('u') if modifiers.contains(KeyModifiers::CONTROL) => match focus {
             BenchmarkFocus::Creators => Some(Message::PageUpBenchmarkCreator),
             BenchmarkFocus::List => Some(Message::PageUpBenchmark),
-            BenchmarkFocus::Details => Some(Message::PageScrollBenchmarkDetailUp),
         },
         KeyCode::PageDown => match focus {
             BenchmarkFocus::Creators => Some(Message::PageDownBenchmarkCreator),
             BenchmarkFocus::List => Some(Message::PageDownBenchmark),
-            BenchmarkFocus::Details => Some(Message::PageScrollBenchmarkDetailDown),
         },
         KeyCode::PageUp => match focus {
             BenchmarkFocus::Creators => Some(Message::PageUpBenchmarkCreator),
             BenchmarkFocus::List => Some(Message::PageUpBenchmark),
-            BenchmarkFocus::Details => Some(Message::PageScrollBenchmarkDetailUp),
         },
         KeyCode::Char('h') | KeyCode::Left => Some(Message::SwitchBenchmarkFocus),
         KeyCode::Char('l') | KeyCode::Right => Some(Message::SwitchBenchmarkFocus),
         KeyCode::Tab | KeyCode::BackTab => Some(Message::SwitchBenchmarkFocus),
+
+        // Filters
+        KeyCode::Char('4') => Some(Message::CycleBenchmarkOpenness),
 
         // Sort
         KeyCode::Char('s') => Some(Message::CycleBenchmarkSort),
