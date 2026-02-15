@@ -115,6 +115,7 @@ static NON_LLM_TOKENS: LazyLock<HashSet<&str>> = LazyLock::new(|| {
         "nomic",
         "rerank",
         "reranker",
+        "guard",
     ])
 });
 
@@ -502,6 +503,16 @@ impl BenchmarkStore {
                 continue;
             }
 
+            // Structural compatibility: reject size/version/modality/specialization mismatches
+            if !fuzzy_compatible(
+                model_id,
+                model_name,
+                &self.entries[idx].name,
+                &self.entries[idx].slug,
+            ) {
+                continue;
+            }
+
             let dot: f64 = query_tokens
                 .intersection(aa_toks)
                 .filter_map(|t| self.idf.get(t.as_str()))
@@ -614,6 +625,16 @@ impl BenchmarkStore {
             let shared_count = query_tokens.intersection(aa_toks).count();
             let min_shared = 2.max(query_tokens.len().min(aa_toks.len()) / 2);
             if shared_count < min_shared {
+                continue;
+            }
+
+            // Structural compatibility: reject size/version/modality/specialization mismatches
+            if !fuzzy_compatible(
+                model_id,
+                model_name,
+                &self.entries[idx].name,
+                &self.entries[idx].slug,
+            ) {
                 continue;
             }
 
@@ -817,6 +838,116 @@ fn fuzzy_tokenize(s: &str) -> HashSet<String> {
         .filter(|t| !(t.len() >= 6 && t.chars().all(|c| c.is_ascii_digit() || c == '.')))
         .map(|t| t.to_string())
         .collect()
+}
+
+/// Regex to extract parameter-count sizes like "8B", "27b", "70B", "1.5b".
+static RE_SIZE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)(\d+(?:\.\d+)?)\s*[xX]?\s*[bB]\b").unwrap());
+
+/// Regex to extract family version numbers for known model families.
+/// Captures (family_name, version_number) from strings like "phi-3", "llama3.1", "gemma2".
+static RE_FAMILY_VERSION: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)(phi|grok|gemma|llama|qwen|glm|mistral|gemini|claude|gpt|deepseek|command)[-_.\s]?(\d+(?:\.\d+)?)")
+        .unwrap()
+});
+
+/// Vision/multimodal indicator tokens.
+static VISION_TOKENS: &[&str] = &["vl", "vision", "multimodal"];
+
+/// Specialization tokens that indicate a model variant incompatible with the base.
+static SPECIALIZATION_TOKENS: &[&str] = &["coder", "code", "math", "safety"];
+
+/// Product-tier tokens where one cannot substitute for another within the same family.
+static TIER_TOKENS: &[&str] = &["flash", "pro", "ultra", "nano", "haiku", "sonnet", "opus"];
+
+/// Extract all parameter-count sizes from a string (e.g., "8B", "27b", "1.5B").
+fn extract_sizes(s: &str) -> HashSet<String> {
+    RE_SIZE
+        .captures_iter(s)
+        .map(|c| c[1].to_lowercase())
+        .collect()
+}
+
+/// Extract (family, version) pairs from a string.
+fn extract_family_versions(s: &str) -> Vec<(String, String)> {
+    RE_FAMILY_VERSION
+        .captures_iter(s)
+        .map(|c| (c[1].to_lowercase(), c[2].to_string()))
+        .collect()
+}
+
+/// Check if a string contains any of the given tokens as whole words.
+fn has_token(s: &str, tokens: &[&str]) -> bool {
+    let lower = s.to_lowercase();
+    tokens.iter().any(|&tok| {
+        lower
+            .split(|c: char| !c.is_alphanumeric())
+            .any(|w| w == tok)
+    })
+}
+
+/// Returns false if the query model and AA entry are structurally incompatible
+/// (different size, version, modality, or specialization). Used as a pre-filter
+/// in T5 (TF-IDF) and T6 (Jaro-Winkler) fuzzy matching to reduce false positives.
+fn fuzzy_compatible(query_id: &str, query_name: &str, aa_name: &str, aa_slug: &str) -> bool {
+    let q_combined = format!("{} {}", query_id, query_name);
+    let aa_combined = format!("{} {}", aa_name, aa_slug);
+
+    // 1. Size gate: reject if both sides have explicit sizes that don't overlap
+    let q_sizes = extract_sizes(&q_combined);
+    let aa_sizes = extract_sizes(&aa_combined);
+    if !q_sizes.is_empty() && !aa_sizes.is_empty() && q_sizes.is_disjoint(&aa_sizes) {
+        return false;
+    }
+
+    // 2. Version gate: reject if same family but different major version
+    let q_fv = extract_family_versions(&q_combined);
+    let aa_fv = extract_family_versions(&aa_combined);
+    for (q_family, q_ver) in &q_fv {
+        for (aa_family, aa_ver) in &aa_fv {
+            if q_family == aa_family && q_ver != aa_ver {
+                // Compare major version only (before first dot)
+                let q_major = q_ver.split('.').next().unwrap_or(q_ver);
+                let aa_major = aa_ver.split('.').next().unwrap_or(aa_ver);
+                if q_major != aa_major {
+                    return false;
+                }
+            }
+        }
+    }
+
+    // 3. Vision/VL gate: reject if one side is vision and the other is not
+    let q_vision = has_token(&q_combined, VISION_TOKENS);
+    let aa_vision = has_token(&aa_combined, VISION_TOKENS);
+    if q_vision != aa_vision {
+        return false;
+    }
+
+    // 4. Specialization gate: reject if one side has a specialization the other lacks
+    for &tok in SPECIALIZATION_TOKENS {
+        let q_has = has_token(&q_combined, &[tok]);
+        let aa_has = has_token(&aa_combined, &[tok]);
+        if q_has != aa_has {
+            return false;
+        }
+    }
+
+    // 5. Product-tier gate: reject if both sides have tier tokens but they differ
+    let q_tiers: HashSet<&str> = TIER_TOKENS
+        .iter()
+        .filter(|&&t| has_token(&q_combined, &[t]))
+        .copied()
+        .collect();
+    let aa_tiers: HashSet<&str> = TIER_TOKENS
+        .iter()
+        .filter(|&&t| has_token(&aa_combined, &[t]))
+        .copied()
+        .collect();
+    if !q_tiers.is_empty() && !aa_tiers.is_empty() && q_tiers.is_disjoint(&aa_tiers) {
+        return false;
+    }
+
+    true
 }
 
 /// Returns true if a query is brand-compatible with an AA entry.
