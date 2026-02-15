@@ -12,7 +12,7 @@ use crate::benchmarks::BenchmarkEntry;
 
 const CACHE_VERSION: u32 = 1;
 const CACHE_FILENAME: &str = "benchmarks-cache.json";
-const CACHE_TTL_SECS: i64 = 24 * 60 * 60; // 24 hours
+const CACHE_TTL_SECS: i64 = 6 * 60 * 60; // 6 hours
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BenchmarkCache {
