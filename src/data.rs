@@ -82,6 +82,7 @@ pub struct Modalities {
 impl Model {
     /// Returns true if this model outputs text (or has no modalities specified).
     /// Non-text models (image gen, video gen, embeddings) return false.
+    #[cfg(test)]
     pub fn is_text_model(&self) -> bool {
         match &self.modalities {
             Some(m) => m.output.iter().any(|o| o == "text"),
