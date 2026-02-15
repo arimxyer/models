@@ -158,8 +158,13 @@ pub enum Message {
     PageUpBenchmarkCreator,
     SwitchBenchmarkFocus,
     CycleBenchmarkOpenness,
+    CycleBenchmarkRegion,
+    CycleBenchmarkType,
     CycleBenchmarkSort,
     ToggleBenchmarkSortDir,
+    QuickSortIntelligence,
+    QuickSortDate,
+    QuickSortSpeed,
     CopyBenchmarkName,
     OpenBenchmarkUrl,
     // Async data messages
@@ -755,12 +760,37 @@ impl App {
                 self.benchmarks_app
                     .cycle_openness_filter(&self.benchmark_store);
             }
+            Message::CycleBenchmarkRegion => {
+                self.benchmarks_app
+                    .cycle_region_filter(&self.benchmark_store);
+            }
+            Message::CycleBenchmarkType => {
+                self.benchmarks_app.cycle_type_filter(&self.benchmark_store);
+            }
             Message::CycleBenchmarkSort => {
                 self.benchmarks_app.cycle_sort(&self.benchmark_store);
             }
             Message::ToggleBenchmarkSortDir => {
                 self.benchmarks_app
                     .toggle_sort_direction(&self.benchmark_store);
+            }
+            Message::QuickSortIntelligence => {
+                self.benchmarks_app.quick_sort(
+                    super::benchmarks_app::BenchmarkSortColumn::Intelligence,
+                    &self.benchmark_store,
+                );
+            }
+            Message::QuickSortDate => {
+                self.benchmarks_app.quick_sort(
+                    super::benchmarks_app::BenchmarkSortColumn::ReleaseDate,
+                    &self.benchmark_store,
+                );
+            }
+            Message::QuickSortSpeed => {
+                self.benchmarks_app.quick_sort(
+                    super::benchmarks_app::BenchmarkSortColumn::Speed,
+                    &self.benchmark_store,
+                );
             }
             Message::CopyBenchmarkName | Message::OpenBenchmarkUrl => {
                 // Handled in main loop

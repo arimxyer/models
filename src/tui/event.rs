@@ -245,8 +245,15 @@ fn handle_benchmarks_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> 
         KeyCode::Char('l') | KeyCode::Right => Some(Message::SwitchBenchmarkFocus),
         KeyCode::Tab | KeyCode::BackTab => Some(Message::SwitchBenchmarkFocus),
 
+        // Quick-sort (press again to toggle direction)
+        KeyCode::Char('1') => Some(Message::QuickSortIntelligence),
+        KeyCode::Char('2') => Some(Message::QuickSortDate),
+        KeyCode::Char('3') => Some(Message::QuickSortSpeed),
+
         // Filters
         KeyCode::Char('4') => Some(Message::CycleBenchmarkOpenness),
+        KeyCode::Char('5') => Some(Message::CycleBenchmarkRegion),
+        KeyCode::Char('6') => Some(Message::CycleBenchmarkType),
 
         // Sort
         KeyCode::Char('s') => Some(Message::CycleBenchmarkSort),

@@ -977,7 +977,9 @@ fn draw_benchmarks_main(f: &mut Frame, area: Rect, app: &mut App) {
 }
 
 fn draw_benchmark_creators(f: &mut Frame, area: Rect, app: &mut App) {
-    use super::benchmarks_app::{BenchmarkFocus, CreatorListItem, OpennessFilter};
+    use super::benchmarks_app::{
+        BenchmarkFocus, CreatorListItem, OpennessFilter, RegionFilter, TypeFilter,
+    };
 
     let bench_app = &mut app.benchmarks_app;
     let store = &app.benchmark_store;
@@ -996,9 +998,9 @@ fn draw_benchmark_creators(f: &mut Frame, area: Rect, app: &mut App) {
     let inner_area = outer_block.inner(area);
     f.render_widget(outer_block, area);
 
-    // Filter row
-    let filter_active = bench_app.openness_filter != OpennessFilter::All;
-    let filter_color = if filter_active {
+    // Filter rows — one per filter dimension
+    let src_active = bench_app.openness_filter != OpennessFilter::All;
+    let src_color = if src_active {
         match bench_app.openness_filter {
             OpennessFilter::Open => Color::Green,
             OpennessFilter::Closed => Color::Red,
@@ -1008,14 +1010,43 @@ fn draw_benchmark_creators(f: &mut Frame, area: Rect, app: &mut App) {
     } else {
         Color::DarkGray
     };
-    let filter_label = if filter_active {
+    let src_label = if src_active {
         bench_app.openness_filter.label()
     } else {
         "Src"
     };
+
+    let rgn_active = bench_app.region_filter != RegionFilter::All;
+    let rgn_color = if rgn_active {
+        Color::Cyan
+    } else {
+        Color::DarkGray
+    };
+    let rgn_label = if rgn_active {
+        bench_app.region_filter.label()
+    } else {
+        "Rgn"
+    };
+
+    let typ_active = bench_app.type_filter != TypeFilter::All;
+    let typ_color = if typ_active {
+        Color::Magenta
+    } else {
+        Color::DarkGray
+    };
+    let typ_label = if typ_active {
+        bench_app.type_filter.label()
+    } else {
+        "Type"
+    };
+
     let filter_line = Line::from(vec![
-        Span::styled("[4]", Style::default().fg(filter_color)),
-        Span::raw(format!(" {}", filter_label)),
+        Span::styled("[4]", Style::default().fg(src_color)),
+        Span::raw(format!("{} ", src_label)),
+        Span::styled("[5]", Style::default().fg(rgn_color)),
+        Span::raw(format!("{} ", rgn_label)),
+        Span::styled("[6]", Style::default().fg(typ_color)),
+        Span::raw(typ_label.to_string()),
     ]);
 
     let chunks = Layout::default()
@@ -1039,9 +1070,12 @@ fn draw_benchmark_creators(f: &mut Frame, area: Rect, app: &mut App) {
             CreatorListItem::Creator(slug) => {
                 let (display_name, count) = bench_app.creator_display(slug);
                 let openness = bench_app.creator_openness(slug);
+                let region = bench_app.creator_region(slug);
                 ListItem::new(Line::from(vec![
                     Span::raw(format!("{} ({}) ", display_name, count)),
                     Span::styled(openness.label(), Style::default().fg(openness.color())),
+                    Span::raw(" "),
+                    Span::styled(region.label(), Style::default().fg(Color::DarkGray)),
                 ]))
             }
         })
@@ -1182,6 +1216,8 @@ fn draw_benchmark_detail(f: &mut Frame, area: Rect, app: &App) {
         &entry.creator
     };
     let openness = super::benchmarks_app::CreatorOpenness::from_creator(&entry.creator);
+    let region = super::benchmarks_app::CreatorRegion::from_creator(&entry.creator);
+    let creator_type = super::benchmarks_app::CreatorType::from_creator(&entry.creator);
 
     // Line 1: Name
     lines.push(Line::from(Span::styled(
@@ -1190,10 +1226,13 @@ fn draw_benchmark_detail(f: &mut Frame, area: Rect, app: &App) {
             .fg(Color::Cyan)
             .add_modifier(Modifier::BOLD),
     )));
-    // Line 2: Creator
+    // Line 2: Creator + region + type
     lines.push(Line::from(vec![
         Span::styled("Creator  ", Style::default().fg(Color::DarkGray)),
-        Span::raw(creator_display),
+        Span::raw(format!("{}  ", creator_display)),
+        Span::styled(region.label(), Style::default().fg(Color::DarkGray)),
+        Span::raw("  "),
+        Span::styled(creator_type.label(), Style::default().fg(Color::DarkGray)),
     ]));
     // Line 3: Source + Release date
     let em = "\u{2014}";
@@ -1533,18 +1572,18 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
                     Span::raw("repo"),
                 ]),
                 Tab::Benchmarks => Line::from(vec![
-                    Span::styled(" q ", Style::default().fg(Color::Yellow)),
-                    Span::raw("quit  "),
-                    Span::styled(" / ", Style::default().fg(Color::Yellow)),
-                    Span::raw("search  "),
+                    Span::styled(" 1 ", Style::default().fg(Color::Yellow)),
+                    Span::raw("intel  "),
+                    Span::styled(" 2 ", Style::default().fg(Color::Yellow)),
+                    Span::raw("date  "),
+                    Span::styled(" 3 ", Style::default().fg(Color::Yellow)),
+                    Span::raw("speed  "),
+                    Span::styled(" 4-6 ", Style::default().fg(Color::Yellow)),
+                    Span::raw("filters  "),
                     Span::styled(" s ", Style::default().fg(Color::Yellow)),
                     Span::raw("sort  "),
-                    Span::styled(" S ", Style::default().fg(Color::Yellow)),
-                    Span::raw("dir  "),
-                    Span::styled(" c ", Style::default().fg(Color::Yellow)),
-                    Span::raw("copy  "),
-                    Span::styled(" o ", Style::default().fg(Color::Yellow)),
-                    Span::raw("open AA"),
+                    Span::styled(" / ", Style::default().fg(Color::Yellow)),
+                    Span::raw("search"),
                 ]),
             };
 
@@ -1829,14 +1868,52 @@ fn draw_help_popup(f: &mut Frame, scroll: u16, current_tab: Tab) {
         Tab::Benchmarks => {
             help_text.extend(vec![
                 Line::from(Span::styled(
-                    "Sort",
+                    "Quick Sort (press again to flip direction)",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                )),
+                Line::from(vec![
+                    Span::styled("  1             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Sort by Intelligence index"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  2             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Sort by Release date"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  3             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Sort by Speed (tok/s)"),
+                ]),
+                Line::from(""),
+                Line::from(Span::styled(
+                    "Filters",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                )),
+                Line::from(vec![
+                    Span::styled("  4             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Cycle source filter (Open/Closed/Mixed)"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  5             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Cycle region filter (US/China/Europe/...)"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  6             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Cycle type filter (Startup/Big Tech/Research)"),
+                ]),
+                Line::from(""),
+                Line::from(Span::styled(
+                    "Sort (full cycle)",
                     Style::default()
                         .fg(Color::Cyan)
                         .add_modifier(Modifier::BOLD),
                 )),
                 Line::from(vec![
                     Span::styled("  s             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Cycle sort column"),
+                    Span::raw("Cycle through all sort columns"),
                 ]),
                 Line::from(vec![
                     Span::styled("  S             ", Style::default().fg(Color::Yellow)),

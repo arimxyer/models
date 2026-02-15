@@ -221,6 +221,178 @@ impl OpennessFilter {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CreatorRegion {
+    US,
+    China,
+    Europe,
+    MiddleEast,
+    SouthKorea,
+    Canada,
+    Other,
+}
+
+impl CreatorRegion {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::US => "US",
+            Self::China => "China",
+            Self::Europe => "Europe",
+            Self::MiddleEast => "Middle East",
+            Self::SouthKorea => "S. Korea",
+            Self::Canada => "Canada",
+            Self::Other => "Other",
+        }
+    }
+
+    pub fn from_creator(slug: &str) -> Self {
+        match slug {
+            // United States
+            "openai" | "anthropic" | "google" | "meta" | "xai" | "aws" | "nvidia"
+            | "perplexity" | "azure" | "ibm" | "databricks" | "servicenow" | "snowflake"
+            | "liquidai" | "nous-research" | "ai2" | "prime-intellect" | "deepcogito"
+            | "reka-ai" => Self::US,
+            // China
+            "deepseek" | "alibaba" | "kimi" | "minimax" | "stepfun" | "baidu"
+            | "bytedance_seed" | "xiaomi" | "inclusionai" | "kwaikat" | "zai" | "openchat" => {
+                Self::China
+            }
+            // Europe
+            "mistral" => Self::Europe,
+            // Middle East (UAE)
+            "tii-uae" | "mbzuai" => Self::MiddleEast,
+            // South Korea
+            "naver" | "korea-telecom" | "lg" | "upstage" | "motif-technologies" => Self::SouthKorea,
+            // Canada
+            "cohere" => Self::Canada,
+            // Other (Israel: ai21-labs, etc.)
+            _ => Self::Other,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum RegionFilter {
+    #[default]
+    All,
+    US,
+    China,
+    Europe,
+    MiddleEast,
+    SouthKorea,
+    Canada,
+    Other,
+}
+
+impl RegionFilter {
+    pub fn next(self) -> Self {
+        match self {
+            Self::All => Self::US,
+            Self::US => Self::China,
+            Self::China => Self::Europe,
+            Self::Europe => Self::MiddleEast,
+            Self::MiddleEast => Self::SouthKorea,
+            Self::SouthKorea => Self::Canada,
+            Self::Canada => Self::Other,
+            Self::Other => Self::All,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::All => "All",
+            Self::US => "US",
+            Self::China => "China",
+            Self::Europe => "Europe",
+            Self::MiddleEast => "Mid East",
+            Self::SouthKorea => "S. Korea",
+            Self::Canada => "Canada",
+            Self::Other => "Other",
+        }
+    }
+
+    pub fn matches(self, region: CreatorRegion) -> bool {
+        match self {
+            Self::All => true,
+            Self::US => region == CreatorRegion::US,
+            Self::China => region == CreatorRegion::China,
+            Self::Europe => region == CreatorRegion::Europe,
+            Self::MiddleEast => region == CreatorRegion::MiddleEast,
+            Self::SouthKorea => region == CreatorRegion::SouthKorea,
+            Self::Canada => region == CreatorRegion::Canada,
+            Self::Other => region == CreatorRegion::Other,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CreatorType {
+    Startup,
+    Giant,
+    Research,
+}
+
+impl CreatorType {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Startup => "Startup",
+            Self::Giant => "Big Tech",
+            Self::Research => "Research",
+        }
+    }
+
+    pub fn from_creator(slug: &str) -> Self {
+        match slug {
+            // Big tech / large corporations
+            "google" | "meta" | "aws" | "nvidia" | "alibaba" | "azure" | "ibm" | "servicenow"
+            | "snowflake" | "baidu" | "bytedance_seed" | "xiaomi" | "naver" | "korea-telecom"
+            | "lg" | "kwaikat" | "databricks" | "zai" | "inclusionai" => Self::Giant,
+            // Research labs / institutes / nonprofits
+            "tii-uae" | "mbzuai" | "nous-research" | "ai2" | "openchat" => Self::Research,
+            // AI-focused startups (default)
+            _ => Self::Startup,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TypeFilter {
+    #[default]
+    All,
+    Startup,
+    Giant,
+    Research,
+}
+
+impl TypeFilter {
+    pub fn next(self) -> Self {
+        match self {
+            Self::All => Self::Startup,
+            Self::Startup => Self::Giant,
+            Self::Giant => Self::Research,
+            Self::Research => Self::All,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::All => "All",
+            Self::Startup => "Startup",
+            Self::Giant => "Big Tech",
+            Self::Research => "Research",
+        }
+    }
+
+    pub fn matches(self, creator_type: CreatorType) -> bool {
+        match self {
+            Self::All => true,
+            Self::Startup => creator_type == CreatorType::Startup,
+            Self::Giant => creator_type == CreatorType::Giant,
+            Self::Research => creator_type == CreatorType::Research,
+        }
+    }
+}
+
 /// Pre-computed creator info: (display_name, entry_count)
 struct CreatorInfo {
     display_name: String,
@@ -240,6 +412,8 @@ pub struct BenchmarksApp {
     pub selected_creator: usize,
     pub creator_list_state: ListState,
     pub openness_filter: OpennessFilter,
+    pub region_filter: RegionFilter,
+    pub type_filter: TypeFilter,
     creator_info: HashMap<String, CreatorInfo>,
 }
 
@@ -263,6 +437,8 @@ impl BenchmarksApp {
             selected_creator: 0,
             creator_list_state,
             openness_filter: OpennessFilter::default(),
+            region_filter: RegionFilter::default(),
+            type_filter: TypeFilter::default(),
             creator_info: HashMap::new(),
         };
 
@@ -295,6 +471,10 @@ impl BenchmarksApp {
             .filter(|slug| {
                 self.openness_filter
                     .matches(CreatorOpenness::from_creator(slug))
+                    && self
+                        .region_filter
+                        .matches(CreatorRegion::from_creator(slug))
+                    && self.type_filter.matches(CreatorType::from_creator(slug))
             })
             .cloned()
             .collect();
@@ -326,6 +506,11 @@ impl BenchmarksApp {
         CreatorOpenness::from_creator(slug)
     }
 
+    /// Get the region for a creator slug.
+    pub fn creator_region(&self, slug: &str) -> CreatorRegion {
+        CreatorRegion::from_creator(slug)
+    }
+
     /// Get the currently selected creator slug, or None for "All".
     fn selected_creator_slug(&self) -> Option<&str> {
         match self.creator_list_items.get(self.selected_creator) {
@@ -344,8 +529,20 @@ impl BenchmarksApp {
             .iter()
             .enumerate()
             .filter(|(_, entry)| {
-                // Openness filter (applies even when "All" creators selected)
+                // Creator attribute filters (apply even when "All" creators selected)
                 if !openness_filter.matches(CreatorOpenness::from_creator(&entry.creator)) {
+                    return false;
+                }
+                if !self
+                    .region_filter
+                    .matches(CreatorRegion::from_creator(&entry.creator))
+                {
+                    return false;
+                }
+                if !self
+                    .type_filter
+                    .matches(CreatorType::from_creator(&entry.creator))
+                {
                     return false;
                 }
                 // Creator filter
@@ -439,6 +636,18 @@ impl BenchmarksApp {
         self.apply_sort(store);
     }
 
+    /// Jump directly to a sort column. If already on that column, toggle direction.
+    pub fn quick_sort(&mut self, col: BenchmarkSortColumn, store: &BenchmarkStore) {
+        if self.sort_column == col {
+            self.sort_descending = !self.sort_descending;
+            self.apply_sort(store);
+        } else {
+            self.sort_column = col;
+            self.sort_descending = col.default_descending();
+            self.update_filtered(store);
+        }
+    }
+
     pub fn current_entry<'a>(
         &self,
         store: &'a BenchmarkStore,
@@ -477,6 +686,22 @@ impl BenchmarksApp {
 
     pub fn cycle_openness_filter(&mut self, store: &BenchmarkStore) {
         self.openness_filter = self.openness_filter.next();
+        self.build_creator_list(store);
+        self.selected_creator = 0;
+        self.creator_list_state.select(Some(0));
+        self.update_filtered(store);
+    }
+
+    pub fn cycle_region_filter(&mut self, store: &BenchmarkStore) {
+        self.region_filter = self.region_filter.next();
+        self.build_creator_list(store);
+        self.selected_creator = 0;
+        self.creator_list_state.select(Some(0));
+        self.update_filtered(store);
+    }
+
+    pub fn cycle_type_filter(&mut self, store: &BenchmarkStore) {
+        self.type_filter = self.type_filter.next();
         self.build_creator_list(store);
         self.selected_creator = 0;
         self.creator_list_state.select(Some(0));
