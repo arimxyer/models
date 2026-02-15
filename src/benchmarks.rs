@@ -18,7 +18,10 @@ static RE_PARENS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s*\([^)]*\)")
 
 /// Regex to strip reasoning/thinking variant suffixes for fuzzy tokenization.
 static RE_VARIANT_SUFFIX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"[-\s](?:non[-\s]?reasoning|reasoning|thinking|adaptive)\b").unwrap()
+    Regex::new(
+        r"[-\s](?:non[-\s]?reasoning|reasoning|thinking|adaptive|nothink|preview|latest|turbo)\b",
+    )
+    .unwrap()
 });
 
 /// Brand tokens used for cross-brand filtering in fuzzy matching.
@@ -448,7 +451,7 @@ impl BenchmarkStore {
         model_name: &str,
         reasoning: bool,
     ) -> Option<&BenchmarkEntry> {
-        const THRESHOLD: f64 = 0.65;
+        const THRESHOLD: f64 = 0.55;
         /// Minimum gap between top-1 and top-2 cosine scores to accept a match.
         /// Prevents false positives in dense neighborhoods where multiple candidates
         /// score similarly (ambiguity gating).
@@ -494,11 +497,15 @@ impl BenchmarkStore {
                 continue;
             }
 
-            // Scaled shared-token minimum: require at least 2 shared tokens, or half
-            // the smaller set size, whichever is greater. Prevents sparse matches on
-            // long model names where 2 tokens is insufficient.
+            // Scaled shared-token minimum: relaxed when brand is structurally confirmed
+            // via CREATOR_BRANDS, stricter for unknown/heuristic brands.
             let shared_count = query_tokens.intersection(aa_toks).count();
-            let min_shared = 2.max(query_tokens.len().min(aa_toks.len()) / 2);
+            let brand_confirmed = creator_confirmed(&query_tokens, entry_creator);
+            let min_shared = if brand_confirmed {
+                1.max(query_tokens.len().min(aa_toks.len()) / 3)
+            } else {
+                2.max(query_tokens.len().min(aa_toks.len()) / 2)
+            };
             if shared_count < min_shared {
                 continue;
             }
@@ -597,7 +604,7 @@ impl BenchmarkStore {
         model_name: &str,
         reasoning: bool,
     ) -> Option<&BenchmarkEntry> {
-        const JW_THRESHOLD: f64 = 0.85;
+        const JW_THRESHOLD: f64 = 0.80;
 
         let query_tokens: HashSet<String> = fuzzy_tokenize(model_id)
             .union(&fuzzy_tokenize(model_name))
@@ -623,7 +630,12 @@ impl BenchmarkStore {
             }
 
             let shared_count = query_tokens.intersection(aa_toks).count();
-            let min_shared = 2.max(query_tokens.len().min(aa_toks.len()) / 2);
+            let brand_confirmed = creator_confirmed(&query_tokens, entry_creator);
+            let min_shared = if brand_confirmed {
+                1.max(query_tokens.len().min(aa_toks.len()) / 3)
+            } else {
+                2.max(query_tokens.len().min(aa_toks.len()) / 2)
+            };
             if shared_count < min_shared {
                 continue;
             }
@@ -993,6 +1005,18 @@ fn creator_compatible(
         return true;
     }
     !q_brands.is_disjoint(&e_brands)
+}
+
+/// Returns true only when the query brand matches via the structured `CREATOR_BRANDS`
+/// map. Used to relax `min_shared` requirements when we have high-confidence brand data.
+fn creator_confirmed(query: &HashSet<String>, creator: &str) -> bool {
+    let q_brands: HashSet<&str> = query.iter().filter_map(|t| extract_brand(t)).collect();
+    if q_brands.is_empty() {
+        return false;
+    }
+    CREATOR_BRANDS
+        .get(creator)
+        .is_some_and(|brands| q_brands.iter().any(|b| brands.contains(b)))
 }
 
 #[cfg(test)]
