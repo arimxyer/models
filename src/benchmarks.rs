@@ -18,10 +18,7 @@ static RE_PARENS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s*\([^)]*\)")
 
 /// Regex to strip reasoning/thinking variant suffixes for fuzzy tokenization.
 static RE_VARIANT_SUFFIX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(
-        r"[-\s](?:non[-\s]?reasoning|reasoning|thinking|adaptive|nothink|preview|latest|turbo)\b",
-    )
-    .unwrap()
+    Regex::new(r"[-\s](?:non[-\s]?reasoning|reasoning|thinking|adaptive|nothink|turbo)\b").unwrap()
 });
 
 /// Brand tokens used for cross-brand filtering in fuzzy matching.
@@ -158,6 +155,33 @@ static MANUAL_OVERRIDES: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
         // "GPT-4o (ChatGPT)" with slug "gpt-4o-chatgpt". Fuzzy shares
         // {"4o","chatgpt"} but "latest" and "gpt" diverge, cosine < 0.65.
         ("chatgpt4olatest", "gpt-4o-chatgpt"),
+        //
+        // ── Mistral date-based IDs vs version names ──
+        //
+        // Mistral uses date-based model_ids (2508, 2503) while AA uses
+        // version names (3.1). Fuzzy can't bridge "2508" ↔ "3.1".
+        ("mistralmedium2508", "mistral-medium-3-1"),
+        ("mistralsmall2503", "mistral-small-3-1"),
+        // "magistral-medium-latest" is the alias; AA tracks the specific
+        // release as "Magistral Medium 1.2" (slug magistral-medium-2509).
+        ("magistralmediumlatest", "magistral-medium-2509"),
+        // "mistral-saba-24b" has size suffix; AA tracks as just "Mistral Saba".
+        ("mistralsaba24b", "mistral-saba"),
+        //
+        // ── Xiaomi MiMo name vs date slug ──
+        //
+        // models.dev uses "mimo-v2-flash"; AA slug uses a date: "mimo-v2-0206".
+        ("mimov2flash", "mimo-v2-0206"),
+        //
+        // ── MiniMax context-window suffix ──
+        //
+        // models.dev: "MiniMax-M1"; AA: "MiniMax M1 40k" (slug minimax-m1-40k).
+        ("minimaxm1", "minimax-m1-40k"),
+        //
+        // ── Upstage Solar name mismatch ──
+        //
+        // models.dev: "solar-pro2"; AA: "Solar Pro 2" with reasoning/preview variants.
+        ("solarpro2", "solar-pro-2-reasoning"),
     ])
 });
 
