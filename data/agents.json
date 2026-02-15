@@ -224,6 +224,26 @@
       "config_files": [],
       "homepage": "https://moonshotai.github.io/kimi-cli/",
       "docs": "https://moonshotai.github.io/kimi-cli/"
+    },
+    "openclaw": {
+      "name": "OpenClaw",
+      "repo": "openclaw/openclaw",
+      "categories": ["cli"],
+      "installation_method": "cli",
+      "pricing": {
+        "model": "free",
+        "free_tier": true,
+        "usage_notes": "Free tool, pay for underlying model API"
+      },
+      "supported_providers": ["anthropic", "openai"],
+      "platform_support": ["macos", "linux", "windows"],
+      "open_source": true,
+      "cli_binary": "openclaw",
+      "version_command": ["--version"],
+      "version_regex": "([0-9]+\\.[0-9]+\\.[0-9]+)",
+      "config_files": [],
+      "homepage": "https://openclaw.ai",
+      "docs": "https://docs.openclaw.ai"
     }
   }
 }
