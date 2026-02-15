@@ -14,9 +14,15 @@ A fast CLI and TUI for browsing AI models, benchmarks, and coding agents.
 
 <video src="https://github.com/user-attachments/assets/f4c33f15-8ae7-4997-bb9f-240b79b0b562" controls width="100%"></video>
 
-## What's New (v0.8.0)
+## What's New (v0.8.1)
 
-### Benchmarks Tab (New)
+### Runtime Benchmark Data
+- **Auto-updating benchmarks** — benchmark data refreshes from CDN every 6 hours in the background, no user configuration required
+- **Disk cache** — previously fetched data persists across sessions at `~/.config/models/benchmarks-cache.json`
+- **Offline fallback** — embedded data is always available when the network is unreachable
+- **GitHub Action** — daily automated refresh of benchmark data from the Artificial Analysis API
+
+### v0.8.0: Benchmarks Tab (New)
 - **Dedicated Benchmarks tab** — browse 400+ model entries from Artificial Analysis with quality, speed, and pricing data
 - **Creator sidebar** with 40+ creators, each classified by source (Open/Closed/Mixed), region (US/China/Europe/Middle East/S. Korea/Canada/Other), and type (Startup/Big Tech/Research)
 - **Three filter dimensions** — `[4]` source, `[5]` region, `[6]` type — to slice the creator and benchmark lists
@@ -47,6 +53,7 @@ A fast CLI and TUI for browsing AI models, benchmarks, and coding agents.
 
 ### Benchmarks Tab
 - **400+ benchmark entries** from Artificial Analysis with quality, speed, and pricing scores
+- **Auto-updating** — data refreshes from CDN every 6 hours in the background with offline fallback
 - **Creator sidebar** with 40+ creators — filter by source (Open/Closed/Mixed), region (US/China/Europe/...), and type (Startup/Big Tech/Research)
 - **Quick-sort keys** — instantly sort by Intelligence, Date, or Speed
 - **Dynamic columns** — list columns adapt to show the most relevant benchmarks for the active sort
