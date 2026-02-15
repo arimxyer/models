@@ -30,6 +30,9 @@ serde_json = "1"
 # Regex
 regex = "1"
 
+# String similarity (Jaro-Winkler for T6 fuzzy matching)
+strsim = "0.11"
+
 # TUI
 ratatui = "0.29"
 crossterm = "0.28"
