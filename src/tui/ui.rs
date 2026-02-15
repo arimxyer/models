@@ -12,7 +12,7 @@ use crate::provider_category::{provider_category, ProviderCategory};
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let (main_constraint, detail_constraint) = match app.current_tab {
-        Tab::Models => (Constraint::Min(0), Constraint::Length(25)),
+        Tab::Models => (Constraint::Min(0), Constraint::Percentage(35)),
         Tab::Agents | Tab::Benchmarks => (Constraint::Min(0), Constraint::Length(0)),
     };
 
@@ -966,10 +966,10 @@ fn draw_benchmarks_main(f: &mut Frame, area: Rect, app: &mut App) {
 
     draw_benchmark_creators(f, h_chunks[0], app);
 
-    // Vertical split of right side: table (65%) | detail (35%)
+    // Vertical split of right side: table (55%) | detail (45%)
     let v_chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Percentage(65), Constraint::Percentage(35)])
+        .constraints([Constraint::Percentage(55), Constraint::Percentage(45)])
         .split(h_chunks[1]);
 
     draw_benchmark_list(f, v_chunks[0], app);
@@ -1040,9 +1040,8 @@ fn draw_benchmark_creators(f: &mut Frame, area: Rect, app: &mut App) {
                 let (display_name, count) = bench_app.creator_display(slug);
                 let openness = bench_app.creator_openness(slug);
                 ListItem::new(Line::from(vec![
-                    Span::raw(format!("{} ", display_name)),
+                    Span::raw(format!("{} ({}) ", display_name, count)),
                     Span::styled(openness.label(), Style::default().fg(openness.color())),
-                    Span::styled(format!(" {}", count), Style::default().fg(Color::DarkGray)),
                 ]))
             }
         })
@@ -1102,21 +1101,28 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
     let inner_area = outer_block.inner(area);
     f.render_widget(outer_block, area);
 
-    // Header row + data rows
+    // Dynamic columns based on active sort
+    let visible_cols = bench_app.sort_column.visible_columns();
+
     let header_style = Style::default()
         .fg(Color::Yellow)
         .add_modifier(Modifier::BOLD);
+    let active_header_style = Style::default()
+        .fg(Color::Cyan)
+        .add_modifier(Modifier::BOLD);
 
-    let header = ListItem::new(Line::from(vec![
-        Span::styled(format!("{:<28}", "Name"), header_style),
-        Span::styled(format!("{:>6}", "Intel"), header_style),
-        Span::styled(format!("{:>6}", "Code"), header_style),
-        Span::styled(format!("{:>6}", "Math"), header_style),
-        Span::styled(format!("{:>6}", "GPQA"), header_style),
-        Span::styled(format!("{:>6}", "MMLU"), header_style),
-        Span::styled(format!("{:>6}", "HLE"), header_style),
-        Span::styled(format!("{:>7}", "Tok/s"), header_style),
-    ]));
+    let header_spans: Vec<Span> = visible_cols
+        .iter()
+        .map(|col| {
+            let style = if *col == bench_app.sort_column {
+                active_header_style
+            } else {
+                header_style
+            };
+            benchmark_col_header(*col, style)
+        })
+        .collect();
+    let header = ListItem::new(Line::from(header_spans));
 
     let entries = store.entries();
     let mut items: Vec<ListItem> = vec![header];
@@ -1125,7 +1131,6 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
         let entry = &entries[entry_idx];
         let is_selected = display_idx == bench_app.selected;
 
-        let name = truncate(&entry.name, 27);
         let style = if is_selected {
             Style::default()
                 .bg(Color::DarkGray)
@@ -1134,17 +1139,11 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
             Style::default()
         };
 
-        let row = ListItem::new(Line::from(vec![
-            Span::styled(format!("{:<28}", name), style),
-            Span::styled(fmt_col_idx(entry.intelligence_index), style),
-            Span::styled(fmt_col_idx(entry.coding_index), style),
-            Span::styled(fmt_col_idx(entry.math_index), style),
-            Span::styled(fmt_col_pct(entry.gpqa), style),
-            Span::styled(fmt_col_pct(entry.mmlu_pro), style),
-            Span::styled(fmt_col_pct(entry.hle), style),
-            Span::styled(fmt_speed(entry.output_tps), style),
-        ]));
-        items.push(row);
+        let row_spans: Vec<Span> = visible_cols
+            .iter()
+            .map(|col| benchmark_col_value(entry, *col, style))
+            .collect();
+        items.push(ListItem::new(Line::from(row_spans)));
     }
 
     let list = List::new(items);
@@ -1412,6 +1411,73 @@ fn fmt_speed(value: Option<f64>) -> String {
     match value {
         Some(v) => format!("{:>7.0}", v),
         None => format!("{:>7}", "\u{2014}"),
+    }
+}
+
+fn fmt_col_ttft(value: Option<f64>) -> String {
+    match value {
+        Some(v) => format!("{:>6.2}s", v),
+        None => format!("{:>7}", "\u{2014}"),
+    }
+}
+
+fn fmt_col_date(value: Option<&str>) -> String {
+    match value {
+        Some(d) => format!("{:>11}", d),
+        None => format!("{:>11}", "\u{2014}"),
+    }
+}
+
+/// Render a column header span for the given sort column
+fn benchmark_col_header(
+    col: super::benchmarks_app::BenchmarkSortColumn,
+    style: Style,
+) -> Span<'static> {
+    use super::benchmarks_app::BenchmarkSortColumn::*;
+    match col {
+        Name => Span::styled(format!("{:<28}", "Name"), style),
+        Intelligence => Span::styled(format!("{:>6}", "Intel"), style),
+        Coding => Span::styled(format!("{:>6}", "Code"), style),
+        Math => Span::styled(format!("{:>6}", "Math"), style),
+        Gpqa => Span::styled(format!("{:>6}", "GPQA"), style),
+        MMLUPro => Span::styled(format!("{:>6}", "MMLU"), style),
+        Hle => Span::styled(format!("{:>6}", "HLE"), style),
+        LiveCode => Span::styled(format!("{:>6}", "LCode"), style),
+        SciCode => Span::styled(format!("{:>6}", "SciCd"), style),
+        Terminal => Span::styled(format!("{:>6}", "Term"), style),
+        IFBench => Span::styled(format!("{:>6}", "IFB"), style),
+        Lcr => Span::styled(format!("{:>6}", "LCR"), style),
+        Tau2 => Span::styled(format!("{:>6}", "Tau2"), style),
+        Speed => Span::styled(format!("{:>7}", "Tok/s"), style),
+        Ttft => Span::styled(format!("{:>7}", "TTFT"), style),
+        ReleaseDate => Span::styled(format!("{:>11}", "Released"), style),
+    }
+}
+
+/// Render a column value span for the given sort column
+fn benchmark_col_value<'a>(
+    entry: &crate::benchmarks::BenchmarkEntry,
+    col: super::benchmarks_app::BenchmarkSortColumn,
+    style: Style,
+) -> Span<'a> {
+    use super::benchmarks_app::BenchmarkSortColumn::*;
+    match col {
+        Name => Span::styled(format!("{:<28}", truncate(&entry.name, 27)), style),
+        Intelligence => Span::styled(fmt_col_idx(entry.intelligence_index), style),
+        Coding => Span::styled(fmt_col_idx(entry.coding_index), style),
+        Math => Span::styled(fmt_col_idx(entry.math_index), style),
+        Gpqa => Span::styled(fmt_col_pct(entry.gpqa), style),
+        MMLUPro => Span::styled(fmt_col_pct(entry.mmlu_pro), style),
+        Hle => Span::styled(fmt_col_pct(entry.hle), style),
+        LiveCode => Span::styled(fmt_col_pct(entry.livecodebench), style),
+        SciCode => Span::styled(fmt_col_pct(entry.scicode), style),
+        Terminal => Span::styled(fmt_col_pct(entry.terminalbench_hard), style),
+        IFBench => Span::styled(fmt_col_pct(entry.ifbench), style),
+        Lcr => Span::styled(fmt_col_pct(entry.lcr), style),
+        Tau2 => Span::styled(fmt_col_pct(entry.tau2), style),
+        Speed => Span::styled(fmt_speed(entry.output_tps), style),
+        Ttft => Span::styled(fmt_col_ttft(entry.ttft), style),
+        ReleaseDate => Span::styled(fmt_col_date(entry.release_date.as_deref()), style),
     }
 }
 

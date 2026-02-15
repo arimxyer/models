@@ -26,6 +26,7 @@ pub enum BenchmarkSortColumn {
     Speed,
     Ttft,
     Name,
+    ReleaseDate,
 }
 
 impl BenchmarkSortColumn {
@@ -45,7 +46,8 @@ impl BenchmarkSortColumn {
             Self::Tau2 => Self::Speed,
             Self::Speed => Self::Ttft,
             Self::Ttft => Self::Name,
-            Self::Name => Self::Intelligence,
+            Self::Name => Self::ReleaseDate,
+            Self::ReleaseDate => Self::Intelligence,
         }
     }
 
@@ -66,12 +68,41 @@ impl BenchmarkSortColumn {
             Self::Speed => "Tok/s",
             Self::Ttft => "TTFT",
             Self::Name => "Name",
+            Self::ReleaseDate => "Date",
         }
     }
 
     /// Whether descending is the default sort direction for this column
     pub fn default_descending(&self) -> bool {
         !matches!(self, Self::Name | Self::Ttft)
+    }
+
+    /// Returns the columns to display in the list based on the active sort.
+    /// Always includes Name + the 3 composite indexes, plus the sort column's group.
+    pub fn visible_columns(&self) -> Vec<BenchmarkSortColumn> {
+        use BenchmarkSortColumn::*;
+
+        // Always-shown base columns
+        let mut cols = vec![Name, Intelligence, Coding, Math];
+
+        // Add the group that the sort column belongs to
+        let group = match self {
+            Intelligence | Coding | Math => vec![],
+            Gpqa | MMLUPro | Hle => vec![Gpqa, MMLUPro, Hle],
+            LiveCode | SciCode | Terminal => vec![LiveCode, SciCode, Terminal],
+            IFBench | Lcr | Tau2 => vec![IFBench, Lcr, Tau2],
+            Speed | Ttft => vec![Speed, Ttft],
+            Name => vec![Speed],
+            ReleaseDate => vec![ReleaseDate],
+        };
+
+        for col in group {
+            if !cols.contains(&col) {
+                cols.push(col);
+            }
+        }
+
+        cols
     }
 
     /// Extract the relevant field value from a benchmark entry.
@@ -94,6 +125,10 @@ impl BenchmarkSortColumn {
             Self::Speed => entry.output_tps,
             Self::Ttft => entry.ttft,
             Self::Name => Some(0.0),
+            Self::ReleaseDate => entry
+                .release_date
+                .as_ref()
+                .and_then(|d| parse_date_to_numeric(d)),
         }
     }
 }
@@ -375,6 +410,14 @@ impl BenchmarksApp {
                 BenchmarkSortColumn::Speed => cmp_opt_f64(ea.output_tps, eb.output_tps),
                 BenchmarkSortColumn::Ttft => cmp_opt_f64(ea.ttft, eb.ttft),
                 BenchmarkSortColumn::Name => ea.name.cmp(&eb.name),
+                BenchmarkSortColumn::ReleaseDate => cmp_opt_f64(
+                    ea.release_date
+                        .as_ref()
+                        .and_then(|d| parse_date_to_numeric(d)),
+                    eb.release_date
+                        .as_ref()
+                        .and_then(|d| parse_date_to_numeric(d)),
+                ),
             };
 
             if desc {
@@ -475,6 +518,19 @@ impl BenchmarksApp {
             BenchmarkFocus::Creators => BenchmarkFocus::List,
             BenchmarkFocus::List => BenchmarkFocus::Creators,
         };
+    }
+}
+
+/// Parse "YYYY-MM-DD" to a numeric value for sorting (e.g., 20240115.0)
+fn parse_date_to_numeric(date: &str) -> Option<f64> {
+    let parts: Vec<&str> = date.split('-').collect();
+    if parts.len() == 3 {
+        let year = parts[0].parse::<u32>().ok()?;
+        let month = parts[1].parse::<u32>().ok()?;
+        let day = parts[2].parse::<u32>().ok()?;
+        Some((year * 10000 + month * 100 + day) as f64)
+    } else {
+        None
     }
 }
 
