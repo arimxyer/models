@@ -61,6 +61,14 @@ static BRAND_TOKENS: LazyLock<HashSet<&str>> = LazyLock::new(|| {
         "exaone",
         "mixtral",
         "titan",
+        "olmo",
+        "solar",
+        "hermes",
+        "flux",
+        "voyage",
+        "ernie",
+        "seed",
+        "ling",
     ])
 });
 
@@ -99,6 +107,9 @@ static CREATOR_BRANDS: LazyLock<HashMap<&str, &[&str]>> = LazyLock::new(|| {
         ("lg", &["exaone"]),
         ("ibm", &["granite"]),
         ("minimax", &["minimax"]),
+        ("ai2", &["olmo"]),
+        ("upstage", &["solar"]),
+        ("nous-research", &["hermes"]),
     ])
 });
 
@@ -116,6 +127,12 @@ static NON_LLM_TOKENS: LazyLock<HashSet<&str>> = LazyLock::new(|| {
         "rerank",
         "reranker",
         "guard",
+        "deepgram",
+        "m2m100",
+        "m2m",
+        "parakeet",
+        "whisper",
+        "tts",
     ])
 });
 
@@ -182,6 +199,12 @@ static MANUAL_OVERRIDES: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
         //
         // models.dev: "solar-pro2"; AA: "Solar Pro 2" with reasoning/preview variants.
         ("solarpro2", "solar-pro-2-reasoning"),
+        //
+        // ── Mistral Magistral Small alias ──
+        //
+        // models.dev: "magistral-small"; AA: "Magistral Small 1.2" (slug
+        // magistral-small-2509). Same pattern as medium alias above.
+        ("magistralsmall", "magistral-small-2509"),
     ])
 });
 
@@ -883,7 +906,7 @@ static RE_SIZE: LazyLock<Regex> =
 /// Regex to extract family version numbers for known model families.
 /// Captures (family_name, version_number) from strings like "phi-3", "llama3.1", "gemma2".
 static RE_FAMILY_VERSION: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)(phi|grok|gemma|llama|qwen|glm|mistral|gemini|claude|gpt|deepseek|command)[-_.\s]?(\d+(?:\.\d+)?)")
+    Regex::new(r"(?i)(phi|grok|gemma|llama|qwen|glm|mistral|gemini|claude|gpt|deepseek|command|hermes|nova|ernie)[-_.\s]?(\d+(?:\.\d+)?)")
         .unwrap()
 });
 
@@ -891,10 +914,13 @@ static RE_FAMILY_VERSION: LazyLock<Regex> = LazyLock::new(|| {
 static VISION_TOKENS: &[&str] = &["vl", "vision", "multimodal"];
 
 /// Specialization tokens that indicate a model variant incompatible with the base.
-static SPECIALIZATION_TOKENS: &[&str] = &["coder", "code", "math", "safety"];
+static SPECIALIZATION_TOKENS: &[&str] = &["coder", "code", "math", "safety", "guard", "distill"];
 
 /// Product-tier tokens where one cannot substitute for another within the same family.
-static TIER_TOKENS: &[&str] = &["flash", "pro", "ultra", "nano", "haiku", "sonnet", "opus"];
+static TIER_TOKENS: &[&str] = &[
+    "flash", "pro", "ultra", "nano", "haiku", "sonnet", "opus", "mini", "small", "medium", "large",
+    "lite", "plus",
+];
 
 /// Extract all parameter-count sizes from a string (e.g., "8B", "27b", "1.5B").
 fn extract_sizes(s: &str) -> HashSet<String> {
@@ -1014,21 +1040,25 @@ fn creator_compatible(
         return true;
     }
 
-    // Prefer structured creator data when available
-    if let Some(creator_brand_list) = CREATOR_BRANDS.get(creator) {
-        // Query must contain at least one brand token owned by this creator
-        return q_brands.iter().any(|b| creator_brand_list.contains(b));
-    }
-
-    // Fallback: heuristic brand-token overlap (for creators not in CREATOR_BRANDS)
     let e_brands: HashSet<&str> = entry_tokens
         .iter()
         .filter_map(|t| extract_brand(t))
         .collect();
-    if e_brands.is_empty() {
-        return true;
+
+    // When both sides have recognized brands, require direct overlap.
+    // This prevents cross-family matches within the same creator
+    // (e.g., Gemma ≠ Gemini even though both are Google).
+    if !q_brands.is_empty() && !e_brands.is_empty() {
+        return !q_brands.is_disjoint(&e_brands);
     }
-    !q_brands.is_disjoint(&e_brands)
+
+    // If only one side has brands, use creator data when available
+    if let Some(creator_brand_list) = CREATOR_BRANDS.get(creator) {
+        return q_brands.iter().any(|b| creator_brand_list.contains(b));
+    }
+
+    // No brand tokens on entry and no creator data: allow
+    true
 }
 
 /// Returns true only when the query brand matches via the structured `CREATOR_BRANDS`
@@ -1239,6 +1269,104 @@ mod tests {
             entry.name.contains("Claude 3.5 Sonnet") || entry.slug.contains("claude-3-5-sonnet"),
             "family should help match, got: {}",
             entry.name
+        );
+    }
+
+    #[test]
+    fn test_find_o1_preview() {
+        let store = BenchmarkStore::load();
+        let result = store.find_for_model("o1-preview", "o1-preview", true, None, None);
+        assert!(
+            result.is_some(),
+            "o1-preview should match AA entry with slug 'o1-preview'"
+        );
+        let entry = result.unwrap();
+        assert!(
+            entry.slug.contains("o1-preview"),
+            "expected o1-preview slug, got: {}",
+            entry.slug
+        );
+    }
+
+    /// Regression: cross-family and structural false positives must stay blocked.
+    #[test]
+    fn test_fuzzy_false_positives_blocked() {
+        let store = BenchmarkStore::load();
+
+        // Cross-family: Gemma 2 must NOT match Gemini
+        let fp = store.find_for_model("google/gemma-2-9b-it", "Gemma 2 9B", true, None, None);
+        assert!(
+            fp.is_none() || !fp.unwrap().slug.contains("gemini"),
+            "Gemma 2 should NOT match Gemini, got: {}",
+            fp.map_or("none".into(), |e| e.slug.clone())
+        );
+
+        // Cross-family: FLUX (image gen) must NOT match any text LLM
+        let fp = store.find_for_model(
+            "black-forest-labs/flux.2-max",
+            "FLUX.2 Max",
+            true,
+            None,
+            None,
+        );
+        assert!(fp.is_none(), "FLUX should not match any text model");
+
+        // Cross-family: Voyage must NOT match Mistral
+        let fp = store.find_for_model("voyage/voyage-3-large", "Voyage 3 Large", true, None, None);
+        assert!(
+            fp.is_none() || !fp.unwrap().slug.contains("mistral"),
+            "Voyage should NOT match Mistral"
+        );
+
+        // Non-LLM: Deepgram Nova (STT) must NOT match AWS Nova (LLM)
+        let fp = store.find_for_model("@cf/deepgram/nova-3", "Deepgram Nova 3", true, None, None);
+        assert!(
+            fp.is_none() || !fp.unwrap().slug.contains("nova-pro"),
+            "Deepgram Nova should NOT match AWS Nova"
+        );
+
+        // Non-LLM: M2M100 (translation) must NOT match LFM2
+        let fp = store.find_for_model("@cf/m2m100-1.2b", "M2M100 1.2B", true, None, None);
+        assert!(fp.is_none(), "M2M100 should not match any text model");
+
+        // Version: Hermes 3 must NOT match Hermes 4
+        let fp = store.find_for_model(
+            "nousresearch/hermes-3-llama-3.1-405b:free",
+            "Hermes 3 Llama 3.1 405B",
+            true,
+            None,
+            None,
+        );
+        assert!(
+            fp.is_none() || !fp.unwrap().slug.contains("hermes-4"),
+            "Hermes 3 should NOT match Hermes 4, got: {}",
+            fp.map_or("none".into(), |e| e.slug.clone())
+        );
+
+        // Size: Phi-3 Medium must NOT match Phi-3 Mini
+        let fp = store.find_for_model(
+            "phi-3-medium-128k-instruct",
+            "Phi-3 Medium 128K",
+            true,
+            None,
+            None,
+        );
+        assert!(
+            fp.is_none() || !fp.unwrap().slug.contains("phi-3-mini"),
+            "Phi-3 Medium should NOT match Phi-3 Mini"
+        );
+
+        // Specialization: R1 Distill must NOT match base R1
+        let fp = store.find_for_model(
+            "deepseek-r1-distill-qwen-7b",
+            "DeepSeek R1 Distill Qwen 7B",
+            true,
+            None,
+            None,
+        );
+        assert!(
+            fp.is_none() || fp.unwrap().slug.contains("distill"),
+            "R1 Distill should NOT match base R1"
         );
     }
 

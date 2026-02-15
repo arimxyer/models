@@ -3,3 +3,4 @@
 docs/plans/
 .claude/
 .env
+data/fuzzy_*.json
