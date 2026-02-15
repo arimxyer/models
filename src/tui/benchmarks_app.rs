@@ -447,6 +447,16 @@ impl BenchmarksApp {
         app
     }
 
+    /// Rebuild all derived state after the underlying store changes.
+    /// Re-derives creator list, filtered indices, and resets selection.
+    pub fn rebuild(&mut self, store: &BenchmarkStore) {
+        self.build_creator_list(store);
+        self.selected_creator = 0;
+        self.creator_list_state.select(Some(0));
+        self.selected = 0;
+        self.update_filtered(store);
+    }
+
     fn build_creator_list(&mut self, store: &BenchmarkStore) {
         let mut info: HashMap<String, CreatorInfo> = HashMap::new();
 

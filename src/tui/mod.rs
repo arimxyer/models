@@ -17,6 +17,8 @@ pub mod ui;
 use crate::agents::{
     load_agents, AsyncGitHubClient, ConditionalFetchResult, GitHubCache, GitHubData,
 };
+use crate::benchmark_cache::BenchmarkCache;
+use crate::benchmark_fetch::{BenchmarkFetchResult, BenchmarkFetcher};
 use crate::benchmarks::BenchmarkStore;
 use crate::config::Config;
 use crate::data::ProvidersMap;
@@ -50,7 +52,14 @@ pub async fn run(providers: ProvidersMap) -> Result<()> {
     // Load remaining data
     let agents_file = load_agents().ok();
     let config = Config::load().ok();
-    let benchmark_store = BenchmarkStore::load();
+
+    // Load benchmark cache and use it if fresh, otherwise fall back to embedded
+    let bench_cache = BenchmarkCache::load();
+    let benchmark_store = if bench_cache.is_fresh() && bench_cache.has_entries() {
+        BenchmarkStore::load_with_cache(&bench_cache)
+    } else {
+        BenchmarkStore::load()
+    };
 
     // Load disk cache for GitHub data (load before wrapping to avoid blocking in async)
     let disk_cache = GitHubCache::load();
@@ -131,8 +140,28 @@ pub async fn run(providers: ProvidersMap) -> Result<()> {
         Vec::new()
     };
 
+    // Spawn background benchmark fetch if cache is stale
+    let (bench_tx, bench_rx) = mpsc::channel(1);
+    if !bench_cache.is_fresh() {
+        let bench_tx = bench_tx.clone();
+        let cached_etag = bench_cache.etag.clone();
+        tokio::spawn(async move {
+            let fetcher = BenchmarkFetcher::new();
+            let result = fetcher.fetch_conditional(cached_etag.as_deref()).await;
+            let _ = bench_tx.send(result).await;
+        });
+    }
+
     // Main loop - pass client and sender for dynamic fetches
-    let result = run_app(&mut terminal, &mut app, rx, tx, client, disk_cache.clone());
+    let result = run_app(
+        &mut terminal,
+        &mut app,
+        rx,
+        tx,
+        client,
+        disk_cache.clone(),
+        bench_rx,
+    );
 
     // Abort any remaining fetch tasks to allow clean shutdown
     for handle in fetch_handles {
@@ -165,6 +194,7 @@ fn run_app(
     github_tx: mpsc::Sender<FetchResult>,
     client: AsyncGitHubClient,
     disk_cache: Arc<RwLock<GitHubCache>>,
+    mut bench_rx: mpsc::Receiver<BenchmarkFetchResult>,
 ) -> Result<()> {
     let mut last_status_time: Option<std::time::Instant> = None;
 
@@ -218,6 +248,39 @@ fn run_app(
                 }
                 FetchResult::Failure(id, error) => {
                     app.update(app::Message::GitHubFetchFailed(id, error));
+                }
+            }
+        }
+
+        // Check for benchmark data updates (non-blocking)
+        if let Ok(result) = bench_rx.try_recv() {
+            match result {
+                BenchmarkFetchResult::Fresh(entries, etag) => {
+                    // Save to cache before updating app state
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_secs() as i64)
+                        .unwrap_or(0);
+                    let cache = BenchmarkCache {
+                        version: 1,
+                        entries: entries.clone(),
+                        etag,
+                        fetched_at: now,
+                    };
+                    let _ = cache.save();
+                    app.update(app::Message::BenchmarkDataReceived(entries));
+                }
+                BenchmarkFetchResult::NotModified => {
+                    // Touch the cache timestamp so we don't re-fetch next startup
+                    let mut cache = BenchmarkCache::load();
+                    cache.fetched_at = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_secs() as i64)
+                        .unwrap_or(0);
+                    let _ = cache.save();
+                }
+                BenchmarkFetchResult::Error => {
+                    app.update(app::Message::BenchmarkFetchFailed);
                 }
             }
         }

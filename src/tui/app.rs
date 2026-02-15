@@ -6,7 +6,7 @@ use super::benchmarks_app::BenchmarksApp;
 /// Page size for page up/down navigation
 const PAGE_SIZE: usize = 10;
 use crate::agents::{AgentsFile, FetchStatus, GitHubData};
-use crate::benchmarks::BenchmarkStore;
+use crate::benchmarks::{BenchmarkEntry, BenchmarkStore};
 use crate::config::Config;
 use crate::data::{Model, Provider, ProvidersMap};
 use crate::provider_category::{provider_category, ProviderCategory};
@@ -170,6 +170,9 @@ pub enum Message {
     // Async data messages
     GitHubDataReceived(String, GitHubData),
     GitHubFetchFailed(String, String), // (agent_id, error_message)
+    // Benchmark data messages
+    BenchmarkDataReceived(Vec<BenchmarkEntry>),
+    BenchmarkFetchFailed,
 }
 
 #[derive(Debug, Clone)]
@@ -824,6 +827,13 @@ impl App {
                         agents_app.loading_github = false;
                     }
                 }
+            }
+            Message::BenchmarkDataReceived(entries) => {
+                self.benchmark_store = BenchmarkStore::from_entries(entries);
+                self.benchmarks_app.rebuild(&self.benchmark_store);
+            }
+            Message::BenchmarkFetchFailed => {
+                // Silently keep existing data
             }
         }
         true

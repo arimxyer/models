@@ -1,8 +1,10 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+
+use crate::benchmark_cache::BenchmarkCache;
 
 const BENCHMARKS_JSON: &str = include_str!("../data/benchmarks.json");
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct BenchmarkEntry {
     pub name: String,
     pub slug: String,
@@ -46,6 +48,20 @@ impl BenchmarkStore {
         let entries: Vec<BenchmarkEntry> =
             serde_json::from_str(BENCHMARKS_JSON).unwrap_or_default();
         Self { entries }
+    }
+
+    /// Create a store from runtime-fetched entries.
+    pub fn from_entries(entries: Vec<BenchmarkEntry>) -> Self {
+        Self { entries }
+    }
+
+    /// Load using cache if it has entries, otherwise fall back to embedded data.
+    pub fn load_with_cache(cache: &BenchmarkCache) -> Self {
+        if cache.has_entries() {
+            Self::from_entries(cache.entries.clone())
+        } else {
+            Self::load()
+        }
     }
 }
 
