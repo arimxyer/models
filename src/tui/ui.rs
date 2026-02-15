@@ -942,159 +942,6 @@ fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
             ]));
         }
 
-        // Benchmarks section (Artificial Analysis)
-        detail_lines.push(Line::from(""));
-        if let Some(bench) = app.benchmark_store.find_for_text_model(&entry.id, model) {
-            if bench.has_any_score() {
-                detail_lines.push(Line::from(vec![
-                    Span::styled(
-                        "── Benchmarks ",
-                        Style::default()
-                            .fg(Color::DarkGray)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                    Span::styled(
-                        "(indexes 0-100, scores %) ",
-                        Style::default().fg(Color::DarkGray),
-                    ),
-                    Span::styled(
-                        "──",
-                        Style::default()
-                            .fg(Color::DarkGray)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                ]));
-
-                // Format index scores (already 0-100 scale)
-                let fmt_idx = |v: Option<f64>| {
-                    v.map(|s| format!("{:.1}", s))
-                        .unwrap_or_else(|| "-".to_string())
-                };
-                // Format decimal scores as percentages (0-1 -> 0-100%)
-                let fmt_pct = |v: Option<f64>| {
-                    v.map(|s| format!("{:.1}%", s * 100.0))
-                        .unwrap_or_else(|| "-".to_string())
-                };
-
-                // Row 1: Composite indexes
-                detail_lines.push(Line::from(vec![
-                    Span::styled("Intelligence: ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(format!("{:<8}", fmt_idx(bench.intelligence_index))),
-                    Span::styled("Coding: ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(format!("{:<8}", fmt_idx(bench.coding_index))),
-                    Span::styled("Math: ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(fmt_idx(bench.math_index)),
-                ]));
-
-                // Row 2: Knowledge benchmarks
-                detail_lines.push(Line::from(vec![
-                    Span::styled("GPQA: ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(format!("{:<12}", fmt_pct(bench.gpqa))),
-                    Span::styled("MMLU-Pro: ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(fmt_pct(bench.mmlu_pro)),
-                ]));
-
-                // Row 3: Reasoning benchmarks
-                detail_lines.push(Line::from(vec![
-                    Span::styled("HLE: ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(format!("{:<13}", fmt_pct(bench.hle))),
-                    Span::styled("IFBench: ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(fmt_pct(bench.ifbench)),
-                ]));
-
-                // Row 4: Coding and science
-                detail_lines.push(Line::from(vec![
-                    Span::styled("LiveCode: ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(format!("{:<8}", fmt_pct(bench.livecodebench))),
-                    Span::styled("SciCode: ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(format!("{:<8}", fmt_pct(bench.scicode))),
-                    Span::styled("Term: ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(fmt_pct(bench.terminalbench_hard)),
-                ]));
-
-                // Row 5: Context and agent benchmarks
-                detail_lines.push(Line::from(vec![
-                    Span::styled("LCR: ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(format!("{:<13}", fmt_pct(bench.lcr))),
-                    Span::styled("Tau2: ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(fmt_pct(bench.tau2)),
-                ]));
-
-                // Row 6: Additional math benchmarks
-                if bench.math_500.is_some() || bench.aime_25.is_some() {
-                    detail_lines.push(Line::from(vec![
-                        Span::styled("MATH-500: ", Style::default().fg(Color::DarkGray)),
-                        Span::raw(format!("{:<8}", fmt_pct(bench.math_500))),
-                        Span::styled("AIME'25: ", Style::default().fg(Color::DarkGray)),
-                        Span::raw(fmt_pct(bench.aime_25)),
-                    ]));
-                }
-
-                // Row 7: Performance metrics
-                let tps = bench
-                    .output_tps
-                    .filter(|&v| v > 0.0)
-                    .map(|v| format!("{:.0} tok/s", v))
-                    .unwrap_or_else(|| "-".to_string());
-                let ttft = bench
-                    .ttft
-                    .filter(|&v| v > 0.0)
-                    .map(|v| format!("{:.1}s", v))
-                    .unwrap_or_else(|| "-".to_string());
-                detail_lines.push(Line::from(vec![
-                    Span::styled("Speed: ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(format!("{:<11}", tps)),
-                    Span::styled("TTFT: ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(ttft),
-                ]));
-
-                // Row 8: Pricing
-                if bench.price_blended.is_some() {
-                    let fmt_price = |v: Option<f64>| {
-                        v.map(|p| format!("${:.3}", p))
-                            .unwrap_or_else(|| "-".to_string())
-                    };
-                    detail_lines.push(Line::from(vec![
-                        Span::styled("Input: ", Style::default().fg(Color::DarkGray)),
-                        Span::raw(format!("{:<10}", fmt_price(bench.price_input))),
-                        Span::styled("Output: ", Style::default().fg(Color::DarkGray)),
-                        Span::raw(format!("{:<10}", fmt_price(bench.price_output))),
-                    ]));
-                    detail_lines.push(Line::from(vec![
-                        Span::styled("Blended: ", Style::default().fg(Color::DarkGray)),
-                        Span::raw(format!("{}/M tokens", fmt_price(bench.price_blended))),
-                    ]));
-                }
-
-                // Row 9: Source info (creator, release date)
-                let mut source_spans = vec![
-                    Span::styled("Source: ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(if bench.creator_name.is_empty() {
-                        bench.creator.clone()
-                    } else {
-                        bench.creator_name.clone()
-                    }),
-                ];
-                if let Some(ref date) = bench.release_date {
-                    source_spans.push(Span::styled(
-                        format!("  Released: {}", date),
-                        Style::default().fg(Color::DarkGray),
-                    ));
-                }
-                detail_lines.push(Line::from(source_spans));
-            } else {
-                detail_lines.push(Line::from(Span::styled(
-                    "No benchmark scores available",
-                    Style::default().fg(Color::DarkGray),
-                )));
-            }
-        } else {
-            detail_lines.push(Line::from(Span::styled(
-                "No benchmark data available",
-                Style::default().fg(Color::DarkGray),
-            )));
-        }
-
         detail_lines
     } else {
         vec![Line::from(Span::styled(
@@ -1257,9 +1104,20 @@ fn draw_benchmark_detail(f: &mut Frame, area: Rect, app: &App) {
         ]));
     }
     if !entry.creator.is_empty() {
+        let creator_display = if !entry.creator_name.is_empty() {
+            &entry.creator_name
+        } else {
+            &entry.creator
+        };
         lines.push(Line::from(vec![
             Span::styled("Creator: ", Style::default().fg(Color::DarkGray)),
-            Span::raw(&entry.creator),
+            Span::raw(creator_display),
+        ]));
+    }
+    if let Some(ref date) = entry.release_date {
+        lines.push(Line::from(vec![
+            Span::styled("Released: ", Style::default().fg(Color::DarkGray)),
+            Span::raw(date.as_str()),
         ]));
     }
 
@@ -1289,6 +1147,17 @@ fn draw_benchmark_detail(f: &mut Frame, area: Rect, app: &App) {
     push_score_line(&mut lines, "TerminalBench", entry.terminalbench_hard);
     push_score_line(&mut lines, "Tau2", entry.tau2);
 
+    // Math
+    if entry.math_500.is_some() || entry.aime_25.is_some() {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            "\u{2500}\u{2500}\u{2500} Math \u{2500}\u{2500}\u{2500}",
+            Style::default().fg(Color::DarkGray),
+        )));
+        push_score_line(&mut lines, "MATH-500", entry.math_500);
+        push_score_line(&mut lines, "AIME'25", entry.aime_25);
+    }
+
     // Performance
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
@@ -1297,6 +1166,19 @@ fn draw_benchmark_detail(f: &mut Frame, area: Rect, app: &App) {
     )));
     push_score_line(&mut lines, "Speed (tok/s)", entry.output_tps);
     push_score_line(&mut lines, "TTFT (ms)", entry.ttft);
+
+    // Pricing
+    if entry.price_input.is_some() || entry.price_output.is_some() || entry.price_blended.is_some()
+    {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            "\u{2500}\u{2500}\u{2500} Pricing ($/M tokens) \u{2500}\u{2500}\u{2500}",
+            Style::default().fg(Color::DarkGray),
+        )));
+        push_price_line(&mut lines, "Input", entry.price_input);
+        push_price_line(&mut lines, "Output", entry.price_output);
+        push_price_line(&mut lines, "Blended", entry.price_blended);
+    }
 
     // Keybinding hints
     lines.push(Line::from(""));
@@ -1323,6 +1205,22 @@ fn push_score_line(lines: &mut Vec<Line>, label: &str, value: Option<f64>) {
     let val_str = match value {
         Some(v) => format!("{:.1}", v),
         None => "\u{2014}".to_string(), // em dash
+    };
+    let val_color = if value.is_some() {
+        Color::White
+    } else {
+        Color::DarkGray
+    };
+    lines.push(Line::from(vec![
+        Span::styled(format!("  {:<16}", label), Style::default().fg(Color::Gray)),
+        Span::styled(val_str, Style::default().fg(val_color)),
+    ]));
+}
+
+fn push_price_line(lines: &mut Vec<Line>, label: &str, value: Option<f64>) {
+    let val_str = match value {
+        Some(v) => format!("${:.3}", v),
+        None => "\u{2014}".to_string(),
     };
     let val_color = if value.is_some() {
         Color::White

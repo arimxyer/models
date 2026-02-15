@@ -303,10 +303,7 @@ fn run_app(
                 }
                 app::Message::OpenBenchmarkUrl => {
                     if let Some(entry) = app.benchmarks_app.current_entry(&app.benchmark_store) {
-                        let url = format!(
-                            "https://artificialanalysis.ai/leaderboards/models/{}",
-                            entry.slug
-                        );
+                        let url = format!("https://artificialanalysis.ai/models/{}", entry.slug);
                         let _ = open::that_in_background(&url);
                         app.set_status(format!("Opened: {}", url));
                         last_status_time = Some(std::time::Instant::now());
