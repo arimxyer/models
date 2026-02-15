@@ -152,6 +152,10 @@ pub enum Message {
     PrevBenchmark,
     PageDownBenchmark,
     PageUpBenchmark,
+    NextBenchmarkCreator,
+    PrevBenchmarkCreator,
+    PageDownBenchmarkCreator,
+    PageUpBenchmarkCreator,
     SwitchBenchmarkFocus,
     CycleBenchmarkSort,
     ToggleBenchmarkSortDir,
@@ -730,6 +734,22 @@ impl App {
             }
             Message::PageUpBenchmark => {
                 self.benchmarks_app.page_up();
+            }
+            Message::NextBenchmarkCreator => {
+                self.benchmarks_app.next_creator();
+                self.benchmarks_app.update_filtered(&self.benchmark_store);
+            }
+            Message::PrevBenchmarkCreator => {
+                self.benchmarks_app.prev_creator();
+                self.benchmarks_app.update_filtered(&self.benchmark_store);
+            }
+            Message::PageDownBenchmarkCreator => {
+                self.benchmarks_app.page_down_creator();
+                self.benchmarks_app.update_filtered(&self.benchmark_store);
+            }
+            Message::PageUpBenchmarkCreator => {
+                self.benchmarks_app.page_up_creator();
+                self.benchmarks_app.update_filtered(&self.benchmark_store);
             }
             Message::SwitchBenchmarkFocus => {
                 self.benchmarks_app.switch_focus();

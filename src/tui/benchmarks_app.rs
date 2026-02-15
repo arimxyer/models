@@ -1,6 +1,8 @@
+use std::collections::HashMap;
+
 use ratatui::widgets::ListState;
 
-use crate::benchmarks::BenchmarkStore;
+use crate::benchmarks::{BenchmarkEntry, BenchmarkStore};
 
 /// Page size for page up/down navigation
 const PAGE_SIZE: usize = 10;
@@ -70,13 +72,49 @@ impl BenchmarkSortColumn {
     pub fn default_descending(&self) -> bool {
         !matches!(self, Self::Name | Self::Ttft)
     }
+
+    /// Extract the relevant field value from a benchmark entry.
+    /// Returns `Some` for numeric columns with data, `None` for missing data.
+    /// Name always returns `Some` (never filters out entries).
+    pub fn extract(&self, entry: &BenchmarkEntry) -> Option<f64> {
+        match self {
+            Self::Intelligence => entry.intelligence_index,
+            Self::Coding => entry.coding_index,
+            Self::Math => entry.math_index,
+            Self::Gpqa => entry.gpqa,
+            Self::MMLUPro => entry.mmlu_pro,
+            Self::Hle => entry.hle,
+            Self::LiveCode => entry.livecodebench,
+            Self::SciCode => entry.scicode,
+            Self::IFBench => entry.ifbench,
+            Self::Lcr => entry.lcr,
+            Self::Terminal => entry.terminalbench_hard,
+            Self::Tau2 => entry.tau2,
+            Self::Speed => entry.output_tps,
+            Self::Ttft => entry.ttft,
+            Self::Name => Some(0.0),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BenchmarkFocus {
+    Creators,
     #[default]
     List,
     Details,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CreatorListItem {
+    All,
+    Creator(String), // creator slug
+}
+
+/// Pre-computed creator info: (display_name, entry_count)
+struct CreatorInfo {
+    display_name: String,
+    count: usize,
 }
 
 pub struct BenchmarksApp {
@@ -88,6 +126,11 @@ pub struct BenchmarksApp {
     pub sort_descending: bool,
     pub search_query: String,
     pub detail_scroll: u16,
+    // Creator sidebar
+    pub creator_list_items: Vec<CreatorListItem>,
+    pub selected_creator: usize,
+    pub creator_list_state: ListState,
+    creator_info: HashMap<String, CreatorInfo>,
 }
 
 impl BenchmarksApp {
@@ -95,38 +138,113 @@ impl BenchmarksApp {
         let mut list_state = ListState::default();
         list_state.select(Some(0));
 
+        let mut creator_list_state = ListState::default();
+        creator_list_state.select(Some(0));
+
         let mut app = Self {
             filtered_indices: Vec::new(),
             selected: 0,
             list_state,
             focus: BenchmarkFocus::default(),
             sort_column: BenchmarkSortColumn::default(),
-            sort_descending: true, // Scores default descending
+            sort_descending: true,
             search_query: String::new(),
             detail_scroll: 0,
+            creator_list_items: Vec::new(),
+            selected_creator: 0,
+            creator_list_state,
+            creator_info: HashMap::new(),
         };
 
+        app.build_creator_list(store);
         app.update_filtered(store);
         app
     }
 
+    fn build_creator_list(&mut self, store: &BenchmarkStore) {
+        let mut info: HashMap<String, CreatorInfo> = HashMap::new();
+
+        for entry in store.entries() {
+            if entry.creator.is_empty() {
+                continue;
+            }
+            info.entry(entry.creator.clone())
+                .and_modify(|i| i.count += 1)
+                .or_insert_with(|| CreatorInfo {
+                    display_name: if entry.creator_name.is_empty() {
+                        entry.creator.clone()
+                    } else {
+                        entry.creator_name.clone()
+                    },
+                    count: 1,
+                });
+        }
+
+        let mut creators: Vec<String> = info.keys().cloned().collect();
+        creators.sort_by(|a, b| {
+            let name_a = &info[a].display_name;
+            let name_b = &info[b].display_name;
+            name_a.to_lowercase().cmp(&name_b.to_lowercase())
+        });
+
+        self.creator_list_items = Vec::with_capacity(creators.len() + 1);
+        self.creator_list_items.push(CreatorListItem::All);
+        for slug in creators {
+            self.creator_list_items.push(CreatorListItem::Creator(slug));
+        }
+
+        self.creator_info = info;
+    }
+
+    /// Get (display_name, count) for a creator slug.
+    pub fn creator_display<'a>(&'a self, slug: &'a str) -> (&'a str, usize) {
+        self.creator_info
+            .get(slug)
+            .map(|i| (i.display_name.as_str(), i.count))
+            .unwrap_or((slug, 0))
+    }
+
+    /// Get the currently selected creator slug, or None for "All".
+    fn selected_creator_slug(&self) -> Option<&str> {
+        match self.creator_list_items.get(self.selected_creator) {
+            Some(CreatorListItem::Creator(slug)) => Some(slug),
+            _ => None,
+        }
+    }
+
     pub fn update_filtered(&mut self, store: &BenchmarkStore) {
         let query_lower = self.search_query.to_lowercase();
+        let creator_slug = self.selected_creator_slug().map(|s| s.to_owned());
 
         self.filtered_indices = store
             .entries()
             .iter()
             .enumerate()
             .filter(|(_, entry)| {
-                if query_lower.is_empty() {
-                    return true;
+                // Creator filter
+                if let Some(ref slug) = creator_slug {
+                    if entry.creator != *slug {
+                        return false;
+                    }
                 }
-                entry.name.to_lowercase().contains(&query_lower)
-                    || entry.creator.to_lowercase().contains(&query_lower)
-                    || entry.slug.to_lowercase().contains(&query_lower)
+                // Search filter
+                if !query_lower.is_empty() {
+                    return entry.name.to_lowercase().contains(&query_lower)
+                        || entry.creator.to_lowercase().contains(&query_lower)
+                        || entry.slug.to_lowercase().contains(&query_lower);
+                }
+                true
             })
             .map(|(i, _)| i)
             .collect();
+
+        // Null-filter: hide entries missing data for the active sort column
+        if !matches!(self.sort_column, BenchmarkSortColumn::Name) {
+            let col = self.sort_column;
+            let entries = store.entries();
+            self.filtered_indices
+                .retain(|&i| col.extract(&entries[i]).is_some());
+        }
 
         self.apply_sort(store);
 
@@ -178,7 +296,7 @@ impl BenchmarksApp {
     pub fn cycle_sort(&mut self, store: &BenchmarkStore) {
         self.sort_column = self.sort_column.next();
         self.sort_descending = self.sort_column.default_descending();
-        self.apply_sort(store);
+        self.update_filtered(store);
     }
 
     pub fn toggle_sort_direction(&mut self, store: &BenchmarkStore) {
@@ -194,6 +312,8 @@ impl BenchmarksApp {
             .get(self.selected)
             .and_then(|&i| store.entries().get(i))
     }
+
+    // --- List navigation ---
 
     pub fn next(&mut self) {
         if self.selected < self.filtered_indices.len().saturating_sub(1) {
@@ -224,10 +344,41 @@ impl BenchmarksApp {
         self.detail_scroll = 0;
     }
 
+    // --- Creator sidebar navigation ---
+
+    pub fn next_creator(&mut self) {
+        let max = self.creator_list_items.len().saturating_sub(1);
+        if self.selected_creator < max {
+            self.selected_creator += 1;
+            self.creator_list_state.select(Some(self.selected_creator));
+        }
+    }
+
+    pub fn prev_creator(&mut self) {
+        if self.selected_creator > 0 {
+            self.selected_creator -= 1;
+            self.creator_list_state.select(Some(self.selected_creator));
+        }
+    }
+
+    pub fn page_down_creator(&mut self) {
+        let max = self.creator_list_items.len().saturating_sub(1);
+        self.selected_creator = (self.selected_creator + PAGE_SIZE).min(max);
+        self.creator_list_state.select(Some(self.selected_creator));
+    }
+
+    pub fn page_up_creator(&mut self) {
+        self.selected_creator = self.selected_creator.saturating_sub(PAGE_SIZE);
+        self.creator_list_state.select(Some(self.selected_creator));
+    }
+
+    // --- Focus ---
+
     pub fn switch_focus(&mut self) {
         self.focus = match self.focus {
+            BenchmarkFocus::Creators => BenchmarkFocus::List,
             BenchmarkFocus::List => BenchmarkFocus::Details,
-            BenchmarkFocus::Details => BenchmarkFocus::List,
+            BenchmarkFocus::Details => BenchmarkFocus::Creators,
         };
     }
 }

@@ -216,49 +216,37 @@ fn handle_benchmarks_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> 
     let focus = app.benchmarks_app.focus;
 
     match code {
-        // Navigation
-        KeyCode::Char('j') | KeyCode::Down => {
-            if focus == BenchmarkFocus::List {
-                Some(Message::NextBenchmark)
-            } else {
-                Some(Message::ScrollBenchmarkDetailDown)
-            }
-        }
-        KeyCode::Char('k') | KeyCode::Up => {
-            if focus == BenchmarkFocus::List {
-                Some(Message::PrevBenchmark)
-            } else {
-                Some(Message::ScrollBenchmarkDetailUp)
-            }
-        }
-        KeyCode::Char('d') if modifiers.contains(KeyModifiers::CONTROL) => {
-            if focus == BenchmarkFocus::List {
-                Some(Message::PageDownBenchmark)
-            } else {
-                Some(Message::PageScrollBenchmarkDetailDown)
-            }
-        }
-        KeyCode::Char('u') if modifiers.contains(KeyModifiers::CONTROL) => {
-            if focus == BenchmarkFocus::List {
-                Some(Message::PageUpBenchmark)
-            } else {
-                Some(Message::PageScrollBenchmarkDetailUp)
-            }
-        }
-        KeyCode::PageDown => {
-            if focus == BenchmarkFocus::List {
-                Some(Message::PageDownBenchmark)
-            } else {
-                Some(Message::PageScrollBenchmarkDetailDown)
-            }
-        }
-        KeyCode::PageUp => {
-            if focus == BenchmarkFocus::List {
-                Some(Message::PageUpBenchmark)
-            } else {
-                Some(Message::PageScrollBenchmarkDetailUp)
-            }
-        }
+        // Navigation — dispatch based on focused panel
+        KeyCode::Char('j') | KeyCode::Down => match focus {
+            BenchmarkFocus::Creators => Some(Message::NextBenchmarkCreator),
+            BenchmarkFocus::List => Some(Message::NextBenchmark),
+            BenchmarkFocus::Details => Some(Message::ScrollBenchmarkDetailDown),
+        },
+        KeyCode::Char('k') | KeyCode::Up => match focus {
+            BenchmarkFocus::Creators => Some(Message::PrevBenchmarkCreator),
+            BenchmarkFocus::List => Some(Message::PrevBenchmark),
+            BenchmarkFocus::Details => Some(Message::ScrollBenchmarkDetailUp),
+        },
+        KeyCode::Char('d') if modifiers.contains(KeyModifiers::CONTROL) => match focus {
+            BenchmarkFocus::Creators => Some(Message::PageDownBenchmarkCreator),
+            BenchmarkFocus::List => Some(Message::PageDownBenchmark),
+            BenchmarkFocus::Details => Some(Message::PageScrollBenchmarkDetailDown),
+        },
+        KeyCode::Char('u') if modifiers.contains(KeyModifiers::CONTROL) => match focus {
+            BenchmarkFocus::Creators => Some(Message::PageUpBenchmarkCreator),
+            BenchmarkFocus::List => Some(Message::PageUpBenchmark),
+            BenchmarkFocus::Details => Some(Message::PageScrollBenchmarkDetailUp),
+        },
+        KeyCode::PageDown => match focus {
+            BenchmarkFocus::Creators => Some(Message::PageDownBenchmarkCreator),
+            BenchmarkFocus::List => Some(Message::PageDownBenchmark),
+            BenchmarkFocus::Details => Some(Message::PageScrollBenchmarkDetailDown),
+        },
+        KeyCode::PageUp => match focus {
+            BenchmarkFocus::Creators => Some(Message::PageUpBenchmarkCreator),
+            BenchmarkFocus::List => Some(Message::PageUpBenchmark),
+            BenchmarkFocus::Details => Some(Message::PageScrollBenchmarkDetailUp),
+        },
         KeyCode::Char('h') | KeyCode::Left => Some(Message::SwitchBenchmarkFocus),
         KeyCode::Char('l') | KeyCode::Right => Some(Message::SwitchBenchmarkFocus),
         KeyCode::Tab | KeyCode::BackTab => Some(Message::SwitchBenchmarkFocus),
