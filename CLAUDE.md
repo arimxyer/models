@@ -53,6 +53,18 @@ Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message`
 - Embedded data as offline fallback, disk cache for freshness, async fetch for updates
 - `BenchmarkEntry` must derive both `Serialize` and `Deserialize` (needed for cache)
 
+## Gotchas
+- clippy `-D warnings` treats unused enum variant fields as errors — if a Message variant's payload is only passed through (e.g., error strings logged nowhere), use a unit variant instead
+- `Cargo.lock` must be committed after `Cargo.toml` version bumps
+- GitHub Actions `workflow_dispatch` only works when the workflow file exists on the default branch — cannot test from feature branches
+
+## Releasing
+1. Bump version in `Cargo.toml`
+2. `mise run fmt && mise run clippy && mise run test`
+3. Commit `Cargo.toml` and `Cargo.lock` together
+4. `git tag v<version> && git push && git push --tags`
+5. Release workflow runs automatically: builds binaries, publishes to crates.io, updates Homebrew/Scoop
+
 ## Secrets
 - `AA_API_KEY` — Artificial Analysis API key (GitHub repo secret, local `.env`)
 - `CARGO_REGISTRY_TOKEN` — crates.io publish token (GitHub repo secret)
