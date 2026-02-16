@@ -1033,7 +1033,7 @@ dependencies = [
 
 [[package]]
 name = "modelsdev"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "anyhow",
  "arboard",
