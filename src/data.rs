@@ -131,6 +131,17 @@ impl Model {
         }
     }
 
+    /// Compact cost string for list columns (rounded to 1 decimal place).
+    pub fn cost_short(value: Option<f64>) -> String {
+        match value {
+            Some(v) if v >= 100.0 => format!("${:.0}", v),
+            Some(v) if v >= 1.0 => format!("${:.1}", v),
+            Some(v) if v >= 0.01 => format!("${:.2}", v),
+            Some(v) => format!("${:.3}", v),
+            None => "\u{2014}".to_string(),
+        }
+    }
+
     pub fn capabilities_str(&self) -> String {
         let mut caps = Vec::new();
         if self.reasoning {
@@ -174,9 +185,19 @@ impl Model {
 
 fn format_tokens(n: u64) -> String {
     if n >= 1_000_000 {
-        format!("{}M", n / 1_000_000)
+        let m = n as f64 / 1_000_000.0;
+        if m.fract() == 0.0 {
+            format!("{}M", m as u64)
+        } else {
+            format!("{:.1}M", m)
+        }
     } else if n >= 1_000 {
-        format!("{}k", n / 1_000)
+        let k = n as f64 / 1_000.0;
+        if k.fract() == 0.0 {
+            format!("{}k", k as u64)
+        } else {
+            format!("{:.1}k", k)
+        }
     } else {
         n.to_string()
     }

@@ -203,46 +203,11 @@ fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
     let models = app.filtered_models();
     let show_provider_col = app.is_all_selected();
 
-    // Build items with header row
-    let mut items: Vec<ListItem> = Vec::with_capacity(models.len() + 1);
-
-    // Header row
-    let header_style = Style::default()
-        .fg(Color::DarkGray)
-        .add_modifier(Modifier::UNDERLINED);
-    let header_text = if show_provider_col {
-        format!(
-            "{:<30} {:<18} {:>10} {:>8}",
-            "Model ID", "Provider", "Cost", "Context"
-        )
-    } else {
-        format!("{:<35} {:>12} {:>8}", "Model ID", "Cost", "Context")
-    };
-    items.push(ListItem::new(header_text).style(header_style));
-
-    // Model rows
-    for entry in models.iter() {
-        let cost = entry.model.cost_str();
-        let ctx = entry.model.context_str();
-        let text = if show_provider_col {
-            format!(
-                "{:<30} {:<18} {:>10} {:>8}",
-                truncate(&entry.id, 30),
-                truncate(&entry.provider_id, 18),
-                cost,
-                ctx
-            )
-        } else {
-            format!("{:<35} {:>12} {:>8}", truncate(&entry.id, 35), cost, ctx)
-        };
-        items.push(ListItem::new(text));
-    }
-
     let sort_indicator = match app.sort_order {
         SortOrder::Default => "",
-        SortOrder::ReleaseDate => " ↓date",
-        SortOrder::Cost => " ↑cost",
-        SortOrder::Context => " ↓ctx",
+        SortOrder::ReleaseDate => " \u{2193}date",
+        SortOrder::Cost => " \u{2191}cost",
+        SortOrder::Context => " \u{2193}ctx",
     };
 
     let filter_indicator = format_filters(&app.filters, app.provider_category_filter);
@@ -273,21 +238,110 @@ fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
         )
     };
 
-    let list = List::new(items)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(border_style)
-                .title(title),
-        )
-        .highlight_style(
+    let outer_block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(border_style)
+        .title(title);
+    let inner_area = outer_block.inner(area);
+    f.render_widget(outer_block, area);
+
+    // Fixed column widths: Input(8) Output(8) Context(8) + provider(18 optional)
+    let input_w: u16 = 8;
+    let output_w: u16 = 8;
+    let ctx_w: u16 = 8;
+    let provider_w: u16 = if show_provider_col { 18 } else { 0 };
+    let num_gaps: u16 = if show_provider_col { 4 } else { 3 };
+    let fixed_w = provider_w + input_w + output_w + ctx_w + num_gaps;
+    let name_width = (inner_area.width.saturating_sub(fixed_w) as usize).max(10);
+
+    let header_style = Style::default()
+        .fg(Color::Yellow)
+        .add_modifier(Modifier::BOLD);
+    let active_header_style = Style::default()
+        .fg(Color::Cyan)
+        .add_modifier(Modifier::BOLD);
+
+    // Determine which column is actively sorted
+    let sort_col = match app.sort_order {
+        SortOrder::Default => "name",
+        SortOrder::ReleaseDate => "name",
+        SortOrder::Cost => "cost",
+        SortOrder::Context => "context",
+    };
+    let cost_style = if sort_col == "cost" {
+        active_header_style
+    } else {
+        header_style
+    };
+
+    // Build header spans
+    let mut header_spans: Vec<Span> = vec![Span::styled(
+        format!("{:<width$}", "Model ID", width = name_width),
+        if sort_col == "name" {
+            active_header_style
+        } else {
+            header_style
+        },
+    )];
+    if show_provider_col {
+        header_spans.push(Span::styled(format!(" {:<18}", "Provider"), header_style));
+    }
+    header_spans.push(Span::styled(format!(" {:>8}", "Input"), cost_style));
+    header_spans.push(Span::styled(format!(" {:>8}", "Output"), cost_style));
+    header_spans.push(Span::styled(
+        format!(" {:>8}", "Context"),
+        if sort_col == "context" {
+            active_header_style
+        } else {
+            header_style
+        },
+    ));
+
+    // Build items with header row
+    let mut items: Vec<ListItem> = Vec::with_capacity(models.len() + 1);
+    items.push(ListItem::new(Line::from(header_spans)));
+
+    // Model rows
+    for (display_idx, entry) in models.iter().enumerate() {
+        let is_selected = display_idx == app.selected_model;
+        let style = if is_selected {
             Style::default()
                 .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD),
-        )
-        .highlight_symbol("> ");
+                .bg(Color::DarkGray)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default()
+        };
 
-    f.render_stateful_widget(list, area, &mut app.model_list_state);
+        let cost = &entry.model.cost;
+        let input_cost = crate::data::Model::cost_short(cost.as_ref().and_then(|c| c.input));
+        let output_cost = crate::data::Model::cost_short(cost.as_ref().and_then(|c| c.output));
+        let ctx = entry.model.context_str();
+
+        let mut row_spans: Vec<Span> = vec![Span::styled(
+            format!(
+                "{:<width$}",
+                truncate(&entry.id, name_width.saturating_sub(1)),
+                width = name_width
+            ),
+            style,
+        )];
+        if show_provider_col {
+            row_spans.push(Span::styled(
+                format!(" {:<18}", truncate(&entry.provider_id, 18)),
+                style,
+            ));
+        }
+        row_spans.push(Span::styled(format!(" {:>8}", input_cost), style));
+        row_spans.push(Span::styled(format!(" {:>8}", output_cost), style));
+        row_spans.push(Span::styled(format!(" {:>8}", ctx), style));
+
+        items.push(ListItem::new(Line::from(row_spans)));
+    }
+
+    let list = List::new(items);
+    let mut state = app.model_list_state.clone();
+    f.render_stateful_widget(list, inner_area, &mut state);
 }
 
 fn draw_details_row(f: &mut Frame, area: Rect, app: &App) {
@@ -1185,6 +1239,7 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
 
         let style = if is_selected {
             Style::default()
+                .fg(Color::Yellow)
                 .bg(Color::DarkGray)
                 .add_modifier(Modifier::BOLD)
         } else {
