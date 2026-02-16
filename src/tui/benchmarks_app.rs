@@ -26,6 +26,9 @@ pub enum BenchmarkSortColumn {
     Speed,
     Ttft,
     Ttfat,
+    PriceInput,
+    PriceOutput,
+    PriceBlended,
     Name,
     ReleaseDate,
 }
@@ -47,7 +50,10 @@ impl BenchmarkSortColumn {
             Self::Tau2 => Self::Speed,
             Self::Speed => Self::Ttft,
             Self::Ttft => Self::Ttfat,
-            Self::Ttfat => Self::Name,
+            Self::Ttfat => Self::PriceInput,
+            Self::PriceInput => Self::PriceOutput,
+            Self::PriceOutput => Self::PriceBlended,
+            Self::PriceBlended => Self::Name,
             Self::Name => Self::ReleaseDate,
             Self::ReleaseDate => Self::Intelligence,
         }
@@ -70,6 +76,9 @@ impl BenchmarkSortColumn {
             Self::Speed => "Tok/s",
             Self::Ttft => "TTFT",
             Self::Ttfat => "TTFAT",
+            Self::PriceInput => "In $/M",
+            Self::PriceOutput => "Out $/M",
+            Self::PriceBlended => "Bld $/M",
             Self::Name => "Name",
             Self::ReleaseDate => "Date",
         }
@@ -77,7 +86,15 @@ impl BenchmarkSortColumn {
 
     /// Whether descending is the default sort direction for this column
     pub fn default_descending(&self) -> bool {
-        !matches!(self, Self::Name | Self::Ttft | Self::Ttfat)
+        !matches!(
+            self,
+            Self::Name
+                | Self::Ttft
+                | Self::Ttfat
+                | Self::PriceInput
+                | Self::PriceOutput
+                | Self::PriceBlended
+        )
     }
 
     /// Returns the columns to display in the list based on the active sort.
@@ -95,6 +112,7 @@ impl BenchmarkSortColumn {
             LiveCode | SciCode | Terminal => vec![LiveCode, SciCode, Terminal],
             IFBench | Lcr | Tau2 => vec![IFBench, Lcr, Tau2],
             Speed | Ttft | Ttfat => vec![Speed, Ttft, Ttfat],
+            PriceInput | PriceOutput | PriceBlended => vec![PriceInput, PriceOutput, PriceBlended],
             Name => vec![Speed],
             ReleaseDate => vec![ReleaseDate],
         };
@@ -128,6 +146,9 @@ impl BenchmarkSortColumn {
             Self::Speed => entry.output_tps,
             Self::Ttft => entry.ttft,
             Self::Ttfat => entry.ttfat,
+            Self::PriceInput => entry.price_input,
+            Self::PriceOutput => entry.price_output,
+            Self::PriceBlended => entry.price_blended,
             Self::Name => Some(0.0),
             Self::ReleaseDate => entry
                 .release_date
@@ -147,7 +168,8 @@ pub enum BenchmarkFocus {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CreatorListItem {
     All,
-    Creator(String), // creator slug
+    GroupHeader(String), // non-selectable section header
+    Creator(String),     // creator slug
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -187,22 +209,21 @@ impl CreatorOpenness {
     }
 }
 
+/// Per-model source filter: uses open_weights_map with CreatorOpenness fallback.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum OpennessFilter {
+pub enum SourceFilter {
     #[default]
     All,
     Open,
     Closed,
-    Mixed,
 }
 
-impl OpennessFilter {
+impl SourceFilter {
     pub fn next(self) -> Self {
         match self {
             Self::All => Self::Open,
             Self::Open => Self::Closed,
-            Self::Closed => Self::Mixed,
-            Self::Mixed => Self::All,
+            Self::Closed => Self::All,
         }
     }
 
@@ -211,16 +232,26 @@ impl OpennessFilter {
             Self::All => "All",
             Self::Open => "Open",
             Self::Closed => "Closed",
-            Self::Mixed => "Mixed",
         }
     }
 
-    pub fn matches(self, openness: CreatorOpenness) -> bool {
+    /// Check if an entry passes the filter using per-model open_weights_map
+    /// with CreatorOpenness as fallback for unmatched entries.
+    pub fn matches(
+        self,
+        entry: &BenchmarkEntry,
+        open_weights_map: &std::collections::HashMap<String, bool>,
+    ) -> bool {
         match self {
             Self::All => true,
-            Self::Open => openness == CreatorOpenness::Open,
-            Self::Closed => openness == CreatorOpenness::Closed,
-            Self::Mixed => openness == CreatorOpenness::Mixed,
+            Self::Open => match open_weights_map.get(&entry.slug) {
+                Some(&ow) => ow,
+                None => CreatorOpenness::from_creator(&entry.creator) == CreatorOpenness::Open,
+            },
+            Self::Closed => match open_weights_map.get(&entry.slug) {
+                Some(&ow) => !ow,
+                None => CreatorOpenness::from_creator(&entry.creator) == CreatorOpenness::Closed,
+            },
         }
     }
 }
@@ -275,58 +306,13 @@ impl CreatorRegion {
     }
 }
 
+/// How creators are grouped in the sidebar (toggle, not filter).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum RegionFilter {
+pub enum CreatorGrouping {
     #[default]
-    All,
-    US,
-    China,
-    Europe,
-    MiddleEast,
-    SouthKorea,
-    Canada,
-    Other,
-}
-
-impl RegionFilter {
-    pub fn next(self) -> Self {
-        match self {
-            Self::All => Self::US,
-            Self::US => Self::China,
-            Self::China => Self::Europe,
-            Self::Europe => Self::MiddleEast,
-            Self::MiddleEast => Self::SouthKorea,
-            Self::SouthKorea => Self::Canada,
-            Self::Canada => Self::Other,
-            Self::Other => Self::All,
-        }
-    }
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::All => "All",
-            Self::US => "US",
-            Self::China => "China",
-            Self::Europe => "Europe",
-            Self::MiddleEast => "Mid East",
-            Self::SouthKorea => "S. Korea",
-            Self::Canada => "Canada",
-            Self::Other => "Other",
-        }
-    }
-
-    pub fn matches(self, region: CreatorRegion) -> bool {
-        match self {
-            Self::All => true,
-            Self::US => region == CreatorRegion::US,
-            Self::China => region == CreatorRegion::China,
-            Self::Europe => region == CreatorRegion::Europe,
-            Self::MiddleEast => region == CreatorRegion::MiddleEast,
-            Self::SouthKorea => region == CreatorRegion::SouthKorea,
-            Self::Canada => region == CreatorRegion::Canada,
-            Self::Other => region == CreatorRegion::Other,
-        }
-    }
+    None,
+    ByRegion,
+    ByType,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -359,44 +345,6 @@ impl CreatorType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum TypeFilter {
-    #[default]
-    All,
-    Startup,
-    Giant,
-    Research,
-}
-
-impl TypeFilter {
-    pub fn next(self) -> Self {
-        match self {
-            Self::All => Self::Startup,
-            Self::Startup => Self::Giant,
-            Self::Giant => Self::Research,
-            Self::Research => Self::All,
-        }
-    }
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::All => "All",
-            Self::Startup => "Startup",
-            Self::Giant => "Big Tech",
-            Self::Research => "Research",
-        }
-    }
-
-    pub fn matches(self, creator_type: CreatorType) -> bool {
-        match self {
-            Self::All => true,
-            Self::Startup => creator_type == CreatorType::Startup,
-            Self::Giant => creator_type == CreatorType::Giant,
-            Self::Research => creator_type == CreatorType::Research,
-        }
-    }
-}
-
 /// Pre-computed creator info: (display_name, entry_count)
 struct CreatorInfo {
     display_name: String,
@@ -415,14 +363,13 @@ pub struct BenchmarksApp {
     pub creator_list_items: Vec<CreatorListItem>,
     pub selected_creator: usize,
     pub creator_list_state: ListState,
-    pub openness_filter: OpennessFilter,
-    pub region_filter: RegionFilter,
-    pub type_filter: TypeFilter,
+    pub source_filter: SourceFilter,
+    pub creator_grouping: CreatorGrouping,
     creator_info: HashMap<String, CreatorInfo>,
 }
 
 impl BenchmarksApp {
-    pub fn new(store: &BenchmarkStore) -> Self {
+    pub fn new(store: &BenchmarkStore, open_weights_map: &HashMap<String, bool>) -> Self {
         let mut list_state = ListState::default();
         list_state.select(Some(0));
 
@@ -440,25 +387,24 @@ impl BenchmarksApp {
             creator_list_items: Vec::new(),
             selected_creator: 0,
             creator_list_state,
-            openness_filter: OpennessFilter::default(),
-            region_filter: RegionFilter::default(),
-            type_filter: TypeFilter::default(),
+            source_filter: SourceFilter::default(),
+            creator_grouping: CreatorGrouping::default(),
             creator_info: HashMap::new(),
         };
 
         app.build_creator_list(store);
-        app.update_filtered(store);
+        app.update_filtered(store, open_weights_map);
         app
     }
 
     /// Rebuild all derived state after the underlying store changes.
     /// Re-derives creator list, filtered indices, and resets selection.
-    pub fn rebuild(&mut self, store: &BenchmarkStore) {
+    pub fn rebuild(&mut self, store: &BenchmarkStore, open_weights_map: &HashMap<String, bool>) {
         self.build_creator_list(store);
         self.selected_creator = 0;
         self.creator_list_state.select(Some(0));
         self.selected = 0;
-        self.update_filtered(store);
+        self.update_filtered(store, open_weights_map);
     }
 
     fn build_creator_list(&mut self, store: &BenchmarkStore) {
@@ -480,18 +426,7 @@ impl BenchmarksApp {
                 });
         }
 
-        let mut creators: Vec<String> = info
-            .keys()
-            .filter(|slug| {
-                self.openness_filter
-                    .matches(CreatorOpenness::from_creator(slug))
-                    && self
-                        .region_filter
-                        .matches(CreatorRegion::from_creator(slug))
-                    && self.type_filter.matches(CreatorType::from_creator(slug))
-            })
-            .cloned()
-            .collect();
+        let mut creators: Vec<String> = info.keys().cloned().collect();
         creators.sort_by(|a, b| {
             let name_a = &info[a].display_name;
             let name_b = &info[b].display_name;
@@ -500,8 +435,61 @@ impl BenchmarksApp {
 
         self.creator_list_items = Vec::with_capacity(creators.len() + 1);
         self.creator_list_items.push(CreatorListItem::All);
-        for slug in creators {
-            self.creator_list_items.push(CreatorListItem::Creator(slug));
+
+        match self.creator_grouping {
+            CreatorGrouping::None => {
+                for slug in creators {
+                    self.creator_list_items.push(CreatorListItem::Creator(slug));
+                }
+            }
+            CreatorGrouping::ByRegion => {
+                let regions = [
+                    CreatorRegion::US,
+                    CreatorRegion::China,
+                    CreatorRegion::Europe,
+                    CreatorRegion::MiddleEast,
+                    CreatorRegion::SouthKorea,
+                    CreatorRegion::Canada,
+                    CreatorRegion::Other,
+                ];
+                for region in &regions {
+                    let group: Vec<&String> = creators
+                        .iter()
+                        .filter(|s| CreatorRegion::from_creator(s) == *region)
+                        .collect();
+                    if group.is_empty() {
+                        continue;
+                    }
+                    self.creator_list_items
+                        .push(CreatorListItem::GroupHeader(region.label().to_string()));
+                    for slug in group {
+                        self.creator_list_items
+                            .push(CreatorListItem::Creator(slug.clone()));
+                    }
+                }
+            }
+            CreatorGrouping::ByType => {
+                let types = [
+                    CreatorType::Startup,
+                    CreatorType::Giant,
+                    CreatorType::Research,
+                ];
+                for ct in &types {
+                    let group: Vec<&String> = creators
+                        .iter()
+                        .filter(|s| CreatorType::from_creator(s) == *ct)
+                        .collect();
+                    if group.is_empty() {
+                        continue;
+                    }
+                    self.creator_list_items
+                        .push(CreatorListItem::GroupHeader(ct.label().to_string()));
+                    for slug in group {
+                        self.creator_list_items
+                            .push(CreatorListItem::Creator(slug.clone()));
+                    }
+                }
+            }
         }
 
         self.creator_info = info;
@@ -513,16 +501,6 @@ impl BenchmarksApp {
             .get(slug)
             .map(|i| (i.display_name.as_str(), i.count))
             .unwrap_or((slug, 0))
-    }
-
-    /// Get the openness classification for a creator slug.
-    pub fn creator_openness(&self, slug: &str) -> CreatorOpenness {
-        CreatorOpenness::from_creator(slug)
-    }
-
-    /// Get the region for a creator slug.
-    pub fn creator_region(&self, slug: &str) -> CreatorRegion {
-        CreatorRegion::from_creator(slug)
     }
 
     /// Get the currently selected creator slug, or None for "All".
@@ -539,30 +517,22 @@ impl BenchmarksApp {
         Some(self.creator_display(slug).0)
     }
 
-    pub fn update_filtered(&mut self, store: &BenchmarkStore) {
+    pub fn update_filtered(
+        &mut self,
+        store: &BenchmarkStore,
+        open_weights_map: &HashMap<String, bool>,
+    ) {
         let query_lower = self.search_query.to_lowercase();
         let creator_slug = self.selected_creator_slug().map(|s| s.to_owned());
-        let openness_filter = self.openness_filter;
+        let source_filter = self.source_filter;
 
         self.filtered_indices = store
             .entries()
             .iter()
             .enumerate()
             .filter(|(_, entry)| {
-                // Creator attribute filters (apply even when "All" creators selected)
-                if !openness_filter.matches(CreatorOpenness::from_creator(&entry.creator)) {
-                    return false;
-                }
-                if !self
-                    .region_filter
-                    .matches(CreatorRegion::from_creator(&entry.creator))
-                {
-                    return false;
-                }
-                if !self
-                    .type_filter
-                    .matches(CreatorType::from_creator(&entry.creator))
-                {
+                // Per-model source filter (open/closed)
+                if !source_filter.matches(entry, open_weights_map) {
                     return false;
                 }
                 // Creator filter
@@ -627,6 +597,11 @@ impl BenchmarksApp {
                 BenchmarkSortColumn::Speed => cmp_opt_f64(ea.output_tps, eb.output_tps),
                 BenchmarkSortColumn::Ttft => cmp_opt_f64(ea.ttft, eb.ttft),
                 BenchmarkSortColumn::Ttfat => cmp_opt_f64(ea.ttfat, eb.ttfat),
+                BenchmarkSortColumn::PriceInput => cmp_opt_f64(ea.price_input, eb.price_input),
+                BenchmarkSortColumn::PriceOutput => cmp_opt_f64(ea.price_output, eb.price_output),
+                BenchmarkSortColumn::PriceBlended => {
+                    cmp_opt_f64(ea.price_blended, eb.price_blended)
+                }
                 BenchmarkSortColumn::Name => ea.name.cmp(&eb.name),
                 BenchmarkSortColumn::ReleaseDate => cmp_opt_f64(
                     ea.release_date
@@ -646,10 +621,10 @@ impl BenchmarksApp {
         });
     }
 
-    pub fn cycle_sort(&mut self, store: &BenchmarkStore) {
+    pub fn cycle_sort(&mut self, store: &BenchmarkStore, open_weights_map: &HashMap<String, bool>) {
         self.sort_column = self.sort_column.next();
         self.sort_descending = self.sort_column.default_descending();
-        self.update_filtered(store);
+        self.update_filtered(store, open_weights_map);
     }
 
     pub fn toggle_sort_direction(&mut self, store: &BenchmarkStore) {
@@ -658,14 +633,19 @@ impl BenchmarksApp {
     }
 
     /// Jump directly to a sort column. If already on that column, toggle direction.
-    pub fn quick_sort(&mut self, col: BenchmarkSortColumn, store: &BenchmarkStore) {
+    pub fn quick_sort(
+        &mut self,
+        col: BenchmarkSortColumn,
+        store: &BenchmarkStore,
+        open_weights_map: &HashMap<String, bool>,
+    ) {
         if self.sort_column == col {
             self.sort_descending = !self.sort_descending;
             self.apply_sort(store);
         } else {
             self.sort_column = col;
             self.sort_descending = col.default_descending();
-            self.update_filtered(store);
+            self.update_filtered(store, open_weights_map);
         }
     }
 
@@ -720,71 +700,98 @@ impl BenchmarksApp {
         self.list_state.select(Some(self.selected));
     }
 
-    pub fn cycle_openness_filter(&mut self, store: &BenchmarkStore) {
-        self.openness_filter = self.openness_filter.next();
-        self.build_creator_list(store);
-        self.selected_creator = 0;
-        self.creator_list_state.select(Some(0));
-        self.update_filtered(store);
+    pub fn cycle_source_filter(
+        &mut self,
+        store: &BenchmarkStore,
+        open_weights_map: &HashMap<String, bool>,
+    ) {
+        self.source_filter = self.source_filter.next();
+        self.update_filtered(store, open_weights_map);
     }
 
-    pub fn cycle_region_filter(&mut self, store: &BenchmarkStore) {
-        self.region_filter = self.region_filter.next();
+    pub fn toggle_region_grouping(&mut self, store: &BenchmarkStore) {
+        self.creator_grouping = if self.creator_grouping == CreatorGrouping::ByRegion {
+            CreatorGrouping::None
+        } else {
+            CreatorGrouping::ByRegion
+        };
         self.build_creator_list(store);
         self.selected_creator = 0;
         self.creator_list_state.select(Some(0));
-        self.update_filtered(store);
     }
 
-    pub fn cycle_type_filter(&mut self, store: &BenchmarkStore) {
-        self.type_filter = self.type_filter.next();
+    pub fn toggle_type_grouping(&mut self, store: &BenchmarkStore) {
+        self.creator_grouping = if self.creator_grouping == CreatorGrouping::ByType {
+            CreatorGrouping::None
+        } else {
+            CreatorGrouping::ByType
+        };
         self.build_creator_list(store);
         self.selected_creator = 0;
         self.creator_list_state.select(Some(0));
-        self.update_filtered(store);
     }
 
     // --- Creator sidebar navigation ---
 
+    fn is_header(&self, idx: usize) -> bool {
+        matches!(
+            self.creator_list_items.get(idx),
+            Some(CreatorListItem::GroupHeader(_))
+        )
+    }
+
+    /// Move to the next selectable item, skipping headers.
+    fn skip_to_selectable(&mut self, start: usize, forward: bool) {
+        let max = self.creator_list_items.len().saturating_sub(1);
+        let mut idx = start;
+        while self.is_header(idx) {
+            if forward {
+                if idx >= max {
+                    return; // can't go further
+                }
+                idx += 1;
+            } else {
+                if idx == 0 {
+                    return;
+                }
+                idx -= 1;
+            }
+        }
+        self.selected_creator = idx;
+        self.creator_list_state.select(Some(idx));
+    }
+
     pub fn next_creator(&mut self) {
         let max = self.creator_list_items.len().saturating_sub(1);
         if self.selected_creator < max {
-            self.selected_creator += 1;
-            self.creator_list_state.select(Some(self.selected_creator));
+            self.skip_to_selectable(self.selected_creator + 1, true);
         }
     }
 
     pub fn prev_creator(&mut self) {
         if self.selected_creator > 0 {
-            self.selected_creator -= 1;
-            self.creator_list_state.select(Some(self.selected_creator));
+            self.skip_to_selectable(self.selected_creator - 1, false);
         }
     }
 
     pub fn select_first_creator(&mut self) {
-        if self.selected_creator > 0 {
-            self.selected_creator = 0;
-            self.creator_list_state.select(Some(0));
-        }
+        self.skip_to_selectable(0, true);
     }
 
     pub fn select_last_creator(&mut self) {
         let max = self.creator_list_items.len().saturating_sub(1);
-        if self.selected_creator < max {
-            self.selected_creator = max;
-            self.creator_list_state.select(Some(max));
-        }
+        self.skip_to_selectable(max, false);
     }
 
     pub fn page_down_creator(&mut self) {
         let max = self.creator_list_items.len().saturating_sub(1);
-        self.selected_creator = (self.selected_creator + PAGE_SIZE).min(max);
-        self.creator_list_state.select(Some(self.selected_creator));
+        let target = (self.selected_creator + PAGE_SIZE).min(max);
+        self.skip_to_selectable(target, true);
     }
 
     pub fn page_up_creator(&mut self) {
-        self.selected_creator = self.selected_creator.saturating_sub(PAGE_SIZE);
-        self.creator_list_state.select(Some(self.selected_creator));
+        let target = self.selected_creator.saturating_sub(PAGE_SIZE);
+        self.skip_to_selectable(target, true);
     }
 
     // --- Focus ---

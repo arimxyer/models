@@ -273,9 +273,9 @@ fn handle_benchmarks_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> 
         KeyCode::Char('3') => Some(Message::QuickSortSpeed),
 
         // Filters
-        KeyCode::Char('4') => Some(Message::CycleBenchmarkOpenness),
-        KeyCode::Char('5') => Some(Message::CycleBenchmarkRegion),
-        KeyCode::Char('6') => Some(Message::CycleBenchmarkType),
+        KeyCode::Char('4') => Some(Message::CycleBenchmarkSource),
+        KeyCode::Char('5') => Some(Message::ToggleRegionGrouping),
+        KeyCode::Char('6') => Some(Message::ToggleTypeGrouping),
 
         // Sort
         KeyCode::Char('s') => Some(Message::CycleBenchmarkSort),

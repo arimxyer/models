@@ -1051,9 +1051,7 @@ fn draw_benchmarks_main(f: &mut Frame, area: Rect, app: &mut App) {
 }
 
 fn draw_benchmark_creators(f: &mut Frame, area: Rect, app: &mut App) {
-    use super::benchmarks_app::{
-        BenchmarkFocus, CreatorListItem, OpennessFilter, RegionFilter, TypeFilter,
-    };
+    use super::benchmarks_app::{BenchmarkFocus, CreatorGrouping, CreatorListItem};
 
     let bench_app = &mut app.benchmarks_app;
     let store = &app.benchmark_store;
@@ -1072,55 +1070,26 @@ fn draw_benchmark_creators(f: &mut Frame, area: Rect, app: &mut App) {
     let inner_area = outer_block.inner(area);
     f.render_widget(outer_block, area);
 
-    // Filter rows — one per filter dimension
-    let src_active = bench_app.openness_filter != OpennessFilter::All;
-    let src_color = if src_active {
-        match bench_app.openness_filter {
-            OpennessFilter::Open => Color::Green,
-            OpennessFilter::Closed => Color::Red,
-            OpennessFilter::Mixed => Color::Yellow,
-            OpennessFilter::All => Color::DarkGray,
-        }
-    } else {
-        Color::DarkGray
-    };
-    let src_label = if src_active {
-        bench_app.openness_filter.label()
-    } else {
-        "Src"
-    };
-
-    let rgn_active = bench_app.region_filter != RegionFilter::All;
+    // Grouping toggle indicators
+    let rgn_active = bench_app.creator_grouping == CreatorGrouping::ByRegion;
     let rgn_color = if rgn_active {
         Color::Yellow
     } else {
         Color::DarkGray
     };
-    let rgn_label = if rgn_active {
-        bench_app.region_filter.label()
-    } else {
-        "Rgn"
-    };
 
-    let typ_active = bench_app.type_filter != TypeFilter::All;
+    let typ_active = bench_app.creator_grouping == CreatorGrouping::ByType;
     let typ_color = if typ_active {
         Color::Magenta
     } else {
         Color::DarkGray
     };
-    let typ_label = if typ_active {
-        bench_app.type_filter.label()
-    } else {
-        "Type"
-    };
 
     let filter_line = Line::from(vec![
-        Span::styled("[4]", Style::default().fg(src_color)),
-        Span::raw(format!("{} ", src_label)),
         Span::styled("[5]", Style::default().fg(rgn_color)),
-        Span::raw(format!("{} ", rgn_label)),
+        Span::raw(if rgn_active { "Region " } else { "Rgn " }),
         Span::styled("[6]", Style::default().fg(typ_color)),
-        Span::raw(typ_label.to_string()),
+        Span::raw("Type"),
     ]);
 
     let chunks = Layout::default()
@@ -1144,23 +1113,32 @@ fn draw_benchmark_creators(f: &mut Frame, area: Rect, app: &mut App) {
                     Span::raw(format!(" ({})", count)),
                 ]))
             }
+            CreatorListItem::GroupHeader(label) => {
+                let header_color = match bench_app.creator_grouping {
+                    CreatorGrouping::ByRegion => Color::Yellow,
+                    CreatorGrouping::ByType => Color::Magenta,
+                    _ => Color::DarkGray,
+                };
+                ListItem::new(Line::from(vec![
+                    Span::styled("\u{2500}\u{2500} ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(
+                        label.as_str(),
+                        Style::default()
+                            .fg(header_color)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(" \u{2500}\u{2500}", Style::default().fg(Color::DarkGray)),
+                ]))
+            }
             CreatorListItem::Creator(slug) => {
                 let (display_name, count) = bench_app.creator_display(slug);
-                let openness = bench_app.creator_openness(slug);
-                let region = bench_app.creator_region(slug);
-                // Suffix: " O RGN" — openness label + space + region label
-                let suffix_len = openness.label().len() + 1 + region.label().len();
-                // Name part: "Name (N) " — needs at least some space
                 let count_str = format!("({})", count);
-                // Max name chars: total width - count - suffix - separators
-                let overhead = count_str.len() + 1 + suffix_len + 1; // " (N) ...suffix"
+                let overhead = count_str.len() + 1;
                 let max_name = item_width.saturating_sub(overhead);
                 let name = truncate(display_name, max_name);
                 ListItem::new(Line::from(vec![
-                    Span::raw(format!("{} {} ", name, count_str)),
-                    Span::styled(openness.label(), Style::default().fg(openness.color())),
-                    Span::raw(" "),
-                    Span::styled(region.label(), Style::default().fg(Color::DarkGray)),
+                    Span::raw(format!("{} ", name)),
+                    Span::styled(count_str, Style::default().fg(Color::DarkGray)),
                 ]))
             }
         })
@@ -1199,21 +1177,28 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
     };
     let sort_indicator = format!(" {}{}", sort_dir, bench_app.sort_column.label());
 
+    let source_indicator = match bench_app.source_filter {
+        super::benchmarks_app::SourceFilter::All => String::new(),
+        filter => format!(" [{}]", filter.label()),
+    };
+
     let creator_label = bench_app.selected_creator_name().unwrap_or("Benchmarks");
 
     let title = if bench_app.search_query.is_empty() {
         format!(
-            " {} ({}){} ",
+            " {} ({}){}{} ",
             creator_label,
             bench_app.filtered_indices.len(),
+            source_indicator,
             sort_indicator
         )
     } else {
         format!(
-            " {} ({}) [/{}]{} ",
+            " {} ({}) [/{}]{}{} ",
             creator_label,
             bench_app.filtered_indices.len(),
             bench_app.search_query,
+            source_indicator,
             sort_indicator
         )
     };
@@ -1328,13 +1313,18 @@ fn draw_benchmark_detail(f: &mut Frame, area: Rect, app: &App) {
             .fg(Color::Cyan)
             .add_modifier(Modifier::BOLD),
     )));
-    // Line 2: Creator + Source
+    // Line 2: Creator + Source (per-model if available, else per-creator fallback)
     let em = "\u{2014}";
+    let (source_label, source_color) = match app.open_weights_map.get(&entry.slug) {
+        Some(true) => ("Open", Color::Green),
+        Some(false) => ("Closed", Color::Red),
+        None => (openness.label(), openness.color()),
+    };
     lines.push(Line::from(vec![
         Span::styled("Creator  ", Style::default().fg(Color::DarkGray)),
         Span::raw(format!("{:<16}", creator_display)),
         Span::styled("Source  ", Style::default().fg(Color::DarkGray)),
-        Span::styled(openness.label(), Style::default().fg(openness.color())),
+        Span::styled(source_label, Style::default().fg(source_color)),
     ]));
     // Line 3: Region + Type
     lines.push(Line::from(vec![
@@ -1529,6 +1519,14 @@ fn fmt_pct(value: Option<f64>) -> String {
     }
 }
 
+/// Format a price value for list columns (right-aligned, 9 chars)
+fn fmt_col_price(value: Option<f64>) -> String {
+    match value {
+        Some(v) => format!("{:>8.2}$", v),
+        None => format!("{:>9}", "\u{2014}"),
+    }
+}
+
 /// Format a price value
 fn fmt_price(value: Option<f64>) -> String {
     match value {
@@ -1580,6 +1578,7 @@ fn benchmark_col_width(col: super::benchmarks_app::BenchmarkSortColumn) -> u16 {
     match col {
         Name => 0, // dynamic
         Speed | Ttft | Ttfat => 7,
+        PriceInput | PriceOutput | PriceBlended => 9,
         ReleaseDate => 11,
         _ => 6, // all index/percentage columns
     }
@@ -1609,6 +1608,9 @@ fn benchmark_col_header(
         Speed => Span::styled(format!("{:>7}", "Tok/s"), style),
         Ttft => Span::styled(format!("{:>7}", "TTFT"), style),
         Ttfat => Span::styled(format!("{:>7}", "TTFAT"), style),
+        PriceInput => Span::styled(format!("{:>9}", "In $/M"), style),
+        PriceOutput => Span::styled(format!("{:>9}", "Out $/M"), style),
+        PriceBlended => Span::styled(format!("{:>9}", "Bld $/M"), style),
         ReleaseDate => Span::styled(format!("{:>11}", "Released"), style),
     }
 }
@@ -1645,6 +1647,9 @@ fn benchmark_col_value<'a>(
         Speed => Span::styled(fmt_speed(entry.output_tps), style),
         Ttft => Span::styled(fmt_col_ttft(entry.ttft), style),
         Ttfat => Span::styled(fmt_col_ttft(entry.ttfat), style),
+        PriceInput => Span::styled(fmt_col_price(entry.price_input), style),
+        PriceOutput => Span::styled(fmt_col_price(entry.price_output), style),
+        PriceBlended => Span::styled(fmt_col_price(entry.price_blended), style),
         ReleaseDate => Span::styled(fmt_col_date(entry.release_date.as_deref()), style),
     }
 }
@@ -1707,8 +1712,10 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
                     Span::raw("date  "),
                     Span::styled(" 3 ", Style::default().fg(Color::Yellow)),
                     Span::raw("speed  "),
-                    Span::styled(" 4-6 ", Style::default().fg(Color::Yellow)),
-                    Span::raw("filters  "),
+                    Span::styled(" 4 ", Style::default().fg(Color::Yellow)),
+                    Span::raw("source  "),
+                    Span::styled(" 5-6 ", Style::default().fg(Color::Yellow)),
+                    Span::raw("group  "),
                     Span::styled(" s ", Style::default().fg(Color::Yellow)),
                     Span::raw("sort  "),
                     Span::styled(" / ", Style::default().fg(Color::Yellow)),

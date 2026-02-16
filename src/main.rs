@@ -6,6 +6,7 @@ mod benchmarks;
 mod cli;
 mod config;
 mod data;
+mod open_weights;
 mod provider_category;
 mod tui;
 
