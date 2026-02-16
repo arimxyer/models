@@ -34,7 +34,7 @@ A fast CLI and TUI for browsing AI models, benchmarks, and coding agents.
 - **GitHub Action** — daily automated refresh of benchmark data from the Artificial Analysis API
 
 ### v0.8.0: Benchmarks Tab (New)
-- **Dedicated Benchmarks tab** — browse 400+ model entries from Artificial Analysis with quality, speed, and pricing data
+- **Dedicated Benchmarks tab** — browse ~400 model entries from Artificial Analysis with quality, speed, and pricing data
 - **Creator sidebar** with 40+ creators, each classified by source (Open/Closed/Mixed), region (US/China/Europe/Middle East/S. Korea/Canada/Other), and type (Startup/Big Tech/Research)
 - **Three filter dimensions** — `[4]` source, `[5]` region, `[6]` type — to slice the creator and benchmark lists
 - **Quick-sort keys** — `[1]` Intelligence, `[2]` Date, `[3]` Speed — press again to flip direction
@@ -58,7 +58,7 @@ A fast CLI and TUI for browsing AI models, benchmarks, and coding agents.
 - **JSON output** for scripting and automation
 
 ### Benchmarks Tab
-- **400+ benchmark entries** from Artificial Analysis with quality, speed, and pricing scores
+- **~400 benchmark entries** from Artificial Analysis with quality, speed, and pricing scores
 - **Auto-updating** — data refreshes from CDN every 6 hours in the background with offline fallback
 - **Creator sidebar** with 40+ creators — filter by source (Open/Closed/Mixed), region (US/China/Europe/...), and type (Startup/Big Tech/Research)
 - **Quick-sort keys** — instantly sort by Intelligence, Date, or Speed
@@ -311,7 +311,7 @@ models search "llama" --json
 ## Data Sources
 
 - **Model data**: Fetched from [models.dev](https://models.dev), an open-source database of AI models maintained by [SST](https://github.com/sst/models.dev)
-- **Benchmark data**: Fetched from [Artificial Analysis](https://artificialanalysis.ai) — quality indexes, benchmark scores, speed, and pricing for 400+ model entries
+- **Benchmark data**: Fetched from [Artificial Analysis](https://artificialanalysis.ai) — quality indexes, benchmark scores, speed, and pricing for ~400 model entries
 - **Agent data**: Curated catalog in [`data/agents.json`](data/agents.json) — contributions welcome!
 - **GitHub data**: Fetched from GitHub API (stars, releases, changelogs)
 
