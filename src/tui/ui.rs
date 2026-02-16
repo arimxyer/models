@@ -1397,15 +1397,18 @@ fn draw_benchmark_detail(f: &mut Frame, area: Rect, app: &App) {
         &mut lines,
         "MATH-500",
         fmt_pct(entry.math_500),
+        "AIME",
+        fmt_pct(entry.aime),
         "AIME'25",
         fmt_pct(entry.aime_25),
-        "",
-        String::new(),
     );
 
-    // Performance (speed: higher better, TTFT: lower better)
+    // Performance (speed: higher better, TTFT/TTFAT: lower better)
     lines.push(Line::from(""));
-    push_section_header(&mut lines, "Performance (Speed \u{2191}, TTFT \u{2193})");
+    push_section_header(
+        &mut lines,
+        "Performance (Speed \u{2191}, TTFT/TTFAT \u{2193})",
+    );
     let tps_str = entry
         .output_tps
         .map(|v| format!("{:.0} tok/s", v))
@@ -1414,14 +1417,12 @@ fn draw_benchmark_detail(f: &mut Frame, area: Rect, app: &App) {
         .ttft
         .map(|v| format!("{:.2}s", v))
         .unwrap_or_else(|| em.to_string());
+    let ttfat_str = entry
+        .ttfat
+        .map(|v| format!("{:.2}s", v))
+        .unwrap_or_else(|| em.to_string());
     push_three_col(
-        &mut lines,
-        "Speed",
-        tps_str,
-        "TTFT",
-        ttft_str,
-        "",
-        String::new(),
+        &mut lines, "Speed", tps_str, "TTFT", ttft_str, "TTFAT", ttfat_str,
     );
 
     // Pricing ($/M tokens, lower is better)
@@ -1578,7 +1579,7 @@ fn benchmark_col_width(col: super::benchmarks_app::BenchmarkSortColumn) -> u16 {
     use super::benchmarks_app::BenchmarkSortColumn::*;
     match col {
         Name => 0, // dynamic
-        Speed | Ttft => 7,
+        Speed | Ttft | Ttfat => 7,
         ReleaseDate => 11,
         _ => 6, // all index/percentage columns
     }
@@ -1607,6 +1608,7 @@ fn benchmark_col_header(
         Tau2 => Span::styled(format!("{:>6}", "Tau2"), style),
         Speed => Span::styled(format!("{:>7}", "Tok/s"), style),
         Ttft => Span::styled(format!("{:>7}", "TTFT"), style),
+        Ttfat => Span::styled(format!("{:>7}", "TTFAT"), style),
         ReleaseDate => Span::styled(format!("{:>11}", "Released"), style),
     }
 }
@@ -1642,6 +1644,7 @@ fn benchmark_col_value<'a>(
         Tau2 => Span::styled(fmt_col_pct(entry.tau2), style),
         Speed => Span::styled(fmt_speed(entry.output_tps), style),
         Ttft => Span::styled(fmt_col_ttft(entry.ttft), style),
+        Ttfat => Span::styled(fmt_col_ttft(entry.ttfat), style),
         ReleaseDate => Span::styled(fmt_col_date(entry.release_date.as_deref()), style),
     }
 }

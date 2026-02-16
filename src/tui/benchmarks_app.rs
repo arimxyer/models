@@ -25,6 +25,7 @@ pub enum BenchmarkSortColumn {
     Tau2,
     Speed,
     Ttft,
+    Ttfat,
     Name,
     ReleaseDate,
 }
@@ -45,7 +46,8 @@ impl BenchmarkSortColumn {
             Self::Terminal => Self::Tau2,
             Self::Tau2 => Self::Speed,
             Self::Speed => Self::Ttft,
-            Self::Ttft => Self::Name,
+            Self::Ttft => Self::Ttfat,
+            Self::Ttfat => Self::Name,
             Self::Name => Self::ReleaseDate,
             Self::ReleaseDate => Self::Intelligence,
         }
@@ -67,6 +69,7 @@ impl BenchmarkSortColumn {
             Self::Tau2 => "Tau2",
             Self::Speed => "Tok/s",
             Self::Ttft => "TTFT",
+            Self::Ttfat => "TTFAT",
             Self::Name => "Name",
             Self::ReleaseDate => "Date",
         }
@@ -74,7 +77,7 @@ impl BenchmarkSortColumn {
 
     /// Whether descending is the default sort direction for this column
     pub fn default_descending(&self) -> bool {
-        !matches!(self, Self::Name | Self::Ttft)
+        !matches!(self, Self::Name | Self::Ttft | Self::Ttfat)
     }
 
     /// Returns the columns to display in the list based on the active sort.
@@ -91,7 +94,7 @@ impl BenchmarkSortColumn {
             Gpqa | MMLUPro | Hle => vec![Gpqa, MMLUPro, Hle],
             LiveCode | SciCode | Terminal => vec![LiveCode, SciCode, Terminal],
             IFBench | Lcr | Tau2 => vec![IFBench, Lcr, Tau2],
-            Speed | Ttft => vec![Speed, Ttft],
+            Speed | Ttft | Ttfat => vec![Speed, Ttft, Ttfat],
             Name => vec![Speed],
             ReleaseDate => vec![ReleaseDate],
         };
@@ -124,6 +127,7 @@ impl BenchmarkSortColumn {
             Self::Tau2 => entry.tau2,
             Self::Speed => entry.output_tps,
             Self::Ttft => entry.ttft,
+            Self::Ttfat => entry.ttfat,
             Self::Name => Some(0.0),
             Self::ReleaseDate => entry
                 .release_date
@@ -622,6 +626,7 @@ impl BenchmarksApp {
                 BenchmarkSortColumn::Tau2 => cmp_opt_f64(ea.tau2, eb.tau2),
                 BenchmarkSortColumn::Speed => cmp_opt_f64(ea.output_tps, eb.output_tps),
                 BenchmarkSortColumn::Ttft => cmp_opt_f64(ea.ttft, eb.ttft),
+                BenchmarkSortColumn::Ttfat => cmp_opt_f64(ea.ttfat, eb.ttfat),
                 BenchmarkSortColumn::Name => ea.name.cmp(&eb.name),
                 BenchmarkSortColumn::ReleaseDate => cmp_opt_f64(
                     ea.release_date
