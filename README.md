@@ -14,16 +14,24 @@ A fast CLI and TUI for browsing AI models, benchmarks, and coding agents.
 
 <video src="https://github.com/user-attachments/assets/07c750f4-ca47-4f89-8a32-99e0be5004d8" controls width="100%"></video>
 
-## What's New (v0.8.3)
+## What's New (v0.8.4)
 
-### New Benchmark Fields
+### Fixes
+- **Fixed TUI rendering glitch** — resolved an issue where the interface could render incorrectly on launch without a terminal resize. Apologies if you experienced this in v0.8.3!
+
+### Smaller, Leaner Binary
+- **Removed embedded benchmark data** — benchmark data is no longer compiled into the binary (~300KB smaller). Data loads from disk cache on subsequent launches (instant) or fetches from CDN on first launch (~1-2s).
+- **Simplified data flow** — two-tier loading (disk cache + CDN fetch) replaces the previous three-tier system (embedded + cache + CDN), eliminating a class of stale-data-on-upgrade bugs
+
+### Cleanup
+- **Removed redundant startup logic** — simplified cache validation and ETag handling
+- **No user action required** — existing disk caches are automatically validated and reused or refreshed as needed
+
+### v0.8.3: New Benchmark Fields
 - **TTFAT column** — Time to First Answer Token, distinguishing thinking time from TTFT on reasoning models (e.g., 6.7s TTFAT vs 0.46s TTFT)
 - **AIME benchmark** — original AIME evaluation score displayed alongside MATH-500 and AIME'25 in the detail panel
 - **Stable IDs** — `id` and `creator_id` from Artificial Analysis for reliable cross-session entity tracking
-
-### Cache Hardening
 - **Schema-aware cache validation** — stale CDN payloads with missing fields are automatically rejected
-- **`DATA_SCHEMA_VERSION`** — cache entries are validated against the current binary's field coverage, preventing silent data loss on upgrades
 
 ### v0.8.2: UI Polish & Consistency
 - **Split cost columns** — Models list now shows separate Input and Output cost columns with smart rounding

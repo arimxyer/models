@@ -60,6 +60,7 @@ Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message`
 - GitHub Actions `workflow_dispatch` only works when the workflow file exists on the default branch — cannot test from feature branches
 - Adding a new field to `BenchmarkEntry`: (1) add field with `#[serde(default)]`, (2) add a coverage check in `BenchmarkSchemaCoverage::from_entries()`, (3) bump `DATA_SCHEMA_VERSION` in `benchmark_cache.rs` — this ensures stale caches are rejected and CDN payloads are validated before replacing loaded data
 - The AA API uses `0` as a sentinel for missing performance data — jq transforms must convert `0` → `null` (e.g., `if . == 0 then null else . end`)
+- Never use `eprintln!` in TUI mode — stderr output corrupts ratatui's alternate screen buffer, causing rendering glitches. Use `Message` variants or status bar updates instead
 
 ## Releasing
 1. Bump version in `Cargo.toml`
