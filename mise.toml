@@ -51,9 +51,11 @@ fi
 echo "Fetching from Artificial Analysis API..."
 xh GET https://artificialanalysis.ai/api/v2/data/llms/models X-API-Key:"$AA_API_KEY" \
   | jq '[.data[] | {
+    id: .id,
     name: .name,
     slug: .slug,
     creator: .model_creator.slug,
+    creator_id: .model_creator.id,
     creator_name: .model_creator.name,
     release_date: .release_date,
     intelligence_index: .evaluations.artificial_analysis_intelligence_index,
@@ -69,9 +71,11 @@ xh GET https://artificialanalysis.ai/api/v2/data/llms/models X-API-Key:"$AA_API_
     terminalbench_hard: .evaluations.terminalbench_hard,
     tau2: .evaluations.tau2,
     math_500: .evaluations.math_500,
+    aime: .evaluations.aime,
     aime_25: .evaluations.aime_25,
-    output_tps: .median_output_tokens_per_second,
-    ttft: .median_time_to_first_token_seconds,
+    output_tps: (.median_output_tokens_per_second | if . == 0 then null else . end),
+    ttft: (.median_time_to_first_token_seconds | if . == 0 then null else . end),
+    ttfat: (.median_time_to_first_answer_token | if . == 0 then null else . end),
     price_input: .pricing.price_1m_input_tokens,
     price_output: .pricing.price_1m_output_tokens,
     price_blended: .pricing.price_1m_blended_3_to_1
