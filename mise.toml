@@ -28,7 +28,7 @@ run = "cargo test"
 
 [tasks.run]
 description = "Run the TUI application"
-run = "cargo run -- tui"
+run = "cargo run"
 
 [tasks.refresh-benchmarks]
 description = "Fetch latest benchmark data from Artificial Analysis API"
