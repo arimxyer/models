@@ -310,6 +310,7 @@ models search "llama" --json
 
 ## Data Sources
 
+Lots of gratitude and couldn't have made this application without these workhorses doing the legwork. Shout out to the sources!:
 - **Model data**: Fetched from [models.dev](https://models.dev), an open-source database of AI models maintained by [SST](https://github.com/sst/models.dev)
 - **Benchmark data**: Fetched from [Artificial Analysis](https://artificialanalysis.ai) — quality indexes, benchmark scores, speed, and pricing for ~400 model entries
 - **Agent data**: Curated catalog in [`data/agents.json`](data/agents.json) — contributions welcome!
