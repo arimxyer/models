@@ -19,7 +19,7 @@ use crate::agents::{
 };
 use crate::benchmark_cache::BenchmarkCache;
 use crate::benchmark_fetch::{BenchmarkFetchResult, BenchmarkFetcher};
-use crate::benchmarks::BenchmarkStore;
+use crate::benchmarks::{benchmark_entries_compatible, BenchmarkStore};
 use crate::config::Config;
 use crate::data::ProvidersMap;
 use std::sync::Arc;
@@ -256,28 +256,43 @@ fn run_app(
         if let Ok(result) = bench_rx.try_recv() {
             match result {
                 BenchmarkFetchResult::Fresh(entries, etag) => {
-                    // Save to cache before updating app state
-                    let now = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .map(|d| d.as_secs() as i64)
-                        .unwrap_or(0);
-                    let cache = BenchmarkCache {
-                        version: 1,
-                        entries: entries.clone(),
-                        etag,
-                        fetched_at: now,
-                    };
-                    let _ = cache.save();
-                    app.update(app::Message::BenchmarkDataReceived(entries));
+                    // Validate CDN data before replacing currently loaded data.
+                    // Reject if CDN schema is stale relative to current app baseline.
+                    if benchmark_entries_compatible(&entries, app.benchmark_store.entries()) {
+                        let now = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map(|d| d.as_secs() as i64)
+                            .unwrap_or(0);
+                        let cache = BenchmarkCache {
+                            version: crate::benchmark_cache::CACHE_VERSION,
+                            schema_version: crate::benchmark_cache::DATA_SCHEMA_VERSION,
+                            entries: entries.clone(),
+                            etag,
+                            fetched_at: now,
+                        };
+                        let _ = cache.save();
+                        app.update(app::Message::BenchmarkDataReceived(entries));
+                    } else {
+                        eprintln!(
+                            "Rejected stale benchmark CDN payload: schema compatibility failed"
+                        );
+                    }
                 }
                 BenchmarkFetchResult::NotModified => {
-                    // Touch the cache timestamp so we don't re-fetch next startup
+                    // Touch cache timestamp only if the cached schema is compatible with
+                    // currently loaded data. If stale, keep it stale to force retries.
                     let mut cache = BenchmarkCache::load();
-                    cache.fetched_at = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .map(|d| d.as_secs() as i64)
-                        .unwrap_or(0);
-                    let _ = cache.save();
+                    if benchmark_entries_compatible(&cache.entries, app.benchmark_store.entries()) {
+                        cache.fetched_at = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map(|d| d.as_secs() as i64)
+                            .unwrap_or(0);
+                        let _ = cache.save();
+                    } else {
+                        eprintln!(
+                            "Skipped cache freshness extension on 304: cached benchmark schema is stale"
+                        );
+                    }
                 }
                 BenchmarkFetchResult::Error => {
                     app.update(app::Message::BenchmarkFetchFailed);
