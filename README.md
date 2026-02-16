@@ -42,11 +42,6 @@ A fast CLI and TUI for browsing AI models, benchmarks, and coding agents.
 - **Detail panel** — non-scrollable flat layout with indexes, benchmark scores, performance metrics, and pricing
 - **Null-filtering** — entries missing data for the active sort column are hidden automatically
 
-### Benchmark Matching Pipeline
-- **7-tier entity resolution** matching models.dev entries to Artificial Analysis benchmarks (88.2% match rate)
-- TF-IDF and Jaro-Winkler fuzzy matching with brand-aware pre-filters
-- `fuzzy_compatible()` structural gates for size, version, vision, specialization, and product-tier mismatches
-
 ### Other
 - **Provider categories** — filter and group providers by type (Origin, Cloud, Inference, Gateway, Dev Tool)
 - **OpenClaw agent** added to the agents catalog
