@@ -9,8 +9,8 @@
 A fast CLI and TUI for browsing AI models, benchmarks, and coding agents.
 
 - **Models Tab**: Browse 2000+ models across 85+ providers from [models.dev](https://models.dev), categorized by type (Origin, Cloud, Inference, Gateway, Dev Tool)
-- **Benchmarks Tab**: Compare model performance across 15+ benchmarks from [Artificial Analysis](https://artificialanalysis.ai), with creator filtering by source, region, and type
 - **Agents Tab**: Track AI coding assistants (Claude Code, Aider, Cursor, etc.) with version detection and GitHub integration
+- **Benchmarks Tab**: Compare model performance across 15+ benchmarks from [Artificial Analysis](https://artificialanalysis.ai), with creator filtering by source, region, and type
 
 <video src="https://github.com/user-attachments/assets/07c750f4-ca47-4f89-8a32-99e0be5004d8" controls width="100%"></video>
 
@@ -57,6 +57,13 @@ A fast CLI and TUI for browsing AI models, benchmarks, and coding agents.
 - **Copy to clipboard** with a single keypress
 - **JSON output** for scripting and automation
 
+### Agents Tab
+- **Curated catalog** of 12+ AI coding assistants
+- **Version detection** — automatically detects installed agents
+- **GitHub integration** — stars, releases, changelogs, update availability
+- **Persistent cache** — instant startup with ETag-based conditional fetching
+- **Customizable tracking** — choose which agents to monitor
+
 ### Benchmarks Tab
 - **~400 benchmark entries** from Artificial Analysis with quality, speed, and pricing scores
 - **Auto-updating** — data refreshes from CDN every 6 hours in the background with offline fallback
@@ -64,13 +71,6 @@ A fast CLI and TUI for browsing AI models, benchmarks, and coding agents.
 - **Quick-sort keys** — instantly sort by Intelligence, Date, or Speed
 - **Dynamic columns** — list columns adapt to show the most relevant benchmarks for the active sort
 - **Detail panel** — full benchmark breakdown with indexes, scores, performance, and pricing
-
-### Agents Tab
-- **Curated catalog** of 12+ AI coding assistants
-- **Version detection** — automatically detects installed agents
-- **GitHub integration** — stars, releases, changelogs, update availability
-- **Persistent cache** — instant startup with ETag-based conditional fetching
-- **Customizable tracking** — choose which agents to monitor
 
 ## Installation
 
@@ -123,7 +123,7 @@ models
 **Global**
 | Key | Action |
 |-----|--------|
-| `]` / `[` | Switch tabs (Models / Benchmarks / Agents) |
+| `]` / `[` | Switch tabs (Models / Agents / Benchmarks) |
 | `?` | Show context-aware help |
 | `q` | Quit |
 
@@ -167,34 +167,6 @@ models
 | `D` | Copy provider docs URL |
 | `A` | Copy provider API URL |
 
-### Benchmarks Tab
-
-**Quick Sort** (press again to toggle direction)
-| Key | Action |
-|-----|--------|
-| `1` | Sort by Intelligence index |
-| `2` | Sort by Release date |
-| `3` | Sort by Speed (tok/s) |
-
-**Filters**
-| Key | Action |
-|-----|--------|
-| `4` | Cycle source filter (Open / Closed / Mixed) |
-| `5` | Cycle region filter (US / China / Europe / Middle East / S. Korea / Canada / Other) |
-| `6` | Cycle type filter (Startup / Big Tech / Research) |
-
-**Sort (full cycle)**
-| Key | Action |
-|-----|--------|
-| `s` | Cycle through all 16 sort columns |
-| `S` | Toggle sort direction (asc/desc) |
-
-**Actions**
-| Key | Action |
-|-----|--------|
-| `c` | Copy benchmark name |
-| `o` | Open Artificial Analysis page |
-
 ### Agents Tab
 
 ![Agents tab screenshot](public/assets/agents-screenshot.png)
@@ -231,6 +203,34 @@ repo = "owner/repo"
 binary = "my-agent"
 version_command = ["--version"]
 ```
+
+### Benchmarks Tab
+
+**Quick Sort** (press again to toggle direction)
+| Key | Action |
+|-----|--------|
+| `1` | Sort by Intelligence index |
+| `2` | Sort by Release date |
+| `3` | Sort by Speed (tok/s) |
+
+**Filters**
+| Key | Action |
+|-----|--------|
+| `4` | Cycle source filter (Open / Closed / Mixed) |
+| `5` | Cycle region filter (US / China / Europe / Middle East / S. Korea / Canada / Other) |
+| `6` | Cycle type filter (Startup / Big Tech / Research) |
+
+**Sort (full cycle)**
+| Key | Action |
+|-----|--------|
+| `s` | Cycle through all 16 sort columns |
+| `S` | Toggle sort direction (asc/desc) |
+
+**Actions**
+| Key | Action |
+|-----|--------|
+| `c` | Copy benchmark name |
+| `o` | Open Artificial Analysis page |
 
 ### CLI Commands
 
