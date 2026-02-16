@@ -1,6 +1,6 @@
 [package]
 name = "modelsdev"
-version = "0.8.4"
+version = "0.8.5"
 edition = "2021"
 description = "CLI/TUI tool for browsing AI models and tracking coding agents"
 license = "MIT"
@@ -57,3 +57,9 @@ dirs = "6"
 
 # Config file parsing
 toml = "0.8"
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+panic = "abort"
