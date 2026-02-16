@@ -181,13 +181,14 @@ fn draw_providers(f: &mut Frame, area: Rect, app: &mut App) {
         }
     }
 
+    let caret = if is_focused { "> " } else { "  " };
     let list = List::new(items)
         .highlight_style(
             Style::default()
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
         )
-        .highlight_symbol("> ");
+        .highlight_symbol(caret);
 
     f.render_stateful_widget(list, chunks[1], &mut app.provider_list_state);
 }
@@ -254,13 +255,14 @@ fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
     let inner_area = outer_block.inner(area);
     f.render_widget(outer_block, area);
 
-    // Fixed column widths: Input(8) Output(8) Context(8) + provider(18 optional)
+    // Fixed column widths: caret(2) + Input(8) Output(8) Context(8) + provider(18 optional)
+    let caret_w: u16 = 2;
     let input_w: u16 = 8;
     let output_w: u16 = 8;
     let ctx_w: u16 = 8;
     let provider_w: u16 = if show_provider_col { 18 } else { 0 };
     let num_gaps: u16 = if show_provider_col { 4 } else { 3 };
-    let fixed_w = provider_w + input_w + output_w + ctx_w + num_gaps;
+    let fixed_w = caret_w + provider_w + input_w + output_w + ctx_w + num_gaps;
     let name_width = (inner_area.width.saturating_sub(fixed_w) as usize).max(10);
 
     let header_style = Style::default()
@@ -283,15 +285,21 @@ fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
         header_style
     };
 
-    // Build header spans
-    let mut header_spans: Vec<Span> = vec![Span::styled(
-        format!("{:<width$}", "Model ID", width = name_width),
-        if sort_col == "name" {
-            active_header_style
-        } else {
-            header_style
-        },
-    )];
+    // Caret prefix for focused panel
+    let caret = if is_focused { "> " } else { "  " };
+
+    // Build header spans (leading spaces to align with caret)
+    let mut header_spans: Vec<Span> = vec![
+        Span::raw("  "),
+        Span::styled(
+            format!("{:<width$}", "Model ID", width = name_width),
+            if sort_col == "name" {
+                active_header_style
+            } else {
+                header_style
+            },
+        ),
+    ];
     if show_provider_col {
         header_spans.push(Span::styled(format!(" {:<18}", "Provider"), header_style));
     }
@@ -326,14 +334,18 @@ fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
         let output_cost = crate::data::Model::cost_short(cost.as_ref().and_then(|c| c.output));
         let ctx = entry.model.context_str();
 
-        let mut row_spans: Vec<Span> = vec![Span::styled(
-            format!(
-                "{:<width$}",
-                truncate(&entry.id, name_width.saturating_sub(1)),
-                width = name_width
+        let prefix = if is_selected { caret } else { "  " };
+        let mut row_spans: Vec<Span> = vec![
+            Span::styled(prefix, style),
+            Span::styled(
+                format!(
+                    "{:<width$}",
+                    truncate(&entry.id, name_width.saturating_sub(1)),
+                    width = name_width
+                ),
+                style,
             ),
-            style,
-        )];
+        ];
         if show_provider_col {
             row_spans.push(Span::styled(
                 format!(" {:<18}", truncate(&entry.provider_id, 18)),
@@ -558,7 +570,7 @@ fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut App) {
 
             let (prefix, text_style) = if is_selected {
                 (
-                    "> ",
+                    if is_focused { "> " } else { "  " },
                     Style::default()
                         .fg(Color::Yellow)
                         .add_modifier(Modifier::BOLD),
@@ -1154,13 +1166,14 @@ fn draw_benchmark_creators(f: &mut Frame, area: Rect, app: &mut App) {
         })
         .collect();
 
+    let caret = if is_focused { "> " } else { "  " };
     let list = List::new(items)
         .highlight_style(
             Style::default()
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
         )
-        .highlight_symbol("> ");
+        .highlight_symbol(caret);
 
     let mut state = bench_app.creator_list_state.clone();
     f.render_stateful_widget(list, chunks[1], &mut state);
@@ -1215,12 +1228,16 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
     // Dynamic columns based on active sort
     let visible_cols = bench_app.sort_column.visible_columns();
 
-    // Compute dynamic name column width from available space
+    // Compute dynamic name column width from available space (minus 2 for caret)
+    let caret_w: u16 = 2;
     let fixed_width: u16 = visible_cols
         .iter()
         .map(|col| benchmark_col_width(*col))
         .sum();
-    let name_width = (inner_area.width.saturating_sub(fixed_width) as usize).max(10);
+    let name_width = (inner_area.width.saturating_sub(fixed_width + caret_w) as usize).max(10);
+
+    // Caret prefix for focused panel
+    let caret = if is_focused { "> " } else { "  " };
 
     let header_style = Style::default()
         .fg(Color::Yellow)
@@ -1229,17 +1246,15 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
         .fg(Color::Cyan)
         .add_modifier(Modifier::BOLD);
 
-    let header_spans: Vec<Span> = visible_cols
-        .iter()
-        .map(|col| {
-            let style = if *col == bench_app.sort_column {
-                active_header_style
-            } else {
-                header_style
-            };
-            benchmark_col_header(*col, style, name_width)
-        })
-        .collect();
+    let mut header_spans: Vec<Span> = vec![Span::raw("  ")];
+    header_spans.extend(visible_cols.iter().map(|col| {
+        let style = if *col == bench_app.sort_column {
+            active_header_style
+        } else {
+            header_style
+        };
+        benchmark_col_header(*col, style, name_width)
+    }));
     let header = ListItem::new(Line::from(header_spans));
 
     let entries = store.entries();
@@ -1257,10 +1272,13 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
             Style::default()
         };
 
-        let row_spans: Vec<Span> = visible_cols
-            .iter()
-            .map(|col| benchmark_col_value(entry, *col, style, name_width))
-            .collect();
+        let prefix = if is_selected { caret } else { "  " };
+        let mut row_spans: Vec<Span> = vec![Span::styled(prefix, style)];
+        row_spans.extend(
+            visible_cols
+                .iter()
+                .map(|col| benchmark_col_value(entry, *col, style, name_width)),
+        );
         items.push(ListItem::new(Line::from(row_spans)));
     }
 
