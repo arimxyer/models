@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use crate::benchmarks::BenchmarkEntry;
 
 pub const CACHE_VERSION: u32 = 3;
-pub const DATA_SCHEMA_VERSION: u32 = 1;
+pub const DATA_SCHEMA_VERSION: u32 = 2;
 const CACHE_FILENAME: &str = "benchmarks-cache.json";
 const CACHE_TTL_SECS: i64 = 6 * 60 * 60; // 6 hours
 

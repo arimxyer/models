@@ -6,6 +6,8 @@ use super::benchmarks_app::BenchmarksApp;
 /// Page size for page up/down navigation
 const PAGE_SIZE: usize = 10;
 use crate::agents::{AgentsFile, FetchStatus, GitHubData};
+use std::collections::HashMap;
+
 use crate::benchmarks::{BenchmarkEntry, BenchmarkStore};
 use crate::config::Config;
 use crate::data::{Model, Provider, ProvidersMap};
@@ -163,9 +165,9 @@ pub enum Message {
     PageDownBenchmarkCreator,
     PageUpBenchmarkCreator,
     SwitchBenchmarkFocus,
-    CycleBenchmarkOpenness,
-    CycleBenchmarkRegion,
-    CycleBenchmarkType,
+    CycleBenchmarkSource,
+    ToggleRegionGrouping,
+    ToggleTypeGrouping,
     CycleBenchmarkSort,
     ToggleBenchmarkSortDir,
     QuickSortIntelligence,
@@ -214,6 +216,7 @@ pub struct App {
     pub provider_list_items: Vec<ProviderListItem>,
     pub benchmark_store: BenchmarkStore,
     pub benchmarks_app: BenchmarksApp,
+    pub open_weights_map: HashMap<String, bool>,
 }
 
 impl App {
@@ -233,7 +236,9 @@ impl App {
 
         let config = config.unwrap_or_default();
         let agents_app = agents_file.map(|af| AgentsApp::new(af, &config));
-        let benchmarks_app = BenchmarksApp::new(&benchmark_store);
+        let open_weights_map =
+            crate::open_weights::build_open_weights_map(&providers, benchmark_store.entries());
+        let benchmarks_app = BenchmarksApp::new(&benchmark_store, &open_weights_map);
 
         let mut app = Self {
             providers,
@@ -259,6 +264,7 @@ impl App {
             provider_list_items: Vec::new(),
             benchmark_store,
             benchmarks_app,
+            open_weights_map,
         };
 
         app.update_provider_list();
@@ -494,7 +500,8 @@ impl App {
                     Tab::Benchmarks => {
                         self.benchmarks_app.search_query.push(c);
                         self.benchmarks_app.selected = 0;
-                        self.benchmarks_app.update_filtered(&self.benchmark_store);
+                        self.benchmarks_app
+                            .update_filtered(&self.benchmark_store, &self.open_weights_map);
                     }
                 }
             }
@@ -517,7 +524,8 @@ impl App {
                     Tab::Benchmarks => {
                         self.benchmarks_app.search_query.pop();
                         self.benchmarks_app.selected = 0;
-                        self.benchmarks_app.update_filtered(&self.benchmark_store);
+                        self.benchmarks_app
+                            .update_filtered(&self.benchmark_store, &self.open_weights_map);
                     }
                 }
             }
@@ -540,7 +548,8 @@ impl App {
                     Tab::Benchmarks => {
                         self.benchmarks_app.search_query.clear();
                         self.benchmarks_app.selected = 0;
-                        self.benchmarks_app.update_filtered(&self.benchmark_store);
+                        self.benchmarks_app
+                            .update_filtered(&self.benchmark_store, &self.open_weights_map);
                     }
                 }
             }
@@ -764,44 +773,52 @@ impl App {
             }
             Message::NextBenchmarkCreator => {
                 self.benchmarks_app.next_creator();
-                self.benchmarks_app.update_filtered(&self.benchmark_store);
+                self.benchmarks_app
+                    .update_filtered(&self.benchmark_store, &self.open_weights_map);
             }
             Message::PrevBenchmarkCreator => {
                 self.benchmarks_app.prev_creator();
-                self.benchmarks_app.update_filtered(&self.benchmark_store);
+                self.benchmarks_app
+                    .update_filtered(&self.benchmark_store, &self.open_weights_map);
             }
             Message::SelectFirstBenchmarkCreator => {
                 self.benchmarks_app.select_first_creator();
-                self.benchmarks_app.update_filtered(&self.benchmark_store);
+                self.benchmarks_app
+                    .update_filtered(&self.benchmark_store, &self.open_weights_map);
             }
             Message::SelectLastBenchmarkCreator => {
                 self.benchmarks_app.select_last_creator();
-                self.benchmarks_app.update_filtered(&self.benchmark_store);
+                self.benchmarks_app
+                    .update_filtered(&self.benchmark_store, &self.open_weights_map);
             }
             Message::PageDownBenchmarkCreator => {
                 self.benchmarks_app.page_down_creator();
-                self.benchmarks_app.update_filtered(&self.benchmark_store);
+                self.benchmarks_app
+                    .update_filtered(&self.benchmark_store, &self.open_weights_map);
             }
             Message::PageUpBenchmarkCreator => {
                 self.benchmarks_app.page_up_creator();
-                self.benchmarks_app.update_filtered(&self.benchmark_store);
+                self.benchmarks_app
+                    .update_filtered(&self.benchmark_store, &self.open_weights_map);
             }
             Message::SwitchBenchmarkFocus => {
                 self.benchmarks_app.switch_focus();
             }
-            Message::CycleBenchmarkOpenness => {
+            Message::CycleBenchmarkSource => {
                 self.benchmarks_app
-                    .cycle_openness_filter(&self.benchmark_store);
+                    .cycle_source_filter(&self.benchmark_store, &self.open_weights_map);
             }
-            Message::CycleBenchmarkRegion => {
+            Message::ToggleRegionGrouping => {
                 self.benchmarks_app
-                    .cycle_region_filter(&self.benchmark_store);
+                    .toggle_region_grouping(&self.benchmark_store);
             }
-            Message::CycleBenchmarkType => {
-                self.benchmarks_app.cycle_type_filter(&self.benchmark_store);
+            Message::ToggleTypeGrouping => {
+                self.benchmarks_app
+                    .toggle_type_grouping(&self.benchmark_store);
             }
             Message::CycleBenchmarkSort => {
-                self.benchmarks_app.cycle_sort(&self.benchmark_store);
+                self.benchmarks_app
+                    .cycle_sort(&self.benchmark_store, &self.open_weights_map);
             }
             Message::ToggleBenchmarkSortDir => {
                 self.benchmarks_app
@@ -811,18 +828,21 @@ impl App {
                 self.benchmarks_app.quick_sort(
                     super::benchmarks_app::BenchmarkSortColumn::Intelligence,
                     &self.benchmark_store,
+                    &self.open_weights_map,
                 );
             }
             Message::QuickSortDate => {
                 self.benchmarks_app.quick_sort(
                     super::benchmarks_app::BenchmarkSortColumn::ReleaseDate,
                     &self.benchmark_store,
+                    &self.open_weights_map,
                 );
             }
             Message::QuickSortSpeed => {
                 self.benchmarks_app.quick_sort(
                     super::benchmarks_app::BenchmarkSortColumn::Speed,
                     &self.benchmark_store,
+                    &self.open_weights_map,
                 );
             }
             Message::CopyBenchmarkName | Message::OpenBenchmarkUrl => {
@@ -860,7 +880,12 @@ impl App {
             }
             Message::BenchmarkDataReceived(entries) => {
                 self.benchmark_store = BenchmarkStore::from_entries(entries);
-                self.benchmarks_app.rebuild(&self.benchmark_store);
+                self.open_weights_map = crate::open_weights::build_open_weights_map(
+                    &self.providers,
+                    self.benchmark_store.entries(),
+                );
+                self.benchmarks_app
+                    .rebuild(&self.benchmark_store, &self.open_weights_map);
             }
             Message::BenchmarkFetchFailed => {
                 // Silently keep existing data
