@@ -26,7 +26,7 @@ mise run fmt && mise run clippy && mise run test
 
 ### Data Flow
 - Model data: fetched from models.dev API at startup (`src/api.rs`)
-- Benchmark data: embedded in binary + auto-refreshed from jsDelivr CDN every 6h (`src/benchmark_cache.rs`, `src/benchmark_fetch.rs`)
+- Benchmark data: disk-cached + auto-refreshed from jsDelivr CDN every 6h (`src/benchmark_cache.rs`, `src/benchmark_fetch.rs`)
 - Agent/GitHub data: disk-cached with ETag conditional fetching (`src/agents/cache.rs`, `src/agents/github.rs`)
 
 ### Async Pattern
@@ -37,7 +37,7 @@ Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message`
 - `src/tui/app.rs` — App state, Message enum, update logic
 - `src/tui/event.rs` — keybinding → Message mapping
 - `src/tui/ui.rs` — rendering
-- `src/benchmarks.rs` — BenchmarkStore (embedded + runtime constructors)
+- `src/benchmarks.rs` — BenchmarkStore, schema validation
 - `src/benchmark_cache.rs` — disk cache with 6h TTL
 - `src/benchmark_fetch.rs` — jsDelivr CDN fetcher with ETag
 
@@ -50,7 +50,7 @@ Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message`
 - Use `mise run <task>` for all CLI operations — never run bare commands
 - Keep clippy clean with `-D warnings`
 - Enum-based message passing (no callbacks)
-- Embedded data as offline fallback, disk cache for freshness, async fetch for updates
+- Disk cache for persistence, async CDN fetch for freshness, empty store on first launch until CDN responds
 - `BenchmarkEntry` must derive both `Serialize` and `Deserialize` (needed for cache)
 - New `BenchmarkEntry` fields require `#[serde(default)]` and a corresponding check in `BenchmarkSchemaCoverage` to prevent stale caches from silently dropping data
 
