@@ -12,7 +12,7 @@ A fast CLI and TUI for browsing AI models, benchmarks, and coding agents.
 - **Benchmarks Tab**: Compare model performance across 15+ benchmarks from [Artificial Analysis](https://artificialanalysis.ai), with creator filtering by source, region, and type
 - **Agents Tab**: Track AI coding assistants (Claude Code, Aider, Cursor, etc.) with version detection and GitHub integration
 
-<video src="https://github.com/user-attachments/assets/f4c33f15-8ae7-4997-bb9f-240b79b0b562" controls width="100%"></video>
+<video src="https://github.com/user-attachments/assets/07c750f4-ca47-4f89-8a32-99e0be5004d8" controls width="100%"></video>
 
 ## What's New (v0.8.2)
 
