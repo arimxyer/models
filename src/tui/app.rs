@@ -121,6 +121,8 @@ pub enum Message {
     // Agents tab messages
     NextAgent,
     PrevAgent,
+    SelectFirstAgent,
+    SelectLastAgent,
     PageDownAgent,
     PageUpAgent,
     SwitchAgentFocus,
@@ -150,10 +152,14 @@ pub enum Message {
     // Benchmarks tab messages
     NextBenchmark,
     PrevBenchmark,
+    SelectFirstBenchmark,
+    SelectLastBenchmark,
     PageDownBenchmark,
     PageUpBenchmark,
     NextBenchmarkCreator,
     PrevBenchmarkCreator,
+    SelectFirstBenchmarkCreator,
+    SelectLastBenchmarkCreator,
     PageDownBenchmarkCreator,
     PageUpBenchmarkCreator,
     SwitchBenchmarkFocus,
@@ -602,6 +608,16 @@ impl App {
                     agents_app.prev_agent();
                 }
             }
+            Message::SelectFirstAgent => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.select_first_agent();
+                }
+            }
+            Message::SelectLastAgent => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.select_last_agent();
+                }
+            }
             Message::PageDownAgent => {
                 if let Some(ref mut agents_app) = self.agents_app {
                     agents_app.page_down(PAGE_SIZE);
@@ -734,6 +750,12 @@ impl App {
             Message::PrevBenchmark => {
                 self.benchmarks_app.prev();
             }
+            Message::SelectFirstBenchmark => {
+                self.benchmarks_app.select_first();
+            }
+            Message::SelectLastBenchmark => {
+                self.benchmarks_app.select_last();
+            }
             Message::PageDownBenchmark => {
                 self.benchmarks_app.page_down();
             }
@@ -746,6 +768,14 @@ impl App {
             }
             Message::PrevBenchmarkCreator => {
                 self.benchmarks_app.prev_creator();
+                self.benchmarks_app.update_filtered(&self.benchmark_store);
+            }
+            Message::SelectFirstBenchmarkCreator => {
+                self.benchmarks_app.select_first_creator();
+                self.benchmarks_app.update_filtered(&self.benchmark_store);
+            }
+            Message::SelectLastBenchmarkCreator => {
+                self.benchmarks_app.select_last_creator();
                 self.benchmarks_app.update_filtered(&self.benchmark_store);
             }
             Message::PageDownBenchmarkCreator => {

@@ -154,6 +154,20 @@ fn handle_agents_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Opti
                 Some(Message::ScrollDetailUp)
             }
         }
+        KeyCode::Char('g') => {
+            if focus == AgentFocus::List {
+                Some(Message::SelectFirstAgent)
+            } else {
+                None
+            }
+        }
+        KeyCode::Char('G') => {
+            if focus == AgentFocus::List {
+                Some(Message::SelectLastAgent)
+            } else {
+                None
+            }
+        }
         // Page navigation (Ctrl+d/u or PageDown/PageUp)
         KeyCode::Char('d') if modifiers.contains(KeyModifiers::CONTROL) => {
             if focus == AgentFocus::List {
@@ -224,6 +238,14 @@ fn handle_benchmarks_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> 
         KeyCode::Char('k') | KeyCode::Up => match focus {
             BenchmarkFocus::Creators => Some(Message::PrevBenchmarkCreator),
             BenchmarkFocus::List => Some(Message::PrevBenchmark),
+        },
+        KeyCode::Char('g') => match focus {
+            BenchmarkFocus::Creators => Some(Message::SelectFirstBenchmarkCreator),
+            BenchmarkFocus::List => Some(Message::SelectFirstBenchmark),
+        },
+        KeyCode::Char('G') => match focus {
+            BenchmarkFocus::Creators => Some(Message::SelectLastBenchmarkCreator),
+            BenchmarkFocus::List => Some(Message::SelectLastBenchmark),
         },
         KeyCode::Char('d') if modifiers.contains(KeyModifiers::CONTROL) => match focus {
             BenchmarkFocus::Creators => Some(Message::PageDownBenchmarkCreator),

@@ -321,6 +321,23 @@ impl AgentsApp {
         }
     }
 
+    pub fn select_first_agent(&mut self) {
+        if self.selected_agent > 0 {
+            self.selected_agent = 0;
+            self.agent_list_state.select(Some(0));
+            self.detail_scroll = 0;
+        }
+    }
+
+    pub fn select_last_agent(&mut self) {
+        let last = self.filtered_entries.len().saturating_sub(1);
+        if self.selected_agent < last {
+            self.selected_agent = last;
+            self.agent_list_state.select(Some(last));
+            self.detail_scroll = 0;
+        }
+    }
+
     pub fn page_down(&mut self, page_size: usize) {
         let last_index = self.filtered_entries.len().saturating_sub(1);
         self.selected_agent = (self.selected_agent + page_size).min(last_index);

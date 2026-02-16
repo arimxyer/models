@@ -683,6 +683,21 @@ impl BenchmarksApp {
         }
     }
 
+    pub fn select_first(&mut self) {
+        if self.selected > 0 {
+            self.selected = 0;
+            self.list_state.select(Some(self.selected));
+        }
+    }
+
+    pub fn select_last(&mut self) {
+        let last = self.filtered_indices.len().saturating_sub(1);
+        if self.selected < last {
+            self.selected = last;
+            self.list_state.select(Some(self.selected));
+        }
+    }
+
     pub fn page_down(&mut self) {
         let last_index = self.filtered_indices.len().saturating_sub(1);
         self.selected = (self.selected + PAGE_SIZE).min(last_index);
@@ -732,6 +747,21 @@ impl BenchmarksApp {
         if self.selected_creator > 0 {
             self.selected_creator -= 1;
             self.creator_list_state.select(Some(self.selected_creator));
+        }
+    }
+
+    pub fn select_first_creator(&mut self) {
+        if self.selected_creator > 0 {
+            self.selected_creator = 0;
+            self.creator_list_state.select(Some(0));
+        }
+    }
+
+    pub fn select_last_creator(&mut self) {
+        let max = self.creator_list_items.len().saturating_sub(1);
+        if self.selected_creator < max {
+            self.selected_creator = max;
+            self.creator_list_state.select(Some(max));
         }
     }
 

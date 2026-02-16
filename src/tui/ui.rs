@@ -1056,6 +1056,9 @@ fn draw_benchmark_creators(f: &mut Frame, area: Rect, app: &mut App) {
 
     f.render_widget(Paragraph::new(filter_line), chunks[0]);
 
+    // Available width for creator items (inner area minus highlight symbol "  " or "> ")
+    let item_width = inner_area.width.saturating_sub(2) as usize;
+
     let items: Vec<ListItem> = bench_app
         .creator_list_items
         .iter()
@@ -1071,8 +1074,16 @@ fn draw_benchmark_creators(f: &mut Frame, area: Rect, app: &mut App) {
                 let (display_name, count) = bench_app.creator_display(slug);
                 let openness = bench_app.creator_openness(slug);
                 let region = bench_app.creator_region(slug);
+                // Suffix: " O RGN" — openness label + space + region label
+                let suffix_len = openness.label().len() + 1 + region.label().len();
+                // Name part: "Name (N) " — needs at least some space
+                let count_str = format!("({})", count);
+                // Max name chars: total width - count - suffix - separators
+                let overhead = count_str.len() + 1 + suffix_len + 1; // " (N) ...suffix"
+                let max_name = item_width.saturating_sub(overhead);
+                let name = truncate(display_name, max_name);
                 ListItem::new(Line::from(vec![
-                    Span::raw(format!("{} ({}) ", display_name, count)),
+                    Span::raw(format!("{} {} ", name, count_str)),
                     Span::styled(openness.label(), Style::default().fg(openness.color())),
                     Span::raw(" "),
                     Span::styled(region.label(), Style::default().fg(Color::DarkGray)),
@@ -1138,6 +1149,13 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
     // Dynamic columns based on active sort
     let visible_cols = bench_app.sort_column.visible_columns();
 
+    // Compute dynamic name column width from available space
+    let fixed_width: u16 = visible_cols
+        .iter()
+        .map(|col| benchmark_col_width(*col))
+        .sum();
+    let name_width = (inner_area.width.saturating_sub(fixed_width) as usize).max(10);
+
     let header_style = Style::default()
         .fg(Color::Yellow)
         .add_modifier(Modifier::BOLD);
@@ -1153,7 +1171,7 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
             } else {
                 header_style
             };
-            benchmark_col_header(*col, style)
+            benchmark_col_header(*col, style, name_width)
         })
         .collect();
     let header = ListItem::new(Line::from(header_spans));
@@ -1175,7 +1193,7 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
 
         let row_spans: Vec<Span> = visible_cols
             .iter()
-            .map(|col| benchmark_col_value(entry, *col, style))
+            .map(|col| benchmark_col_value(entry, *col, style, name_width))
             .collect();
         items.push(ListItem::new(Line::from(row_spans)));
     }
@@ -1226,21 +1244,25 @@ fn draw_benchmark_detail(f: &mut Frame, area: Rect, app: &App) {
             .fg(Color::Cyan)
             .add_modifier(Modifier::BOLD),
     )));
-    // Line 2: Creator + region + type
+    // Line 2: Creator + Source
+    let em = "\u{2014}";
     lines.push(Line::from(vec![
         Span::styled("Creator  ", Style::default().fg(Color::DarkGray)),
-        Span::raw(format!("{}  ", creator_display)),
-        Span::styled(region.label(), Style::default().fg(Color::DarkGray)),
-        Span::raw("  "),
-        Span::styled(creator_type.label(), Style::default().fg(Color::DarkGray)),
+        Span::raw(format!("{:<16}", creator_display)),
+        Span::styled("Source  ", Style::default().fg(Color::DarkGray)),
+        Span::styled(openness.label(), Style::default().fg(openness.color())),
     ]));
-    // Line 3: Source + Release date
-    let em = "\u{2014}";
+    // Line 3: Region + Type
+    lines.push(Line::from(vec![
+        Span::styled("Region   ", Style::default().fg(Color::DarkGray)),
+        Span::raw(format!("{:<16}", region.label())),
+        Span::styled("Type    ", Style::default().fg(Color::DarkGray)),
+        Span::raw(creator_type.label()),
+    ]));
+    // Line 4: Release date
     let date_str = entry.release_date.as_deref().unwrap_or(em);
     lines.push(Line::from(vec![
-        Span::styled("Source   ", Style::default().fg(Color::DarkGray)),
-        Span::styled(openness.label(), Style::default().fg(openness.color())),
-        Span::styled("    Released  ", Style::default().fg(Color::DarkGray)),
+        Span::styled("Released ", Style::default().fg(Color::DarkGray)),
         Span::raw(date_str),
     ]));
 
@@ -1467,14 +1489,26 @@ fn fmt_col_date(value: Option<&str>) -> String {
     }
 }
 
+/// Fixed width for a non-Name column.
+fn benchmark_col_width(col: super::benchmarks_app::BenchmarkSortColumn) -> u16 {
+    use super::benchmarks_app::BenchmarkSortColumn::*;
+    match col {
+        Name => 0, // dynamic
+        Speed | Ttft => 7,
+        ReleaseDate => 11,
+        _ => 6, // all index/percentage columns
+    }
+}
+
 /// Render a column header span for the given sort column
 fn benchmark_col_header(
     col: super::benchmarks_app::BenchmarkSortColumn,
     style: Style,
+    name_width: usize,
 ) -> Span<'static> {
     use super::benchmarks_app::BenchmarkSortColumn::*;
     match col {
-        Name => Span::styled(format!("{:<28}", "Name"), style),
+        Name => Span::styled(format!("{:<width$}", "Name", width = name_width), style),
         Intelligence => Span::styled(format!("{:>6}", "Intel"), style),
         Coding => Span::styled(format!("{:>6}", "Code"), style),
         Math => Span::styled(format!("{:>6}", "Math"), style),
@@ -1498,10 +1532,18 @@ fn benchmark_col_value<'a>(
     entry: &crate::benchmarks::BenchmarkEntry,
     col: super::benchmarks_app::BenchmarkSortColumn,
     style: Style,
+    name_width: usize,
 ) -> Span<'a> {
     use super::benchmarks_app::BenchmarkSortColumn::*;
     match col {
-        Name => Span::styled(format!("{:<28}", truncate(&entry.name, 27)), style),
+        Name => Span::styled(
+            format!(
+                "{:<width$}",
+                truncate(&entry.name, name_width.saturating_sub(1)),
+                width = name_width
+            ),
+            style,
+        ),
         Intelligence => Span::styled(fmt_col_idx(entry.intelligence_index), style),
         Coding => Span::styled(fmt_col_idx(entry.coding_index), style),
         Math => Span::styled(fmt_col_idx(entry.math_index), style),
