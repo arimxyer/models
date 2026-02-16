@@ -529,6 +529,12 @@ impl BenchmarksApp {
         }
     }
 
+    /// Get the display name of the currently selected creator, or None for "All".
+    pub fn selected_creator_name(&self) -> Option<&str> {
+        let slug = self.selected_creator_slug()?;
+        Some(self.creator_display(slug).0)
+    }
+
     pub fn update_filtered(&mut self, store: &BenchmarkStore) {
         let query_lower = self.search_query.to_lowercase();
         let creator_slug = self.selected_creator_slug().map(|s| s.to_owned());

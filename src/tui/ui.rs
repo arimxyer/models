@@ -212,25 +212,34 @@ fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
 
     let filter_indicator = format_filters(&app.filters, app.provider_category_filter);
 
+    // Show provider name in title when a specific provider is selected
+    let provider_label = app
+        .selected_provider_data()
+        .map(|(_, p)| p.name.as_str())
+        .unwrap_or("Models");
+
     let title = if app.search_query.is_empty() && filter_indicator.is_empty() {
-        format!(" Models ({}){} ", models.len(), sort_indicator)
+        format!(" {} ({}){} ", provider_label, models.len(), sort_indicator)
     } else if app.search_query.is_empty() {
         format!(
-            " Models ({}){} [{}] ",
+            " {} ({}){} [{}] ",
+            provider_label,
             models.len(),
             sort_indicator,
             filter_indicator
         )
     } else if filter_indicator.is_empty() {
         format!(
-            " Models ({}) [{}]{} ",
+            " {} ({}) [{}]{} ",
+            provider_label,
             models.len(),
             app.search_query,
             sort_indicator
         )
     } else {
         format!(
-            " Models ({}) [{}] [{}]{} ",
+            " {} ({}) [{}] [{}]{} ",
+            provider_label,
             models.len(),
             app.search_query,
             filter_indicator,
@@ -307,7 +316,6 @@ fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
         let style = if is_selected {
             Style::default()
                 .fg(Color::Yellow)
-                .bg(Color::DarkGray)
                 .add_modifier(Modifier::BOLD)
         } else {
             Style::default()
@@ -1072,7 +1080,7 @@ fn draw_benchmark_creators(f: &mut Frame, area: Rect, app: &mut App) {
 
     let rgn_active = bench_app.region_filter != RegionFilter::All;
     let rgn_color = if rgn_active {
-        Color::Cyan
+        Color::Yellow
     } else {
         Color::DarkGray
     };
@@ -1178,15 +1186,19 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
     };
     let sort_indicator = format!(" {}{}", sort_dir, bench_app.sort_column.label());
 
+    let creator_label = bench_app.selected_creator_name().unwrap_or("Benchmarks");
+
     let title = if bench_app.search_query.is_empty() {
         format!(
-            " Benchmarks ({}){} ",
+            " {} ({}){} ",
+            creator_label,
             bench_app.filtered_indices.len(),
             sort_indicator
         )
     } else {
         format!(
-            " Benchmarks ({}) [/{}]{} ",
+            " {} ({}) [/{}]{} ",
+            creator_label,
             bench_app.filtered_indices.len(),
             bench_app.search_query,
             sort_indicator
@@ -1240,7 +1252,6 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
         let style = if is_selected {
             Style::default()
                 .fg(Color::Yellow)
-                .bg(Color::DarkGray)
                 .add_modifier(Modifier::BOLD)
         } else {
             Style::default()
