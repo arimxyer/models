@@ -14,18 +14,24 @@ A fast CLI and TUI for browsing AI models, benchmarks, and coding agents.
 
 <video src="https://github.com/user-attachments/assets/07c750f4-ca47-4f89-8a32-99e0be5004d8" controls width="100%"></video>
 
-## What's New (v0.8.2)
+## What's New (v0.8.3)
 
-### UI Polish & Consistency
+### New Benchmark Fields
+- **TTFAT column** — Time to First Answer Token, distinguishing thinking time from TTFT on reasoning models (e.g., 6.7s TTFAT vs 0.46s TTFT)
+- **AIME benchmark** — original AIME evaluation score displayed alongside MATH-500 and AIME'25 in the detail panel
+- **Stable IDs** — `id` and `creator_id` from Artificial Analysis for reliable cross-session entity tracking
+
+### Cache Hardening
+- **Schema-aware cache validation** — stale disk caches with missing fields are automatically rejected in favor of embedded data
+- **`DATA_SCHEMA_VERSION`** — cache entries are validated against the current binary's field coverage, preventing silent data loss on upgrades
+
+### v0.8.2: UI Polish & Consistency
 - **Split cost columns** — Models list now shows separate Input and Output cost columns with smart rounding
 - **Dynamic column widths** — Model ID and Benchmark Name columns expand to fill available terminal width
 - **Focus-aware caret** — `> ` indicator acts as a pseudo cursor, appearing only on the active panel
 - **Dynamic panel titles** — Models list shows the selected provider name; Benchmarks list shows the selected creator name
 - **Styled column headers** — yellow bold headers with cyan highlight on the active sort column
 - **`g`/`G` keybindings** — jump to first/last item on Benchmarks and Agents tabs (already on Models)
-- **Improved context formatting** — fractional k/M values display correctly (e.g., `131.1k`, `1.5M`)
-- **Creator panel truncation** — long creator names truncate cleanly within the sidebar width
-- **Benchmarks detail panel** — Region and Business Type now have their own labeled property lines
 
 ### v0.8.1: Runtime Benchmark Data
 - **Auto-updating benchmarks** — benchmark data refreshes from CDN every 6 hours in the background, no user configuration required
@@ -225,7 +231,7 @@ version_command = ["--version"]
 **Sort (full cycle)**
 | Key | Action |
 |-----|--------|
-| `s` | Cycle through all 16 sort columns |
+| `s` | Cycle through all 17 sort columns |
 | `S` | Toggle sort direction (asc/desc) |
 
 **Actions**
