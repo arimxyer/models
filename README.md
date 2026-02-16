@@ -116,7 +116,7 @@ Just run `models` with no arguments to launch the interactive browser:
 models
 ```
 
-![models TUI screenshot](public/assets/screenshot.png)
+![Models tab screenshot](public/assets/models-screenshot.png)
 
 ### TUI Keybindings
 
@@ -205,6 +205,8 @@ version_command = ["--version"]
 ```
 
 ### Benchmarks Tab
+
+![Benchmarks tab screenshot](public/assets/benchmark-screenshot.png)
 
 **Quick Sort** (press again to toggle direction)
 | Key | Action |
