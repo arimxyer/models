@@ -53,12 +53,13 @@ pub async fn run(providers: ProvidersMap) -> Result<()> {
     let agents_file = load_agents().ok();
     let config = Config::load().ok();
 
-    // Load benchmark cache and use it if fresh, otherwise fall back to embedded
+    // Load benchmark data from disk cache if fresh, otherwise start empty.
+    // CDN fetch runs in the background and populates the store when ready.
     let bench_cache = BenchmarkCache::load();
     let benchmark_store = if bench_cache.is_fresh() && bench_cache.has_entries() {
-        BenchmarkStore::load_with_cache(&bench_cache)
+        BenchmarkStore::from_entries(bench_cache.entries.clone())
     } else {
-        BenchmarkStore::load()
+        BenchmarkStore::empty()
     };
 
     // Load disk cache for GitHub data (load before wrapping to avoid blocking in async)
@@ -143,7 +144,6 @@ pub async fn run(providers: ProvidersMap) -> Result<()> {
     // Spawn background benchmark fetch if cache is stale
     let (bench_tx, bench_rx) = mpsc::channel(1);
     if !bench_cache.is_fresh() {
-        let bench_tx = bench_tx.clone();
         let cached_etag = bench_cache.etag.clone();
         tokio::spawn(async move {
             let fetcher = BenchmarkFetcher::new();
@@ -272,27 +272,16 @@ fn run_app(
                         };
                         let _ = cache.save();
                         app.update(app::Message::BenchmarkDataReceived(entries));
-                    } else {
-                        eprintln!(
-                            "Rejected stale benchmark CDN payload: schema compatibility failed"
-                        );
                     }
                 }
                 BenchmarkFetchResult::NotModified => {
-                    // Touch cache timestamp only if the cached schema is compatible with
-                    // currently loaded data. If stale, keep it stale to force retries.
+                    // CDN data unchanged — touch cache timestamp to avoid re-fetching.
                     let mut cache = BenchmarkCache::load();
-                    if benchmark_entries_compatible(&cache.entries, app.benchmark_store.entries()) {
-                        cache.fetched_at = std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .map(|d| d.as_secs() as i64)
-                            .unwrap_or(0);
-                        let _ = cache.save();
-                    } else {
-                        eprintln!(
-                            "Skipped cache freshness extension on 304: cached benchmark schema is stale"
-                        );
-                    }
+                    cache.fetched_at = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_secs() as i64)
+                        .unwrap_or(0);
+                    let _ = cache.save();
                 }
                 BenchmarkFetchResult::Error => {
                     app.update(app::Message::BenchmarkFetchFailed);

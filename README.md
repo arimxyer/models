@@ -22,7 +22,7 @@ A fast CLI and TUI for browsing AI models, benchmarks, and coding agents.
 - **Stable IDs** — `id` and `creator_id` from Artificial Analysis for reliable cross-session entity tracking
 
 ### Cache Hardening
-- **Schema-aware cache validation** — stale disk caches with missing fields are automatically rejected in favor of embedded data
+- **Schema-aware cache validation** — stale CDN payloads with missing fields are automatically rejected
 - **`DATA_SCHEMA_VERSION`** — cache entries are validated against the current binary's field coverage, preventing silent data loss on upgrades
 
 ### v0.8.2: UI Polish & Consistency
@@ -36,7 +36,6 @@ A fast CLI and TUI for browsing AI models, benchmarks, and coding agents.
 ### v0.8.1: Runtime Benchmark Data
 - **Auto-updating benchmarks** — benchmark data refreshes from CDN every 6 hours in the background, no user configuration required
 - **Disk cache** — previously fetched data persists across sessions at `~/.config/models/benchmarks-cache.json`
-- **Offline fallback** — embedded data is always available when the network is unreachable
 - **GitHub Action** — daily automated refresh of benchmark data from the Artificial Analysis API
 
 ### v0.8.0: Benchmarks Tab (New)
@@ -72,7 +71,7 @@ A fast CLI and TUI for browsing AI models, benchmarks, and coding agents.
 
 ### Benchmarks Tab
 - **~400 benchmark entries** from Artificial Analysis with quality, speed, and pricing scores
-- **Auto-updating** — data refreshes from CDN every 6 hours in the background with offline fallback
+- **Auto-updating** — data refreshes from CDN every 6 hours in the background, persisted to disk cache
 - **Creator sidebar** with 40+ creators — filter by source (Open/Closed/Mixed), region (US/China/Europe/...), and type (Startup/Big Tech/Research)
 - **Quick-sort keys** — instantly sort by Intelligence, Date, or Speed
 - **Dynamic columns** — list columns adapt to show the most relevant benchmarks for the active sort
