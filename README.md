@@ -14,9 +14,20 @@ A fast CLI and TUI for browsing AI models, benchmarks, and coding agents.
 
 <video src="https://github.com/user-attachments/assets/f4c33f15-8ae7-4997-bb9f-240b79b0b562" controls width="100%"></video>
 
-## What's New (v0.8.1)
+## What's New (v0.8.2)
 
-### Runtime Benchmark Data
+### UI Polish & Consistency
+- **Split cost columns** — Models list now shows separate Input and Output cost columns with smart rounding
+- **Dynamic column widths** — Model ID and Benchmark Name columns expand to fill available terminal width
+- **Focus-aware caret** — `> ` indicator acts as a pseudo cursor, appearing only on the active panel
+- **Dynamic panel titles** — Models list shows the selected provider name; Benchmarks list shows the selected creator name
+- **Styled column headers** — yellow bold headers with cyan highlight on the active sort column
+- **`g`/`G` keybindings** — jump to first/last item on Benchmarks and Agents tabs (already on Models)
+- **Improved context formatting** — fractional k/M values display correctly (e.g., `131.1k`, `1.5M`)
+- **Creator panel truncation** — long creator names truncate cleanly within the sidebar width
+- **Benchmarks detail panel** — Region and Business Type now have their own labeled property lines
+
+### v0.8.1: Runtime Benchmark Data
 - **Auto-updating benchmarks** — benchmark data refreshes from CDN every 6 hours in the background, no user configuration required
 - **Disk cache** — previously fetched data persists across sessions at `~/.config/models/benchmarks-cache.json`
 - **Offline fallback** — embedded data is always available when the network is unreachable
