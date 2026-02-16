@@ -821,128 +821,118 @@ fn draw_provider_detail(f: &mut Frame, area: Rect, app: &App) {
 }
 
 fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::DarkGray))
+        .title(" Details ");
+
     let lines: Vec<Line> = if let Some(entry) = app.current_model() {
         let model = &entry.model;
         let provider_id = &entry.provider_id;
+        let em = "\u{2014}";
 
         let caps = model.capabilities_str();
         let modalities = model.modalities_str();
 
-        // Format cache costs
-        let cache_read = model
-            .cost
-            .as_ref()
-            .and_then(|c| c.cache_read)
-            .map(|v| format!("${}/M", v))
-            .unwrap_or("-".into());
-        let cache_write = model
-            .cost
-            .as_ref()
-            .and_then(|c| c.cache_write)
-            .map(|v| format!("${}/M", v))
-            .unwrap_or("-".into());
+        let mut lines: Vec<Line> = Vec::new();
 
-        let mut detail_lines = vec![
-            // Row 1: Name and ID
-            Line::from(vec![
-                Span::styled(
-                    &model.name,
-                    Style::default()
-                        .fg(Color::White)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::raw("  "),
-                Span::styled(
-                    format!("({})", entry.id),
-                    Style::default().fg(Color::DarkGray),
-                ),
-            ]),
-            // Row 2: Provider and Family
-            Line::from(vec![
-                Span::styled("Provider: ", Style::default().fg(Color::DarkGray)),
-                Span::styled(
-                    format!("{:<16}", provider_id),
-                    Style::default().fg(Color::Cyan),
-                ),
-                Span::styled("Family: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(model.family.as_deref().unwrap_or("-")),
-            ]),
-            // Row 3: Status
-            Line::from(vec![
-                Span::styled("Status: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(model.status.as_deref().unwrap_or("active")),
-            ]),
-            Line::from(""),
-            // Row 4: Context, Input, and Output limits
-            Line::from(vec![
-                Span::styled("Context: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(format!("{:<10}", model.context_str())),
-                Span::styled("Input: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(format!("{:<10}", model.input_limit_str())),
-                Span::styled("Output: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(model.output_str()),
-            ]),
-            // Row 5: Input and Output cost
-            Line::from(vec![
-                Span::styled("Input: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(format!(
-                    "{:<14}",
-                    model
-                        .cost
-                        .as_ref()
-                        .and_then(|c| c.input)
-                        .map(|v| format!("${}/M", v))
-                        .unwrap_or("-".into())
-                )),
-                Span::styled("Output: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(
-                    model
-                        .cost
-                        .as_ref()
-                        .and_then(|c| c.output)
-                        .map(|v| format!("${}/M", v))
-                        .unwrap_or("-".into()),
-                ),
-            ]),
-            // Row 6: Cache read and write costs
-            Line::from(vec![
-                Span::styled("Cache Read: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(format!("{:<10}", cache_read)),
-                Span::styled("Cache Write: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(cache_write),
-            ]),
-            Line::from(""),
-            // Row 7: Capabilities
-            Line::from(vec![
-                Span::styled("Capabilities: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(caps),
-            ]),
-            // Row 8: Modalities
-            Line::from(vec![
-                Span::styled("Modalities: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(modalities),
-            ]),
-            // Row 9: Dates
-            Line::from(vec![
-                Span::styled("Released: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(format!(
-                    "{:<14}",
-                    model.release_date.as_deref().unwrap_or("-")
-                )),
-                Span::styled("Knowledge: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(model.knowledge.as_deref().unwrap_or("-")),
-            ]),
-        ];
+        // Name
+        lines.push(Line::from(Span::styled(
+            &model.name,
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )));
+        // ID
+        lines.push(Line::from(Span::styled(
+            &entry.id,
+            Style::default().fg(Color::DarkGray),
+        )));
 
-        // Add last updated if available
-        if let Some(updated) = &model.last_updated {
-            detail_lines.push(Line::from(vec![
-                Span::styled("Updated: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(updated),
-            ]));
-        }
+        // ─── Model ───
+        lines.push(Line::from(""));
+        push_section_header(&mut lines, "Model");
+        push_three_col(
+            &mut lines,
+            "Provider",
+            provider_id.clone(),
+            "Family",
+            model.family.as_deref().unwrap_or(em).to_string(),
+            "",
+            String::new(),
+        );
+        push_three_col(
+            &mut lines,
+            "Status",
+            model.status.as_deref().unwrap_or("active").to_string(),
+            "Released",
+            model.release_date.as_deref().unwrap_or(em).to_string(),
+            "",
+            String::new(),
+        );
+        push_three_col(
+            &mut lines,
+            "Knowledge",
+            model.knowledge.as_deref().unwrap_or(em).to_string(),
+            "Updated",
+            model.last_updated.as_deref().unwrap_or(em).to_string(),
+            "",
+            String::new(),
+        );
 
-        detail_lines
+        // ─── Limits ───
+        lines.push(Line::from(""));
+        push_section_header(&mut lines, "Limits");
+        push_three_col(
+            &mut lines,
+            "Context",
+            model.context_str(),
+            "Input",
+            model.input_limit_str(),
+            "Output",
+            model.output_str(),
+        );
+
+        // ─── Pricing ───
+        let fmt_cost = |v: Option<f64>| -> String {
+            v.map(|v| format!("${}/M", v))
+                .unwrap_or_else(|| em.to_string())
+        };
+        let cost = model.cost.as_ref();
+        lines.push(Line::from(""));
+        push_section_header(&mut lines, "Pricing (per M tokens)");
+        push_three_col(
+            &mut lines,
+            "Input",
+            fmt_cost(cost.and_then(|c| c.input)),
+            "Output",
+            fmt_cost(cost.and_then(|c| c.output)),
+            "",
+            String::new(),
+        );
+        push_three_col(
+            &mut lines,
+            "Cache Read",
+            fmt_cost(cost.and_then(|c| c.cache_read)),
+            "Cache Write",
+            fmt_cost(cost.and_then(|c| c.cache_write)),
+            "",
+            String::new(),
+        );
+
+        // ─── Capabilities ───
+        lines.push(Line::from(""));
+        push_section_header(&mut lines, "Capabilities");
+        lines.push(Line::from(vec![
+            Span::styled("  ", Style::default()),
+            Span::raw(caps),
+        ]));
+        lines.push(Line::from(vec![
+            Span::styled("  ", Style::default()),
+            Span::raw(modalities),
+        ]));
+
+        lines
     } else {
         vec![Line::from(Span::styled(
             "No model selected",
@@ -950,10 +940,7 @@ fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
         ))]
     };
 
-    let paragraph = Paragraph::new(lines)
-        .block(Block::default().borders(Borders::ALL).title(" Details "))
-        .wrap(Wrap { trim: true });
-
+    let paragraph = Paragraph::new(lines).block(block);
     f.render_widget(paragraph, area);
 }
 
