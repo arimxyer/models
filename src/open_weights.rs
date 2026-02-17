@@ -32,6 +32,28 @@ fn creator_to_providers(creator: &str) -> &[&str] {
     }
 }
 
+/// Hardcoded open/closed status for well-known creators that have no
+/// models.dev provider. Returns `None` for unknown creators.
+fn known_creator_openness(creator: &str) -> Option<bool> {
+    match creator {
+        // Open weight
+        "ai2" => Some(true),           // OLMo, Molmo, Tülu — Allen Institute
+        "ibm" => Some(true),           // Granite
+        "lg" => Some(true),            // EXAONE
+        "nous-research" => Some(true), // Hermes, DeepHermes
+        "tii-uae" => Some(true),       // Falcon
+        "databricks" => Some(true),    // DBRX
+        "snowflake" => Some(true),     // Arctic
+        "servicenow" => Some(true),    // Apriel
+        "deepcogito" => Some(true),    // Cogito
+        // Closed / proprietary API
+        "ai21-labs" => Some(false),     // Jamba
+        "naver" => Some(false),         // HyperCLOVA
+        "korea-telecom" => Some(false), // Mi:dm
+        _ => None,
+    }
+}
+
 /// Build a map from AA benchmark entry slug → open_weights bool.
 ///
 /// Matching strategy:
@@ -135,7 +157,13 @@ pub fn build_open_weights_map(
         if best_score >= MIN_SIMILARITY {
             if let Some(ow) = best_ow {
                 result.insert(entry.slug.clone(), ow);
+                continue;
             }
+        }
+
+        // Stage 3: Known creator overrides for providers absent from models.dev
+        if let Some(ow) = known_creator_openness(&entry.creator) {
+            result.insert(entry.slug.clone(), ow);
         }
     }
 
