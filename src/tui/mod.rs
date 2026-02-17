@@ -17,9 +17,8 @@ pub mod ui;
 use crate::agents::{
     load_agents, AsyncGitHubClient, ConditionalFetchResult, GitHubCache, GitHubData,
 };
-use crate::benchmark_cache::BenchmarkCache;
 use crate::benchmark_fetch::{BenchmarkFetchResult, BenchmarkFetcher};
-use crate::benchmarks::{benchmark_entries_compatible, BenchmarkStore};
+use crate::benchmarks::BenchmarkStore;
 use crate::config::Config;
 use crate::data::ProvidersMap;
 use std::sync::Arc;
@@ -53,14 +52,8 @@ pub async fn run(providers: ProvidersMap) -> Result<()> {
     let agents_file = load_agents().ok();
     let config = Config::load().ok();
 
-    // Load benchmark data from disk cache if fresh, otherwise start empty.
-    // CDN fetch runs in the background and populates the store when ready.
-    let bench_cache = BenchmarkCache::load();
-    let benchmark_store = if bench_cache.is_fresh() && bench_cache.has_entries() {
-        BenchmarkStore::from_entries(bench_cache.entries.clone())
-    } else {
-        BenchmarkStore::empty()
-    };
+    // Benchmark data fetched from CDN in background; starts empty until loaded.
+    let benchmark_store = BenchmarkStore::empty();
 
     // Load disk cache for GitHub data (load before wrapping to avoid blocking in async)
     let disk_cache = GitHubCache::load();
@@ -141,16 +134,13 @@ pub async fn run(providers: ProvidersMap) -> Result<()> {
         Vec::new()
     };
 
-    // Spawn background benchmark fetch if cache is stale
+    // Spawn background benchmark fetch from CDN
     let (bench_tx, bench_rx) = mpsc::channel(1);
-    if !bench_cache.is_fresh() {
-        let cached_etag = bench_cache.etag.clone();
-        tokio::spawn(async move {
-            let fetcher = BenchmarkFetcher::new();
-            let result = fetcher.fetch_conditional(cached_etag.as_deref()).await;
-            let _ = bench_tx.send(result).await;
-        });
-    }
+    tokio::spawn(async move {
+        let fetcher = BenchmarkFetcher::new();
+        let result = fetcher.fetch().await;
+        let _ = bench_tx.send(result).await;
+    });
 
     // Main loop - pass client and sender for dynamic fetches
     let result = run_app(
@@ -255,33 +245,8 @@ fn run_app(
         // Check for benchmark data updates (non-blocking)
         if let Ok(result) = bench_rx.try_recv() {
             match result {
-                BenchmarkFetchResult::Fresh(entries, etag) => {
-                    // Validate CDN data before replacing currently loaded data.
-                    // Reject if CDN schema is stale relative to current app baseline.
-                    if benchmark_entries_compatible(&entries, app.benchmark_store.entries()) {
-                        let now = std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .map(|d| d.as_secs() as i64)
-                            .unwrap_or(0);
-                        let cache = BenchmarkCache {
-                            version: crate::benchmark_cache::CACHE_VERSION,
-                            schema_version: crate::benchmark_cache::DATA_SCHEMA_VERSION,
-                            entries: entries.clone(),
-                            etag,
-                            fetched_at: now,
-                        };
-                        let _ = cache.save();
-                        app.update(app::Message::BenchmarkDataReceived(entries));
-                    }
-                }
-                BenchmarkFetchResult::NotModified => {
-                    // CDN data unchanged — touch cache timestamp to avoid re-fetching.
-                    let mut cache = BenchmarkCache::load();
-                    cache.fetched_at = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .map(|d| d.as_secs() as i64)
-                        .unwrap_or(0);
-                    let _ = cache.save();
+                BenchmarkFetchResult::Fresh(entries) => {
+                    app.update(app::Message::BenchmarkDataReceived(entries));
                 }
                 BenchmarkFetchResult::Error => {
                     app.update(app::Message::BenchmarkFetchFailed);
