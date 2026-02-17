@@ -3,7 +3,13 @@ use std::collections::HashMap;
 use crate::benchmarks::BenchmarkEntry;
 use crate::data::Provider;
 
-/// Normalize a string for fuzzy matching: lowercase, strip separators.
+/// Minimum Jaro-Winkler similarity to consider a match.
+/// 0.85 is tuned to catch reordered tokens (e.g. "llama-3-1-instruct-405b" ↔
+/// "llama-3.1-405b-instruct") while rejecting cross-family matches
+/// (e.g. "gemma-3-27b" ≠ "gemini-3-pro").
+const MIN_SIMILARITY: f64 = 0.85;
+
+/// Normalize a string for matching: lowercase, strip separators.
 fn normalize(s: &str) -> String {
     s.to_lowercase()
         .chars()
@@ -12,7 +18,6 @@ fn normalize(s: &str) -> String {
 }
 
 /// Map AA creator slugs to models.dev provider IDs where they differ.
-/// Returns one or more provider IDs to search (some creators span multiple providers).
 fn creator_to_providers(creator: &str) -> &[&str] {
     match creator {
         "meta" => &["llama"],
@@ -21,55 +26,33 @@ fn creator_to_providers(creator: &str) -> &[&str] {
         "azure" => &["azure"],
         "nvidia" => &["nvidia"],
         "ibm" => &["nova"],
-        // These creators match their models.dev provider ID directly
         _ => &[],
     }
 }
 
-/// Score how well a normalized AA slug matches a normalized models.dev model ID.
-/// Higher is better. Returns 0 for no match.
-fn match_score(norm_slug: &str, norm_model_id: &str) -> usize {
-    if norm_slug == norm_model_id {
-        return usize::MAX; // perfect match
-    }
-
-    // Check containment — prefer the longer overlap
-    if norm_model_id.contains(norm_slug) {
-        // slug is a prefix/subset of model ID (e.g. "claude35sonnet" in "claude35sonnet20241022")
-        return norm_slug.len() * 2;
-    }
-    if norm_slug.contains(norm_model_id) {
-        // model ID is a prefix/subset of slug (e.g. "o3mini" in "o3minihigh")
-        return norm_model_id.len();
-    }
-
-    0
-}
-
 /// Build a map from AA benchmark entry slug → open_weights bool.
 ///
-/// For each AA entry, we try to find the corresponding model in models.dev
-/// by matching the entry's `creator` to a provider and then matching the
-/// entry's `slug` against model IDs within that provider.
+/// Matching strategy:
+/// 1. Map AA `creator` to models.dev provider(s) via translation table
+/// 2. Within matched provider(s), find the best model match using
+///    Jaro-Winkler similarity on normalized slugs/IDs
+/// 3. Accept matches above [`MIN_SIMILARITY`] threshold, pick highest score
 ///
-/// Uses a creator→provider translation table for known naming differences,
-/// and best-score matching (not first-match) for slug resolution.
-///
-/// Unmatched entries are simply absent from the returned map — callers
-/// should display no source label for those.
+/// Unmatched entries are absent from the map — callers show no source label.
 pub fn build_open_weights_map(
     providers: &[(String, Provider)],
     entries: &[BenchmarkEntry],
 ) -> HashMap<String, bool> {
-    // Build a lookup: normalized provider ID → &Provider
-    let provider_lookup: HashMap<String, &Provider> =
-        providers.iter().map(|(id, p)| (normalize(id), p)).collect();
+    // Build lookups: normalized provider ID → models (normalized model ID → open_weights)
+    let provider_set: HashMap<String, ()> = providers
+        .iter()
+        .map(|(id, _)| (normalize(id), ()))
+        .collect();
 
-    // For each provider, build normalized model ID → open_weights
-    let mut model_lookup: HashMap<String, HashMap<String, bool>> = HashMap::new();
+    let mut model_lookup: HashMap<String, Vec<(String, bool)>> = HashMap::new();
     for (id, provider) in providers {
         let norm_provider = normalize(id);
-        let models: HashMap<String, bool> = provider
+        let models: Vec<(String, bool)> = provider
             .models
             .iter()
             .map(|(model_id, model)| (normalize(model_id), model.open_weights))
@@ -87,44 +70,45 @@ pub fn build_open_weights_map(
         let norm_creator = normalize(&entry.creator);
         let norm_slug = normalize(&entry.slug);
 
-        // Determine which providers to search: explicit mapping first, then identity
+        // Determine which providers to search
         let mapped = creator_to_providers(&entry.creator);
         let provider_ids: Vec<String> = if mapped.is_empty() {
-            // Identity: try the creator slug directly
             vec![norm_creator.clone()]
         } else {
             mapped.iter().map(|id| normalize(id)).collect()
         };
 
-        // Find the best match across all candidate providers
-        let mut best_score = 0usize;
+        // Find the best match across candidate providers using Jaro-Winkler
+        let mut best_score: f64 = 0.0;
         let mut best_ow = None;
 
         for norm_provider_id in &provider_ids {
-            if !provider_lookup.contains_key(norm_provider_id.as_str()) {
+            if !provider_set.contains_key(norm_provider_id.as_str()) {
                 continue;
             }
 
             if let Some(models) = model_lookup.get(norm_provider_id.as_str()) {
-                for (norm_model_id, &ow) in models {
-                    let score = match_score(&norm_slug, norm_model_id);
+                for (norm_model_id, ow) in models {
+                    let score = strsim::jaro_winkler(&norm_slug, norm_model_id);
                     if score > best_score {
                         best_score = score;
-                        best_ow = Some(ow);
-                        if score == usize::MAX {
-                            break; // perfect match, no need to keep looking
+                        best_ow = Some(*ow);
+                        if (score - 1.0).abs() < f64::EPSILON {
+                            break; // exact match
                         }
                     }
                 }
             }
 
-            if best_score == usize::MAX {
-                break; // perfect match found
+            if (best_score - 1.0).abs() < f64::EPSILON {
+                break;
             }
         }
 
-        if let Some(ow) = best_ow {
-            result.insert(entry.slug.clone(), ow);
+        if best_score >= MIN_SIMILARITY {
+            if let Some(ow) = best_ow {
+                result.insert(entry.slug.clone(), ow);
+            }
         }
     }
 
@@ -135,7 +119,7 @@ pub fn build_open_weights_map(
 mod tests {
     use super::*;
     use crate::benchmarks::BenchmarkEntry;
-    use crate::data::{Model, Provider};
+    use crate::data::{Model, Provider, ProvidersMap};
 
     fn make_provider(id: &str, models: Vec<(&str, bool)>) -> (String, Provider) {
         let mut model_map = HashMap::new();
@@ -316,26 +300,99 @@ mod tests {
     }
 
     #[test]
-    fn test_match_score_exact() {
-        assert_eq!(match_score("gpt4o", "gpt4o"), usize::MAX);
+    fn test_reordered_tokens_match() {
+        // AA: "llama-3-1-instruct-405b" vs models.dev: "llama-3.1-405b-instruct"
+        // These differ in token order but should match via Jaro-Winkler
+        let providers = vec![make_provider(
+            "llama",
+            vec![("llama-3.1-405b-instruct", true)],
+        )];
+        let entries = vec![make_entry("meta", "llama-3-1-instruct-405b")];
+
+        let map = build_open_weights_map(&providers, &entries);
+        assert_eq!(map.get("llama-3-1-instruct-405b"), Some(&true));
     }
 
     #[test]
-    fn test_match_score_slug_in_model() {
-        // slug "claude35sonnet" in model "claude35sonnet20241022"
-        let score = match_score("claude35sonnet", "claude35sonnet20241022");
-        assert_eq!(score, "claude35sonnet".len() * 2);
+    fn test_cross_family_rejected() {
+        // "gemma-3-27b" should NOT match "gemini-3-pro" — different model families
+        let providers = vec![make_provider(
+            "google",
+            vec![("gemini-3-pro-preview", false)],
+        )];
+        let entries = vec![make_entry("google", "gemma-3-27b")];
+
+        let map = build_open_weights_map(&providers, &entries);
+        assert!(map.is_empty(), "gemma should not match gemini");
     }
 
+    /// Diagnostic test: runs matching against real benchmarks.json + live models.dev API.
+    /// Run manually with: cargo test diagnostic_match_rate -- --ignored --nocapture
     #[test]
-    fn test_match_score_model_in_slug() {
-        // model "o3mini" in slug "o3minihigh"
-        let score = match_score("o3minihigh", "o3mini");
-        assert_eq!(score, "o3mini".len());
-    }
+    #[ignore]
+    fn diagnostic_match_rate() {
+        // Load benchmark entries from local data file
+        let bench_path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("data/benchmarks.json");
+        let bench_data = std::fs::read_to_string(&bench_path)
+            .unwrap_or_else(|_| panic!("Failed to read {}", bench_path.display()));
+        let entries: Vec<BenchmarkEntry> =
+            serde_json::from_str(&bench_data).expect("Failed to parse benchmarks.json");
 
-    #[test]
-    fn test_match_score_no_match() {
-        assert_eq!(match_score("gpt4o", "claude35sonnet"), 0);
+        // Fetch providers from models.dev API
+        let api_url = "https://models.dev/api.json";
+        let response = reqwest::blocking::get(api_url).expect("Failed to fetch models.dev API");
+        let providers_map: ProvidersMap = response.json().expect("Failed to parse API response");
+        let providers: Vec<(String, crate::data::Provider)> = providers_map.into_iter().collect();
+
+        // Run matching
+        let map = build_open_weights_map(&providers, &entries);
+
+        // Report stats
+        let total = entries.len();
+        let matched = map.len();
+        let unmatched = total - matched;
+        let open_count = map.values().filter(|&&v| v).count();
+        let closed_count = map.values().filter(|&&v| !v).count();
+
+        println!("\n=== Open Weights Match Rate ===");
+        println!("Total AA entries:  {total}");
+        println!(
+            "Matched:           {matched} ({:.1}%)",
+            matched as f64 / total as f64 * 100.0
+        );
+        println!("  Open:            {open_count}");
+        println!("  Closed:          {closed_count}");
+        println!(
+            "Unmatched:         {unmatched} ({:.1}%)",
+            unmatched as f64 / total as f64 * 100.0
+        );
+
+        // Group unmatched by creator
+        let mut unmatched_by_creator: HashMap<&str, Vec<&str>> = HashMap::new();
+        for entry in &entries {
+            if !map.contains_key(&entry.slug) {
+                unmatched_by_creator
+                    .entry(&entry.creator)
+                    .or_default()
+                    .push(&entry.slug);
+            }
+        }
+        let mut unmatched_creators: Vec<_> = unmatched_by_creator.iter().collect();
+        unmatched_creators.sort_by(|a, b| b.1.len().cmp(&a.1.len()));
+
+        println!("\n--- Unmatched by creator ---");
+        for &(creator, slugs) in &unmatched_creators {
+            let mapped = creator_to_providers(creator);
+            let mapping_note = if mapped.is_empty() {
+                format!("(identity: {})", normalize(creator))
+            } else {
+                format!("(mapped → {:?})", mapped)
+            };
+            println!("{} ({} entries) {}", creator, slugs.len(), mapping_note);
+            for slug in slugs {
+                println!("  - {slug}");
+            }
+        }
     }
 }
