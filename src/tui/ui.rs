@@ -1329,7 +1329,6 @@ fn draw_benchmark_detail(f: &mut Frame, area: Rect, app: &App) {
     } else {
         &entry.creator
     };
-    let openness = super::benchmarks_app::CreatorOpenness::from_creator(&entry.creator);
     let region = super::benchmarks_app::CreatorRegion::from_creator(&entry.creator);
     let creator_type = super::benchmarks_app::CreatorType::from_creator(&entry.creator);
 
@@ -1340,12 +1339,12 @@ fn draw_benchmark_detail(f: &mut Frame, area: Rect, app: &App) {
             .fg(Color::Cyan)
             .add_modifier(Modifier::BOLD),
     )));
-    // Line 2: Creator + Source (per-model if available, else per-creator fallback)
+    // Line 2: Creator + Source (per-model only, no fallback)
     let em = "\u{2014}";
     let (source_label, source_color) = match app.open_weights_map.get(&entry.slug) {
         Some(true) => ("Open", Color::Green),
         Some(false) => ("Closed", Color::Red),
-        None => (openness.label(), openness.color()),
+        None => (em, Color::DarkGray),
     };
     lines.push(Line::from(vec![
         Span::styled("Creator  ", Style::default().fg(Color::DarkGray)),

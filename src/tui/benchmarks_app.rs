@@ -172,44 +172,7 @@ pub enum CreatorListItem {
     Creator(String),     // creator slug
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CreatorOpenness {
-    Open,
-    Closed,
-    Mixed,
-}
-
-impl CreatorOpenness {
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Open => "Open",
-            Self::Closed => "Closed",
-            Self::Mixed => "Mixed",
-        }
-    }
-
-    pub fn color(self) -> Color {
-        match self {
-            Self::Open => Color::Green,
-            Self::Closed => Color::Red,
-            Self::Mixed => Color::Yellow,
-        }
-    }
-
-    pub fn from_creator(slug: &str) -> Self {
-        match slug {
-            // Closed-source (API-only, no public weights)
-            "anthropic" | "aws" => Self::Closed,
-            // Mixed (both open-weight and proprietary models)
-            "openai" | "google" | "mistral" | "xai" | "cohere" | "perplexity" | "stepfun"
-            | "reka-ai" => Self::Mixed,
-            // Open-weight (default for most other creators)
-            _ => Self::Open,
-        }
-    }
-}
-
-/// Per-model source filter: uses open_weights_map with CreatorOpenness fallback.
+/// Per-model source filter: uses open_weights_map only (unmatched entries excluded from filtering).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SourceFilter {
     #[default]
@@ -235,8 +198,8 @@ impl SourceFilter {
         }
     }
 
-    /// Check if an entry passes the filter using per-model open_weights_map
-    /// with CreatorOpenness as fallback for unmatched entries.
+    /// Check if an entry passes the filter using per-model open_weights_map.
+    /// Unmatched entries (not in the map) are excluded when filtering by Open or Closed.
     pub fn matches(
         self,
         entry: &BenchmarkEntry,
@@ -244,14 +207,11 @@ impl SourceFilter {
     ) -> bool {
         match self {
             Self::All => true,
-            Self::Open => match open_weights_map.get(&entry.slug) {
-                Some(&ow) => ow,
-                None => CreatorOpenness::from_creator(&entry.creator) == CreatorOpenness::Open,
-            },
-            Self::Closed => match open_weights_map.get(&entry.slug) {
-                Some(&ow) => !ow,
-                None => CreatorOpenness::from_creator(&entry.creator) == CreatorOpenness::Closed,
-            },
+            Self::Open => open_weights_map.get(&entry.slug).copied().unwrap_or(false),
+            Self::Closed => open_weights_map
+                .get(&entry.slug)
+                .map(|&ow| !ow)
+                .unwrap_or(false),
         }
     }
 }

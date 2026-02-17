@@ -18,7 +18,7 @@ fn normalize(s: &str) -> String {
 /// entry's `slug` against model IDs within that provider.
 ///
 /// Unmatched entries are simply absent from the returned map — callers
-/// should fall back to `CreatorOpenness` for those.
+/// should display no source label for those.
 pub fn build_open_weights_map(
     providers: &[(String, Provider)],
     entries: &[BenchmarkEntry],
