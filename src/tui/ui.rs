@@ -1051,7 +1051,9 @@ fn draw_benchmarks_main(f: &mut Frame, area: Rect, app: &mut App) {
 }
 
 fn draw_benchmark_creators(f: &mut Frame, area: Rect, app: &mut App) {
-    use super::benchmarks_app::{BenchmarkFocus, CreatorGrouping, CreatorListItem};
+    use super::benchmarks_app::{
+        BenchmarkFocus, CreatorGrouping, CreatorListItem, CreatorRegion, CreatorType,
+    };
 
     let bench_app = &mut app.benchmarks_app;
     let store = &app.benchmark_store;
@@ -1114,32 +1116,57 @@ fn draw_benchmark_creators(f: &mut Frame, area: Rect, app: &mut App) {
                 ]))
             }
             CreatorListItem::GroupHeader(label) => {
+                // Match models panel: full-width colored header with trailing ───
                 let header_color = match bench_app.creator_grouping {
-                    CreatorGrouping::ByRegion => Color::Yellow,
-                    CreatorGrouping::ByType => Color::Magenta,
+                    CreatorGrouping::ByRegion => {
+                        CreatorRegion::from_label(label).map_or(Color::DarkGray, |r| r.color())
+                    }
+                    CreatorGrouping::ByType => {
+                        CreatorType::from_label(label).map_or(Color::DarkGray, |t| t.color())
+                    }
                     _ => Color::DarkGray,
                 };
-                ListItem::new(Line::from(vec![
-                    Span::styled("\u{2500}\u{2500} ", Style::default().fg(Color::DarkGray)),
-                    Span::styled(
-                        label.as_str(),
-                        Style::default()
-                            .fg(header_color)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                    Span::styled(" \u{2500}\u{2500}", Style::default().fg(Color::DarkGray)),
-                ]))
+                let label_len = label.len() + 4; // "── " + label + " "
+                let trailing = if item_width > label_len {
+                    "\u{2500}".repeat(item_width - label_len)
+                } else {
+                    String::new()
+                };
+                let text = format!("\u{2500}\u{2500} {} {}", label, trailing);
+                ListItem::new(text).style(
+                    Style::default()
+                        .fg(header_color)
+                        .add_modifier(Modifier::BOLD),
+                )
             }
             CreatorListItem::Creator(slug) => {
                 let (display_name, count) = bench_app.creator_display(slug);
+                // When grouped, show a colored tag for the creator's classification
+                let tag = match bench_app.creator_grouping {
+                    CreatorGrouping::ByRegion => {
+                        let r = CreatorRegion::from_creator(slug);
+                        Some((r.label(), r.color()))
+                    }
+                    CreatorGrouping::ByType => {
+                        let t = CreatorType::from_creator(slug);
+                        Some((t.label(), t.color()))
+                    }
+                    CreatorGrouping::None => None,
+                };
                 let count_str = format!("({})", count);
-                let overhead = count_str.len() + 1;
+                let tag_len = tag.as_ref().map_or(0, |(l, _)| l.len() + 1);
+                let overhead = count_str.len() + 1 + tag_len;
                 let max_name = item_width.saturating_sub(overhead);
                 let name = truncate(display_name, max_name);
-                ListItem::new(Line::from(vec![
+                let mut spans = vec![
                     Span::raw(format!("{} ", name)),
                     Span::styled(count_str, Style::default().fg(Color::DarkGray)),
-                ]))
+                ];
+                if let Some((label, color)) = tag {
+                    spans.push(Span::raw(" "));
+                    spans.push(Span::styled(label, Style::default().fg(color)));
+                }
+                ListItem::new(Line::from(spans))
             }
         })
         .collect();

@@ -280,6 +280,31 @@ impl CreatorRegion {
         }
     }
 
+    pub fn color(self) -> Color {
+        match self {
+            Self::US => Color::Blue,
+            Self::China => Color::Red,
+            Self::Europe => Color::Magenta,
+            Self::MiddleEast => Color::Yellow,
+            Self::SouthKorea => Color::Cyan,
+            Self::Canada => Color::Green,
+            Self::Other => Color::DarkGray,
+        }
+    }
+
+    pub fn from_label(label: &str) -> Option<Self> {
+        match label {
+            "US" => Some(Self::US),
+            "China" => Some(Self::China),
+            "Europe" => Some(Self::Europe),
+            "Middle East" => Some(Self::MiddleEast),
+            "S. Korea" => Some(Self::SouthKorea),
+            "Canada" => Some(Self::Canada),
+            "Other" => Some(Self::Other),
+            _ => None,
+        }
+    }
+
     pub fn from_creator(slug: &str) -> Self {
         match slug {
             // United States
@@ -294,13 +319,13 @@ impl CreatorRegion {
             }
             // Europe
             "mistral" => Self::Europe,
-            // Middle East (UAE)
-            "tii-uae" | "mbzuai" => Self::MiddleEast,
+            // Middle East (UAE, Israel)
+            "tii-uae" | "mbzuai" | "ai21-labs" => Self::MiddleEast,
             // South Korea
             "naver" | "korea-telecom" | "lg" | "upstage" | "motif-technologies" => Self::SouthKorea,
             // Canada
             "cohere" => Self::Canada,
-            // Other (Israel: ai21-labs, etc.)
+            // Other
             _ => Self::Other,
         }
     }
@@ -323,11 +348,28 @@ pub enum CreatorType {
 }
 
 impl CreatorType {
+    pub fn color(self) -> Color {
+        match self {
+            Self::Startup => Color::Green,
+            Self::Giant => Color::Blue,
+            Self::Research => Color::Magenta,
+        }
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             Self::Startup => "Startup",
             Self::Giant => "Big Tech",
             Self::Research => "Research",
+        }
+    }
+
+    pub fn from_label(label: &str) -> Option<Self> {
+        match label {
+            "Startup" => Some(Self::Startup),
+            "Big Tech" => Some(Self::Giant),
+            "Research" => Some(Self::Research),
+            _ => None,
         }
     }
 
