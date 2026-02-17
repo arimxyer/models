@@ -43,37 +43,6 @@ pub struct BenchmarkStore {
     entries: Vec<BenchmarkEntry>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct BenchmarkSchemaCoverage {
-    pub has_ttfat: bool,
-    pub has_ids: bool,
-}
-
-impl BenchmarkSchemaCoverage {
-    pub fn from_entries(entries: &[BenchmarkEntry]) -> Self {
-        Self {
-            has_ttfat: entries.iter().any(|e| e.ttfat.is_some()),
-            has_ids: entries
-                .iter()
-                .any(|e| !e.id.is_empty() && !e.creator_id.is_empty()),
-        }
-    }
-}
-
-/// Returns true when `candidate` satisfies the schema capabilities required by `baseline`.
-/// This protects against stale payloads that deserialize but miss newly required fields.
-pub fn benchmark_entries_compatible(
-    candidate: &[BenchmarkEntry],
-    baseline: &[BenchmarkEntry],
-) -> bool {
-    let candidate_cov = BenchmarkSchemaCoverage::from_entries(candidate);
-    let baseline_cov = BenchmarkSchemaCoverage::from_entries(baseline);
-
-    let ttfat_ok = !baseline_cov.has_ttfat || candidate_cov.has_ttfat;
-    let ids_ok = !baseline_cov.has_ids || candidate_cov.has_ids;
-    ttfat_ok && ids_ok
-}
-
 impl BenchmarkStore {
     pub fn entries(&self) -> &[BenchmarkEntry] {
         &self.entries
@@ -129,96 +98,6 @@ mod tests {
         };
         overrides(&mut entry);
         entry
-    }
-
-    #[test]
-    fn test_ttfat_survives_serialize_roundtrip() {
-        // Simulate CDN JSON -> deserialize -> cache save -> cache load
-        let json = r#"[{
-            "id": "abc-123",
-            "name": "test-model",
-            "slug": "test",
-            "creator": "openai",
-            "creator_id": "def-456",
-            "creator_name": "OpenAI",
-            "release_date": "2025-01-01",
-            "intelligence_index": 50.0,
-            "coding_index": null,
-            "math_index": null,
-            "mmlu_pro": null,
-            "gpqa": null,
-            "hle": null,
-            "livecodebench": null,
-            "scicode": null,
-            "ifbench": null,
-            "lcr": null,
-            "terminalbench_hard": null,
-            "tau2": null,
-            "math_500": null,
-            "aime": null,
-            "aime_25": null,
-            "output_tps": 100.0,
-            "ttft": 0.5,
-            "ttfat": 6.7,
-            "price_input": 1.0,
-            "price_output": 2.0,
-            "price_blended": 1.25
-        }]"#;
-
-        let entries: Vec<BenchmarkEntry> = serde_json::from_str(json).unwrap();
-        assert_eq!(entries[0].ttfat, Some(6.7), "ttfat lost during deserialize");
-
-        let cached = serde_json::to_string(&entries).unwrap();
-        let restored: Vec<BenchmarkEntry> = serde_json::from_str(&cached).unwrap();
-        assert_eq!(
-            restored[0].ttfat,
-            Some(6.7),
-            "ttfat lost during cache roundtrip"
-        );
-    }
-
-    #[test]
-    fn test_compatible_rejects_candidate_missing_ttfat() {
-        let baseline = vec![make_entry(|e| {
-            e.id = "id-1".to_string();
-            e.creator_id = "creator-1".to_string();
-            e.ttfat = Some(1.2);
-        })];
-        let candidate = vec![make_entry(|_| {})]; // no ttfat, no ids
-
-        assert!(!benchmark_entries_compatible(&candidate, &baseline));
-    }
-
-    #[test]
-    fn test_compatible_rejects_candidate_missing_ids() {
-        let baseline = vec![make_entry(|e| {
-            e.id = "id-1".to_string();
-            e.creator_id = "creator-1".to_string();
-        })];
-        let candidate = vec![make_entry(|_| {})]; // no ids
-
-        assert!(!benchmark_entries_compatible(&candidate, &baseline));
-    }
-
-    #[test]
-    fn test_compatible_accepts_matching_schema() {
-        let baseline = vec![make_entry(|e| {
-            e.id = "id-1".to_string();
-            e.creator_id = "creator-1".to_string();
-            e.ttfat = Some(1.2);
-        })];
-
-        assert!(benchmark_entries_compatible(&baseline, &baseline));
-    }
-
-    #[test]
-    fn test_compatible_accepts_anything_with_empty_baseline() {
-        // Empty baseline = no requirements = accept any candidate.
-        // This is the first-launch scenario (no cache, no embedded data).
-        let empty: Vec<BenchmarkEntry> = vec![];
-        let candidate = vec![make_entry(|_| {})]; // incomplete but better than nothing
-
-        assert!(benchmark_entries_compatible(&candidate, &empty));
     }
 
     #[test]
