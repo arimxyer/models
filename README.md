@@ -225,6 +225,8 @@ binary = "my-agent"
 version_command = ["--version"]
 ```
 
+See [Custom Agents](docs/custom-agents.md) for the full reference.
+
 ### Benchmarks Tab
 
 ![Benchmarks tab screenshot](public/assets/benchmark-screenshot.png)
