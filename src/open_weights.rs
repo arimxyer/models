@@ -35,17 +35,18 @@ fn creator_to_providers(creator: &str) -> &[&str] {
 /// Build a map from AA benchmark entry slug → open_weights bool.
 ///
 /// Matching strategy:
-/// 1. Map AA `creator` to models.dev provider(s) via translation table
-/// 2. Within matched provider(s), find the best model match using
-///    Jaro-Winkler similarity on normalized slugs/IDs
-/// 3. Accept matches above [`MIN_SIMILARITY`] threshold, pick highest score
+/// 1. **Creator-scoped**: Map AA creator to models.dev provider(s), then
+///    Jaro-Winkler match the slug within those providers
+/// 2. **Global fallback**: If no creator-scoped match, search ALL models
+///    across ALL providers for a high-confidence slug match
 ///
-/// Unmatched entries are absent from the map — callers show no source label.
+/// Both stages require [`MIN_SIMILARITY`] threshold. Unmatched entries
+/// are absent from the map — callers show no source label.
 pub fn build_open_weights_map(
     providers: &[(String, Provider)],
     entries: &[BenchmarkEntry],
 ) -> HashMap<String, bool> {
-    // Build lookups: normalized provider ID → models (normalized model ID → open_weights)
+    // Build per-provider lookup: normalized provider ID → [(normalized model ID, open_weights)]
     let provider_set: HashMap<String, ()> = providers
         .iter()
         .map(|(id, _)| (normalize(id), ()))
@@ -62,6 +63,17 @@ pub fn build_open_weights_map(
         model_lookup.insert(norm_provider, models);
     }
 
+    // Build global flat list of all models for fallback matching
+    let all_models: Vec<(String, bool)> = providers
+        .iter()
+        .flat_map(|(_, provider)| {
+            provider
+                .models
+                .iter()
+                .map(|(model_id, model)| (normalize(model_id), model.open_weights))
+        })
+        .collect();
+
     let mut result = HashMap::new();
 
     for entry in entries {
@@ -72,7 +84,7 @@ pub fn build_open_weights_map(
         let norm_creator = normalize(&entry.creator);
         let norm_slug = normalize(&entry.slug);
 
-        // Determine which providers to search
+        // Stage 1: Creator-scoped matching
         let mapped = creator_to_providers(&entry.creator);
         let provider_ids: Vec<String> = if mapped.is_empty() {
             vec![norm_creator.clone()]
@@ -80,7 +92,6 @@ pub fn build_open_weights_map(
             mapped.iter().map(|id| normalize(id)).collect()
         };
 
-        // Find the best match across candidate providers using Jaro-Winkler
         let mut best_score: f64 = 0.0;
         let mut best_ow = None;
 
@@ -96,7 +107,7 @@ pub fn build_open_weights_map(
                         best_score = score;
                         best_ow = Some(*ow);
                         if (score - 1.0).abs() < f64::EPSILON {
-                            break; // exact match
+                            break;
                         }
                     }
                 }
@@ -104,6 +115,20 @@ pub fn build_open_weights_map(
 
             if (best_score - 1.0).abs() < f64::EPSILON {
                 break;
+            }
+        }
+
+        // Stage 2: Global fallback — search all models if creator-scoped didn't match
+        if best_score < MIN_SIMILARITY {
+            for (norm_model_id, ow) in &all_models {
+                let score = strsim::jaro_winkler(&norm_slug, norm_model_id);
+                if score > best_score {
+                    best_score = score;
+                    best_ow = Some(*ow);
+                    if (score - 1.0).abs() < f64::EPSILON {
+                        break;
+                    }
+                }
             }
         }
 
