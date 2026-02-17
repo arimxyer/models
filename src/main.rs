@@ -1,6 +1,5 @@
 mod agents;
 mod api;
-mod benchmark_cache;
 mod benchmark_fetch;
 mod benchmarks;
 mod cli;
