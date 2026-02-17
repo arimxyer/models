@@ -14,18 +14,25 @@ A fast CLI and TUI for browsing AI models, benchmarks, and coding agents.
 
 <video src="https://github.com/user-attachments/assets/07c750f4-ca47-4f89-8a32-99e0be5004d8" controls width="100%"></video>
 
-## What's New (v0.8.4)
+## What's New (v0.8.6)
 
-### Fixes
-- **Fixed TUI rendering glitch** — resolved an issue where the interface could render incorrectly on launch without a terminal resize. Apologies if you experienced this in v0.8.3!
+### Cost Sorting
+- **Price sort columns** — sort benchmarks by input, output, or blended price per million tokens via `[s]` cycle
 
-### Smaller, Leaner Binary
-- **Removed embedded benchmark data** — benchmark data is no longer compiled into the binary (~300KB smaller). Data loads from disk cache on subsequent launches (instant) or fetches from CDN on first launch (~1-2s).
-- **Simplified data flow** — two-tier loading (disk cache + CDN fetch) replaces the previous three-tier system (embedded + cache + CDN), eliminating a class of stale-data-on-upgrade bugs
+### Open Weights Detection
+- **Per-model source detection** — runtime matching of AA benchmark entries against models.dev data to determine open/closed status per model (not just per creator)
+- **Source filter** — `[4]` cycles through All / Open / Closed to filter the benchmark list by open-weights status
 
-### Cleanup
-- **Removed redundant startup logic** — simplified cache validation and ETag handling
-- **No user action required** — existing disk caches are automatically validated and reused or refreshed as needed
+### Creator Grouping
+- **Region and type grouping** — `[5]` and `[6]` now toggle grouped layout with colored section headers instead of filtering creators out
+- **Colored sidebar** — group headers and creator tags use per-group colors (e.g., US=Blue, China=Red, Startup=Green, Big Tech=Blue)
+
+### v0.8.5: Release Profile
+- **Optimized release binary** — strip, LTO, single codegen unit, panic=abort (~6MB, down from ~11MB)
+
+### v0.8.4: Fixes & Cleanup
+- **Fixed TUI rendering glitch** — resolved an issue where the interface could render incorrectly on launch without a terminal resize
+- **Removed embedded benchmark data** — two-tier loading (disk cache + CDN fetch) replaces the previous three-tier system
 
 ### v0.8.3: New Benchmark Fields
 - **TTFAT column** — Time to First Answer Token, distinguishing thinking time from TTFT on reasoning models (e.g., 6.7s TTFAT vs 0.46s TTFT)
@@ -48,8 +55,8 @@ A fast CLI and TUI for browsing AI models, benchmarks, and coding agents.
 
 ### v0.8.0: Benchmarks Tab (New)
 - **Dedicated Benchmarks tab** — browse ~400 model entries from Artificial Analysis with quality, speed, and pricing data
-- **Creator sidebar** with 40+ creators, each classified by source (Open/Closed/Mixed), region (US/China/Europe/Middle East/S. Korea/Canada/Other), and type (Startup/Big Tech/Research)
-- **Three filter dimensions** — `[4]` source, `[5]` region, `[6]` type — to slice the creator and benchmark lists
+- **Creator sidebar** with 40+ creators, classified by region and type with grouping toggles
+- **Source filter** — `[4]` filters by open/closed weights; `[5]`/`[6]` toggle region/type grouping with colored headers
 - **Quick-sort keys** — `[1]` Intelligence, `[2]` Date, `[3]` Speed — press again to flip direction
 - **Dynamic column visibility** — list columns adapt based on the active sort group (knowledge, code, reasoning, math, performance)
 - **Detail panel** — non-scrollable flat layout with indexes, benchmark scores, performance metrics, and pricing
@@ -80,7 +87,8 @@ A fast CLI and TUI for browsing AI models, benchmarks, and coding agents.
 ### Benchmarks Tab
 - **~400 benchmark entries** from Artificial Analysis with quality, speed, and pricing scores
 - **Auto-updating** — data refreshes from CDN every 6 hours in the background, persisted to disk cache
-- **Creator sidebar** with 40+ creators — filter by source (Open/Closed/Mixed), region (US/China/Europe/...), and type (Startup/Big Tech/Research)
+- **Creator sidebar** with 40+ creators — group by region or type with colored section headers
+- **Per-model open weights detection** — runtime matching against models.dev, with source filter toggle
 - **Quick-sort keys** — instantly sort by Intelligence, Date, or Speed
 - **Dynamic columns** — list columns adapt to show the most relevant benchmarks for the active sort
 - **Detail panel** — full benchmark breakdown with indexes, scores, performance, and pricing
@@ -228,17 +236,17 @@ version_command = ["--version"]
 | `2` | Sort by Release date |
 | `3` | Sort by Speed (tok/s) |
 
-**Filters**
+**Filters & Grouping**
 | Key | Action |
 |-----|--------|
-| `4` | Cycle source filter (Open / Closed / Mixed) |
-| `5` | Cycle region filter (US / China / Europe / Middle East / S. Korea / Canada / Other) |
-| `6` | Cycle type filter (Startup / Big Tech / Research) |
+| `4` | Cycle source filter (All / Open / Closed) |
+| `5` | Toggle region grouping |
+| `6` | Toggle type grouping |
 
 **Sort (full cycle)**
 | Key | Action |
 |-----|--------|
-| `s` | Cycle through all 17 sort columns |
+| `s` | Cycle through all 20 sort columns |
 | `S` | Toggle sort direction (asc/desc) |
 
 **Actions**

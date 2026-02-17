@@ -40,6 +40,7 @@ Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message`
 - `src/benchmarks.rs` — BenchmarkStore, schema validation
 - `src/benchmark_cache.rs` — disk cache with 6h TTL
 - `src/benchmark_fetch.rs` — jsDelivr CDN fetcher with ETag
+- `src/open_weights.rs` — runtime matching of AA entries to models.dev for open/closed status
 
 ### GitHub Actions
 - `ci.yml` — runs on PR/push: fmt check, clippy, test
