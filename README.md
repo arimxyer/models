@@ -14,53 +14,32 @@ A fast CLI and TUI for browsing AI models, benchmarks, and coding agents.
 
 <video src="https://github.com/user-attachments/assets/07c750f4-ca47-4f89-8a32-99e0be5004d8" controls width="100%"></video>
 
-## What's New (v0.8.6)
+## What's New (v0.8.8)
 
-### Cost Sorting
+### Improved Open Weights Matching
+- **91% match rate** — three-stage matching pipeline using Jaro-Winkler similarity (`strsim`) to determine open/closed status per model
+- **Global fallback** — when creator-scoped matching fails, searches all models.dev providers for the best slug match
+- **Known creator overrides** — hardcoded open/closed status for 12 well-known creators absent from models.dev (IBM, AI2, TII, etc.)
+- **No more "Mixed" labels** — removed CreatorOpenness fallback; unmatched models show an em dash instead of misleading labels
+
+### v0.8.7: Benchmark Data Freshness
+- **jsDelivr cache purging** — GitHub Action now purges CDN cache after committing new data for faster propagation
+- **No disk cache** — benchmark data fetched fresh from CDN on every launch for simplicity
+
+### v0.8.6: Cost Sorting & Open Weights
 - **Price sort columns** — sort benchmarks by input, output, or blended price per million tokens via `[s]` cycle
-
-### Open Weights Detection
-- **Per-model source detection** — runtime matching of AA benchmark entries against models.dev data to determine open/closed status per model (not just per creator)
-- **Source filter** — `[4]` cycles through All / Open / Closed to filter the benchmark list by open-weights status
-
-### Creator Grouping
-- **Region and type grouping** — `[5]` and `[6]` now toggle grouped layout with colored section headers instead of filtering creators out
-- **Colored sidebar** — group headers and creator tags use per-group colors (e.g., US=Blue, China=Red, Startup=Green, Big Tech=Blue)
+- **Per-model source detection** — runtime matching of AA entries against models.dev data
+- **Source filter** — `[4]` cycles through All / Open / Closed
+- **Region and type grouping** — `[5]` and `[6]` toggle grouped layout with colored section headers
 
 ### v0.8.5: Release Profile
 - **Optimized release binary** — strip, LTO, single codegen unit, panic=abort (~6MB, down from ~11MB)
 
-### v0.8.4: Fixes & Cleanup
-- **Fixed TUI rendering glitch** — resolved an issue where the interface could render incorrectly on launch without a terminal resize
-- **Removed embedded benchmark data** — two-tier loading (disk cache + CDN fetch) replaces the previous three-tier system
-
-### v0.8.3: New Benchmark Fields
-- **TTFAT column** — Time to First Answer Token, distinguishing thinking time from TTFT on reasoning models (e.g., 6.7s TTFAT vs 0.46s TTFT)
-- **AIME benchmark** — original AIME evaluation score displayed alongside MATH-500 and AIME'25 in the detail panel
-- **Stable IDs** — `id` and `creator_id` from Artificial Analysis for reliable cross-session entity tracking
-- **Schema-aware cache validation** — stale CDN payloads with missing fields are automatically rejected
-
-### v0.8.2: UI Polish & Consistency
-- **Split cost columns** — Models list now shows separate Input and Output cost columns with smart rounding
-- **Dynamic column widths** — Model ID and Benchmark Name columns expand to fill available terminal width
-- **Focus-aware caret** — `> ` indicator acts as a pseudo cursor, appearing only on the active panel
-- **Dynamic panel titles** — Models list shows the selected provider name; Benchmarks list shows the selected creator name
-- **Styled column headers** — yellow bold headers with cyan highlight on the active sort column
-- **`g`/`G` keybindings** — jump to first/last item on Benchmarks and Agents tabs (already on Models)
-
-### v0.8.1: Runtime Benchmark Data
-- **Auto-updating benchmarks** — benchmark data refreshes from CDN every 6 hours in the background, no user configuration required
-- **Disk cache** — previously fetched data persists across sessions at `~/.config/models/benchmarks-cache.json`
-- **GitHub Action** — daily automated refresh of benchmark data from the Artificial Analysis API
-
-### v0.8.0: Benchmarks Tab (New)
+### v0.8.0–0.8.4: Benchmarks Tab
 - **Dedicated Benchmarks tab** — browse ~400 model entries from Artificial Analysis with quality, speed, and pricing data
 - **Creator sidebar** with 40+ creators, classified by region and type with grouping toggles
-- **Source filter** — `[4]` filters by open/closed weights; `[5]`/`[6]` toggle region/type grouping with colored headers
 - **Quick-sort keys** — `[1]` Intelligence, `[2]` Date, `[3]` Speed — press again to flip direction
-- **Dynamic column visibility** — list columns adapt based on the active sort group (knowledge, code, reasoning, math, performance)
-- **Detail panel** — non-scrollable flat layout with indexes, benchmark scores, performance metrics, and pricing
-- **Null-filtering** — entries missing data for the active sort column are hidden automatically
+- **Dynamic columns, detail panel, TTFAT, AIME benchmarks** and more
 
 ### Other
 - **Provider categories** — filter and group providers by type (Origin, Cloud, Inference, Gateway, Dev Tool)
@@ -86,7 +65,7 @@ A fast CLI and TUI for browsing AI models, benchmarks, and coding agents.
 
 ### Benchmarks Tab
 - **~400 benchmark entries** from Artificial Analysis with quality, speed, and pricing scores
-- **Auto-updating** — data refreshes from CDN every 6 hours in the background, persisted to disk cache
+- **Auto-updating** — data fetched fresh from CDN on every launch; GitHub Action refreshes source data every 6 hours
 - **Creator sidebar** with 40+ creators — group by region or type with colored section headers
 - **Per-model open weights detection** — runtime matching against models.dev, with source filter toggle
 - **Quick-sort keys** — instantly sort by Intelligence, Date, or Speed

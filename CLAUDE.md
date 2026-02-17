@@ -26,7 +26,7 @@ mise run fmt && mise run clippy && mise run test
 
 ### Data Flow
 - Model data: fetched from models.dev API at startup (`src/api.rs`)
-- Benchmark data: disk-cached + auto-refreshed from jsDelivr CDN every 6h (`src/benchmark_cache.rs`, `src/benchmark_fetch.rs`)
+- Benchmark data: fetched fresh from jsDelivr CDN on every launch (`src/benchmark_fetch.rs`)
 - Agent/GitHub data: disk-cached with ETag conditional fetching (`src/agents/cache.rs`, `src/agents/github.rs`)
 
 ### Async Pattern
@@ -37,9 +37,8 @@ Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message`
 - `src/tui/app.rs` — App state, Message enum, update logic
 - `src/tui/event.rs` — keybinding → Message mapping
 - `src/tui/ui.rs` — rendering
-- `src/benchmarks.rs` — BenchmarkStore, schema validation
-- `src/benchmark_cache.rs` — disk cache with 6h TTL
-- `src/benchmark_fetch.rs` — jsDelivr CDN fetcher with ETag
+- `src/benchmarks.rs` — BenchmarkStore, BenchmarkEntry
+- `src/benchmark_fetch.rs` — jsDelivr CDN fetcher (no cache, no ETag)
 - `src/open_weights.rs` — runtime matching of AA entries to models.dev for open/closed status
 
 ### GitHub Actions
@@ -51,15 +50,15 @@ Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message`
 - Use `mise run <task>` for all CLI operations — never run bare commands
 - Keep clippy clean with `-D warnings`
 - Enum-based message passing (no callbacks)
-- Disk cache for persistence, async CDN fetch for freshness, empty store on first launch until CDN responds
-- `BenchmarkEntry` must derive both `Serialize` and `Deserialize` (needed for cache)
-- New `BenchmarkEntry` fields require `#[serde(default)]` and a corresponding check in `BenchmarkSchemaCoverage` to prevent stale caches from silently dropping data
+- No disk cache — benchmark data fetched fresh from CDN on every launch, empty store until CDN responds
+- `BenchmarkEntry` must derive both `Serialize` and `Deserialize`
+- New `BenchmarkEntry` fields require `#[serde(default)]`
 
 ## Gotchas
 - clippy `-D warnings` treats unused enum variant fields as errors — if a Message variant's payload is only passed through (e.g., error strings logged nowhere), use a unit variant instead
 - `Cargo.lock` must be committed after `Cargo.toml` version bumps
 - GitHub Actions `workflow_dispatch` only works when the workflow file exists on the default branch — cannot test from feature branches
-- Adding a new field to `BenchmarkEntry`: (1) add field with `#[serde(default)]`, (2) add a coverage check in `BenchmarkSchemaCoverage::from_entries()`, (3) bump `DATA_SCHEMA_VERSION` in `benchmark_cache.rs` — this ensures stale caches are rejected and CDN payloads are validated before replacing loaded data
+- Adding a new field to `BenchmarkEntry`: add field with `#[serde(default)]` — no cache versioning needed since data is fetched fresh every launch
 - The AA API uses `0` as a sentinel for missing performance data — jq transforms must convert `0` → `null` (e.g., `if . == 0 then null else . end`)
 - Never use `eprintln!` in TUI mode — stderr output corrupts ratatui's alternate screen buffer, causing rendering glitches. Use `Message` variants or status bar updates instead
 
