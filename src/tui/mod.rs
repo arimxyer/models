@@ -48,6 +48,14 @@ pub enum FetchResult {
 pub async fn run(providers: ProvidersMap) -> Result<()> {
     use crate::agents::FetchStatus;
 
+    // TODO: Remove this cleanup by v0.9.0 — legacy benchmark cache from pre-v0.8.7
+    if let Some(config_dir) = dirs::config_dir() {
+        let legacy_cache = config_dir.join("models").join("benchmarks-cache.json");
+        if legacy_cache.exists() {
+            let _ = std::fs::remove_file(legacy_cache);
+        }
+    }
+
     // Load remaining data
     let agents_file = load_agents().ok();
     let config = Config::load().ok();
