@@ -22,10 +22,12 @@ fn creator_to_providers(creator: &str) -> &[&str] {
     match creator {
         "meta" => &["llama"],
         "kimi" => &["moonshotai"],
+        // Note: aws→amazon-bedrock and nvidia use org-prefixed model IDs
+        // (e.g. "amazon.nova-2-lite-v1:0", "deepseek-ai/deepseek-r1") that
+        // don't match AA slugs, but the mapping is kept for partial matches.
         "aws" => &["amazon-bedrock"],
         "azure" => &["azure"],
         "nvidia" => &["nvidia"],
-        "ibm" => &["nova"],
         _ => &[],
     }
 }
@@ -381,18 +383,70 @@ mod tests {
         let mut unmatched_creators: Vec<_> = unmatched_by_creator.iter().collect();
         unmatched_creators.sort_by(|a, b| b.1.len().cmp(&a.1.len()));
 
+        // Build provider ID set for checking availability
+        let provider_set: HashMap<String, Vec<String>> = providers
+            .iter()
+            .map(|(id, p)| {
+                let model_ids: Vec<String> = p.models.keys().cloned().collect();
+                (normalize(id), model_ids)
+            })
+            .collect();
+
         println!("\n--- Unmatched by creator ---");
+        let mut no_provider_count = 0;
+        let mut has_provider_count = 0;
+
         for &(creator, slugs) in &unmatched_creators {
             let mapped = creator_to_providers(creator);
+            let norm_ids: Vec<String> = if mapped.is_empty() {
+                vec![normalize(creator)]
+            } else {
+                mapped.iter().map(|id| normalize(id)).collect()
+            };
+
+            let has_provider = norm_ids
+                .iter()
+                .any(|id| provider_set.contains_key(id.as_str()));
+            let status = if has_provider {
+                has_provider_count += slugs.len();
+                "HAS PROVIDER"
+            } else {
+                no_provider_count += slugs.len();
+                "NO PROVIDER"
+            };
+
             let mapping_note = if mapped.is_empty() {
                 format!("(identity: {})", normalize(creator))
             } else {
                 format!("(mapped → {:?})", mapped)
             };
-            println!("{} ({} entries) {}", creator, slugs.len(), mapping_note);
+            println!(
+                "[{status}] {creator} ({} entries) {mapping_note}",
+                slugs.len()
+            );
             for slug in slugs {
                 println!("  - {slug}");
             }
+
+            // Show sample model IDs from the provider for gap analysis
+            if has_provider {
+                for norm_id in &norm_ids {
+                    if let Some(model_ids) = provider_set.get(norm_id.as_str()) {
+                        let mut sample: Vec<&str> = model_ids.iter().map(|s| s.as_str()).collect();
+                        sample.sort();
+                        sample.truncate(10);
+                        println!(
+                            "  >> models.dev has: {:?}{}",
+                            sample,
+                            if model_ids.len() > 10 { " ..." } else { "" }
+                        );
+                    }
+                }
+            }
         }
+
+        println!("\n--- Summary ---");
+        println!("No provider in models.dev:  {no_provider_count} (truly unmatchable)");
+        println!("Has provider, slug mismatch: {has_provider_count} (potentially fixable)");
     }
 }
