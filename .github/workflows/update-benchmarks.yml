@@ -54,10 +54,17 @@ jobs:
           echo "Fetched $(jq length data/benchmarks.json) entries"
 
       - name: Commit and push if changed
+        id: commit
         run: |
-          git diff --quiet data/benchmarks.json && exit 0
+          git diff --quiet data/benchmarks.json && echo "changed=false" >> "$GITHUB_OUTPUT" && exit 0
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/benchmarks.json
           git commit -m "chore: update benchmark data from Artificial Analysis"
           git push
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Purge jsDelivr cache
+        if: steps.commit.outputs.changed == 'true'
+        run: |
+          curl -sf "https://purge.jsdelivr.net/gh/arimxyer/models@main/data/benchmarks.json" || true
