@@ -1,23 +1,13 @@
 use anyhow::{anyhow, Result};
 use regex::Regex;
 use serde::Deserialize;
-use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::RwLock;
 
 use super::cache::{CachedGitHubData, GitHubCache, SerializableGitHubData};
 use super::{GitHubData, Release};
 
-#[allow(dead_code)]
-const CACHE_TTL: Duration = Duration::from_secs(60 * 60);
 const GITHUB_API_BASE: &str = "https://api.github.com";
-
-#[allow(dead_code)]
-struct CacheEntry {
-    data: GitHubData,
-    fetched_at: Instant,
-}
 
 #[derive(Debug, Deserialize)]
 pub struct RepoResponse {
@@ -41,7 +31,6 @@ pub struct ReleaseResponse {
 
 /// Result of a conditional fetch operation
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum ConditionalFetchResult {
     /// New data fetched, with optional ETag for future conditional requests
     Fresh(GitHubData, Option<String>),
@@ -71,9 +60,6 @@ fn extract_version(tag: &str) -> String {
 #[derive(Clone)]
 pub struct AsyncGitHubClient {
     client: reqwest::Client,
-    #[allow(dead_code)]
-    cache: Arc<Mutex<HashMap<String, CacheEntry>>>,
-    #[allow(dead_code)]
     disk_cache: Arc<RwLock<GitHubCache>>,
     token: Option<String>,
 }
@@ -97,82 +83,9 @@ impl AsyncGitHubClient {
 
         Self {
             client,
-            cache: Arc::new(Mutex::new(HashMap::new())),
             disk_cache,
             token,
         }
-    }
-
-    /// Get a reference to the disk cache
-    #[allow(dead_code)]
-    pub fn disk_cache(&self) -> &Arc<RwLock<GitHubCache>> {
-        &self.disk_cache
-    }
-
-    #[allow(dead_code)]
-    pub async fn fetch(&self, repo: &str) -> Result<GitHubData> {
-        // Check cache
-        {
-            let cache = self.cache.lock().await;
-            if let Some(entry) = cache.get(repo) {
-                if entry.fetched_at.elapsed() < CACHE_TTL {
-                    return Ok(entry.data.clone());
-                }
-            }
-        }
-
-        let data = self.fetch_fresh(repo).await?;
-
-        // Update cache
-        {
-            let mut cache = self.cache.lock().await;
-            cache.insert(
-                repo.to_string(),
-                CacheEntry {
-                    data: data.clone(),
-                    fetched_at: Instant::now(),
-                },
-            );
-        }
-
-        Ok(data)
-    }
-
-    #[allow(dead_code)]
-    pub async fn fetch_fresh(&self, repo: &str) -> Result<GitHubData> {
-        let mut data = GitHubData::default();
-
-        // Fetch repo and releases in parallel
-        let repo_url = format!("{}/repos/{}", GITHUB_API_BASE, repo);
-        let releases_url = format!("{}/repos/{}/releases", GITHUB_API_BASE, repo);
-
-        let (repo_result, releases_result) = tokio::join!(
-            self.get_json::<RepoResponse>(&repo_url),
-            self.get_json::<Vec<ReleaseResponse>>(&releases_url),
-        );
-
-        if let Ok(repo_info) = repo_result {
-            data.stars = Some(repo_info.stargazers_count);
-            data.open_issues = Some(repo_info.open_issues_count);
-            data.license = repo_info
-                .license
-                .and_then(|l| l.spdx_id)
-                .filter(|s| s != "NOASSERTION");
-            data.last_commit = repo_info.pushed_at.map(|s| format_relative_time(&s));
-        }
-
-        if let Ok(releases) = releases_result {
-            data.releases = releases
-                .into_iter()
-                .map(|r| Release {
-                    version: extract_version(&r.tag_name),
-                    date: r.published_at.map(|s| format_relative_time(&s)),
-                    changelog: r.body,
-                })
-                .collect();
-        }
-
-        Ok(data)
     }
 
     async fn get_json<T: serde::de::DeserializeOwned>(&self, url: &str) -> Result<T> {
@@ -199,7 +112,6 @@ impl AsyncGitHubClient {
     ///
     /// If we have cached data with an ETag for this repo, we send an If-None-Match header.
     /// If GitHub returns 304 Not Modified, we know our cached data is still valid.
-    #[allow(dead_code)]
     pub async fn fetch_conditional(&self, repo: &str) -> ConditionalFetchResult {
         // Check disk cache for existing ETag
         let cached_etag = {
@@ -257,8 +169,9 @@ impl AsyncGitHubClient {
             Err(e) => return ConditionalFetchResult::Error(e.to_string()),
         };
 
-        // Fetch releases separately (they have their own ETag, but for simplicity we bundle them)
-        // If fetch fails, try to preserve cached releases
+        // Fetch releases separately
+        // If fetch fails, try to preserve cached releases but keep the OLD ETag
+        // to ensure we re-fetch releases on the next attempt
         let releases_url = format!("{}/repos/{}/releases", GITHUB_API_BASE, repo);
         let releases: Vec<ReleaseResponse> =
             match self.get_json::<Vec<ReleaseResponse>>(&releases_url).await {
@@ -275,14 +188,15 @@ impl AsyncGitHubClient {
                             .license
                             .and_then(|l| l.spdx_id)
                             .filter(|s| s != "NOASSERTION");
-                        data.last_commit = repo_info.pushed_at.map(|s| format_relative_time(&s));
-                        return ConditionalFetchResult::Fresh(data, new_etag);
+                        data.last_commit = repo_info.pushed_at;
+                        // Use the OLD cached ETag so we re-fetch everything next time
+                        return ConditionalFetchResult::Fresh(data, cached_etag);
                     }
                     Vec::new() // No cache, return empty
                 }
             };
 
-        // Build the GitHubData
+        // Build the GitHubData — store raw ISO timestamps, format at display time
         let data = GitHubData {
             stars: Some(repo_info.stargazers_count),
             open_issues: Some(repo_info.open_issues_count),
@@ -290,12 +204,12 @@ impl AsyncGitHubClient {
                 .license
                 .and_then(|l| l.spdx_id)
                 .filter(|s| s != "NOASSERTION"),
-            last_commit: repo_info.pushed_at.map(|s| format_relative_time(&s)),
+            last_commit: repo_info.pushed_at,
             releases: releases
                 .into_iter()
                 .map(|r| Release {
                     version: extract_version(&r.tag_name),
-                    date: r.published_at.map(|s| format_relative_time(&s)),
+                    date: r.published_at,
                     changelog: r.body,
                 })
                 .collect(),
@@ -334,15 +248,6 @@ pub fn format_stars(stars: u64) -> String {
     }
 }
 
-/// Format ISO date string to relative time
-pub fn format_relative_time(iso_date: &str) -> String {
-    if let Some(date) = iso_date.split('T').next() {
-        date.to_string()
-    } else {
-        iso_date.to_string()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -353,11 +258,6 @@ mod tests {
         assert_eq!(format_stars(999), "999");
         assert_eq!(format_stars(1000), "1.0k");
         assert_eq!(format_stars(1234567), "1.2m");
-    }
-
-    #[test]
-    fn test_format_relative_time() {
-        assert_eq!(format_relative_time("2024-01-15T10:30:00Z"), "2024-01-15");
     }
 
     #[test]

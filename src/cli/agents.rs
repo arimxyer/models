@@ -114,7 +114,6 @@ fn dispatch(command: Option<AgentsCommand>) -> Result<()> {
 /// ETag to avoid re-downloading unchanged data. Falls back to cached data
 /// on network errors.
 fn get_github_data(
-    _agent_id: &str,
     agent_name: &str,
     repo: &str,
     disk_cache: &mut crate::agents::cache::GitHubCache,
@@ -174,9 +173,9 @@ fn run_status() -> Result<()> {
     entries.sort_by(|(_, a), (_, b)| a.name.cmp(&b.name));
 
     let runtime = tokio::runtime::Runtime::new()?;
-    for (id, agent) in &entries {
+    for (_id, agent) in &entries {
         let installed = crate::agents::detect::detect_installed(agent);
-        let github = get_github_data(id, &agent.name, &agent.repo, &mut disk_cache, &runtime);
+        let github = get_github_data(&agent.name, &agent.repo, &mut disk_cache, &runtime);
 
         let latest_version = github
             .as_ref()
@@ -255,9 +254,7 @@ fn run_latest() -> Result<()> {
         if !config.is_tracked(id) {
             continue;
         }
-        if let Some(github) =
-            get_github_data(id, &agent.name, &agent.repo, &mut disk_cache, &runtime)
-        {
+        if let Some(github) = get_github_data(&agent.name, &agent.repo, &mut disk_cache, &runtime) {
             for release in &github.releases {
                 if let Some(date) = release
                     .date
@@ -350,7 +347,7 @@ fn run_tool(args: ToolArgs) -> Result<()> {
     let agents_file = crate::agents::loader::load_agents()?;
     let mut disk_cache = crate::agents::cache::GitHubCache::load();
 
-    let (agent_id, agent) = resolve_tool(&args.tool, &agents_file)?;
+    let (_agent_id, agent) = resolve_tool(&args.tool, &agents_file)?;
 
     if args.web {
         let url = format!("https://github.com/{}/releases", agent.repo);
@@ -360,14 +357,8 @@ fn run_tool(args: ToolArgs) -> Result<()> {
     }
 
     let runtime = tokio::runtime::Runtime::new()?;
-    let github = get_github_data(
-        &agent_id,
-        &agent.name,
-        &agent.repo,
-        &mut disk_cache,
-        &runtime,
-    )
-    .unwrap_or_default();
+    let github =
+        get_github_data(&agent.name, &agent.repo, &mut disk_cache, &runtime).unwrap_or_default();
 
     disk_cache.save().ok();
 
@@ -449,12 +440,17 @@ fn print_release(name: &str, release: &crate::agents::data::Release) {
     use super::styles;
 
     let version = &release.version;
-    let date = release.date.as_deref().unwrap_or("unknown date");
+    let date = release
+        .date
+        .as_deref()
+        .and_then(crate::agents::helpers::parse_date)
+        .map(|d| d.format("%Y-%m-%d").to_string())
+        .unwrap_or_else(|| "unknown date".to_string());
     println!(
         "{} {} ({})",
         styles::agent_name(name),
         styles::key_value(version),
-        styles::dim(date)
+        styles::dim(&date)
     );
     println!("{}", styles::separator(40));
     if let Some(body) = &release.changelog {
@@ -507,16 +503,19 @@ fn run_version_list(
     ]);
 
     for release in &github.releases {
-        let date_str = release.date.as_deref().unwrap_or("\u{2014}");
-        let ago = release
+        let parsed = release
             .date
             .as_deref()
-            .and_then(crate::agents::helpers::parse_date)
+            .and_then(crate::agents::helpers::parse_date);
+        let date_str = parsed
+            .map(|d| d.format("%Y-%m-%d").to_string())
+            .unwrap_or_else(|| "\u{2014}".to_string());
+        let ago = parsed
             .map(|d| crate::agents::helpers::format_relative_time(&d))
             .unwrap_or_else(|| "\u{2014}".to_string());
         table.add_row(vec![
             styles::bold_cell(&release.version),
-            comfy_table::Cell::new(date_str),
+            comfy_table::Cell::new(&date_str),
             styles::dim_cell(&ago),
         ]);
     }
@@ -538,11 +537,14 @@ fn run_pick(
         .releases
         .iter()
         .map(|r| {
-            let date = r.date.as_deref().unwrap_or("unknown");
-            let ago = r
+            let parsed = r
                 .date
                 .as_deref()
-                .and_then(crate::agents::helpers::parse_date)
+                .and_then(crate::agents::helpers::parse_date);
+            let date = parsed
+                .map(|d| d.format("%Y-%m-%d").to_string())
+                .unwrap_or_else(|| "unknown".to_string());
+            let ago = parsed
                 .map(|d| crate::agents::helpers::format_relative_time(&d))
                 .unwrap_or_default();
             format!("{:<16} {:<12} {}", r.version, date, ago)

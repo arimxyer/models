@@ -739,8 +739,11 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &App) {
                 )];
 
                 if let Some(date) = &release.date {
+                    let display_date = crate::agents::helpers::parse_date(date)
+                        .map(|d| d.format("%Y-%m-%d").to_string())
+                        .unwrap_or_else(|| date.clone());
                     version_spans.push(Span::styled(
-                        format!("  {}", date),
+                        format!("  {}", display_date),
                         Style::default().fg(Color::DarkGray),
                     ));
                 }

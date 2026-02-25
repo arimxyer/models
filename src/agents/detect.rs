@@ -74,45 +74,32 @@ fn get_version_and_path(
 }
 
 fn extract_version(output: &str, regex_pattern: Option<&str>) -> Option<String> {
-    let pattern = regex_pattern.unwrap_or(r"([0-9]+\.[0-9]+\.[0-9]+)");
-
-    // Simple regex-like extraction (avoid regex crate dependency)
-    // Look for version pattern in output
-    for line in output.lines() {
-        if let Some(version) = extract_semver_from_line(line, pattern) {
-            return Some(version);
+    if let Some(pattern) = regex_pattern {
+        // Use the provided regex pattern — expects a capture group for the version
+        if let Ok(re) = regex::Regex::new(pattern) {
+            for line in output.lines() {
+                if let Some(captures) = re.captures(line) {
+                    // Return first capture group if present, otherwise full match
+                    let version = captures
+                        .get(1)
+                        .or_else(|| captures.get(0))
+                        .map(|m| m.as_str().to_string());
+                    if version.is_some() {
+                        return version;
+                    }
+                }
+            }
         }
     }
-    None
-}
 
-fn extract_semver_from_line(line: &str, _pattern: &str) -> Option<String> {
-    // Simple extraction: find X.Y.Z pattern
-    let chars: Vec<char> = line.chars().collect();
-    let mut i = 0;
-
-    while i < chars.len() {
-        if chars[i].is_ascii_digit() {
-            let start = i;
-            let mut dots = 0;
-
-            while i < chars.len() && (chars[i].is_ascii_digit() || chars[i] == '.') {
-                if chars[i] == '.' {
-                    dots += 1;
-                }
-                i += 1;
-            }
-
-            if dots >= 2 {
-                let version: String = chars[start..i].iter().collect();
-                // Validate it looks like semver
-                let parts: Vec<&str> = version.split('.').collect();
-                if parts.len() >= 3 && parts.iter().all(|p| !p.is_empty()) {
-                    return Some(version.trim_end_matches('.').to_string());
-                }
+    // Default: find X.Y.Z semver pattern
+    let re = regex::Regex::new(r"(\d+\.\d+\.\d+)").ok()?;
+    for line in output.lines() {
+        if let Some(captures) = re.captures(line) {
+            if let Some(m) = captures.get(1) {
+                return Some(m.as_str().to_string());
             }
         }
-        i += 1;
     }
     None
 }
