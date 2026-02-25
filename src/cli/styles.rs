@@ -1,0 +1,216 @@
+use std::io::IsTerminal;
+
+// ── Color constants (crossterm) ──────────────────────────────────────
+pub const CODE_BG: crossterm::style::Color = crossterm::style::Color::Rgb {
+    r: 50,
+    g: 40,
+    b: 25,
+};
+pub const INPUT_BG: crossterm::style::Color = crossterm::style::Color::Rgb {
+    r: 60,
+    g: 60,
+    b: 60,
+};
+
+// ── TTY detection ────────────────────────────────────────────────────
+pub fn is_tty() -> bool {
+    std::io::stdout().is_terminal()
+}
+
+// ── Cell helpers (comfy-table) ───────────────────────────────────────
+pub fn header_cell(text: &str) -> comfy_table::Cell {
+    if is_tty() {
+        comfy_table::Cell::new(text)
+            .fg(comfy_table::Color::Cyan)
+            .add_attribute(comfy_table::Attribute::Bold)
+    } else {
+        comfy_table::Cell::new(text)
+    }
+}
+
+pub fn bold_cell(text: &str) -> comfy_table::Cell {
+    if is_tty() {
+        comfy_table::Cell::new(text).add_attribute(comfy_table::Attribute::Bold)
+    } else {
+        comfy_table::Cell::new(text)
+    }
+}
+
+pub fn green_cell(text: &str) -> comfy_table::Cell {
+    if is_tty() {
+        comfy_table::Cell::new(text).fg(comfy_table::Color::Green)
+    } else {
+        comfy_table::Cell::new(text)
+    }
+}
+
+pub fn yellow_cell(text: &str) -> comfy_table::Cell {
+    if is_tty() {
+        comfy_table::Cell::new(text).fg(comfy_table::Color::Yellow)
+    } else {
+        comfy_table::Cell::new(text)
+    }
+}
+
+pub fn dim_cell(text: &str) -> comfy_table::Cell {
+    if is_tty() {
+        comfy_table::Cell::new(text).fg(comfy_table::Color::DarkGrey)
+    } else {
+        comfy_table::Cell::new(text)
+    }
+}
+
+// ── Inline text helpers (crossterm) ──────────────────────────────────
+pub fn agent_name(text: &str) -> String {
+    if is_tty() {
+        use crossterm::style::Stylize;
+        text.cyan().bold().to_string()
+    } else {
+        text.to_string()
+    }
+}
+
+pub fn section_header(text: &str) -> String {
+    if is_tty() {
+        use crossterm::style::Stylize;
+        text.magenta().bold().to_string()
+    } else {
+        text.to_string()
+    }
+}
+
+pub fn code_badge(text: &str) -> String {
+    if is_tty() {
+        use crossterm::style::Stylize;
+        format!(" {} ", text)
+            .as_str()
+            .yellow()
+            .bold()
+            .on(CODE_BG)
+            .to_string()
+    } else {
+        format!("`{}`", text)
+    }
+}
+
+pub fn code_ref(text: &str) -> String {
+    if is_tty() {
+        use crossterm::style::Stylize;
+        format!(" {} ", text)
+            .as_str()
+            .yellow()
+            .on(CODE_BG)
+            .to_string()
+    } else {
+        format!("`{}`", text)
+    }
+}
+
+pub fn input_badge(text: &str) -> String {
+    if is_tty() {
+        use crossterm::style::Stylize;
+        format!(" {} ", text)
+            .as_str()
+            .yellow()
+            .on(INPUT_BG)
+            .to_string()
+    } else {
+        format!("\"{}\"", text)
+    }
+}
+
+pub fn url(text: &str) -> String {
+    if is_tty() {
+        use crossterm::style::Stylize;
+        text.cyan().underlined().to_string()
+    } else {
+        text.to_string()
+    }
+}
+
+pub fn dim(text: &str) -> String {
+    if is_tty() {
+        use crossterm::style::Stylize;
+        text.dark_grey().to_string()
+    } else {
+        text.to_string()
+    }
+}
+
+pub fn key_value(text: &str) -> String {
+    if is_tty() {
+        use crossterm::style::Stylize;
+        text.bold().to_string()
+    } else {
+        text.to_string()
+    }
+}
+
+pub fn error_prefix() -> String {
+    if is_tty() {
+        use crossterm::style::Stylize;
+        "error:".red().bold().to_string()
+    } else {
+        "error:".to_string()
+    }
+}
+
+pub fn hint_prefix() -> String {
+    if is_tty() {
+        use crossterm::style::Stylize;
+        "hint:".green().bold().to_string()
+    } else {
+        "hint:".to_string()
+    }
+}
+
+pub fn checkmark() -> String {
+    if is_tty() {
+        use crossterm::style::Stylize;
+        "\u{2713}".green().to_string()
+    } else {
+        "\u{2713}".to_string()
+    }
+}
+
+pub fn separator(width: usize) -> String {
+    let line = "\u{2500}".repeat(width);
+    if is_tty() {
+        use crossterm::style::Stylize;
+        line.as_str().dark_grey().to_string()
+    } else {
+        line
+    }
+}
+
+// ── Termimad skin ────────────────────────────────────────────────────
+pub fn changelog_skin() -> termimad::MadSkin {
+    let mut skin = termimad::MadSkin::default();
+    skin.headers[0].set_fg(termimad::crossterm::style::Color::Magenta);
+    skin.headers[1].set_fg(termimad::crossterm::style::Color::Magenta);
+    skin.headers[2].set_fg(termimad::crossterm::style::Color::Magenta);
+    skin.bullet =
+        termimad::StyledChar::from_fg_char(termimad::crossterm::style::Color::Magenta, '•');
+    skin.inline_code
+        .set_fg(termimad::crossterm::style::Color::Yellow);
+    skin.inline_code
+        .set_bg(termimad::crossterm::style::Color::Rgb {
+            r: 50,
+            g: 40,
+            b: 25,
+        });
+    skin
+}
+
+// ── Dialoguer theme ──────────────────────────────────────────────────
+pub fn picker_theme() -> dialoguer::theme::ColorfulTheme {
+    dialoguer::theme::ColorfulTheme {
+        prompt_style: console::Style::new().cyan(),
+        active_item_style: console::Style::new().yellow().bold(),
+        active_item_prefix: console::style("❯ ".to_string()).magenta().bold(),
+        inactive_item_style: console::Style::new().dim(),
+        inactive_item_prefix: console::style("  ".to_string()),
+        values_style: console::Style::new().cyan(),
+        ..dialoguer::theme::ColorfulTheme::default()
+    }
+}
