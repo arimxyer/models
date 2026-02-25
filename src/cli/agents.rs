@@ -238,7 +238,7 @@ fn run_status() -> Result<()> {
         table.add_row(vec![
             styles::bold_cell(&agent.name),
             if is_24h {
-                styles::yellow_cell("\u{2713}")
+                styles::green_cell("\u{2713}")
             } else {
                 comfy_table::Cell::new("")
             },

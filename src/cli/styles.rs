@@ -165,9 +165,12 @@ pub fn separator(width: usize) -> String {
 // ── Termimad skin ────────────────────────────────────────────────────
 pub fn changelog_skin() -> termimad::MadSkin {
     let mut skin = termimad::MadSkin::default();
-    skin.headers[0].set_fg(termimad::crossterm::style::Color::Magenta);
-    skin.headers[1].set_fg(termimad::crossterm::style::Color::Magenta);
-    skin.headers[2].set_fg(termimad::crossterm::style::Color::Magenta);
+    use termimad::crossterm::style::{Attribute, Color as TColor};
+    for h in &mut skin.headers {
+        h.set_fg(TColor::Magenta);
+        h.add_attr(Attribute::Bold);
+        h.compound_style.remove_attr(Attribute::Underlined);
+    }
     skin.bullet =
         termimad::StyledChar::from_fg_char(termimad::crossterm::style::Color::Magenta, '•');
     skin.inline_code
