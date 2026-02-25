@@ -10,41 +10,23 @@ A fast CLI and TUI for browsing AI models, benchmarks, and coding agents.
 
 - **Models Tab**: Browse 2000+ models across 85+ providers from [models.dev](https://models.dev), categorized by type (Origin, Cloud, Inference, Gateway, Dev Tool)
 - **Agents Tab**: Track AI coding assistants (Claude Code, Aider, Cursor, etc.) with version detection and GitHub integration
+- **Agents CLI**: View changelogs, check release status, and compare versions for AI coding tools — `agents status`, `agents claude`, and more
 - **Benchmarks Tab**: Compare model performance across 15+ benchmarks from [Artificial Analysis](https://artificialanalysis.ai), with creator filtering by source, region, and type
 
 <video src="https://github.com/user-attachments/assets/07c750f4-ca47-4f89-8a32-99e0be5004d8" controls width="100%"></video>
 
-## What's New (v0.8.8)
+## What's New
 
-### Improved Open Weights Matching
-- **91% match rate** — three-stage matching pipeline using Jaro-Winkler similarity (`strsim`) to determine open/closed status per model
-- **Global fallback** — when creator-scoped matching fails, searches all models.dev providers for the best slug match
-- **Known creator overrides** — hardcoded open/closed status for 12 well-known creators absent from models.dev (IBM, AI2, TII, etc.)
-- **No more "Mixed" labels** — removed CreatorOpenness fallback; unmatched models show an em dash instead of misleading labels
+### Agents CLI
+- **`agents` command** — view changelogs, check status, browse versions for AI coding tools directly from the terminal
+- **Status table** — see installed vs latest version, 24h release indicator, and release frequency at a glance
+- **Interactive picker** — fuzzy-select any version with `--pick`, view its changelog
+- **Dual entry point** — use as `models agents` or create an `agents` symlink for standalone usage
 
-### v0.8.7: Benchmark Data Freshness
-- **jsDelivr cache purging** — GitHub Action now purges CDN cache after committing new data for faster propagation
-- **No disk cache** — benchmark data fetched fresh from CDN on every launch for simplicity
-
-### v0.8.6: Cost Sorting & Open Weights
-- **Price sort columns** — sort benchmarks by input, output, or blended price per million tokens via `[s]` cycle
-- **Per-model source detection** — runtime matching of AA entries against models.dev data
-- **Source filter** — `[4]` cycles through All / Open / Closed
-- **Region and type grouping** — `[5]` and `[6]` toggle grouped layout with colored section headers
-
-### v0.8.5: Release Profile
-- **Optimized release binary** — strip, LTO, single codegen unit, panic=abort (~6MB, down from ~11MB)
-
-### v0.8.0–0.8.4: Benchmarks Tab
-- **Dedicated Benchmarks tab** — browse ~400 model entries from Artificial Analysis with quality, speed, and pricing data
-- **Creator sidebar** with 40+ creators, classified by region and type with grouping toggles
-- **Quick-sort keys** — `[1]` Intelligence, `[2]` Date, `[3]` Speed — press again to flip direction
-- **Dynamic columns, detail panel, TTFAT, AIME benchmarks** and more
-
-### Other
-- **Provider categories** — filter and group providers by type (Origin, Cloud, Inference, Gateway, Dev Tool)
-- **OpenClaw agent** added to the agents catalog
-- **Responsive layouts** — models tab detail panel scales with terminal height
+### Recent Highlights
+- **91% open weights match rate** — three-stage Jaro-Winkler pipeline for per-model open/closed detection
+- **~400 benchmark entries** from Artificial Analysis with creator filtering by region and type
+- **Optimized binary** — ~6MB release builds with strip, LTO, and panic=abort
 
 ## Features
 
@@ -235,6 +217,59 @@ See [Custom Agents](docs/custom-agents.md) for the full reference.
 |-----|--------|
 | `c` | Copy benchmark name |
 | `o` | Open Artificial Analysis page |
+
+### Agents CLI
+
+Track AI coding agent releases from the command line. Available via `models agents` or as a standalone `agents` command (symlink).
+
+#### Status table
+
+```bash
+models agents status
+```
+
+```
+┌──────────────┬─────┬───────────┬──────────┬─────────┬───────────────┐
+│ Tool         │ 24h │ Installed │ Latest   │ Updated │ Freq.         │
+├──────────────┼─────┼───────────┼──────────┼─────────┼───────────────┤
+│ Claude Code  │ ✓   │ 2.1.42    │ 2.1.42   │ 1d ago  │ ~1d           │
+│ OpenAI Codex │ ✓   │ 0.92.0    │ 0.92.0   │ 6h ago  │ ~3h           │
+│ Goose        │     │ —         │ 1.0.20   │ 3d ago  │ ~2d           │
+└──────────────┴─────┴───────────┴──────────┴─────────┴───────────────┘
+```
+
+#### View latest changelog
+
+```bash
+models agents claude       # by CLI binary name
+models agents claude-code  # by agent ID
+```
+
+#### Browse versions
+
+```bash
+models agents claude --list    # List all versions
+models agents claude --pick    # Interactive fuzzy picker
+models agents claude --version 1.0.170  # Specific version
+```
+
+#### Other commands
+
+```bash
+models agents latest           # All releases from last 24 hours
+models agents list-sources     # List all available agents
+models agents claude --web     # Open GitHub releases in browser
+```
+
+#### Standalone usage
+
+Create a symlink for shorter commands:
+
+```bash
+ln -s $(which models) ~/.local/bin/agents
+agents status
+agents claude --pick
+```
 
 ### CLI Commands
 
