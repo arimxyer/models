@@ -2,6 +2,8 @@ pub mod cache;
 pub mod data;
 pub mod detect;
 pub mod github;
+#[allow(dead_code)]
+pub mod helpers;
 pub mod loader;
 
 #[allow(unused_imports)]
