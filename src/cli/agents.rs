@@ -7,6 +7,18 @@ use tokio::sync::RwLock;
 #[command(name = "agents")]
 #[command(about = "Track AI coding agent releases and changelogs")]
 #[command(version)]
+#[command(after_help = "\
+\x1b[1;4mTool Commands:\x1b[0m
+  agents <tool>                 Show latest changelog for a tool
+  agents <tool> --list, -l      List all versions
+  agents <tool> --pick, -p      Interactive version picker
+  agents <tool> --version <v>   Show changelog for a specific version
+  agents <tool> --web, -w       Open releases page in browser
+
+\x1b[1;4mExamples:\x1b[0m
+  agents claude                 Latest Claude Code changelog
+  agents cursor --list          All Cursor versions
+  agents aider --pick           Pick an Aider release interactively")]
 pub struct AgentsCli {
     #[command(subcommand)]
     pub command: Option<AgentsCommand>,
@@ -102,7 +114,7 @@ fn dispatch(command: Option<AgentsCommand>) -> Result<()> {
             run_tool(tool_args)
         }
         None => {
-            AgentsCli::command().print_help()?;
+            AgentsCli::command().print_long_help()?;
             println!();
             Ok(())
         }
