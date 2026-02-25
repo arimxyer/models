@@ -1,4 +1,6 @@
 pub mod cache;
+#[allow(dead_code)]
+pub mod changelog_parser;
 pub mod data;
 pub mod detect;
 pub mod github;
