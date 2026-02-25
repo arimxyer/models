@@ -32,6 +32,14 @@ mise run fmt && mise run clippy && mise run test
 ### Async Pattern
 Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message` variants processed in the main loop (`src/tui/mod.rs`). The app never blocks on network calls.
 
+### Agents CLI
+- `src/cli/agents.rs` — clap subcommands, dispatch, tool resolution, all agent commands
+- `src/agents/changelog_parser.rs` — GitHub release body markdown parsing into sections
+- `src/agents/helpers.rs` — relative time formatting, release frequency, date parsing
+- Binary aliases: `models agents <cmd>` or `agents <cmd>` via argv[0] symlink detection
+- Commands: `status`, `latest`, `list-sources`, `<tool>` (with `--list`, `--pick`, `--version`, `--web`)
+- Uses termimad for styled markdown output in TTY, plain text when piped
+
 ### Key Files
 - `src/tui/mod.rs` — startup, event loop, async channel handling
 - `src/tui/app.rs` — App state, Message enum, update logic
@@ -60,7 +68,7 @@ Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message`
 - GitHub Actions `workflow_dispatch` only works when the workflow file exists on the default branch — cannot test from feature branches
 - Adding a new field to `BenchmarkEntry`: add field with `#[serde(default)]` — no cache versioning needed since data is fetched fresh every launch
 - The AA API uses `0` as a sentinel for missing performance data — jq transforms must convert `0` → `null` (e.g., `if . == 0 then null else . end`)
-- Never use `eprintln!` in TUI mode — stderr output corrupts ratatui's alternate screen buffer, causing rendering glitches. Use `Message` variants or status bar updates instead
+- Never use `eprintln!` in TUI mode — stderr output corrupts ratatui's alternate screen buffer, causing rendering glitches. Use `Message` variants or status bar updates instead. (`eprintln!` is fine in CLI-only code paths like `src/cli/agents.rs`)
 
 ## Releasing
 1. Bump version in `Cargo.toml`
