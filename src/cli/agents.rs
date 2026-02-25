@@ -358,6 +358,8 @@ fn run_list_sources() -> Result<()> {
 }
 
 fn run_tool(args: ToolArgs) -> Result<()> {
+    use super::styles;
+
     let agents_file = crate::agents::loader::load_agents()?;
     let mut disk_cache = crate::agents::cache::GitHubCache::load();
 
@@ -366,7 +368,7 @@ fn run_tool(args: ToolArgs) -> Result<()> {
     if args.web {
         let url = format!("https://github.com/{}/releases", agent.repo);
         open::that(&url)?;
-        println!("Opened {}", url);
+        println!("Opened {}", styles::url(&url));
         return Ok(());
     }
 
@@ -401,7 +403,12 @@ fn run_tool(args: ToolArgs) -> Result<()> {
         Some(r) => print_release(&agent.name, r),
         None => {
             let target = args.version.as_deref().unwrap_or("latest");
-            println!("No release found for {} ({})", agent.name, target);
+            println!(
+                "{} No release found for {} ({})",
+                styles::error_prefix(),
+                styles::agent_name(&agent.name),
+                styles::input_badge(target)
+            );
         }
     }
 
@@ -412,6 +419,7 @@ fn resolve_tool<'a>(
     tool: &str,
     agents_file: &'a crate::agents::data::AgentsFile,
 ) -> Result<(String, &'a crate::agents::data::Agent)> {
+    use super::styles;
     // Exact ID match
     if let Some(agent) = agents_file.agents.get(tool) {
         return Ok((tool.to_string(), agent));
@@ -432,18 +440,24 @@ fn resolve_tool<'a>(
     match matches.len() {
         1 => return Ok((matches[0].0.clone(), matches[0].1)),
         n if n > 1 => {
-            let names: Vec<_> = matches.iter().map(|(_, a)| a.name.as_str()).collect();
+            let names: Vec<_> = matches
+                .iter()
+                .map(|(id, _)| styles::code_ref(id))
+                .collect();
             anyhow::bail!(
-                "Ambiguous tool '{}'. Matches: {}. Run 'agents list-sources' for exact IDs.",
-                tool,
+                "{} Ambiguous tool {}. Matches: {}",
+                styles::error_prefix(),
+                styles::input_badge(tool),
                 names.join(", ")
             );
         }
         _ => {}
     }
     anyhow::bail!(
-        "Unknown agent: '{}'. Run 'agents list-sources' to see available agents.",
-        tool
+        "{} Unknown agent {}. Run {} to see available agents.",
+        styles::error_prefix(),
+        styles::input_badge(tool),
+        styles::code_badge("agents list-sources")
     )
 }
 
@@ -467,8 +481,7 @@ fn print_release(name: &str, release: &crate::agents::data::Release) {
 }
 
 fn print_changelog_body(body: &str) {
-    use std::io::IsTerminal;
-    if std::io::stdout().is_terminal() {
+    if super::styles::is_tty() {
         super::styles::changelog_skin().print_text(body);
     } else {
         // Plain text when piped
