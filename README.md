@@ -47,7 +47,7 @@ A fast CLI and TUI for browsing AI models, benchmarks, and coding agents.
 
 ### Benchmarks Tab
 - **~400 benchmark entries** from Artificial Analysis with quality, speed, and pricing scores
-- **Auto-updating** — data fetched fresh from CDN on every launch; GitHub Action refreshes source data every 6 hours
+- **Auto-updating** — data fetched fresh from CDN on every launch; GitHub Action refreshes source data every 30 minutes
 - **Creator sidebar** with 40+ creators — group by region or type with colored section headers
 - **Per-model open weights detection** — runtime matching against models.dev, with source filter toggle
 - **Quick-sort keys** — instantly sort by Intelligence, Date, or Speed

@@ -52,7 +52,7 @@ Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message`
 ### GitHub Actions
 - `ci.yml` — runs on PR/push: fmt check, clippy, test
 - `release.yml` — triggered by `v*` tags: builds 5 targets, publishes to crates.io, updates Homebrew/Scoop
-- `update-benchmarks.yml` — runs every 6h: fetches AA API, commits if data changed
+- `update-benchmarks.yml` — runs every 30 minutes: fetches AA API, commits if data changed
 
 ## Conventions
 - Use `mise run <task>` for all CLI operations — never run bare commands
