@@ -1,5 +1,7 @@
 use anyhow::Result;
 use clap::{CommandFactory, Parser};
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 #[derive(Parser, Debug)]
 #[command(name = "agents")]
@@ -103,10 +105,62 @@ fn dispatch(command: Option<AgentsCommand>) -> Result<()> {
     }
 }
 
+/// Fetch GitHub data for an agent, using disk cache with live fallback.
+/// If cached data exists, returns it immediately. Otherwise fetches live
+/// from the GitHub API and updates the disk cache.
+fn get_github_data(
+    agent_id: &str,
+    agent_name: &str,
+    repo: &str,
+    disk_cache: &mut crate::agents::cache::GitHubCache,
+) -> Option<crate::agents::data::GitHubData> {
+    // Try cache first
+    if let Some(cached) = disk_cache.get(agent_id) {
+        return Some(cached.data.to_github_data());
+    }
+
+    // Live fetch fallback
+    eprint!("Fetching data for {}...", agent_name);
+    let runtime = tokio::runtime::Runtime::new().ok()?;
+    let cache_arc = Arc::new(RwLock::new(disk_cache.clone()));
+    let client = crate::agents::github::AsyncGitHubClient::with_disk_cache(None, cache_arc.clone());
+
+    let result = runtime.block_on(client.fetch_conditional(repo));
+
+    match result {
+        crate::agents::github::ConditionalFetchResult::Fresh(data, etag) => {
+            eprintln!(" done.");
+            let serializable = crate::agents::cache::SerializableGitHubData::from(&data);
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs() as i64)
+                .unwrap_or(0);
+            disk_cache.insert(
+                agent_id.to_string(),
+                crate::agents::cache::CachedGitHubData {
+                    data: serializable,
+                    etag,
+                    fetched_at: now,
+                },
+            );
+            Some(data)
+        }
+        crate::agents::github::ConditionalFetchResult::NotModified => {
+            eprintln!(" done.");
+            // Shouldn't happen if cache was empty, but handle gracefully
+            disk_cache.get(agent_id).map(|c| c.data.to_github_data())
+        }
+        crate::agents::github::ConditionalFetchResult::Error(_) => {
+            eprintln!(" failed.");
+            None
+        }
+    }
+}
+
 fn run_status() -> Result<()> {
     let agents_file = crate::agents::loader::load_agents()?;
     let config = crate::config::Config::load()?;
-    let disk_cache = crate::agents::cache::GitHubCache::load();
+    let mut disk_cache = crate::agents::cache::GitHubCache::load();
 
     let mut table = comfy_table::Table::new();
     table.load_preset(comfy_table::presets::UTF8_FULL);
@@ -128,7 +182,7 @@ fn run_status() -> Result<()> {
 
     for (id, agent) in &entries {
         let installed = crate::agents::detect::detect_installed(agent);
-        let github = disk_cache.get(id).map(|c| c.data.to_github_data());
+        let github = get_github_data(id, &agent.name, &agent.repo, &mut disk_cache);
 
         let latest_version = github
             .as_ref()
@@ -178,6 +232,7 @@ fn run_status() -> Result<()> {
         ]);
     }
 
+    disk_cache.save().ok();
     println!("{table}");
     Ok(())
 }
@@ -185,7 +240,7 @@ fn run_status() -> Result<()> {
 fn run_latest() -> Result<()> {
     let agents_file = crate::agents::loader::load_agents()?;
     let config = crate::config::Config::load()?;
-    let disk_cache = crate::agents::cache::GitHubCache::load();
+    let mut disk_cache = crate::agents::cache::GitHubCache::load();
 
     let mut recent: Vec<(String, String, String, chrono::DateTime<chrono::Utc>)> = Vec::new();
 
@@ -193,8 +248,8 @@ fn run_latest() -> Result<()> {
         if !config.is_tracked(id) {
             continue;
         }
-        if let Some(cached) = disk_cache.get(id) {
-            for release in &cached.data.releases {
+        if let Some(github) = get_github_data(id, &agent.name, &agent.repo, &mut disk_cache) {
+            for release in &github.releases {
                 if let Some(date) = release
                     .date
                     .as_deref()
@@ -212,6 +267,8 @@ fn run_latest() -> Result<()> {
             }
         }
     }
+
+    disk_cache.save().ok();
 
     if recent.is_empty() {
         println!("No releases in the last 24 hours.");
@@ -261,7 +318,7 @@ fn run_list_sources() -> Result<()> {
 
 fn run_tool(args: ToolArgs) -> Result<()> {
     let agents_file = crate::agents::loader::load_agents()?;
-    let disk_cache = crate::agents::cache::GitHubCache::load();
+    let mut disk_cache = crate::agents::cache::GitHubCache::load();
 
     let (agent_id, agent) = resolve_tool(&args.tool, &agents_file)?;
 
@@ -272,10 +329,10 @@ fn run_tool(args: ToolArgs) -> Result<()> {
         return Ok(());
     }
 
-    let github = disk_cache
-        .get(&agent_id)
-        .map(|c| c.data.to_github_data())
-        .unwrap_or_default();
+    let github =
+        get_github_data(&agent_id, &agent.name, &agent.repo, &mut disk_cache).unwrap_or_default();
+
+    disk_cache.save().ok();
 
     if args.list {
         return run_version_list(agent, &github);
