@@ -58,6 +58,12 @@ dirs = "6"
 # Config file parsing
 toml = "0.8"
 
+# Markdown rendering (CLI mode)
+termimad = "0.30"
+
+# Interactive prompts (fuzzy version picker)
+dialoguer = { version = "0.11", features = ["fuzzy-select"] }
+
 [profile.release]
 strip = true
 lto = true
