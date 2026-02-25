@@ -1,7 +1,9 @@
 pub mod cache;
+pub mod changelog_parser;
 pub mod data;
 pub mod detect;
 pub mod github;
+pub mod helpers;
 pub mod loader;
 
 #[allow(unused_imports)]

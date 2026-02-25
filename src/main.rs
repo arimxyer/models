@@ -44,6 +44,11 @@ enum Commands {
         #[arg(long)]
         json: bool,
     },
+    /// Track AI coding agent releases and changelogs
+    Agents {
+        #[command(subcommand)]
+        command: Option<cli::agents::AgentsCommand>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -65,6 +70,20 @@ enum ListCommands {
 }
 
 fn main() -> Result<()> {
+    // Check if invoked as "agents" (symlink entry point)
+    let binary_name = std::env::args()
+        .next()
+        .and_then(|s| {
+            std::path::Path::new(&s)
+                .file_name()
+                .map(|f| f.to_string_lossy().to_string())
+        })
+        .unwrap_or_default();
+
+    if binary_name == "agents" {
+        return cli::agents::run();
+    }
+
     let cli = Cli::parse();
 
     match cli.command {
@@ -74,6 +93,7 @@ fn main() -> Result<()> {
         },
         Some(Commands::Show { model_id, json }) => cli::show::model(&model_id, json)?,
         Some(Commands::Search { query, json }) => cli::search::search(&query, json)?,
+        Some(Commands::Agents { command }) => cli::agents::run_with_command(command)?,
         None => {
             // Fetch providers before entering async runtime to avoid blocking in async context
             let providers = api::fetch_providers()?;
