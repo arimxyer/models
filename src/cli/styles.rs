@@ -14,7 +14,8 @@ pub const INPUT_BG: crossterm::style::Color = crossterm::style::Color::Rgb {
 
 // ── TTY detection ────────────────────────────────────────────────────
 pub fn is_tty() -> bool {
-    std::io::stdout().is_terminal()
+    static IS_TTY: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *IS_TTY.get_or_init(|| std::io::stdout().is_terminal())
 }
 
 // ── Cell helpers (comfy-table) ───────────────────────────────────────
@@ -65,15 +66,6 @@ pub fn agent_name(text: &str) -> String {
     if is_tty() {
         use crossterm::style::Stylize;
         text.cyan().bold().to_string()
-    } else {
-        text.to_string()
-    }
-}
-
-pub fn section_header(text: &str) -> String {
-    if is_tty() {
-        use crossterm::style::Stylize;
-        text.magenta().bold().to_string()
     } else {
         text.to_string()
     }
@@ -155,24 +147,6 @@ pub fn error_prefix() -> String {
     }
 }
 
-pub fn hint_prefix() -> String {
-    if is_tty() {
-        use crossterm::style::Stylize;
-        "hint:".green().bold().to_string()
-    } else {
-        "hint:".to_string()
-    }
-}
-
-pub fn checkmark() -> String {
-    if is_tty() {
-        use crossterm::style::Stylize;
-        "\u{2713}".green().to_string()
-    } else {
-        "\u{2713}".to_string()
-    }
-}
-
 pub fn separator(width: usize) -> String {
     let line = "\u{2500}".repeat(width);
     if is_tty() {
@@ -193,6 +167,8 @@ pub fn changelog_skin() -> termimad::MadSkin {
         termimad::StyledChar::from_fg_char(termimad::crossterm::style::Color::Magenta, '•');
     skin.inline_code
         .set_fg(termimad::crossterm::style::Color::Yellow);
+    // Cannot use CODE_BG here: the project depends on crossterm 0.28 while
+    // termimad 0.30 re-exports crossterm 0.29, so the Color types are distinct.
     skin.inline_code
         .set_bg(termimad::crossterm::style::Color::Rgb {
             r: 50,
