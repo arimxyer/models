@@ -88,134 +88,6 @@ cargo build --release
 ./target/release/models
 ```
 
-## CLI Usage
-
-### Agents CLI
-
-Track AI coding agent releases from the command line. Install the `agents` alias during setup, or use `models agents` as a fallback.
-
-```bash
-# Create the agents alias (one-time setup)
-ln -s $(which models) ~/.local/bin/agents
-```
-
-#### Status table
-
-```bash
-agents status
-```
-
-```
-┌──────────────┬─────┬───────────┬──────────┬─────────┬───────────────┐
-│ Tool         │ 24h │ Installed │ Latest   │ Updated │ Freq.         │
-├──────────────┼─────┼───────────┼──────────┼─────────┼───────────────┤
-│ Claude Code  │ ✓   │ 2.1.42    │ 2.1.42   │ 1d ago  │ ~1d           │
-│ OpenAI Codex │ ✓   │ 0.92.0    │ 0.92.0   │ 6h ago  │ ~3h           │
-│ Goose        │     │ —         │ 1.0.20   │ 3d ago  │ ~2d           │
-└──────────────┴─────┴───────────┴──────────┴─────────┴───────────────┘
-```
-
-#### View changelogs
-
-```bash
-agents claude              # Latest changelog (by CLI binary name)
-agents claude-code         # By agent ID
-agents claude --version 1.0.170  # Specific version
-```
-
-#### Browse versions
-
-```bash
-agents claude --list       # List all versions
-agents claude --pick       # Interactive fuzzy picker
-```
-
-#### Other commands
-
-```bash
-agents latest              # All releases from last 24 hours
-agents list-sources        # List all available agents
-agents claude --web        # Open GitHub releases in browser
-```
-
-### Models CLI
-
-#### List providers
-
-```bash
-models list providers
-```
-
-#### List models
-
-```bash
-# All models
-models list models
-
-# Models from a specific provider
-models list models anthropic
-```
-
-#### Show model details
-
-```bash
-models show claude-opus-4-5-20251101
-```
-
-```
-Claude Opus 4.5
-===============
-
-ID:          claude-opus-4-5-20251101
-Provider:    Anthropic (anthropic)
-Family:      claude-opus
-
-Limits
-------
-Context:     200k tokens
-Max Output:  64k tokens
-
-Pricing (per million tokens)
-----------------------------
-Input:       $5.00
-Output:      $25.00
-Cache Read:  $0.50
-Cache Write: $6.25
-
-Capabilities
-------------
-Reasoning:   Yes
-Tool Use:    Yes
-Attachments: Yes
-Modalities:  text, image, pdf -> text
-
-Metadata
---------
-Released:    2025-11-01
-Updated:     2025-11-01
-Knowledge:   2025-03-31
-Open Weights: No
-```
-
-#### Search models
-
-```bash
-models search "gpt-4"
-models search "claude opus"
-```
-
-#### JSON output
-
-All model commands support `--json` for scripting:
-
-```bash
-models list providers --json
-models show claude-opus-4-5 --json
-models search "llama" --json
-```
-
----
-
 ## TUI Usage
 
 ### Interactive Browser
@@ -345,6 +217,134 @@ See [Custom Agents](docs/custom-agents.md) for the full reference.
 |-----|--------|
 | `c` | Copy benchmark name |
 | `o` | Open Artificial Analysis page |
+
+---
+
+## CLI Usage
+
+### Agents CLI
+
+Track AI coding agent releases from the command line. Install the `agents` alias during setup, or use `models agents` as a fallback.
+
+```bash
+# Create the agents alias (one-time setup)
+ln -s $(which models) ~/.local/bin/agents
+```
+
+#### Status table
+
+```bash
+agents status
+```
+
+```
+┌──────────────┬─────┬───────────┬──────────┬─────────┬───────────────┐
+│ Tool         │ 24h │ Installed │ Latest   │ Updated │ Freq.         │
+├──────────────┼─────┼───────────┼──────────┼─────────┼───────────────┤
+│ Claude Code  │ ✓   │ 2.1.42    │ 2.1.42   │ 1d ago  │ ~1d           │
+│ OpenAI Codex │ ✓   │ 0.92.0    │ 0.92.0   │ 6h ago  │ ~3h           │
+│ Goose        │     │ —         │ 1.0.20   │ 3d ago  │ ~2d           │
+└──────────────┴─────┴───────────┴──────────┴─────────┴───────────────┘
+```
+
+#### View changelogs
+
+```bash
+agents claude              # Latest changelog (by CLI binary name)
+agents claude-code         # By agent ID
+agents claude --version 1.0.170  # Specific version
+```
+
+#### Browse versions
+
+```bash
+agents claude --list       # List all versions
+agents claude --pick       # Interactive fuzzy picker
+```
+
+#### Other commands
+
+```bash
+agents latest              # All releases from last 24 hours
+agents list-sources        # List all available agents
+agents claude --web        # Open GitHub releases in browser
+```
+
+### Models CLI
+
+#### List providers
+
+```bash
+models list providers
+```
+
+#### List models
+
+```bash
+# All models
+models list models
+
+# Models from a specific provider
+models list models anthropic
+```
+
+#### Show model details
+
+```bash
+models show claude-opus-4-5-20251101
+```
+
+```
+Claude Opus 4.5
+===============
+
+ID:          claude-opus-4-5-20251101
+Provider:    Anthropic (anthropic)
+Family:      claude-opus
+
+Limits
+------
+Context:     200k tokens
+Max Output:  64k tokens
+
+Pricing (per million tokens)
+----------------------------
+Input:       $5.00
+Output:      $25.00
+Cache Read:  $0.50
+Cache Write: $6.25
+
+Capabilities
+------------
+Reasoning:   Yes
+Tool Use:    Yes
+Attachments: Yes
+Modalities:  text, image, pdf -> text
+
+Metadata
+--------
+Released:    2025-11-01
+Updated:     2025-11-01
+Knowledge:   2025-03-31
+Open Weights: No
+```
+
+#### Search models
+
+```bash
+models search "gpt-4"
+models search "claude opus"
+```
+
+#### JSON output
+
+All model commands support `--json` for scripting:
+
+```bash
+models list providers --json
+models show claude-opus-4-5 --json
+models search "llama" --json
+```
 
 ## Data Sources
 
