@@ -109,22 +109,17 @@ fn dispatch(command: Option<AgentsCommand>) -> Result<()> {
     }
 }
 
-/// Fetch GitHub data for an agent, using disk cache with live fallback.
-/// If cached data exists, returns it immediately. Otherwise fetches live
-/// from the GitHub API and updates the disk cache.
+/// Fetch GitHub data for an agent using ETag-based conditional fetching.
+/// Always checks GitHub for updates (like the TUI does), using the cached
+/// ETag to avoid re-downloading unchanged data. Falls back to cached data
+/// on network errors.
 fn get_github_data(
-    agent_id: &str,
+    _agent_id: &str,
     agent_name: &str,
     repo: &str,
     disk_cache: &mut crate::agents::cache::GitHubCache,
     runtime: &tokio::runtime::Runtime,
 ) -> Option<crate::agents::data::GitHubData> {
-    // Try cache first
-    if let Some(cached) = disk_cache.get(agent_id) {
-        return Some(cached.data.to_github_data());
-    }
-
-    // Live fetch fallback
     eprint!("Fetching data for {}...", agent_name);
     let cache_arc = Arc::new(RwLock::new(disk_cache.clone()));
     let client = crate::agents::github::AsyncGitHubClient::with_disk_cache(None, cache_arc.clone());
@@ -132,31 +127,23 @@ fn get_github_data(
     let result = runtime.block_on(client.fetch_conditional(repo));
 
     match result {
-        crate::agents::github::ConditionalFetchResult::Fresh(data, etag) => {
+        crate::agents::github::ConditionalFetchResult::Fresh(data, _etag) => {
             eprintln!(" done.");
-            let serializable = crate::agents::cache::SerializableGitHubData::from(&data);
-            let now = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_secs() as i64)
-                .unwrap_or(0);
-            disk_cache.insert(
-                agent_id.to_string(),
-                crate::agents::cache::CachedGitHubData {
-                    data: serializable,
-                    etag,
-                    fetched_at: now,
-                },
-            );
+            // fetch_conditional already updates the disk cache internally,
+            // so sync back from the Arc to our local copy
+            let guard = runtime.block_on(cache_arc.read());
+            *disk_cache = guard.clone();
             Some(data)
         }
         crate::agents::github::ConditionalFetchResult::NotModified => {
-            eprintln!(" done.");
-            // Shouldn't happen if cache was empty, but handle gracefully
-            disk_cache.get(agent_id).map(|c| c.data.to_github_data())
+            eprintln!(" up to date.");
+            // Cache key is repo (consistent with TUI and github.rs)
+            disk_cache.get(repo).map(|c| c.data.to_github_data())
         }
         crate::agents::github::ConditionalFetchResult::Error(_) => {
             eprintln!(" failed.");
-            None
+            // Fall back to cached data on network errors
+            disk_cache.get(repo).map(|c| c.data.to_github_data())
         }
     }
 }
