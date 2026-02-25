@@ -98,6 +98,7 @@ jobs:
   publish-crate:
     name: Publish to crates.io
     needs: build
+    if: "!contains(github.ref_name, '-')"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -111,6 +112,7 @@ jobs:
   update-homebrew:
     name: Update Homebrew Tap
     needs: release
+    if: "!contains(github.ref_name, '-')"
     runs-on: ubuntu-latest
     steps:
       - name: Download artifacts
@@ -198,6 +200,7 @@ jobs:
   update-scoop:
     name: Update Scoop Bucket
     needs: release
+    if: "!contains(github.ref_name, '-')"
     runs-on: ubuntu-latest
     steps:
       - name: Download artifacts
