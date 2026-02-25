@@ -1,10 +1,8 @@
 pub mod cache;
-#[allow(dead_code)]
 pub mod changelog_parser;
 pub mod data;
 pub mod detect;
 pub mod github;
-#[allow(dead_code)]
 pub mod helpers;
 pub mod loader;
 

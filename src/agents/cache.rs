@@ -73,6 +73,26 @@ impl From<&GitHubData> for SerializableGitHubData {
     }
 }
 
+impl SerializableGitHubData {
+    pub fn to_github_data(&self) -> GitHubData {
+        GitHubData {
+            releases: self
+                .releases
+                .iter()
+                .map(|r| Release {
+                    version: r.version.clone(),
+                    date: r.date.clone(),
+                    changelog: r.changelog.clone(),
+                })
+                .collect(),
+            stars: self.stars,
+            open_issues: self.open_issues,
+            license: self.license.clone(),
+            last_commit: self.last_commit.clone(),
+        }
+    }
+}
+
 impl From<SerializableGitHubData> for GitHubData {
     fn from(data: SerializableGitHubData) -> Self {
         Self {
