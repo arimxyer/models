@@ -53,7 +53,11 @@ impl ToolArgs {
                 "--web" | "-w" => web = true,
                 "--version" => {
                     i += 1;
-                    version = args.get(i).cloned();
+                    version = Some(
+                        args.get(i)
+                            .cloned()
+                            .ok_or_else(|| anyhow::anyhow!("--version requires a value"))?,
+                    );
                 }
                 other => anyhow::bail!("Unknown flag: {}", other),
             }
@@ -113,6 +117,7 @@ fn get_github_data(
     agent_name: &str,
     repo: &str,
     disk_cache: &mut crate::agents::cache::GitHubCache,
+    runtime: &tokio::runtime::Runtime,
 ) -> Option<crate::agents::data::GitHubData> {
     // Try cache first
     if let Some(cached) = disk_cache.get(agent_id) {
@@ -121,7 +126,6 @@ fn get_github_data(
 
     // Live fetch fallback
     eprint!("Fetching data for {}...", agent_name);
-    let runtime = tokio::runtime::Runtime::new().ok()?;
     let cache_arc = Arc::new(RwLock::new(disk_cache.clone()));
     let client = crate::agents::github::AsyncGitHubClient::with_disk_cache(None, cache_arc.clone());
 
@@ -178,11 +182,12 @@ fn run_status() -> Result<()> {
         .iter()
         .filter(|(id, _)| config.is_tracked(id))
         .collect();
-    entries.sort_by_key(|(_, agent)| agent.name.clone());
+    entries.sort_by(|(_, a), (_, b)| a.name.cmp(&b.name));
 
+    let runtime = tokio::runtime::Runtime::new()?;
     for (id, agent) in &entries {
         let installed = crate::agents::detect::detect_installed(agent);
-        let github = get_github_data(id, &agent.name, &agent.repo, &mut disk_cache);
+        let github = get_github_data(id, &agent.name, &agent.repo, &mut disk_cache, &runtime);
 
         let latest_version = github
             .as_ref()
@@ -244,11 +249,14 @@ fn run_latest() -> Result<()> {
 
     let mut recent: Vec<(String, String, String, chrono::DateTime<chrono::Utc>)> = Vec::new();
 
+    let runtime = tokio::runtime::Runtime::new()?;
     for (id, agent) in &agents_file.agents {
         if !config.is_tracked(id) {
             continue;
         }
-        if let Some(github) = get_github_data(id, &agent.name, &agent.repo, &mut disk_cache) {
+        if let Some(github) =
+            get_github_data(id, &agent.name, &agent.repo, &mut disk_cache, &runtime)
+        {
             for release in &github.releases {
                 if let Some(date) = release
                     .date
@@ -300,7 +308,7 @@ fn run_list_sources() -> Result<()> {
     table.set_header(vec!["ID", "Name", "Repo", "CLI Binary", "Tracked"]);
 
     let mut entries: Vec<_> = agents_file.agents.iter().collect();
-    entries.sort_by_key(|(id, _)| (*id).clone());
+    entries.sort_by(|(a, _), (b, _)| a.cmp(b));
 
     for (id, agent) in entries {
         let tracked = if config.is_tracked(id) {
@@ -329,8 +337,15 @@ fn run_tool(args: ToolArgs) -> Result<()> {
         return Ok(());
     }
 
-    let github =
-        get_github_data(&agent_id, &agent.name, &agent.repo, &mut disk_cache).unwrap_or_default();
+    let runtime = tokio::runtime::Runtime::new()?;
+    let github = get_github_data(
+        &agent_id,
+        &agent.name,
+        &agent.repo,
+        &mut disk_cache,
+        &runtime,
+    )
+    .unwrap_or_default();
 
     disk_cache.save().ok();
 
@@ -376,10 +391,22 @@ fn resolve_tool<'a>(
     }
     // Fuzzy match on name
     let lower = tool.to_lowercase();
-    for (id, agent) in &agents_file.agents {
-        if agent.name.to_lowercase().contains(&lower) {
-            return Ok((id.clone(), agent));
+    let matches: Vec<_> = agents_file
+        .agents
+        .iter()
+        .filter(|(_, a)| a.name.to_lowercase().contains(&lower))
+        .collect();
+    match matches.len() {
+        1 => return Ok((matches[0].0.clone(), matches[0].1)),
+        n if n > 1 => {
+            let names: Vec<_> = matches.iter().map(|(_, a)| a.name.as_str()).collect();
+            anyhow::bail!(
+                "Ambiguous tool '{}'. Matches: {}. Run 'agents list-sources' for exact IDs.",
+                tool,
+                names.join(", ")
+            );
         }
+        _ => {}
     }
     anyhow::bail!(
         "Unknown agent: '{}'. Run 'agents list-sources' to see available agents.",
