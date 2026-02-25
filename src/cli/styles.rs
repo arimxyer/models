@@ -113,8 +113,13 @@ pub fn input_badge(text: &str) -> String {
 
 pub fn url(text: &str) -> String {
     if is_tty() {
-        use crossterm::style::Stylize;
-        text.cyan().underlined().to_string()
+        use crossterm::style::{Attribute, Color, ContentStyle, StyledContent};
+        let style = ContentStyle {
+            foreground_color: Some(Color::Cyan),
+            attributes: Attribute::Underlined.into(),
+            ..Default::default()
+        };
+        StyledContent::new(style, text).to_string()
     } else {
         text.to_string()
     }
@@ -176,6 +181,24 @@ pub fn changelog_skin() -> termimad::MadSkin {
             b: 25,
         });
     skin
+}
+
+/// Post-process rendered text to apply cyan+underline to bare URLs.
+/// Termimad has no link style field, so we regex-replace after rendering.
+pub fn style_urls(text: &str) -> String {
+    use crossterm::style::{Attribute, Color, ContentStyle, StyledContent};
+    let url_re = regex::Regex::new(r"https?://[^\s)\]>]+").unwrap();
+    url_re
+        .replace_all(text, |caps: &regex::Captures| {
+            let url_text = &caps[0];
+            let style = ContentStyle {
+                foreground_color: Some(Color::Cyan),
+                attributes: Attribute::Underlined.into(),
+                ..Default::default()
+            };
+            StyledContent::new(style, url_text).to_string()
+        })
+        .into_owned()
 }
 
 // ── Dialoguer theme ──────────────────────────────────────────────────

@@ -440,10 +440,7 @@ fn resolve_tool<'a>(
     match matches.len() {
         1 => return Ok((matches[0].0.clone(), matches[0].1)),
         n if n > 1 => {
-            let names: Vec<_> = matches
-                .iter()
-                .map(|(id, _)| styles::code_ref(id))
-                .collect();
+            let names: Vec<_> = matches.iter().map(|(id, _)| styles::code_ref(id)).collect();
             anyhow::bail!(
                 "{} Ambiguous tool {}. Matches: {}",
                 styles::error_prefix(),
@@ -482,7 +479,10 @@ fn print_release(name: &str, release: &crate::agents::data::Release) {
 
 fn print_changelog_body(body: &str) {
     if super::styles::is_tty() {
-        super::styles::changelog_skin().print_text(body);
+        let skin = super::styles::changelog_skin();
+        let rendered = skin.term_text(body).to_string();
+        let styled = super::styles::style_urls(&rendered);
+        print!("{}", styled);
     } else {
         // Plain text when piped
         let (sections, ungrouped) = crate::agents::changelog_parser::parse_release_body(body);
