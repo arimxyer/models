@@ -162,6 +162,8 @@ fn get_github_data(
 }
 
 fn run_status() -> Result<()> {
+    use super::styles;
+
     let agents_file = crate::agents::loader::load_agents()?;
     let config = crate::config::Config::load()?;
     let mut disk_cache = crate::agents::cache::GitHubCache::load();
@@ -169,12 +171,12 @@ fn run_status() -> Result<()> {
     let mut table = comfy_table::Table::new();
     table.load_preset(comfy_table::presets::UTF8_FULL);
     table.set_header(vec![
-        "Tool",
-        "24h",
-        "Installed",
-        "Latest",
-        "Updated",
-        "Freq.",
+        styles::header_cell("Tool"),
+        styles::header_cell("24h"),
+        styles::header_cell("Installed"),
+        styles::header_cell("Latest"),
+        styles::header_cell("Updated"),
+        styles::header_cell("Freq."),
     ]);
 
     let mut entries: Vec<_> = agents_file
@@ -220,20 +222,30 @@ fn run_status() -> Result<()> {
 
         let freq = crate::agents::helpers::calculate_release_frequency(&release_dates);
 
+        let installed_str = installed
+            .version
+            .clone()
+            .unwrap_or_else(|| "\u{2014}".to_string());
+
+        let installed_cell = if installed_str == "\u{2014}" {
+            styles::dim_cell(&installed_str)
+        } else if installed_str == latest_version {
+            styles::green_cell(&installed_str)
+        } else {
+            styles::yellow_cell(&installed_str)
+        };
+
         table.add_row(vec![
-            agent.name.clone(),
+            styles::bold_cell(&agent.name),
             if is_24h {
-                "\u{2713}".to_string()
+                styles::green_cell("\u{2713}")
             } else {
-                String::new()
+                comfy_table::Cell::new("")
             },
-            installed
-                .version
-                .clone()
-                .unwrap_or_else(|| "\u{2014}".to_string()),
-            latest_version.to_string(),
-            updated,
-            freq,
+            installed_cell,
+            styles::bold_cell(latest_version),
+            styles::dim_cell(&updated),
+            styles::dim_cell(&freq),
         ]);
     }
 
@@ -243,6 +255,8 @@ fn run_status() -> Result<()> {
 }
 
 fn run_latest() -> Result<()> {
+    use super::styles;
+
     let agents_file = crate::agents::loader::load_agents()?;
     let config = crate::config::Config::load()?;
     let mut disk_cache = crate::agents::cache::GitHubCache::load();
@@ -287,8 +301,13 @@ fn run_latest() -> Result<()> {
 
     for (name, version, body, date) in &recent {
         let ago = crate::agents::helpers::format_relative_time(date);
-        println!("\n{} {} ({})", name, version, ago);
-        println!("{}", "\u{2500}".repeat(40));
+        println!(
+            "\n{} {} ({})",
+            styles::agent_name(name),
+            styles::key_value(version),
+            styles::dim(&ago)
+        );
+        println!("{}", styles::separator(40));
         if body.is_empty() {
             println!("(no changelog)");
         } else {
@@ -300,24 +319,38 @@ fn run_latest() -> Result<()> {
 }
 
 fn run_list_sources() -> Result<()> {
+    use super::styles;
+
     let agents_file = crate::agents::loader::load_agents()?;
     let config = crate::config::Config::load()?;
 
     let mut table = comfy_table::Table::new();
     table.load_preset(comfy_table::presets::UTF8_FULL);
-    table.set_header(vec!["ID", "Name", "Repo", "CLI Binary", "Tracked"]);
+    table.set_header(vec![
+        styles::header_cell("ID"),
+        styles::header_cell("Name"),
+        styles::header_cell("Repo"),
+        styles::header_cell("CLI Binary"),
+        styles::header_cell("Tracked"),
+    ]);
 
     let mut entries: Vec<_> = agents_file.agents.iter().collect();
     entries.sort_by(|(a, _), (b, _)| a.cmp(b));
 
     for (id, agent) in entries {
         let tracked = if config.is_tracked(id) {
-            "\u{2713}"
+            styles::green_cell("\u{2713}")
         } else {
-            ""
+            comfy_table::Cell::new("")
         };
         let cli = agent.cli_binary.as_deref().unwrap_or("\u{2014}");
-        table.add_row(vec![id.as_str(), &agent.name, &agent.repo, cli, tracked]);
+        table.add_row(vec![
+            comfy_table::Cell::new(id.as_str()),
+            styles::bold_cell(&agent.name),
+            styles::dim_cell(&agent.repo),
+            comfy_table::Cell::new(cli),
+            tracked,
+        ]);
     }
 
     println!("{table}");
@@ -325,6 +358,8 @@ fn run_list_sources() -> Result<()> {
 }
 
 fn run_tool(args: ToolArgs) -> Result<()> {
+    use super::styles;
+
     let agents_file = crate::agents::loader::load_agents()?;
     let mut disk_cache = crate::agents::cache::GitHubCache::load();
 
@@ -333,7 +368,7 @@ fn run_tool(args: ToolArgs) -> Result<()> {
     if args.web {
         let url = format!("https://github.com/{}/releases", agent.repo);
         open::that(&url)?;
-        println!("Opened {}", url);
+        println!("Opened {}", styles::url(&url));
         return Ok(());
     }
 
@@ -368,7 +403,12 @@ fn run_tool(args: ToolArgs) -> Result<()> {
         Some(r) => print_release(&agent.name, r),
         None => {
             let target = args.version.as_deref().unwrap_or("latest");
-            println!("No release found for {} ({})", agent.name, target);
+            println!(
+                "{} No release found for {} ({})",
+                styles::error_prefix(),
+                styles::agent_name(&agent.name),
+                styles::input_badge(target)
+            );
         }
     }
 
@@ -379,6 +419,7 @@ fn resolve_tool<'a>(
     tool: &str,
     agents_file: &'a crate::agents::data::AgentsFile,
 ) -> Result<(String, &'a crate::agents::data::Agent)> {
+    use super::styles;
     // Exact ID match
     if let Some(agent) = agents_file.agents.get(tool) {
         return Ok((tool.to_string(), agent));
@@ -399,26 +440,36 @@ fn resolve_tool<'a>(
     match matches.len() {
         1 => return Ok((matches[0].0.clone(), matches[0].1)),
         n if n > 1 => {
-            let names: Vec<_> = matches.iter().map(|(_, a)| a.name.as_str()).collect();
+            let names: Vec<_> = matches.iter().map(|(id, _)| styles::code_ref(id)).collect();
             anyhow::bail!(
-                "Ambiguous tool '{}'. Matches: {}. Run 'agents list-sources' for exact IDs.",
-                tool,
+                "{} Ambiguous tool {}. Matches: {}",
+                styles::error_prefix(),
+                styles::input_badge(tool),
                 names.join(", ")
             );
         }
         _ => {}
     }
     anyhow::bail!(
-        "Unknown agent: '{}'. Run 'agents list-sources' to see available agents.",
-        tool
+        "{} Unknown agent {}. Run {} to see available agents.",
+        styles::error_prefix(),
+        styles::input_badge(tool),
+        styles::code_badge("agents list-sources")
     )
 }
 
 fn print_release(name: &str, release: &crate::agents::data::Release) {
+    use super::styles;
+
     let version = &release.version;
     let date = release.date.as_deref().unwrap_or("unknown date");
-    println!("{} {} ({})", name, version, date);
-    println!("{}", "\u{2500}".repeat(40));
+    println!(
+        "{} {} ({})",
+        styles::agent_name(name),
+        styles::key_value(version),
+        styles::dim(date)
+    );
+    println!("{}", styles::separator(40));
     if let Some(body) = &release.changelog {
         print_changelog_body(body);
     } else {
@@ -427,9 +478,11 @@ fn print_release(name: &str, release: &crate::agents::data::Release) {
 }
 
 fn print_changelog_body(body: &str) {
-    use std::io::IsTerminal;
-    if std::io::stdout().is_terminal() {
-        termimad::print_text(body);
+    if super::styles::is_tty() {
+        let skin = super::styles::changelog_skin();
+        let rendered = skin.term_text(body).to_string();
+        let styled = super::styles::style_urls(&rendered);
+        print!("{}", styled);
     } else {
         // Plain text when piped
         let (sections, ungrouped) = crate::agents::changelog_parser::parse_release_body(body);
@@ -449,15 +502,22 @@ fn run_version_list(
     agent: &crate::agents::data::Agent,
     github: &crate::agents::data::GitHubData,
 ) -> Result<()> {
+    use super::styles;
+
+    let count = github.releases.len().to_string();
     println!(
         "{} \u{2014} {} releases\n",
-        agent.name,
-        github.releases.len()
+        styles::agent_name(&agent.name),
+        styles::dim(&count)
     );
 
     let mut table = comfy_table::Table::new();
     table.load_preset(comfy_table::presets::UTF8_FULL);
-    table.set_header(vec!["Version", "Released", "Ago"]);
+    table.set_header(vec![
+        styles::header_cell("Version"),
+        styles::header_cell("Released"),
+        styles::header_cell("Ago"),
+    ]);
 
     for release in &github.releases {
         let date_str = release.date.as_deref().unwrap_or("\u{2014}");
@@ -467,7 +527,11 @@ fn run_version_list(
             .and_then(crate::agents::helpers::parse_date)
             .map(|d| crate::agents::helpers::format_relative_time(&d))
             .unwrap_or_else(|| "\u{2014}".to_string());
-        table.add_row(vec![release.version.as_str(), date_str, &ago]);
+        table.add_row(vec![
+            styles::bold_cell(&release.version),
+            comfy_table::Cell::new(date_str),
+            styles::dim_cell(&ago),
+        ]);
     }
 
     println!("{table}");
@@ -498,7 +562,8 @@ fn run_pick(
         })
         .collect();
 
-    let selection = dialoguer::FuzzySelect::new()
+    let theme = super::styles::picker_theme();
+    let selection = dialoguer::FuzzySelect::with_theme(&theme)
         .with_prompt(format!("Select a {} release", agent.name))
         .items(&items)
         .default(0)

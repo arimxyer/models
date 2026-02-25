@@ -67,6 +67,9 @@ dialoguer = { version = "0.11", features = ["fuzzy-select"] }
 # Date/time handling
 chrono = { version = "0.4", features = ["serde"] }
 
+# Terminal styling (used for dialoguer theme)
+console = "0.15"
+
 [profile.release]
 strip = true
 lto = true

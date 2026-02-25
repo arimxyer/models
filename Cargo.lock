@@ -1299,6 +1299,7 @@ dependencies = [
  "chrono",
  "clap",
  "comfy-table",
+ "console",
  "crossterm 0.28.1",
  "dialoguer",
  "dirs",
