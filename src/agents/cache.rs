@@ -142,13 +142,6 @@ impl GitHubCache {
         Self::load_from_path(&path)
     }
 
-    /// Try to load the cache from disk
-    fn try_load() -> Result<Self> {
-        let path = Self::cache_path()
-            .ok_or_else(|| anyhow::anyhow!("Could not determine config directory"))?;
-        Self::try_load_from_path(&path)
-    }
-
     /// Load cache from an explicit file path, returning an empty cache if file doesn't exist or is invalid
     fn load_from_path(path: &Path) -> Self {
         Self::try_load_from_path(path).unwrap_or_else(|_| Self::new())
