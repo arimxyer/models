@@ -191,6 +191,62 @@ impl AsyncGitHubClient {
         Ok(response.json().await?)
     }
 
+    /// Fetch only releases for a repo (single API call, no repo metadata).
+    /// Used by CLI commands that don't need stars/issues/license.
+    pub async fn fetch_releases_only(&self, repo: &str) -> ConditionalFetchResult {
+        let releases_url = format!("{}/repos/{}/releases", GITHUB_API_BASE, repo);
+        match self.get_json::<Vec<ReleaseResponse>>(&releases_url).await {
+            Ok(releases) => {
+                let data = GitHubData {
+                    releases: releases.into_iter().map(map_release_response).collect(),
+                    stars: None,
+                    open_issues: None,
+                    license: None,
+                    last_commit: None,
+                };
+
+                // Update disk cache with releases data
+                {
+                    let mut cache = self.disk_cache.write().await;
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_secs() as i64)
+                        .unwrap_or(0);
+
+                    // Merge with existing cached repo metadata if available
+                    let existing = cache.get(repo).cloned();
+                    let merged_data = if let Some(existing) = &existing {
+                        let mut merged: GitHubData = existing.data.clone().into();
+                        merged.releases = data.releases.clone();
+                        merged
+                    } else {
+                        data.clone()
+                    };
+
+                    cache.insert(
+                        repo.to_string(),
+                        CachedGitHubData {
+                            data: SerializableGitHubData::from(&merged_data),
+                            etag: existing.and_then(|e| e.etag),
+                            fetched_at: now,
+                        },
+                    );
+                }
+
+                ConditionalFetchResult::Fresh(data, None)
+            }
+            Err(e) => {
+                // Fall back to cached releases
+                let cache = self.disk_cache.read().await;
+                if cache.get(repo).is_some() {
+                    ConditionalFetchResult::NotModified
+                } else {
+                    ConditionalFetchResult::Error(e.to_string())
+                }
+            }
+        }
+    }
+
     /// Fetch GitHub data conditionally using ETag-based caching.
     ///
     /// If we have cached data with an ETag for this repo, we send an If-None-Match header.
