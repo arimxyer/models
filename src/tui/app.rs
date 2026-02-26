@@ -1157,7 +1157,10 @@ mod tests {
     impl ConfigHomeGuard {
         fn install(path: PathBuf) -> Self {
             let previous_xdg = std::env::var_os("XDG_CONFIG_HOME");
-            std::env::set_var("XDG_CONFIG_HOME", &path);
+            // SAFETY: only one test uses this guard and it runs single-threaded
+            // in practice. env::set_var is deprecated-as-unsafe since Rust 1.83
+            // due to potential races, but acceptable here in test-only code.
+            unsafe { std::env::set_var("XDG_CONFIG_HOME", &path) };
             Self { path, previous_xdg }
         }
     }
@@ -1165,9 +1168,9 @@ mod tests {
     impl Drop for ConfigHomeGuard {
         fn drop(&mut self) {
             if let Some(val) = &self.previous_xdg {
-                std::env::set_var("XDG_CONFIG_HOME", val);
+                unsafe { std::env::set_var("XDG_CONFIG_HOME", val) };
             } else {
-                std::env::remove_var("XDG_CONFIG_HOME");
+                unsafe { std::env::remove_var("XDG_CONFIG_HOME") };
             }
             let _ = std::fs::remove_dir_all(&self.path);
         }
