@@ -96,7 +96,8 @@ pub async fn run(providers: ProvidersMap) -> Result<()> {
     let disk_cache = Arc::new(RwLock::new(disk_cache));
 
     // Create GitHub client and channel for fetch results
-    let client = AsyncGitHubClient::with_disk_cache(None, disk_cache.clone());
+    let token = crate::agents::github::detect_github_token();
+    let client = AsyncGitHubClient::with_disk_cache(token, disk_cache.clone());
     let (tx, rx) = mpsc::channel(100);
 
     // Spawn background GitHub fetches for agents (non-blocking)

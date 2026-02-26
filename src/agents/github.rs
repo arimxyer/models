@@ -9,6 +9,27 @@ use super::{GitHubData, Release};
 
 const GITHUB_API_BASE: &str = "https://api.github.com";
 
+/// Detect a GitHub token for authenticated API access (5,000 req/hr vs 60).
+/// Tries `gh auth token` first (works if user has gh CLI installed and logged in),
+/// then falls back to the `GITHUB_TOKEN` environment variable.
+pub fn detect_github_token() -> Option<String> {
+    // Try gh CLI first
+    if let Ok(output) = std::process::Command::new("gh")
+        .args(["auth", "token"])
+        .output()
+    {
+        if output.status.success() {
+            let token = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !token.is_empty() {
+                return Some(token);
+            }
+        }
+    }
+
+    // Fall back to GITHUB_TOKEN env var
+    std::env::var("GITHUB_TOKEN").ok().filter(|t| !t.is_empty())
+}
+
 #[derive(Debug, Deserialize)]
 pub struct RepoResponse {
     pub stargazers_count: u64,
