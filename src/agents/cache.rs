@@ -9,7 +9,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use super::{GitHubData, Release};
 
@@ -136,19 +136,31 @@ impl GitHubCache {
 
     /// Load the cache from disk, returning an empty cache if file doesn't exist or is invalid
     pub fn load() -> Self {
-        Self::try_load().unwrap_or_else(|_| Self::new())
+        let Some(path) = Self::cache_path() else {
+            return Self::new();
+        };
+        Self::load_from_path(&path)
     }
 
     /// Try to load the cache from disk
     fn try_load() -> Result<Self> {
         let path = Self::cache_path()
             .ok_or_else(|| anyhow::anyhow!("Could not determine config directory"))?;
+        Self::try_load_from_path(&path)
+    }
 
+    /// Load cache from an explicit file path, returning an empty cache if file doesn't exist or is invalid
+    fn load_from_path(path: &Path) -> Self {
+        Self::try_load_from_path(path).unwrap_or_else(|_| Self::new())
+    }
+
+    /// Try to load cache from an explicit file path
+    fn try_load_from_path(path: &Path) -> Result<Self> {
         if !path.exists() {
             return Ok(Self::new());
         }
 
-        let contents = fs::read_to_string(&path)?;
+        let contents = fs::read_to_string(path)?;
         let cache: GitHubCache = serde_json::from_str(&contents)?;
 
         // Future: handle version migrations here
@@ -164,14 +176,18 @@ impl GitHubCache {
     pub fn save(&self) -> Result<()> {
         let path = Self::cache_path()
             .ok_or_else(|| anyhow::anyhow!("Could not determine config directory"))?;
+        self.save_to_path(&path)
+    }
 
+    /// Save the cache to an explicit file path
+    fn save_to_path(&self, path: &Path) -> Result<()> {
         // Create the directory if it doesn't exist
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
 
         let contents = serde_json::to_string_pretty(self)?;
-        fs::write(&path, contents)?;
+        fs::write(path, contents)?;
 
         Ok(())
     }
@@ -205,6 +221,65 @@ impl GitHubCache {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::env;
+    use std::path::Path;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    struct TempDirGuard {
+        path: PathBuf,
+    }
+
+    impl TempDirGuard {
+        fn new(prefix: &str) -> Self {
+            let unique = format!(
+                "{}-{}-{}",
+                prefix,
+                std::process::id(),
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            );
+            let path = env::temp_dir().join(unique);
+            let _ = fs::remove_dir_all(&path);
+            fs::create_dir_all(&path).unwrap();
+            Self { path }
+        }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TempDirGuard {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
+
+    fn sample_cached_data() -> CachedGitHubData {
+        CachedGitHubData {
+            data: SerializableGitHubData {
+                releases: vec![SerializableRelease {
+                    version: "1.2.3".to_string(),
+                    date: Some("2024-01-15T00:00:00Z".to_string()),
+                    changelog: Some("notes".to_string()),
+                }],
+                stars: Some(42),
+                open_issues: Some(7),
+                license: Some("MIT".to_string()),
+                last_commit: Some("2024-01-16T01:02:03Z".to_string()),
+            },
+            etag: Some("\"etag-123\"".to_string()),
+            fetched_at: 1_700_000_000,
+        }
+    }
+
+    fn temp_cache_path(prefix: &str) -> (TempDirGuard, PathBuf) {
+        let temp_dir = TempDirGuard::new(prefix);
+        let path = temp_dir.path().join(CACHE_FILENAME);
+        (temp_dir, path)
+    }
 
     #[test]
     fn test_new_cache() {
@@ -303,5 +378,59 @@ mod tests {
         let back: GitHubData = serializable.into();
         assert_eq!(back.stars, Some(500));
         assert_eq!(back.releases[0].version, "1.0.0");
+    }
+
+    #[test]
+    fn test_save_and_load_round_trip_preserves_repo_key_and_data() {
+        let (temp_dir, cache_path) = temp_cache_path("github-cache-roundtrip");
+
+        let repo_key = "owner/repo-name";
+        let mut cache = GitHubCache::new();
+        cache.insert(repo_key.to_string(), sample_cached_data());
+        cache.save_to_path(&cache_path).unwrap();
+
+        let loaded = GitHubCache::load_from_path(&cache_path);
+        let entry = loaded.get(repo_key).expect("repo key should round-trip");
+
+        assert_eq!(loaded.version, CACHE_VERSION);
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(entry.etag.as_deref(), Some("\"etag-123\""));
+        assert_eq!(entry.fetched_at, 1_700_000_000);
+        assert_eq!(entry.data.releases[0].version, "1.2.3");
+        assert_eq!(
+            entry.data.last_commit.as_deref(),
+            Some("2024-01-16T01:02:03Z")
+        );
+        assert!(cache_path.exists());
+        assert!(temp_dir.path().exists());
+    }
+
+    #[test]
+    fn test_load_version_mismatch_returns_empty_cache() {
+        let (_temp_dir, cache_path) = temp_cache_path("github-cache-version-mismatch");
+        fs::write(
+            &cache_path,
+            r#"{
+  "version": 999,
+  "entries": {
+    "owner/repo": {
+      "data": {
+        "releases": [],
+        "stars": 1,
+        "open_issues": 2,
+        "license": "MIT",
+        "last_commit": "2024-01-01T00:00:00Z"
+      },
+      "etag": "abc",
+      "fetched_at": 123
+    }
+  }
+}"#,
+        )
+        .unwrap();
+
+        let loaded = GitHubCache::load_from_path(&cache_path);
+        assert_eq!(loaded.version, CACHE_VERSION);
+        assert!(loaded.is_empty());
     }
 }

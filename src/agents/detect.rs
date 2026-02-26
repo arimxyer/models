@@ -129,4 +129,31 @@ mod tests {
         assert_eq!(extract_version("no version here", None), None);
         assert_eq!(extract_version("1.2", None), None); // Not enough parts
     }
+
+    #[test]
+    fn test_custom_version_regex_returns_capture_group() {
+        assert_eq!(
+            extract_version(
+                "release build release-12.34.56 (abcdef)",
+                Some(r"release-(\d+\.\d+\.\d+)")
+            ),
+            Some("12.34.56".to_string())
+        );
+    }
+
+    #[test]
+    fn test_custom_version_regex_invalid_pattern_falls_back_to_semver() {
+        assert_eq!(
+            extract_version("tool version v9.8.7", Some(r"([invalid")),
+            Some("9.8.7".to_string())
+        );
+    }
+
+    #[test]
+    fn test_custom_version_regex_non_match_falls_back_to_default_semver() {
+        assert_eq!(
+            extract_version("tool version v4.5.6", Some(r"version=(\d+\.\d+\.\d+)")),
+            Some("4.5.6".to_string())
+        );
+    }
 }
