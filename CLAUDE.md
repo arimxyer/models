@@ -28,6 +28,7 @@ mise run fmt && mise run clippy && mise run test
 - Model data: fetched from models.dev API at startup (`src/api.rs`)
 - Benchmark data: fetched fresh from jsDelivr CDN on every launch (`src/benchmark_fetch.rs`)
 - Agent/GitHub data: disk-cached with ETag conditional fetching (`src/agents/cache.rs`, `src/agents/github.rs`)
+- CLI agents: uses `fetch_releases_only` (1 API call, no repo metadata) — TUI uses full `fetch_conditional` (2 calls, includes stars/issues/license)
 
 ### Async Pattern
 Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message` variants processed in the main loop (`src/tui/mod.rs`). The app never blocks on network calls.
@@ -51,7 +52,7 @@ Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message`
 
 ### GitHub Actions
 - `ci.yml` — runs on PR/push: fmt check, clippy, test
-- `release.yml` — triggered by `v*` tags: builds 5 targets, publishes to crates.io, updates Homebrew/Scoop
+- `release.yml` — triggered by `v*` tags: builds 5 targets in parallel with Rust caching, publishes to crates.io, updates Homebrew/Scoop. Pre-release tags (containing `-`) skip publish/Homebrew/Scoop and mark the GitHub release as prerelease.
 - `update-benchmarks.yml` — runs every 30 minutes: fetches AA API, commits if data changed
 
 ## Conventions
@@ -68,6 +69,7 @@ Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message`
 - GitHub Actions `workflow_dispatch` only works when the workflow file exists on the default branch — cannot test from feature branches
 - Adding a new field to `BenchmarkEntry`: add field with `#[serde(default)]` — no cache versioning needed since data is fetched fresh every launch
 - The AA API uses `0` as a sentinel for missing performance data — jq transforms must convert `0` → `null` (e.g., `if . == 0 then null else . end`)
+- jq transforms use null-safe access (`?.` / `// null`) for nested objects — `mise.toml` and `update-benchmarks.yml` must stay in sync
 - Never use `eprintln!` in TUI mode — stderr output corrupts ratatui's alternate screen buffer, causing rendering glitches. Use `Message` variants or status bar updates instead. (`eprintln!` is fine in CLI-only code paths like `src/cli/agents.rs`)
 
 ## Releasing
