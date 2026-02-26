@@ -165,7 +165,9 @@ fn get_github_data(
 ) -> Option<crate::agents::data::GitHubData> {
     eprint!("Fetching data for {}...", agent_name);
     let cache_arc = Arc::new(RwLock::new(disk_cache.clone()));
-    let client = crate::agents::github::AsyncGitHubClient::with_disk_cache(None, cache_arc.clone());
+    let token = crate::agents::github::detect_github_token();
+    let client =
+        crate::agents::github::AsyncGitHubClient::with_disk_cache(token, cache_arc.clone());
 
     let result = runtime.block_on(client.fetch_conditional(repo));
     let fresh_shared_cache = if matches!(
@@ -194,14 +196,17 @@ fn get_github_data_batch(
     crate::agents::data::InstalledInfo,
 )> {
     let cache_arc = Arc::new(RwLock::new(disk_cache.clone()));
+    let token = crate::agents::github::detect_github_token();
 
     eprint!("Fetching {} agents...", agents.len());
 
     let results: Vec<_> = runtime.block_on(async {
         let mut handles = Vec::new();
         for (id, agent) in agents {
-            let client =
-                crate::agents::github::AsyncGitHubClient::with_disk_cache(None, cache_arc.clone());
+            let client = crate::agents::github::AsyncGitHubClient::with_disk_cache(
+                token.clone(),
+                cache_arc.clone(),
+            );
             let repo = agent.repo.clone();
             let id = id.clone();
             let agent = agent.clone();
