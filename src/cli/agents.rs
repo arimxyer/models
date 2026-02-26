@@ -181,27 +181,40 @@ fn get_github_data(
     data
 }
 
-/// Fetch GitHub data for multiple agents concurrently.
-/// Returns a Vec of (agent_id, repo, Option<GitHubData>) in the same order as input.
+/// Fetch GitHub releases and detect installed versions for multiple agents concurrently.
+/// Uses releases-only endpoint (1 API call per agent, no repo metadata).
+/// Returns a Vec of (agent_id, Option<GitHubData>, InstalledInfo).
 fn get_github_data_batch(
-    agents: &[(String, String, String)], // (id, name, repo)
+    agents: &[(String, crate::agents::data::Agent)],
     disk_cache: &mut crate::agents::cache::GitHubCache,
     runtime: &tokio::runtime::Runtime,
-) -> Vec<(String, Option<crate::agents::data::GitHubData>)> {
+) -> Vec<(
+    String,
+    Option<crate::agents::data::GitHubData>,
+    crate::agents::data::InstalledInfo,
+)> {
     let cache_arc = Arc::new(RwLock::new(disk_cache.clone()));
 
     eprint!("Fetching {} agents...", agents.len());
 
     let results: Vec<_> = runtime.block_on(async {
         let mut handles = Vec::new();
-        for (id, _name, repo) in agents {
+        for (id, agent) in agents {
             let client =
                 crate::agents::github::AsyncGitHubClient::with_disk_cache(None, cache_arc.clone());
-            let repo = repo.clone();
+            let repo = agent.repo.clone();
             let id = id.clone();
+            let agent = agent.clone();
+
             handles.push(tokio::spawn(async move {
-                let result = client.fetch_conditional(&repo).await;
-                (id, repo, result)
+                let (fetch_result, installed) = tokio::join!(
+                    client.fetch_releases_only(&repo),
+                    tokio::task::spawn_blocking(move || {
+                        crate::agents::detect::detect_installed(&agent)
+                    })
+                );
+                let installed = installed.unwrap_or_default();
+                (id, repo, fetch_result, installed)
             }));
         }
         let mut results = Vec::new();
@@ -212,18 +225,19 @@ fn get_github_data_batch(
                     String::new(),
                     String::new(),
                     crate::agents::github::ConditionalFetchResult::Error(e.to_string()),
+                    crate::agents::data::InstalledInfo::default(),
                 )),
             }
         }
         results
     });
 
-    // Sync the shared cache back once (it was updated by all Fresh results internally)
+    // Sync the shared cache back once
     *disk_cache = runtime.block_on(cache_arc.read()).clone();
 
     let output: Vec<_> = results
         .into_iter()
-        .map(|(id, repo, result)| {
+        .map(|(id, repo, result, installed)| {
             let data = match result {
                 crate::agents::github::ConditionalFetchResult::Fresh(data, _etag) => Some(data),
                 crate::agents::github::ConditionalFetchResult::NotModified => {
@@ -233,7 +247,7 @@ fn get_github_data_batch(
                     cached_github_data_for_repo(disk_cache, &repo)
                 }
             };
-            (id, data)
+            (id, data, installed)
         })
         .collect();
 
@@ -255,14 +269,14 @@ fn run_status() -> Result<()> {
         .collect();
     entries.sort_by(|(_, a), (_, b)| a.name.cmp(&b.name));
 
-    // Fetch all agents concurrently
+    // Fetch all agents and detect installed versions concurrently
     let batch_input: Vec<_> = entries
         .iter()
-        .map(|(id, agent)| ((*id).clone(), agent.name.clone(), agent.repo.clone()))
+        .map(|(id, agent)| ((*id).clone(), (*agent).clone()))
         .collect();
 
     let runtime = tokio::runtime::Runtime::new()?;
-    let github_results = get_github_data_batch(&batch_input, &mut disk_cache, &runtime);
+    let batch_results = get_github_data_batch(&batch_input, &mut disk_cache, &runtime);
 
     let mut table = comfy_table::Table::new();
     table.load_preset(comfy_table::presets::UTF8_FULL);
@@ -275,9 +289,7 @@ fn run_status() -> Result<()> {
         styles::header_cell("Freq."),
     ]);
 
-    for ((_, agent), (_, github)) in entries.iter().zip(github_results.iter()) {
-        let installed = crate::agents::detect::detect_installed(agent);
-
+    for ((_, agent), (_, github, installed)) in entries.iter().zip(batch_results.iter()) {
         let latest_version = github
             .as_ref()
             .and_then(|g| g.latest_version())
@@ -356,15 +368,15 @@ fn run_latest() -> Result<()> {
 
     let batch_input: Vec<_> = tracked
         .iter()
-        .map(|(id, agent)| ((*id).clone(), agent.name.clone(), agent.repo.clone()))
+        .map(|(id, agent)| ((*id).clone(), (*agent).clone()))
         .collect();
 
     let runtime = tokio::runtime::Runtime::new()?;
-    let github_results = get_github_data_batch(&batch_input, &mut disk_cache, &runtime);
+    let batch_results = get_github_data_batch(&batch_input, &mut disk_cache, &runtime);
 
     let mut recent: Vec<(String, String, String, chrono::DateTime<chrono::Utc>)> = Vec::new();
 
-    for ((_, agent), (_, github)) in tracked.iter().zip(github_results.iter()) {
+    for ((_, agent), (_, github, _installed)) in tracked.iter().zip(batch_results.iter()) {
         if let Some(github) = github {
             for release in &github.releases {
                 if let Some(date) = release
