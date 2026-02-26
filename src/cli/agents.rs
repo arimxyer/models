@@ -156,10 +156,7 @@ fn format_release_date_ymd(date: Option<&str>) -> Option<String> {
         .map(|d| d.format("%Y-%m-%d").to_string())
 }
 
-/// Fetch GitHub data for an agent using ETag-based conditional fetching.
-/// Always checks GitHub for updates (like the TUI does), using the cached
-/// ETag to avoid re-downloading unchanged data. Falls back to cached data
-/// on network errors.
+/// Fetch GitHub data for a single agent (used by `run_tool` for one-off fetches).
 fn get_github_data(
     agent_name: &str,
     repo: &str,
@@ -175,8 +172,6 @@ fn get_github_data(
         &result,
         crate::agents::github::ConditionalFetchResult::Fresh(_, _)
     ) {
-        // fetch_conditional already updates the shared disk cache internally,
-        // so sync back from the Arc to our local copy for subsequent calls.
         Some(runtime.block_on(cache_arc.read()).clone())
     } else {
         None
@@ -186,12 +181,88 @@ fn get_github_data(
     data
 }
 
+/// Fetch GitHub data for multiple agents concurrently.
+/// Returns a Vec of (agent_id, repo, Option<GitHubData>) in the same order as input.
+fn get_github_data_batch(
+    agents: &[(String, String, String)], // (id, name, repo)
+    disk_cache: &mut crate::agents::cache::GitHubCache,
+    runtime: &tokio::runtime::Runtime,
+) -> Vec<(String, Option<crate::agents::data::GitHubData>)> {
+    let cache_arc = Arc::new(RwLock::new(disk_cache.clone()));
+
+    eprint!("Fetching {} agents...", agents.len());
+
+    let results: Vec<_> = runtime.block_on(async {
+        let mut handles = Vec::new();
+        for (id, _name, repo) in agents {
+            let client =
+                crate::agents::github::AsyncGitHubClient::with_disk_cache(None, cache_arc.clone());
+            let repo = repo.clone();
+            let id = id.clone();
+            handles.push(tokio::spawn(async move {
+                let result = client.fetch_conditional(&repo).await;
+                (id, repo, result)
+            }));
+        }
+        let mut results = Vec::new();
+        for handle in handles {
+            match handle.await {
+                Ok(r) => results.push(r),
+                Err(e) => results.push((
+                    String::new(),
+                    String::new(),
+                    crate::agents::github::ConditionalFetchResult::Error(e.to_string()),
+                )),
+            }
+        }
+        results
+    });
+
+    // Sync the shared cache back once (it was updated by all Fresh results internally)
+    *disk_cache = runtime.block_on(cache_arc.read()).clone();
+
+    let output: Vec<_> = results
+        .into_iter()
+        .map(|(id, repo, result)| {
+            let data = match result {
+                crate::agents::github::ConditionalFetchResult::Fresh(data, _etag) => Some(data),
+                crate::agents::github::ConditionalFetchResult::NotModified => {
+                    cached_github_data_for_repo(disk_cache, &repo)
+                }
+                crate::agents::github::ConditionalFetchResult::Error(_) => {
+                    cached_github_data_for_repo(disk_cache, &repo)
+                }
+            };
+            (id, data)
+        })
+        .collect();
+
+    eprintln!(" done.");
+    output
+}
+
 fn run_status() -> Result<()> {
     use super::styles;
 
     let agents_file = crate::agents::loader::load_agents()?;
     let config = crate::config::Config::load()?;
     let mut disk_cache = crate::agents::cache::GitHubCache::load();
+
+    let mut entries: Vec<_> = agents_file
+        .agents
+        .iter()
+        .filter(|(id, _)| config.is_tracked(id))
+        .collect();
+    entries.sort_by(|(_, a), (_, b)| a.name.cmp(&b.name));
+
+    // Fetch all agents concurrently
+    let batch_input: Vec<_> = entries
+        .iter()
+        .map(|(id, agent)| ((*id).clone(), agent.name.clone(), agent.repo.clone()))
+        .collect();
+
+    let runtime = tokio::runtime::Runtime::new()?;
+    let github_results = get_github_data_batch(&batch_input, &mut disk_cache, &runtime);
 
     let mut table = comfy_table::Table::new();
     table.load_preset(comfy_table::presets::UTF8_FULL);
@@ -204,17 +275,8 @@ fn run_status() -> Result<()> {
         styles::header_cell("Freq."),
     ]);
 
-    let mut entries: Vec<_> = agents_file
-        .agents
-        .iter()
-        .filter(|(id, _)| config.is_tracked(id))
-        .collect();
-    entries.sort_by(|(_, a), (_, b)| a.name.cmp(&b.name));
-
-    let runtime = tokio::runtime::Runtime::new()?;
-    for (_id, agent) in &entries {
+    for ((_, agent), (_, github)) in entries.iter().zip(github_results.iter()) {
         let installed = crate::agents::detect::detect_installed(agent);
-        let github = get_github_data(&agent.name, &agent.repo, &mut disk_cache, &runtime);
 
         let latest_version = github
             .as_ref()
@@ -286,14 +348,24 @@ fn run_latest() -> Result<()> {
     let config = crate::config::Config::load()?;
     let mut disk_cache = crate::agents::cache::GitHubCache::load();
 
-    let mut recent: Vec<(String, String, String, chrono::DateTime<chrono::Utc>)> = Vec::new();
+    let tracked: Vec<_> = agents_file
+        .agents
+        .iter()
+        .filter(|(id, _)| config.is_tracked(id))
+        .collect();
+
+    let batch_input: Vec<_> = tracked
+        .iter()
+        .map(|(id, agent)| ((*id).clone(), agent.name.clone(), agent.repo.clone()))
+        .collect();
 
     let runtime = tokio::runtime::Runtime::new()?;
-    for (id, agent) in &agents_file.agents {
-        if !config.is_tracked(id) {
-            continue;
-        }
-        if let Some(github) = get_github_data(&agent.name, &agent.repo, &mut disk_cache, &runtime) {
+    let github_results = get_github_data_batch(&batch_input, &mut disk_cache, &runtime);
+
+    let mut recent: Vec<(String, String, String, chrono::DateTime<chrono::Utc>)> = Vec::new();
+
+    for ((_, agent), (_, github)) in tracked.iter().zip(github_results.iter()) {
+        if let Some(github) = github {
             for release in &github.releases {
                 if let Some(date) = release
                     .date
