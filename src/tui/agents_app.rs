@@ -265,13 +265,18 @@ impl AgentsApp {
                         .github
                         .latest_release()
                         .and_then(|r| r.date.as_deref())
-                        .unwrap_or("");
+                        .and_then(crate::agents::helpers::parse_date);
                     let db = eb
                         .github
                         .latest_release()
                         .and_then(|r| r.date.as_deref())
-                        .unwrap_or("");
-                    db.cmp(da) // Descending (newest first)
+                        .and_then(crate::agents::helpers::parse_date);
+                    match (da, db) {
+                        (Some(da), Some(db)) => db.cmp(&da), // Descending (newest first)
+                        (Some(_), None) => std::cmp::Ordering::Less,
+                        (None, Some(_)) => std::cmp::Ordering::Greater,
+                        (None, None) => ea.agent.name.cmp(&eb.agent.name),
+                    }
                 }
                 AgentSortOrder::Stars => {
                     let sa = ea.github.stars.unwrap_or(0);
@@ -467,5 +472,88 @@ impl AgentsApp {
         }
 
         active.join(", ")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::agents::{Agent, FetchStatus, GitHubData, InstalledInfo, Release};
+
+    fn agent_entry(id: &str, name: &str, release_date: Option<&str>) -> AgentEntry {
+        AgentEntry {
+            id: id.to_string(),
+            agent: Agent {
+                name: name.to_string(),
+                repo: format!("owner/{id}"),
+                categories: vec![],
+                installation_method: None,
+                pricing: None,
+                supported_providers: vec![],
+                platform_support: vec![],
+                open_source: true,
+                cli_binary: None,
+                version_command: vec![],
+                version_regex: None,
+                config_files: vec![],
+                homepage: None,
+                docs: None,
+            },
+            github: GitHubData {
+                releases: vec![Release {
+                    version: "1.0.0".to_string(),
+                    date: release_date.map(str::to_string),
+                    changelog: None,
+                }],
+                ..GitHubData::default()
+            },
+            installed: InstalledInfo::default(),
+            tracked: true,
+            fetch_status: FetchStatus::Loaded,
+        }
+    }
+
+    fn test_app(entries: Vec<AgentEntry>) -> AgentsApp {
+        let mut agent_list_state = ListState::default();
+        agent_list_state.select(Some(0));
+        AgentsApp {
+            filtered_entries: (0..entries.len()).collect(),
+            entries,
+            selected_category: 0,
+            selected_agent: 0,
+            agent_list_state,
+            focus: AgentFocus::List,
+            filters: AgentFilters::default(),
+            search_query: String::new(),
+            sort_order: AgentSortOrder::Updated,
+            show_picker: false,
+            picker_selected: 0,
+            picker_changes: HashMap::new(),
+            detail_scroll: 0,
+            loading_github: false,
+            pending_github_fetches: 0,
+        }
+    }
+
+    #[test]
+    fn updated_sort_uses_parsed_timestamps_not_lexical_order() {
+        let mut app = test_app(vec![
+            agent_entry(
+                "offset-older",
+                "Offset Older",
+                Some("2024-01-01T00:30:00+01:00"),
+            ),
+            agent_entry("utc-newer", "UTC Newer", Some("2023-12-31T23:45:00Z")),
+            agent_entry("no-date", "No Date", None),
+        ]);
+
+        app.apply_sort();
+
+        let ordered_ids: Vec<_> = app
+            .filtered_entries
+            .iter()
+            .map(|&idx| app.entries[idx].id.as_str())
+            .collect();
+        assert_eq!(ordered_ids, vec!["utc-newer", "offset-older", "no-date"]);
     }
 }

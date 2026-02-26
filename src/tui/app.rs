@@ -692,9 +692,14 @@ impl App {
                             if newly_tracked.is_empty() {
                                 self.set_status("Tracked agents saved".to_string());
                             } else {
+                                let new_fetch_count = newly_tracked.len();
+                                agents_app.pending_github_fetches = agents_app
+                                    .pending_github_fetches
+                                    .saturating_add(new_fetch_count);
+                                agents_app.loading_github = true;
                                 self.set_status(format!(
                                     "Tracked agents saved, fetching {} new...",
-                                    newly_tracked.len()
+                                    new_fetch_count
                                 ));
                                 self.pending_fetches = newly_tracked;
                             }
@@ -1093,5 +1098,129 @@ impl App {
 
     pub fn clear_status(&mut self) {
         self.status_message = None;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::agents::{Agent, AgentsFile};
+    use std::collections::{HashMap, HashSet};
+    use std::ffi::OsString;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn test_agent(name: &str, repo: &str) -> Agent {
+        Agent {
+            name: name.to_string(),
+            repo: repo.to_string(),
+            categories: vec!["cli".to_string()],
+            installation_method: None,
+            pricing: None,
+            supported_providers: vec![],
+            platform_support: vec![],
+            open_source: true,
+            cli_binary: None,
+            version_command: vec![],
+            version_regex: None,
+            config_files: vec![],
+            homepage: None,
+            docs: None,
+        }
+    }
+
+    fn test_agents_file() -> AgentsFile {
+        let mut agents = HashMap::new();
+        agents.insert("alpha".to_string(), test_agent("Alpha", "owner/alpha"));
+        agents.insert("beta".to_string(), test_agent("Beta", "owner/beta"));
+        AgentsFile {
+            schema_version: 1,
+            last_scraped: None,
+            scrape_source: None,
+            agents,
+        }
+    }
+
+    fn temp_config_home() -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time went backwards")
+            .as_nanos();
+        std::env::temp_dir().join(format!("modelsdev-tui-app-test-{nanos}"))
+    }
+
+    struct ConfigHomeGuard {
+        path: PathBuf,
+        previous_xdg: Option<OsString>,
+    }
+
+    impl ConfigHomeGuard {
+        fn install(path: PathBuf) -> Self {
+            let previous_xdg = std::env::var_os("XDG_CONFIG_HOME");
+            std::env::set_var("XDG_CONFIG_HOME", &path);
+            Self { path, previous_xdg }
+        }
+    }
+
+    impl Drop for ConfigHomeGuard {
+        fn drop(&mut self) {
+            if let Some(val) = &self.previous_xdg {
+                std::env::set_var("XDG_CONFIG_HOME", val);
+            } else {
+                std::env::remove_var("XDG_CONFIG_HOME");
+            }
+            let _ = std::fs::remove_dir_all(&self.path);
+        }
+    }
+
+    #[test]
+    fn picker_save_updates_agents_fetch_counters_for_newly_tracked_agents() {
+        let config_home = temp_config_home();
+        let _config_home_guard = ConfigHomeGuard::install(config_home);
+
+        let mut config = Config::default();
+        config.agents.tracked = HashSet::new();
+        config.agents.excluded = HashSet::new();
+        config.agents.custom.clear();
+
+        let agents_file = test_agents_file();
+        let mut app = App::new(
+            HashMap::new(),
+            Some(&agents_file),
+            Some(config),
+            BenchmarkStore::empty(),
+        );
+
+        {
+            let agents_app = app.agents_app.as_mut().expect("agents app should exist");
+            agents_app.loading_github = false;
+            agents_app.pending_github_fetches = 0;
+            agents_app.open_picker();
+            agents_app.picker_changes.insert("alpha".to_string(), true);
+            agents_app.picker_changes.insert("beta".to_string(), true);
+        }
+
+        app.update(Message::PickerSave);
+
+        let agents_app = app.agents_app.as_ref().expect("agents app should exist");
+        assert_eq!(app.pending_fetches.len(), 2);
+        assert_eq!(agents_app.pending_github_fetches, 2);
+        assert!(agents_app.loading_github);
+
+        app.update(Message::GitHubDataReceived(
+            "alpha".to_string(),
+            GitHubData::default(),
+        ));
+        let agents_app = app.agents_app.as_ref().expect("agents app should exist");
+        assert_eq!(agents_app.pending_github_fetches, 1);
+        assert!(agents_app.loading_github);
+
+        app.update(Message::GitHubDataReceived(
+            "beta".to_string(),
+            GitHubData::default(),
+        ));
+        let agents_app = app.agents_app.as_ref().expect("agents app should exist");
+        assert_eq!(agents_app.pending_github_fetches, 0);
+        assert!(!agents_app.loading_github);
     }
 }

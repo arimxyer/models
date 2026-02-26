@@ -121,6 +121,41 @@ fn dispatch(command: Option<AgentsCommand>) -> Result<()> {
     }
 }
 
+fn cached_github_data_for_repo(
+    disk_cache: &crate::agents::cache::GitHubCache,
+    repo: &str,
+) -> Option<crate::agents::data::GitHubData> {
+    disk_cache.get(repo).map(|c| c.data.to_github_data())
+}
+
+fn apply_github_fetch_result(
+    result: crate::agents::github::ConditionalFetchResult,
+    repo: &str,
+    disk_cache: &mut crate::agents::cache::GitHubCache,
+    fresh_shared_cache: Option<crate::agents::cache::GitHubCache>,
+) -> (&'static str, Option<crate::agents::data::GitHubData>) {
+    match result {
+        crate::agents::github::ConditionalFetchResult::Fresh(data, _etag) => {
+            if let Some(shared_cache) = fresh_shared_cache {
+                *disk_cache = shared_cache;
+            }
+            (" done.", Some(data))
+        }
+        crate::agents::github::ConditionalFetchResult::NotModified => (
+            " up to date.",
+            cached_github_data_for_repo(disk_cache, repo),
+        ),
+        crate::agents::github::ConditionalFetchResult::Error(_) => {
+            (" failed.", cached_github_data_for_repo(disk_cache, repo))
+        }
+    }
+}
+
+fn format_release_date_ymd(date: Option<&str>) -> Option<String> {
+    date.and_then(crate::agents::helpers::parse_date)
+        .map(|d| d.format("%Y-%m-%d").to_string())
+}
+
 /// Fetch GitHub data for an agent using ETag-based conditional fetching.
 /// Always checks GitHub for updates (like the TUI does), using the cached
 /// ETag to avoid re-downloading unchanged data. Falls back to cached data
@@ -136,27 +171,19 @@ fn get_github_data(
     let client = crate::agents::github::AsyncGitHubClient::with_disk_cache(None, cache_arc.clone());
 
     let result = runtime.block_on(client.fetch_conditional(repo));
-
-    match result {
-        crate::agents::github::ConditionalFetchResult::Fresh(data, _etag) => {
-            eprintln!(" done.");
-            // fetch_conditional already updates the disk cache internally,
-            // so sync back from the Arc to our local copy
-            let guard = runtime.block_on(cache_arc.read());
-            *disk_cache = guard.clone();
-            Some(data)
-        }
-        crate::agents::github::ConditionalFetchResult::NotModified => {
-            eprintln!(" up to date.");
-            // Cache key is repo (consistent with TUI and github.rs)
-            disk_cache.get(repo).map(|c| c.data.to_github_data())
-        }
-        crate::agents::github::ConditionalFetchResult::Error(_) => {
-            eprintln!(" failed.");
-            // Fall back to cached data on network errors
-            disk_cache.get(repo).map(|c| c.data.to_github_data())
-        }
-    }
+    let fresh_shared_cache = if matches!(
+        &result,
+        crate::agents::github::ConditionalFetchResult::Fresh(_, _)
+    ) {
+        // fetch_conditional already updates the shared disk cache internally,
+        // so sync back from the Arc to our local copy for subsequent calls.
+        Some(runtime.block_on(cache_arc.read()).clone())
+    } else {
+        None
+    };
+    let (status, data) = apply_github_fetch_result(result, repo, disk_cache, fresh_shared_cache);
+    eprintln!("{status}");
+    data
 }
 
 fn run_status() -> Result<()> {
@@ -452,11 +479,7 @@ fn print_release(name: &str, release: &crate::agents::data::Release) {
     use super::styles;
 
     let version = &release.version;
-    let date = release
-        .date
-        .as_deref()
-        .and_then(crate::agents::helpers::parse_date)
-        .map(|d| d.format("%Y-%m-%d").to_string())
+    let date = format_release_date_ymd(release.date.as_deref())
         .unwrap_or_else(|| "unknown date".to_string());
     println!(
         "{} {} ({})",
@@ -519,8 +542,7 @@ fn run_version_list(
             .date
             .as_deref()
             .and_then(crate::agents::helpers::parse_date);
-        let date_str = parsed
-            .map(|d| d.format("%Y-%m-%d").to_string())
+        let date_str = format_release_date_ymd(release.date.as_deref())
             .unwrap_or_else(|| "\u{2014}".to_string());
         let ago = parsed
             .map(|d| crate::agents::helpers::format_relative_time(&d))
@@ -553,9 +575,8 @@ fn run_pick(
                 .date
                 .as_deref()
                 .and_then(crate::agents::helpers::parse_date);
-            let date = parsed
-                .map(|d| d.format("%Y-%m-%d").to_string())
-                .unwrap_or_else(|| "unknown".to_string());
+            let date =
+                format_release_date_ymd(r.date.as_deref()).unwrap_or_else(|| "unknown".to_string());
             let ago = parsed
                 .map(|d| crate::agents::helpers::format_relative_time(&d))
                 .unwrap_or_default();
@@ -574,4 +595,105 @@ fn run_pick(
     println!();
     print_release(&agent.name, release);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_github_data(version: &str) -> crate::agents::data::GitHubData {
+        crate::agents::data::GitHubData {
+            releases: vec![crate::agents::data::Release {
+                version: version.to_string(),
+                date: Some("2024-06-15".to_string()),
+                changelog: Some("changelog".to_string()),
+            }],
+            ..Default::default()
+        }
+    }
+
+    fn cached_entry(version: &str) -> crate::agents::cache::CachedGitHubData {
+        crate::agents::cache::CachedGitHubData {
+            data: crate::agents::cache::SerializableGitHubData::from(&sample_github_data(version)),
+            etag: Some("etag-1".to_string()),
+            fetched_at: 123,
+        }
+    }
+
+    #[test]
+    fn get_github_data_fresh_branch_syncs_local_cache_from_shared_cache() {
+        let repo = "owner/repo";
+        let mut local_cache = crate::agents::cache::GitHubCache::new();
+        let mut shared_cache = crate::agents::cache::GitHubCache::new();
+        shared_cache.insert(repo.to_string(), cached_entry("2.0.0"));
+
+        let result = crate::agents::github::ConditionalFetchResult::Fresh(
+            sample_github_data("2.0.0"),
+            Some("etag-2".to_string()),
+        );
+
+        let (_status, data) =
+            apply_github_fetch_result(result, repo, &mut local_cache, Some(shared_cache.clone()));
+
+        assert_eq!(data.unwrap().latest_version(), Some("2.0.0"));
+        assert_eq!(
+            local_cache.get(repo).and_then(|entry| entry
+                .data
+                .to_github_data()
+                .latest_version()
+                .map(str::to_string)),
+            Some("2.0.0".to_string())
+        );
+        assert!(local_cache.get("Different Agent Name").is_none());
+    }
+
+    #[test]
+    fn get_github_data_not_modified_falls_back_to_cached_repo_key_not_agent_name() {
+        let repo = "owner/repo";
+        let mut local_cache = crate::agents::cache::GitHubCache::new();
+        local_cache.insert(repo.to_string(), cached_entry("1.2.3"));
+        local_cache.insert("Agent Name".to_string(), cached_entry("9.9.9"));
+
+        let (_status, data) = apply_github_fetch_result(
+            crate::agents::github::ConditionalFetchResult::NotModified,
+            repo,
+            &mut local_cache,
+            None,
+        );
+
+        assert_eq!(data.unwrap().latest_version(), Some("1.2.3"));
+    }
+
+    #[test]
+    fn get_github_data_error_falls_back_to_cached_repo_key_not_agent_name() {
+        let repo = "owner/repo";
+        let mut local_cache = crate::agents::cache::GitHubCache::new();
+        local_cache.insert(repo.to_string(), cached_entry("3.4.5"));
+        local_cache.insert("Agent Name".to_string(), cached_entry("0.0.1"));
+
+        let (_status, data) = apply_github_fetch_result(
+            crate::agents::github::ConditionalFetchResult::Error("network down".to_string()),
+            repo,
+            &mut local_cache,
+            None,
+        );
+
+        assert_eq!(data.unwrap().latest_version(), Some("3.4.5"));
+    }
+
+    #[test]
+    fn format_release_date_ymd_formats_plain_iso_date() {
+        assert_eq!(
+            format_release_date_ymd(Some("2024-06-15")),
+            Some("2024-06-15".to_string())
+        );
+    }
+
+    #[test]
+    fn format_release_date_ymd_accepts_rfc3339_offset_input() {
+        assert_eq!(
+            format_release_date_ymd(Some("2024-06-15T23:30:00-02:00")),
+            Some("2024-06-16".to_string())
+        );
+    }
 }

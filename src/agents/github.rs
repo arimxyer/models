@@ -29,6 +29,89 @@ pub struct ReleaseResponse {
     pub body: Option<String>,
 }
 
+fn map_release_response(r: ReleaseResponse) -> Release {
+    Release {
+        version: extract_version(&r.tag_name),
+        date: r.published_at,
+        changelog: r.body,
+    }
+}
+
+fn build_github_data(repo_info: RepoResponse, releases: Vec<ReleaseResponse>) -> GitHubData {
+    GitHubData {
+        stars: Some(repo_info.stargazers_count),
+        open_issues: Some(repo_info.open_issues_count),
+        license: repo_info
+            .license
+            .and_then(|l| l.spdx_id)
+            .filter(|s| s != "NOASSERTION"),
+        last_commit: repo_info.pushed_at,
+        releases: releases.into_iter().map(map_release_response).collect(),
+    }
+}
+
+fn build_github_data_with_cached_releases(
+    repo_info: &RepoResponse,
+    cached: &CachedGitHubData,
+) -> GitHubData {
+    let mut data: GitHubData = cached.data.clone().into();
+    data.stars = Some(repo_info.stargazers_count);
+    data.open_issues = Some(repo_info.open_issues_count);
+    data.license = repo_info
+        .license
+        .as_ref()
+        .and_then(|l| l.spdx_id.clone())
+        .filter(|s| s != "NOASSERTION");
+    data.last_commit = repo_info.pushed_at.clone();
+    data
+}
+
+fn releases_match_cached(cached: &CachedGitHubData, releases: &[ReleaseResponse]) -> bool {
+    if cached.data.releases.len() != releases.len() {
+        return false;
+    }
+
+    cached
+        .data
+        .releases
+        .iter()
+        .zip(releases.iter())
+        .all(|(cached_release, fetched_release)| {
+            cached_release.version == extract_version(&fetched_release.tag_name)
+                && cached_release.date == fetched_release.published_at
+                && cached_release.changelog == fetched_release.body
+        })
+}
+
+fn resolve_repo_not_modified_with_releases(
+    cached: Option<&CachedGitHubData>,
+    cached_etag: Option<String>,
+    releases_fetch: std::result::Result<Vec<ReleaseResponse>, ()>,
+) -> ConditionalFetchResult {
+    let Some(cached) = cached else {
+        return ConditionalFetchResult::NotModified;
+    };
+
+    let Ok(releases) = releases_fetch else {
+        return ConditionalFetchResult::NotModified;
+    };
+
+    if releases_match_cached(cached, &releases) {
+        return ConditionalFetchResult::NotModified;
+    }
+
+    let mut data: GitHubData = cached.data.clone().into();
+    data.releases = releases.into_iter().map(map_release_response).collect();
+    ConditionalFetchResult::Fresh(data, cached_etag)
+}
+
+fn etag_for_releases_failure(
+    cached_etag: Option<String>,
+    new_repo_etag: Option<String>,
+) -> Option<String> {
+    cached_etag.or(new_repo_etag)
+}
+
 /// Result of a conditional fetch operation
 #[derive(Debug, Clone)]
 pub enum ConditionalFetchResult {
@@ -114,9 +197,11 @@ impl AsyncGitHubClient {
     /// If GitHub returns 304 Not Modified, we know our cached data is still valid.
     pub async fn fetch_conditional(&self, repo: &str) -> ConditionalFetchResult {
         // Check disk cache for existing ETag
-        let cached_etag = {
+        let (cached_etag, cached_entry) = {
             let cache = self.disk_cache.read().await;
-            cache.get(repo).and_then(|entry| entry.etag.clone())
+            let entry = cache.get(repo).cloned();
+            let etag = entry.as_ref().and_then(|e| e.etag.clone());
+            (etag, entry)
         };
 
         // Build the request with conditional headers
@@ -140,7 +225,36 @@ impl AsyncGitHubClient {
 
         // Handle 304 Not Modified
         if response.status() == reqwest::StatusCode::NOT_MODIFIED {
-            return ConditionalFetchResult::NotModified;
+            let releases_url = format!("{}/repos/{}/releases", GITHUB_API_BASE, repo);
+            let releases_fetch = self
+                .get_json::<Vec<ReleaseResponse>>(&releases_url)
+                .await
+                .map_err(|_| ());
+
+            let result = resolve_repo_not_modified_with_releases(
+                cached_entry.as_ref(),
+                cached_etag.clone(),
+                releases_fetch,
+            );
+
+            if let ConditionalFetchResult::Fresh(ref data, ref etag) = result {
+                let mut cache = self.disk_cache.write().await;
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs() as i64)
+                    .unwrap_or(0);
+
+                cache.insert(
+                    repo.to_string(),
+                    CachedGitHubData {
+                        data: SerializableGitHubData::from(data),
+                        etag: etag.clone(),
+                        fetched_at: now,
+                    },
+                );
+            }
+
+            return result;
         }
 
         // Handle rate limit
@@ -173,46 +287,22 @@ impl AsyncGitHubClient {
         // If fetch fails, try to preserve cached releases but keep the OLD ETag
         // to ensure we re-fetch releases on the next attempt
         let releases_url = format!("{}/repos/{}/releases", GITHUB_API_BASE, repo);
-        let releases: Vec<ReleaseResponse> =
-            match self.get_json::<Vec<ReleaseResponse>>(&releases_url).await {
-                Ok(r) => r,
-                Err(_) => {
-                    // Fetch failed - try to preserve cached releases
-                    let cache = self.disk_cache.read().await;
-                    if let Some(cached) = cache.get(repo) {
-                        // Return cached data with updated repo info but preserved releases
-                        let mut data: GitHubData = cached.data.clone().into();
-                        data.stars = Some(repo_info.stargazers_count);
-                        data.open_issues = Some(repo_info.open_issues_count);
-                        data.license = repo_info
-                            .license
-                            .and_then(|l| l.spdx_id)
-                            .filter(|s| s != "NOASSERTION");
-                        data.last_commit = repo_info.pushed_at;
-                        // Use the OLD cached ETag so we re-fetch everything next time
-                        return ConditionalFetchResult::Fresh(data, cached_etag);
-                    }
-                    Vec::new() // No cache, return empty
+        let mut etag_for_cache = new_etag.clone();
+        let data = match self.get_json::<Vec<ReleaseResponse>>(&releases_url).await {
+            Ok(releases) => build_github_data(repo_info, releases),
+            Err(_) => {
+                // Fetch failed - try to preserve cached releases
+                if let Some(cached) = cached_entry.as_ref() {
+                    etag_for_cache =
+                        etag_for_releases_failure(cached_etag.clone(), new_etag.clone());
+                    build_github_data_with_cached_releases(&repo_info, cached)
+                } else {
+                    // No cached releases to preserve. Keep the repo ETag; a repo 304 will still
+                    // fetch /releases and recover once the transient error clears.
+                    etag_for_cache = etag_for_releases_failure(None, new_etag.clone());
+                    build_github_data(repo_info, Vec::new())
                 }
-            };
-
-        // Build the GitHubData — store raw ISO timestamps, format at display time
-        let data = GitHubData {
-            stars: Some(repo_info.stargazers_count),
-            open_issues: Some(repo_info.open_issues_count),
-            license: repo_info
-                .license
-                .and_then(|l| l.spdx_id)
-                .filter(|s| s != "NOASSERTION"),
-            last_commit: repo_info.pushed_at,
-            releases: releases
-                .into_iter()
-                .map(|r| Release {
-                    version: extract_version(&r.tag_name),
-                    date: r.published_at,
-                    changelog: r.body,
-                })
-                .collect(),
+            }
         };
 
         // Update disk cache with new data and ETag
@@ -227,13 +317,13 @@ impl AsyncGitHubClient {
                 repo.to_string(),
                 CachedGitHubData {
                     data: SerializableGitHubData::from(&data),
-                    etag: new_etag.clone(),
+                    etag: etag_for_cache.clone(),
                     fetched_at: now,
                 },
             );
         }
 
-        ConditionalFetchResult::Fresh(data, new_etag)
+        ConditionalFetchResult::Fresh(data, etag_for_cache)
     }
 }
 
@@ -251,6 +341,48 @@ pub fn format_stars(stars: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn release_response(tag: &str, published_at: &str) -> ReleaseResponse {
+        ReleaseResponse {
+            tag_name: tag.to_string(),
+            published_at: Some(published_at.to_string()),
+            body: None,
+        }
+    }
+
+    fn cached_entry_with_releases(releases: Vec<(&str, &str)>) -> CachedGitHubData {
+        let releases = releases
+            .into_iter()
+            .map(|(version, date)| super::super::cache::SerializableRelease {
+                version: version.to_string(),
+                date: Some(date.to_string()),
+                changelog: None,
+            })
+            .collect();
+
+        CachedGitHubData {
+            data: SerializableGitHubData {
+                releases,
+                stars: Some(42),
+                open_issues: Some(7),
+                license: Some("MIT".to_string()),
+                last_commit: Some("2024-01-01T00:00:00Z".to_string()),
+            },
+            etag: Some("\"repo-etag\"".to_string()),
+            fetched_at: 123,
+        }
+    }
+
+    fn repo_response(stars: u64, license: Option<&str>, pushed_at: &str) -> RepoResponse {
+        RepoResponse {
+            stargazers_count: stars,
+            open_issues_count: 11,
+            license: Some(LicenseResponse {
+                spdx_id: license.map(str::to_string),
+            }),
+            pushed_at: Some(pushed_at.to_string()),
+        }
+    }
 
     #[test]
     fn test_format_stars() {
@@ -272,5 +404,73 @@ mod tests {
         assert_eq!(extract_version("release-2.0.0"), "2.0.0");
         // With prerelease
         assert_eq!(extract_version("v1.0.0-beta.1"), "1.0.0-beta.1");
+    }
+
+    #[test]
+    fn test_repo_304_with_changed_releases_returns_fresh() {
+        let cached = cached_entry_with_releases(vec![("1.0.0", "2024-01-01T00:00:00Z")]);
+
+        let result = resolve_repo_not_modified_with_releases(
+            Some(&cached),
+            cached.etag.clone(),
+            Ok(vec![release_response("v1.1.0", "2024-02-01T00:00:00Z")]),
+        );
+
+        match result {
+            ConditionalFetchResult::Fresh(data, etag) => {
+                assert_eq!(etag, cached.etag);
+                assert_eq!(data.stars, Some(42));
+                assert_eq!(data.license.as_deref(), Some("MIT"));
+                assert_eq!(data.latest_version(), Some("1.1.0"));
+                assert_eq!(data.releases.len(), 1);
+            }
+            other => panic!("expected Fresh, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_repo_304_with_unchanged_releases_returns_not_modified() {
+        let cached = cached_entry_with_releases(vec![("1.0.0", "2024-01-01T00:00:00Z")]);
+
+        let result = resolve_repo_not_modified_with_releases(
+            Some(&cached),
+            cached.etag.clone(),
+            Ok(vec![release_response("v1.0.0", "2024-01-01T00:00:00Z")]),
+        );
+
+        assert!(matches!(result, ConditionalFetchResult::NotModified));
+    }
+
+    #[test]
+    fn test_repo_304_with_releases_fetch_error_returns_not_modified() {
+        let cached = cached_entry_with_releases(vec![("1.0.0", "2024-01-01T00:00:00Z")]);
+
+        let result =
+            resolve_repo_not_modified_with_releases(Some(&cached), cached.etag.clone(), Err(()));
+
+        assert!(matches!(result, ConditionalFetchResult::NotModified));
+    }
+
+    #[test]
+    fn test_partial_releases_failure_with_cache_preserves_releases_and_old_etag() {
+        let cached = cached_entry_with_releases(vec![("1.0.0", "2024-01-01T00:00:00Z")]);
+        let repo_info = repo_response(99, Some("Apache-2.0"), "2024-03-01T00:00:00Z");
+
+        let data = build_github_data_with_cached_releases(&repo_info, &cached);
+        let etag =
+            etag_for_releases_failure(cached.etag.clone(), Some("\"new-repo-etag\"".to_string()));
+
+        assert_eq!(etag, cached.etag);
+        assert_eq!(data.stars, Some(99));
+        assert_eq!(data.license.as_deref(), Some("Apache-2.0"));
+        assert_eq!(data.last_commit.as_deref(), Some("2024-03-01T00:00:00Z"));
+        assert_eq!(data.latest_version(), Some("1.0.0"));
+    }
+
+    #[test]
+    fn test_partial_releases_failure_without_cache_keeps_new_repo_etag() {
+        let new_repo_etag = Some("\"new-repo-etag\"".to_string());
+        let etag = etag_for_releases_failure(None, new_repo_etag.clone());
+        assert_eq!(etag, new_repo_etag);
     }
 }

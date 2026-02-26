@@ -151,6 +151,28 @@ mod tests {
     }
 
     #[test]
+    fn parse_date_rfc3339_positive_offset() {
+        let result = parse_date("2024-06-15T12:30:00+05:30");
+        assert!(result.is_some());
+        let dt = result.unwrap();
+        assert_eq!(
+            dt.format("%Y-%m-%dT%H:%M:%S").to_string(),
+            "2024-06-15T07:00:00"
+        );
+    }
+
+    #[test]
+    fn parse_date_rfc3339_negative_offset() {
+        let result = parse_date("2024-06-15T12:30:00-07:00");
+        assert!(result.is_some());
+        let dt = result.unwrap();
+        assert_eq!(
+            dt.format("%Y-%m-%dT%H:%M:%S").to_string(),
+            "2024-06-15T19:30:00"
+        );
+    }
+
+    #[test]
     fn parse_date_invalid() {
         assert!(parse_date("not-a-date").is_none());
         assert!(parse_date("").is_none());
