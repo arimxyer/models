@@ -24,6 +24,7 @@ A fast CLI and TUI for browsing AI models, benchmarks, and coding agents.
 - **Dual entry point** — use as `models agents` or create an `agents` symlink for standalone usage
 
 ### Recent Highlights
+- **Fast agents CLI** — concurrent GitHub fetching and version detection, on par with native Go tooling
 - **91% open weights match rate** — three-stage Jaro-Winkler pipeline for per-model open/closed detection
 - **~400 benchmark entries** from Artificial Analysis with creator filtering by region and type
 - **Optimized binary** — ~6MB release builds with strip, LTO, and panic=abort
