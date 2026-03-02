@@ -761,27 +761,7 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &App) {
 
                 // Changelog for this release
                 if let Some(changelog) = &release.changelog {
-                    for line in changelog.lines() {
-                        let trimmed = line.trim();
-                        if trimmed.is_empty() {
-                            continue;
-                        }
-                        // Basic bullet point detection
-                        let formatted = if let Some(rest) = trimmed
-                            .strip_prefix("- ")
-                            .or_else(|| trimmed.strip_prefix("* "))
-                        {
-                            format!("  \u{2022} {}", rest)
-                        } else if let Some(rest) = trimmed.strip_prefix("## ") {
-                            rest.to_string()
-                        } else if trimmed.starts_with('#') {
-                            // Skip other headers like "# What's Changed"
-                            continue;
-                        } else {
-                            format!("  {}", trimmed)
-                        };
-                        detail_lines.push(Line::from(formatted));
-                    }
+                    detail_lines.extend(super::markdown::changelog_to_lines(changelog));
                 }
 
                 detail_lines.push(Line::from("")); // Space between releases

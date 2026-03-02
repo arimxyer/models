@@ -12,6 +12,7 @@ pub mod agents_app;
 pub mod app;
 pub mod benchmarks_app;
 pub mod event;
+pub mod markdown;
 pub mod ui;
 
 use crate::agents::{
