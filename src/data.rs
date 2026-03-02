@@ -114,6 +114,13 @@ impl Model {
             .unwrap_or_else(|| "-".to_string())
     }
 
+    pub fn is_free(&self) -> bool {
+        match &self.cost {
+            None => true,
+            Some(c) => c.input.unwrap_or(0.0) == 0.0 && c.output.unwrap_or(0.0) == 0.0,
+        }
+    }
+
     pub fn cost_str(&self) -> String {
         match &self.cost {
             Some(c) => {

@@ -76,6 +76,7 @@ pub struct Filters {
     pub reasoning: bool,
     pub tools: bool,
     pub open_weights: bool,
+    pub free: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -112,9 +113,11 @@ pub enum Message {
     CopyProviderApi,   // Copy provider API URL
     OpenProviderDoc,   // Open provider documentation URL in browser
     CycleSort,         // Cycle through sort options
+    ToggleSortDir,     // Toggle sort direction (ascending/descending)
     ToggleReasoning,   // Toggle reasoning filter
     ToggleTools,       // Toggle tools filter
     ToggleOpenWeights, // Toggle open weights filter
+    ToggleFree,        // Toggle free models filter
     ToggleHelp,        // Toggle help popup
     ScrollHelpUp,      // Scroll help popup up
     ScrollHelpDown,    // Scroll help popup down
@@ -203,6 +206,7 @@ pub struct App {
     pub focus: Focus,
     pub mode: Mode,
     pub sort_order: SortOrder,
+    pub sort_ascending: bool,
     pub filters: Filters,
     pub search_query: String,
     pub status_message: Option<String>,
@@ -254,6 +258,7 @@ impl App {
             focus: Focus::Providers,
             mode: Mode::Normal,
             sort_order: SortOrder::Default,
+            sort_ascending: false,
             filters: Filters::default(),
             search_query: String::new(),
             status_message: None,
@@ -567,9 +572,18 @@ impl App {
             | Message::OpenProviderDoc => {}
             Message::CycleSort => {
                 self.sort_order = self.sort_order.next();
+                self.sort_ascending = false; // Reset direction when changing sort
                 self.selected_model = 0;
                 self.update_filtered_models();
-                self.model_list_state.select(Some(self.selected_model + 1)); // +1 for header
+                self.model_list_state.select(Some(self.selected_model + 1));
+            }
+            Message::ToggleSortDir => {
+                if self.sort_order != SortOrder::Default {
+                    self.sort_ascending = !self.sort_ascending;
+                    self.selected_model = 0;
+                    self.update_filtered_models();
+                    self.model_list_state.select(Some(self.selected_model + 1));
+                }
             }
             Message::ToggleReasoning => {
                 self.filters.reasoning = !self.filters.reasoning;
@@ -585,6 +599,12 @@ impl App {
             }
             Message::ToggleOpenWeights => {
                 self.filters.open_weights = !self.filters.open_weights;
+                self.selected_model = 0;
+                self.update_filtered_models();
+                self.model_list_state.select(Some(self.selected_model + 1));
+            }
+            Message::ToggleFree => {
+                self.filters.free = !self.filters.free;
                 self.selected_model = 0;
                 self.update_filtered_models();
                 self.model_list_state.select(Some(self.selected_model + 1));
@@ -929,6 +949,9 @@ impl App {
         if self.filters.open_weights && !model.open_weights {
             return false;
         }
+        if self.filters.free && !model.is_free() {
+            return false;
+        }
         true
     }
 
@@ -1005,10 +1028,16 @@ impl App {
                 entries.sort_by(|a, b| a.provider_id.cmp(&b.provider_id).then(a.id.cmp(&b.id)));
             }
             SortOrder::ReleaseDate => {
-                // Sort by release date descending (newest first), None values last
+                // Default: descending (newest first), ascending when toggled
                 entries.sort_by(
                     |a, b| match (&b.model.release_date, &a.model.release_date) {
-                        (Some(b_date), Some(a_date)) => b_date.cmp(a_date),
+                        (Some(b_date), Some(a_date)) => {
+                            if self.sort_ascending {
+                                a_date.cmp(b_date)
+                            } else {
+                                b_date.cmp(a_date)
+                            }
+                        }
                         (Some(_), None) => std::cmp::Ordering::Less,
                         (None, Some(_)) => std::cmp::Ordering::Greater,
                         (None, None) => a.id.cmp(&b.id),
@@ -1016,14 +1045,21 @@ impl App {
                 );
             }
             SortOrder::Cost => {
-                // Sort by input cost ascending (cheapest first), None values last
+                // Default: ascending (cheapest first), descending when toggled
                 entries.sort_by(|a, b| {
                     let a_cost = a.model.cost.as_ref().and_then(|c| c.input);
                     let b_cost = b.model.cost.as_ref().and_then(|c| c.input);
                     match (a_cost, b_cost) {
-                        (Some(a_val), Some(b_val)) => a_val
-                            .partial_cmp(&b_val)
-                            .unwrap_or(std::cmp::Ordering::Equal),
+                        (Some(a_val), Some(b_val)) => {
+                            let cmp = a_val
+                                .partial_cmp(&b_val)
+                                .unwrap_or(std::cmp::Ordering::Equal);
+                            if self.sort_ascending {
+                                cmp.reverse()
+                            } else {
+                                cmp
+                            }
+                        }
                         (Some(_), None) => std::cmp::Ordering::Less,
                         (None, Some(_)) => std::cmp::Ordering::Greater,
                         (None, None) => a.id.cmp(&b.id),
@@ -1031,12 +1067,18 @@ impl App {
                 });
             }
             SortOrder::Context => {
-                // Sort by context size descending (largest first), None values last
+                // Default: descending (largest first), ascending when toggled
                 entries.sort_by(|a, b| {
                     let a_ctx = a.model.limit.as_ref().and_then(|l| l.context);
                     let b_ctx = b.model.limit.as_ref().and_then(|l| l.context);
                     match (b_ctx, a_ctx) {
-                        (Some(b_val), Some(a_val)) => b_val.cmp(&a_val),
+                        (Some(b_val), Some(a_val)) => {
+                            if self.sort_ascending {
+                                a_val.cmp(&b_val)
+                            } else {
+                                b_val.cmp(&a_val)
+                            }
+                        }
                         (Some(_), None) => std::cmp::Ordering::Less,
                         (None, Some(_)) => std::cmp::Ordering::Greater,
                         (None, None) => a.id.cmp(&b.id),

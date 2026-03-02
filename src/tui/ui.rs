@@ -132,9 +132,9 @@ fn draw_providers(f: &mut Frame, area: Rect, app: &mut App) {
     };
 
     let filter_line = Line::from(vec![
-        Span::styled("[4]", Style::default().fg(cat_color)),
+        Span::styled("[5]", Style::default().fg(cat_color)),
         Span::raw(format!(" {} ", cat_label)),
-        Span::styled("[5]", Style::default().fg(grp_color)),
+        Span::styled("[6]", Style::default().fg(grp_color)),
         Span::raw(" Grp"),
     ]);
     f.render_widget(Paragraph::new(filter_line), chunks[0]);
@@ -205,10 +205,21 @@ fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
     let show_provider_col = app.is_all_selected();
 
     let sort_indicator = match app.sort_order {
-        SortOrder::Default => "",
-        SortOrder::ReleaseDate => " \u{2193}date",
-        SortOrder::Cost => " \u{2191}cost",
-        SortOrder::Context => " \u{2193}ctx",
+        SortOrder::Default => String::new(),
+        _ => {
+            let arrow = if app.sort_ascending {
+                "\u{2191}"
+            } else {
+                "\u{2193}"
+            };
+            let label = match app.sort_order {
+                SortOrder::ReleaseDate => "date",
+                SortOrder::Cost => "cost",
+                SortOrder::Context => "ctx",
+                SortOrder::Default => unreachable!(),
+            };
+            format!(" {}{}", arrow, label)
+        }
     };
 
     let filter_indicator = format_filters(&app.filters, app.provider_category_filter);
@@ -1763,10 +1774,10 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
                     Span::raw("switch  "),
                     Span::styled(" / ", Style::default().fg(Color::Yellow)),
                     Span::raw("search  "),
-                    Span::styled(" s ", Style::default().fg(Color::Yellow)),
+                    Span::styled(" s/S ", Style::default().fg(Color::Yellow)),
                     Span::raw("sort  "),
-                    Span::styled(" 4 ", Style::default().fg(Color::Yellow)),
-                    Span::raw("category  "),
+                    Span::styled(" 1-6 ", Style::default().fg(Color::Yellow)),
+                    Span::raw("filter  "),
                     Span::styled(" c ", Style::default().fg(Color::Yellow)),
                     Span::raw("copy"),
                 ]),
@@ -1855,6 +1866,9 @@ fn format_filters(filters: &Filters, category: ProviderCategory) -> String {
     }
     if filters.open_weights {
         active.push("open");
+    }
+    if filters.free {
+        active.push("free");
     }
     if category != ProviderCategory::All {
         active.push(category.label());
@@ -1954,6 +1968,10 @@ fn draw_help_popup(f: &mut Frame, scroll: u16, current_tab: Tab) {
                     Span::raw("Cycle sort (name → date → cost → context)"),
                 ]),
                 Line::from(vec![
+                    Span::styled("  S             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Toggle sort direction"),
+                ]),
+                Line::from(vec![
                     Span::styled("  1             ", Style::default().fg(Color::Yellow)),
                     Span::raw("Toggle reasoning filter"),
                 ]),
@@ -1967,10 +1985,14 @@ fn draw_help_popup(f: &mut Frame, scroll: u16, current_tab: Tab) {
                 ]),
                 Line::from(vec![
                     Span::styled("  4             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Cycle provider category filter"),
+                    Span::raw("Toggle free models filter"),
                 ]),
                 Line::from(vec![
                     Span::styled("  5             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Cycle provider category filter"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  6             ", Style::default().fg(Color::Yellow)),
                     Span::raw("Toggle category grouping"),
                 ]),
                 Line::from(""),

@@ -117,13 +117,15 @@ fn handle_models_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Opti
 
         // Sort
         KeyCode::Char('s') => Some(Message::CycleSort),
+        KeyCode::Char('S') => Some(Message::ToggleSortDir),
 
         // Filters
         KeyCode::Char('1') => Some(Message::ToggleReasoning),
         KeyCode::Char('2') => Some(Message::ToggleTools),
         KeyCode::Char('3') => Some(Message::ToggleOpenWeights),
-        KeyCode::Char('4') => Some(Message::CycleProviderCategory),
-        KeyCode::Char('5') => Some(Message::ToggleGrouping),
+        KeyCode::Char('4') => Some(Message::ToggleFree),
+        KeyCode::Char('5') => Some(Message::CycleProviderCategory),
+        KeyCode::Char('6') => Some(Message::ToggleGrouping),
 
         _ => None,
     }
