@@ -216,6 +216,8 @@ fn handle_agents_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Opti
 
         // Search
         KeyCode::Char('/') => Some(Message::EnterSearch),
+        KeyCode::Char('n') => Some(Message::NextSearchMatch),
+        KeyCode::Char('N') => Some(Message::PrevSearchMatch),
 
         // Sort
         KeyCode::Char('s') => Some(Message::CycleAgentSort),

@@ -146,6 +146,9 @@ pub enum Message {
     ScrollDetailDown,
     PageScrollDetailUp,
     PageScrollDetailDown,
+    // Search match navigation
+    NextSearchMatch,
+    PrevSearchMatch,
     // Agent sort
     CycleAgentSort,
     // Provider categories
@@ -217,6 +220,8 @@ pub struct App {
     pub benchmark_store: BenchmarkStore,
     pub benchmarks_app: BenchmarksApp,
     pub open_weights_map: HashMap<String, bool>,
+    /// Cached detail panel height for search match scrolling
+    pub last_detail_height: u16,
 }
 
 impl App {
@@ -265,6 +270,7 @@ impl App {
             benchmark_store,
             benchmarks_app,
             open_weights_map,
+            last_detail_height: 0,
         };
 
         app.update_provider_list();
@@ -730,6 +736,20 @@ impl App {
                 if let Some(ref mut agents_app) = self.agents_app {
                     agents_app.detail_scroll =
                         agents_app.detail_scroll.saturating_add(PAGE_SIZE as u16);
+                }
+            }
+            Message::NextSearchMatch => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    if let Some(scroll) = agents_app.next_search_match(self.last_detail_height) {
+                        agents_app.detail_scroll = scroll;
+                    }
+                }
+            }
+            Message::PrevSearchMatch => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    if let Some(scroll) = agents_app.prev_search_match(self.last_detail_height) {
+                        agents_app.detail_scroll = scroll;
+                    }
                 }
             }
             Message::CycleAgentSort => {

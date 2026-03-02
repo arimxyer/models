@@ -404,7 +404,7 @@ fn draw_agents_main(f: &mut Frame, area: Rect, app: &mut App) {
         .split(area);
 
     draw_agent_list(f, chunks[0], app);
-    draw_agent_detail(f, chunks[1], app);
+    draw_agent_detail(f, chunks[1], &mut *app);
 }
 
 /// Calculate visible height for detail panel (area height minus borders)
@@ -606,22 +606,26 @@ fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut App) {
     f.render_stateful_widget(list, chunks[1], &mut state);
 }
 
-fn draw_agent_detail(f: &mut Frame, area: Rect, app: &App) {
+fn draw_agent_detail(f: &mut Frame, area: Rect, app: &mut App) {
     use super::agents_app::AgentFocus;
 
-    let agents_app = match &app.agents_app {
-        Some(a) => a,
+    // Extract what we need from agents_app before building lines
+    let (is_focused, search_query) = match &app.agents_app {
+        Some(a) => (a.focus == AgentFocus::Details, a.search_query.clone()),
         None => return,
     };
 
-    let is_focused = agents_app.focus == AgentFocus::Details;
     let border_style = if is_focused {
         Style::default().fg(Color::Cyan)
     } else {
         Style::default().fg(Color::DarkGray)
     };
 
-    let lines: Vec<Line> = if let Some(entry) = agents_app.current_entry() {
+    let mut match_line_indices: Vec<u16> = Vec::new();
+
+    let lines: Vec<Line> = if let Some(entry) =
+        app.agents_app.as_ref().and_then(|a| a.current_entry())
+    {
         let mut detail_lines = Vec::new();
 
         // Header: Name + Version
@@ -761,7 +765,20 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &App) {
 
                 // Changelog for this release
                 if let Some(changelog) = &release.changelog {
-                    detail_lines.extend(super::markdown::changelog_to_lines(changelog));
+                    if search_query.is_empty() {
+                        detail_lines.extend(super::markdown::changelog_to_lines(changelog));
+                    } else {
+                        let changelog_lines = super::markdown::changelog_to_lines_highlighted(
+                            changelog,
+                            &search_query,
+                        );
+                        for cl in changelog_lines {
+                            if super::markdown::line_contains_match(&cl, &search_query) {
+                                match_line_indices.push(detail_lines.len() as u16);
+                            }
+                            detail_lines.push(cl);
+                        }
+                    }
                 }
 
                 detail_lines.push(Line::from("")); // Space between releases
@@ -770,14 +787,20 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &App) {
 
         // Keybinding hints at the bottom
         detail_lines.push(Line::from(""));
-        detail_lines.push(Line::from(vec![
+        let mut hints = vec![
             Span::styled(" o ", Style::default().fg(Color::Yellow)),
             Span::raw("open docs  "),
             Span::styled(" r ", Style::default().fg(Color::Yellow)),
             Span::raw("open repo  "),
             Span::styled(" c ", Style::default().fg(Color::Yellow)),
             Span::raw("copy name"),
-        ]));
+        ];
+        if !search_query.is_empty() {
+            hints.push(Span::raw("  "));
+            hints.push(Span::styled(" n/N ", Style::default().fg(Color::Yellow)));
+            hints.push(Span::raw("next/prev match"));
+        }
+        detail_lines.push(Line::from(hints));
 
         detail_lines
     } else {
@@ -787,23 +810,70 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &App) {
         ))]
     };
 
-    // Clamp scroll to content bounds (calculate clamped value without mutating)
+    // Compute visual (wrapped) line offsets for accurate scrolling
     let visible_height = detail_visible_height(area);
-    let content_lines = lines.len() as u16;
-    let max_scroll = content_lines.saturating_sub(visible_height);
-    let scroll_pos = agents_app.detail_scroll.min(max_scroll);
+    let wrap_width = area.width.saturating_sub(2) as usize; // subtract borders
+
+    // Build a cumulative visual line offset for each logical line
+    let mut visual_offsets: Vec<u16> = Vec::with_capacity(lines.len());
+    let mut visual_total: u16 = 0;
+    for line in &lines {
+        visual_offsets.push(visual_total);
+        let line_width: usize = line.spans.iter().map(|s| s.content.len()).sum();
+        let wrapped_lines = if wrap_width == 0 || line_width == 0 {
+            1
+        } else {
+            line_width.div_ceil(wrap_width).max(1) as u16
+        };
+        visual_total += wrapped_lines;
+    }
+
+    // Compute visual offsets for match lines specifically
+    let match_visual_offsets: Vec<u16> = match_line_indices
+        .iter()
+        .map(|&idx| visual_offsets.get(idx as usize).copied().unwrap_or(0))
+        .collect();
+
+    // Clamp scroll to content bounds (using visual line count)
+    let max_scroll = visual_total.saturating_sub(visible_height);
+    let scroll_pos = {
+        let agents_app = match &app.agents_app {
+            Some(a) => a,
+            None => return,
+        };
+        agents_app.detail_scroll.min(max_scroll)
+    };
+
+    // Build detail title with match count
+    let match_count = match_line_indices.len();
+    let current_match_display = app
+        .agents_app
+        .as_ref()
+        .map(|a| a.current_match)
+        .unwrap_or(0);
+    let detail_title = if !search_query.is_empty() && match_count > 0 {
+        format!(" Details [{}/{}] ", current_match_display + 1, match_count)
+    } else {
+        " Details ".to_string()
+    };
 
     let paragraph = Paragraph::new(lines)
         .block(
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(border_style)
-                .title(" Details "),
+                .title(detail_title),
         )
         .wrap(Wrap { trim: false })
         .scroll((scroll_pos, 0));
 
     f.render_widget(paragraph, area);
+
+    // Update match state and detail height (after lines are consumed)
+    app.last_detail_height = visible_height;
+    if let Some(ref mut agents_app) = app.agents_app {
+        agents_app.update_search_matches(match_line_indices, match_visual_offsets);
+    }
 }
 
 fn draw_provider_detail(f: &mut Frame, area: Rect, app: &App) {
