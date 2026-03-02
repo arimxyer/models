@@ -24,10 +24,14 @@ A fast CLI and TUI for browsing AI models, benchmarks, and coding agents.
 - **Dual entry point** — use as `models agents` or create an `agents` symlink for standalone usage
 
 ### Recent Highlights
+- **Free models filter** — press `4` on the Models tab to show only free models
+- **Sort direction toggle** — press `S` to flip sort direction on Models/Benchmarks tabs
+- **Changelog search** — `/` searches across agent changelogs with highlighted matches and `n`/`N` navigation
+- **Styled markdown** — agent changelogs rendered with headers, bold, inline code, and URLs
+- **Corporate proxy support** — TLS now uses OS trust store, fixing `UnknownIssuer` errors behind corporate proxies
 - **Fast agents CLI** — concurrent GitHub fetching and version detection, on par with native Go tooling
 - **91% open weights match rate** — three-stage Jaro-Winkler pipeline for per-model open/closed detection
 - **~400 benchmark entries** from Artificial Analysis with creator filtering by region and type
-- **Optimized binary** — ~6MB release builds with strip, LTO, and panic=abort
 
 ## Features
 
@@ -43,6 +47,8 @@ A fast CLI and TUI for browsing AI models, benchmarks, and coding agents.
 - **Curated catalog** of 12+ AI coding assistants
 - **Version detection** — automatically detects installed agents
 - **GitHub integration** — stars, releases, changelogs, update availability
+- **Styled changelogs** — markdown rendering with syntax highlighting in the detail pane
+- **Changelog search** — search across changelogs with highlighted matches and `n`/`N` jump-to-match
 - **Persistent cache** — instant startup with ETag-based conditional fetching
 - **Customizable tracking** — choose which agents to monitor
 
@@ -135,11 +141,13 @@ models
 | Key | Action |
 |-----|--------|
 | `s` | Cycle sort (name → date → cost → context) |
+| `S` | Toggle sort direction (asc/desc) |
 | `1` | Toggle reasoning filter |
 | `2` | Toggle tools filter |
 | `3` | Toggle open weights filter |
-| `4` | Cycle provider category filter (All → Origin → Cloud → Inference → Gateway → Tool) |
-| `5` | Toggle category grouping |
+| `4` | Toggle free models filter |
+| `5` | Cycle provider category filter (All → Origin → Cloud → Inference → Gateway → Tool) |
+| `6` | Toggle category grouping |
 
 **Copy & Open**
 | Key | Action |
@@ -161,6 +169,13 @@ models
 | `1` | Toggle installed filter |
 | `2` | Toggle CLI tools filter |
 | `3` | Toggle open source filter |
+
+**Search**
+| Key | Action |
+|-----|--------|
+| `/` | Search agents and changelogs |
+| `n` | Jump to next match |
+| `N` | Jump to previous match |
 
 **Actions**
 | Key | Action |

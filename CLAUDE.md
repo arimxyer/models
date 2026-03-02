@@ -46,6 +46,7 @@ Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message`
 - `src/tui/app.rs` — App state, Message enum, update logic
 - `src/tui/event.rs` — keybinding → Message mapping
 - `src/tui/ui.rs` — rendering
+- `src/tui/markdown.rs` — custom markdown-to-ratatui converter (headers, bullets, bold, code, URLs, search highlighting)
 - `src/benchmarks.rs` — BenchmarkStore, BenchmarkEntry
 - `src/benchmark_fetch.rs` — jsDelivr CDN fetcher (no cache, no ETag)
 - `src/open_weights.rs` — runtime matching of AA entries to models.dev for open/closed status
@@ -71,6 +72,8 @@ Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message`
 - The AA API uses `0` as a sentinel for missing performance data — jq transforms must convert `0` → `null` (e.g., `if . == 0 then null else . end`)
 - jq transforms use null-safe access (`?.` / `// null`) for nested objects — `mise.toml` and `update-benchmarks.yml` must stay in sync
 - Never use `eprintln!` in TUI mode — stderr output corrupts ratatui's alternate screen buffer, causing rendering glitches. Use `Message` variants or status bar updates instead. (`eprintln!` is fine in CLI-only code paths like `src/cli/agents.rs`)
+- `Paragraph::scroll((y, 0))` with `.wrap(Wrap { trim: false })` counts **visual (wrapped) lines**, not logical lines — scroll positions must account for line wrapping when jumping to specific content
+- TLS uses `rustls-tls-native-roots` (not `rustls-tls`) — loads certificates from the OS trust store to support corporate TLS-inspecting proxies
 
 ## Releasing
 1. Bump version in `Cargo.toml`
