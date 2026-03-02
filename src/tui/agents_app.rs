@@ -96,6 +96,10 @@ pub struct AgentsApp {
     pub picker_changes: HashMap<String, bool>, // agent_id -> new tracked state
     // Detail panel scroll
     pub detail_scroll: u16,
+    // Search match navigation (line indices in detail content)
+    pub search_match_lines: Vec<u16>,
+    pub search_match_visual_offsets: Vec<u16>, // visual (wrapped) line offsets for scroll
+    pub current_match: usize,
     // Loading state for async GitHub fetches
     pub loading_github: bool,
     pub pending_github_fetches: usize,
@@ -191,6 +195,9 @@ impl AgentsApp {
             picker_selected: 0,
             picker_changes: HashMap::new(),
             detail_scroll: 0,
+            search_match_lines: Vec::new(),
+            search_match_visual_offsets: Vec::new(),
+            current_match: 0,
             loading_github: true,
             pending_github_fetches: pending_fetches,
         };
@@ -229,10 +236,15 @@ impl AgentsApp {
                         || entry.agent.categories.contains(&"cli".to_string()))
                     && (!self.filters.open_source_only || entry.agent.open_source);
 
-                // Search filter
+                // Search filter (includes changelog content)
                 let search_match = query_lower.is_empty()
                     || entry.agent.name.to_lowercase().contains(&query_lower)
-                    || entry.id.to_lowercase().contains(&query_lower);
+                    || entry.id.to_lowercase().contains(&query_lower)
+                    || entry.github.releases.iter().any(|r| {
+                        r.changelog
+                            .as_ref()
+                            .is_some_and(|c| c.to_lowercase().contains(&query_lower))
+                    });
 
                 category_match && filter_match && search_match
             })
@@ -446,6 +458,45 @@ impl AgentsApp {
         Ok(newly_tracked)
     }
 
+    /// Update match line indices and visual offsets from rendered detail content.
+    /// Only resets current_match when the match set actually changes.
+    pub fn update_search_matches(&mut self, match_lines: Vec<u16>, visual_offsets: Vec<u16>) {
+        if self.search_match_lines != match_lines {
+            self.search_match_lines = match_lines;
+            self.search_match_visual_offsets = visual_offsets;
+            self.current_match = 0;
+        }
+    }
+
+    /// Jump to next search match, returning the scroll position.
+    pub fn next_search_match(&mut self, visible_height: u16) -> Option<u16> {
+        if self.search_match_lines.is_empty() || self.search_match_visual_offsets.is_empty() {
+            return None;
+        }
+        self.current_match = (self.current_match + 1) % self.search_match_lines.len();
+        let visual = self.search_match_visual_offsets[self.current_match];
+        Some(self.scroll_to_current_match(visible_height, visual))
+    }
+
+    /// Jump to previous search match, returning the scroll position.
+    pub fn prev_search_match(&mut self, visible_height: u16) -> Option<u16> {
+        if self.search_match_lines.is_empty() || self.search_match_visual_offsets.is_empty() {
+            return None;
+        }
+        if self.current_match == 0 {
+            self.current_match = self.search_match_lines.len() - 1;
+        } else {
+            self.current_match -= 1;
+        }
+        let visual = self.search_match_visual_offsets[self.current_match];
+        Some(self.scroll_to_current_match(visible_height, visual))
+    }
+
+    fn scroll_to_current_match(&self, visible_height: u16, visual_offset: u16) -> u16 {
+        // Use the pre-computed visual line offset (accounts for wrapping)
+        visual_offset.saturating_sub(visible_height / 2)
+    }
+
     /// Format active filters for display in block title
     pub fn format_active_filters(&self) -> String {
         let mut active = Vec::new();
@@ -530,6 +581,9 @@ mod tests {
             picker_selected: 0,
             picker_changes: HashMap::new(),
             detail_scroll: 0,
+            search_match_lines: Vec::new(),
+            search_match_visual_offsets: Vec::new(),
+            current_match: 0,
             loading_github: false,
             pending_github_fetches: 0,
         }

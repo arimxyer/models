@@ -68,6 +68,45 @@ fn parse_inline_spans(text: &str) -> Vec<Span<'static>> {
     spans
 }
 
+// ── Highlight post-processing ────────────────────────────────────────
+
+fn highlight_style() -> Style {
+    Style::default()
+        .fg(Color::Black)
+        .bg(Color::Yellow)
+        .add_modifier(Modifier::BOLD)
+}
+
+/// Split spans to highlight case-insensitive occurrences of `query`.
+fn highlight_spans(spans: Vec<Span<'static>>, query: &str) -> Vec<Span<'static>> {
+    if query.is_empty() {
+        return spans;
+    }
+    let query_lower = query.to_lowercase();
+    let mut result = Vec::new();
+    for span in spans {
+        let text = span.content.as_ref();
+        let text_lower = text.to_lowercase();
+        let mut last = 0;
+        for (start, _) in text_lower.match_indices(&query_lower) {
+            if start > last {
+                result.push(Span::styled(text[last..start].to_owned(), span.style));
+            }
+            result.push(Span::styled(
+                text[start..start + query.len()].to_owned(),
+                highlight_style(),
+            ));
+            last = start + query.len();
+        }
+        if last < text.len() {
+            result.push(Span::styled(text[last..].to_owned(), span.style));
+        } else if last == 0 {
+            result.push(span);
+        }
+    }
+    result
+}
+
 // ── Public API ──────────────────────────────────────────────────────
 
 /// Convert a raw markdown changelog body into styled ratatui lines.
@@ -115,6 +154,28 @@ pub fn changelog_to_lines(body: &str) -> Vec<Line<'static>> {
     }
 
     lines
+}
+
+/// Convert a raw markdown changelog body into styled lines with search highlighting.
+pub fn changelog_to_lines_highlighted(body: &str, query: &str) -> Vec<Line<'static>> {
+    changelog_to_lines(body)
+        .into_iter()
+        .map(|line| {
+            let spans: Vec<Span<'static>> = line.spans;
+            Line::from(highlight_spans(spans, query))
+        })
+        .collect()
+}
+
+/// Check if a line contains a case-insensitive match for the query.
+pub fn line_contains_match(line: &Line, query: &str) -> bool {
+    if query.is_empty() {
+        return false;
+    }
+    let query_lower = query.to_lowercase();
+    line.spans
+        .iter()
+        .any(|span| span.content.to_lowercase().contains(&query_lower))
 }
 
 #[cfg(test)]
@@ -187,6 +248,42 @@ mod tests {
         assert_eq!(lines.len(), 1);
         assert_eq!(lines[0].spans[0].content, "  ");
         assert_eq!(lines[0].spans[1].content, "Some plain text");
+    }
+
+    #[test]
+    fn highlight_splits_spans() {
+        let lines = changelog_to_lines_highlighted("- Fixed crash on startup", "crash");
+        let spans = &lines[0].spans;
+        // bullet, "Fixed ", "crash" (highlighted), " on startup"
+        let highlighted = spans.iter().find(|s| s.content == "crash").unwrap();
+        assert_eq!(highlighted.style, highlight_style());
+    }
+
+    #[test]
+    fn highlight_case_insensitive() {
+        let lines = changelog_to_lines_highlighted("- Added STREAMING support", "streaming");
+        let highlighted = lines[0]
+            .spans
+            .iter()
+            .find(|s| s.content == "STREAMING")
+            .unwrap();
+        assert_eq!(highlighted.style, highlight_style());
+    }
+
+    #[test]
+    fn highlight_preserves_no_match_lines() {
+        let lines = changelog_to_lines_highlighted("## Bug Fixes\n- Fixed crash", "crash");
+        // Header line should be unchanged
+        assert_eq!(lines[0].spans[0].style, header_style());
+        // Bullet line should have highlight
+        assert!(lines[1].spans.iter().any(|s| s.style == highlight_style()));
+    }
+
+    #[test]
+    fn line_contains_match_works() {
+        let lines = changelog_to_lines("- Fixed crash on startup");
+        assert!(line_contains_match(&lines[0], "crash"));
+        assert!(!line_contains_match(&lines[0], "missing"));
     }
 
     #[test]
