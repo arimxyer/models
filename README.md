@@ -229,8 +229,11 @@ Track AI coding agent releases from the command line. Install the `agents` alias
 
 ```bash
 # Create the agents alias (one-time setup)
+mkdir -p ~/.local/bin
 ln -s $(which models) ~/.local/bin/agents
 ```
+
+> **Note:** Make sure `~/.local/bin` is in your `PATH`. For example, in **bash/zsh** add `export PATH="$HOME/.local/bin:$PATH"` to your shell config, or in **fish** run `fish_add_path ~/.local/bin`.
 
 #### Status table
 
