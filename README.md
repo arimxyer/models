@@ -78,9 +78,10 @@ brew install arimxyer/tap/models
 ### Scoop (Windows)
 
 ```powershell
-scoop bucket add arimxyer https://github.com/arimxyer/scoop-bucket
-scoop install models
+scoop install extras/models
 ```
+
+> **Migrating from the custom bucket?** Run `scoop bucket rm arimxyer` — Scoop Extras handles updates automatically.
 
 ### Pre-built binaries
 

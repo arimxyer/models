@@ -53,7 +53,7 @@ Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message`
 
 ### GitHub Actions
 - `ci.yml` — runs on PR/push: fmt check, clippy, test
-- `release.yml` — triggered by `v*` tags: builds 5 targets in parallel with Rust caching, publishes to crates.io, updates Homebrew/Scoop. Pre-release tags (containing `-`) skip publish/Homebrew/Scoop and mark the GitHub release as prerelease.
+- `release.yml` — triggered by `v*` tags: builds 5 targets in parallel with Rust caching, publishes to crates.io, updates Homebrew tap. Pre-release tags (containing `-`) skip publish/Homebrew and mark the GitHub release as prerelease. Scoop Extras handles Windows updates via its own autoupdate mechanism.
 - `update-benchmarks.yml` — runs every 30 minutes: fetches AA API, commits if data changed
 
 ## Conventions
