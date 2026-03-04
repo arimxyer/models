@@ -11392,12 +11392,12 @@
     "math_500": null,
     "aime": null,
     "aime_25": 0.48,
-    "output_tps": 112.701,
-    "ttft": 0.585,
-    "ttfat": 0.585,
-    "price_input": 0.55,
-    "price_output": 2.15,
-    "price_blended": 0.938
+    "output_tps": 111.001,
+    "ttft": 0.588,
+    "ttfat": 0.588,
+    "price_input": 0.5,
+    "price_output": 2.1,
+    "price_blended": 0.875
   },
   {
     "id": "1cf439b8-0cfd-47b2-9de2-9a2157e6762b",
