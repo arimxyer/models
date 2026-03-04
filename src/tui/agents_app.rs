@@ -544,6 +544,7 @@ mod tests {
                 platform_support: vec![],
                 open_source: true,
                 cli_binary: None,
+                alt_binaries: vec![],
                 version_command: vec![],
                 version_regex: None,
                 config_files: vec![],

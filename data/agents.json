@@ -99,6 +99,7 @@
       "platform_support": ["macos", "linux"],
       "open_source": true,
       "cli_binary": "zed",
+      "alt_binaries": ["zeditor"],
       "version_command": ["--version"],
       "version_regex": "([0-9]+\\.[0-9]+\\.[0-9]+)",
       "config_files": ["~/.config/zed/"],

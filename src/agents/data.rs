@@ -40,6 +40,8 @@ pub struct Agent {
     #[serde(default)]
     pub cli_binary: Option<String>,
     #[serde(default)]
+    pub alt_binaries: Vec<String>,
+    #[serde(default)]
     pub version_command: Vec<String>,
     #[serde(default)]
     pub version_regex: Option<String>,
