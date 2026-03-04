@@ -10,19 +10,20 @@ pub fn detect_installed(agent: &Agent) -> InstalledInfo {
         None => return InstalledInfo::default(),
     };
 
-    // Try to get version directly - this also confirms the binary exists
-    // Skip the separate `which` call since --version tells us if it's installed
-    let (version, path) = get_version_and_path(
-        binary,
-        &agent.version_command,
-        agent.version_regex.as_deref(),
-    );
+    // Try primary binary first, then fall back to alt_binaries
+    // (e.g., "zed" on macOS vs "zeditor" on Arch Linux)
+    let binaries_to_try =
+        std::iter::once(binary.as_str()).chain(agent.alt_binaries.iter().map(|s| s.as_str()));
 
-    if version.is_none() && path.is_none() {
-        return InstalledInfo::default();
+    for bin in binaries_to_try {
+        let (version, path) =
+            get_version_and_path(bin, &agent.version_command, agent.version_regex.as_deref());
+        if version.is_some() || path.is_some() {
+            return InstalledInfo { version, path };
+        }
     }
 
-    InstalledInfo { version, path }
+    InstalledInfo::default()
 }
 
 fn which_binary(name: &str) -> Option<PathBuf> {

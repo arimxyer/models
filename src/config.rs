@@ -38,6 +38,7 @@ impl CustomAgent {
                 .map(|t| vec![t.clone()])
                 .unwrap_or_default(),
             cli_binary: self.binary.clone(),
+            alt_binaries: vec![],
             version_command: self.version_command.clone().unwrap_or_default(),
             installation_method: self.agent_type.clone(),
             pricing: None,
