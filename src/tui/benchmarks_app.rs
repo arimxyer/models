@@ -354,10 +354,80 @@ struct CreatorInfo {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ScatterAxis {
+    #[default]
+    Intelligence,
+    Coding,
+    Math,
+    Speed,
+    Price,
+}
+
+impl ScatterAxis {
+    pub fn next(self) -> Self {
+        match self {
+            Self::Intelligence => Self::Coding,
+            Self::Coding => Self::Math,
+            Self::Math => Self::Speed,
+            Self::Speed => Self::Price,
+            Self::Price => Self::Intelligence,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Intelligence => "Intelligence",
+            Self::Coding => "Coding",
+            Self::Math => "Math",
+            Self::Speed => "Speed (tok/s)",
+            Self::Price => "Price ($/M)",
+        }
+    }
+
+    pub fn extract(self) -> fn(&crate::benchmarks::BenchmarkEntry) -> Option<f64> {
+        match self {
+            Self::Intelligence => |e| e.intelligence_index,
+            Self::Coding => |e| e.coding_index,
+            Self::Math => |e| e.math_index,
+            Self::Speed => |e| e.output_tps,
+            Self::Price => |e| e.price_blended,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum RadarPreset {
+    #[default]
+    Agentic,
+    Academic,
+    Indexes,
+}
+
+impl RadarPreset {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Agentic => "Agentic",
+            Self::Academic => "Academic",
+            Self::Indexes => "Indexes",
+        }
+    }
+
+    pub fn next(self) -> Self {
+        match self {
+            Self::Agentic => Self::Academic,
+            Self::Academic => Self::Indexes,
+            Self::Indexes => Self::Agentic,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BottomView {
     #[default]
     Detail,
     H2H,
+    Scatter,
+    Radar,
 }
 
 pub struct BenchmarksApp {
@@ -380,6 +450,9 @@ pub struct BenchmarksApp {
     #[allow(dead_code)]
     pub h2h_scroll: usize,
     pub show_detail_overlay: bool,
+    pub scatter_x: ScatterAxis,
+    pub scatter_y: ScatterAxis,
+    pub radar_preset: RadarPreset,
 }
 
 impl BenchmarksApp {
@@ -407,6 +480,9 @@ impl BenchmarksApp {
             bottom_view: BottomView::default(),
             h2h_scroll: 0,
             show_detail_overlay: false,
+            scatter_x: ScatterAxis::default(),
+            scatter_y: ScatterAxis::Coding,
+            radar_preset: RadarPreset::default(),
         };
 
         app.build_creator_list(store);
@@ -809,6 +885,27 @@ impl BenchmarksApp {
     pub fn page_up_creator(&mut self) {
         let target = self.selected_creator.saturating_sub(PAGE_SIZE);
         self.skip_to_selectable(target, true);
+    }
+
+    pub fn cycle_bottom_view(&mut self) {
+        self.bottom_view = match self.bottom_view {
+            BottomView::H2H => BottomView::Scatter,
+            BottomView::Scatter => BottomView::Radar,
+            BottomView::Radar => BottomView::H2H,
+            BottomView::Detail => BottomView::H2H,
+        };
+    }
+
+    pub fn cycle_scatter_x(&mut self) {
+        self.scatter_x = self.scatter_x.next();
+    }
+
+    pub fn cycle_scatter_y(&mut self) {
+        self.scatter_y = self.scatter_y.next();
+    }
+
+    pub fn cycle_radar_preset(&mut self) {
+        self.radar_preset = self.radar_preset.next();
     }
 
     /// Auto-transition bottom view based on selection count.

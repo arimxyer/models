@@ -1112,35 +1112,36 @@ fn draw_benchmarks_main(f: &mut Frame, area: Rect, app: &mut App) {
 
     draw_benchmark_list(f, v_chunks[0], app);
 
-    // Bottom panel: detail (0-1 selected) or H2H (2+ selected)
+    // Bottom panel: detail (0-1 selected) or comparison views (2+ selected)
     if app.selections.len() >= 2 {
-        // Sub-tab bar (1 line) + H2H table
+        // Sub-tab bar (1 line) + view content
         let bottom_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Length(1), Constraint::Min(0)])
             .split(v_chunks[1]);
 
-        // Sub-tab indicator
-        let tab_line = Line::from(vec![
-            Span::styled(
-                " [H2H] ",
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                format!(" {} models selected", app.selections.len()),
-                Style::default().fg(Color::DarkGray),
-            ),
-        ]);
-        f.render_widget(Paragraph::new(tab_line), bottom_chunks[0]);
+        // Sub-tab bar: [H2H] [Scatter] [Radar]
+        draw_benchmark_subtab_bar(f, bottom_chunks[0], &app.benchmarks_app);
 
-        draw_h2h_table_generic(
-            f,
-            bottom_chunks[1],
-            app.benchmark_store.entries(),
-            &app.selections,
-        );
+        match app.benchmarks_app.bottom_view {
+            super::benchmarks_app::BottomView::H2H => {
+                draw_h2h_table_generic(
+                    f,
+                    bottom_chunks[1],
+                    app.benchmark_store.entries(),
+                    &app.selections,
+                );
+            }
+            super::benchmarks_app::BottomView::Scatter => {
+                draw_scatter(f, bottom_chunks[1], app);
+            }
+            super::benchmarks_app::BottomView::Radar => {
+                super::radar::draw_radar(f, bottom_chunks[1], app);
+            }
+            super::benchmarks_app::BottomView::Detail => {
+                draw_benchmark_detail(f, bottom_chunks[1], app);
+            }
+        }
     } else {
         draw_benchmark_detail(f, v_chunks[1], app);
     }
@@ -1149,6 +1150,31 @@ fn draw_benchmarks_main(f: &mut Frame, area: Rect, app: &mut App) {
     if app.benchmarks_app.show_detail_overlay && app.selections.len() >= 2 {
         draw_detail_overlay(f, area, app);
     }
+}
+
+fn draw_benchmark_subtab_bar(
+    f: &mut Frame,
+    area: Rect,
+    bench_app: &super::benchmarks_app::BenchmarksApp,
+) {
+    use super::benchmarks_app::BottomView;
+    let views = [
+        ("H2H", BottomView::H2H),
+        ("Scatter", BottomView::Scatter),
+        ("Radar", BottomView::Radar),
+    ];
+    let mut spans = Vec::new();
+    for (label, view) in &views {
+        let style = if bench_app.bottom_view == *view {
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::DarkGray)
+        };
+        spans.push(Span::styled(format!(" [{}] ", label), style));
+    }
+    f.render_widget(Paragraph::new(Line::from(spans)), area);
 }
 
 fn draw_benchmark_creators(f: &mut Frame, area: Rect, app: &mut App) {
@@ -1286,7 +1312,7 @@ fn draw_benchmark_creators(f: &mut Frame, area: Rect, app: &mut App) {
 }
 
 /// Color palette for selected models in comparison mode.
-fn compare_colors(index: usize) -> Color {
+pub(super) fn compare_colors(index: usize) -> Color {
     const PALETTE: [Color; 8] = [
         Color::Red,
         Color::Green,
@@ -1908,18 +1934,45 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
                 ]),
                 Tab::Benchmarks => {
                     if app.selections.len() >= 2 {
-                        Line::from(vec![
+                        use super::benchmarks_app::BottomView;
+                        let mut spans = vec![
                             Span::styled(" Space ", Style::default().fg(Color::Yellow)),
                             Span::raw("select  "),
-                            Span::styled(" d ", Style::default().fg(Color::Yellow)),
-                            Span::raw("detail  "),
-                            Span::styled(" x ", Style::default().fg(Color::Yellow)),
+                            Span::styled(" v ", Style::default().fg(Color::Yellow)),
+                            Span::raw("view  "),
+                        ];
+                        match app.benchmarks_app.bottom_view {
+                            BottomView::H2H => {
+                                spans.extend([
+                                    Span::styled(" d ", Style::default().fg(Color::Yellow)),
+                                    Span::raw("detail  "),
+                                ]);
+                            }
+                            BottomView::Scatter => {
+                                spans.extend([
+                                    Span::styled(" x ", Style::default().fg(Color::Yellow)),
+                                    Span::raw("X-axis  "),
+                                    Span::styled(" y ", Style::default().fg(Color::Yellow)),
+                                    Span::raw("Y-axis  "),
+                                ]);
+                            }
+                            BottomView::Radar => {
+                                spans.extend([
+                                    Span::styled(" a ", Style::default().fg(Color::Yellow)),
+                                    Span::raw("preset  "),
+                                ]);
+                            }
+                            BottomView::Detail => {}
+                        }
+                        spans.extend([
+                            Span::styled(" c ", Style::default().fg(Color::Yellow)),
                             Span::raw("clear  "),
                             Span::styled(" s ", Style::default().fg(Color::Yellow)),
                             Span::raw("sort  "),
                             Span::styled(" / ", Style::default().fg(Color::Yellow)),
                             Span::raw("search"),
-                        ])
+                        ]);
+                        Line::from(spans)
                     } else {
                         Line::from(vec![
                             Span::styled(" 1 ", Style::default().fg(Color::Yellow)),
@@ -2294,10 +2347,6 @@ fn draw_help_popup(f: &mut Frame, scroll: u16, current_tab: Tab) {
                         .add_modifier(Modifier::BOLD),
                 )),
                 Line::from(vec![
-                    Span::styled("  c             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Copy benchmark name"),
-                ]),
-                Line::from(vec![
                     Span::styled("  o             ", Style::default().fg(Color::Yellow)),
                     Span::raw("Open Artificial Analysis page"),
                 ]),
@@ -2313,12 +2362,28 @@ fn draw_help_popup(f: &mut Frame, scroll: u16, current_tab: Tab) {
                     Span::raw("Toggle model for comparison (max 8)"),
                 ]),
                 Line::from(vec![
-                    Span::styled("  x             ", Style::default().fg(Color::Yellow)),
+                    Span::styled("  c             ", Style::default().fg(Color::Yellow)),
                     Span::raw("Clear all selections"),
                 ]),
                 Line::from(vec![
+                    Span::styled("  v             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Cycle view: H2H → Scatter → Radar"),
+                ]),
+                Line::from(vec![
                     Span::styled("  d             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Show detail overlay (when 2+ selected)"),
+                    Span::raw("Show detail overlay (H2H view)"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  x             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Cycle scatter X-axis"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  y             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Cycle scatter Y-axis"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  a             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Cycle radar preset"),
                 ]),
                 Line::from(""),
             ]);
@@ -2720,6 +2785,247 @@ fn draw_h2h_table_generic(
 
     let paragraph = Paragraph::new(lines);
     f.render_widget(paragraph, inner);
+}
+
+fn draw_scatter(f: &mut Frame, area: Rect, app: &App) {
+    use ratatui::symbols::Marker;
+    use ratatui::widgets::{Axis, Chart, Dataset, GraphType};
+
+    let entries = app.benchmark_store.entries();
+    if entries.is_empty() {
+        let block = Block::default().borders(Borders::ALL).title(" Scatter ");
+        f.render_widget(block, area);
+        return;
+    }
+
+    let x_extract = app.benchmarks_app.scatter_x.extract();
+    let y_extract = app.benchmarks_app.scatter_y.extract();
+
+    // Collect all points with both x and y values present
+    let mut all_points: Vec<(f64, f64)> = Vec::new();
+    for entry in entries.iter() {
+        if let (Some(x), Some(y)) = (x_extract(entry), y_extract(entry)) {
+            all_points.push((x, y));
+        }
+    }
+
+    if all_points.is_empty() {
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title(" Scatter (no data) ");
+        f.render_widget(block, area);
+        return;
+    }
+
+    // Split area: chart on top, legend row at bottom (if selections exist)
+    let has_selections = !app.selections.is_empty();
+    let (chart_area, legend_area) = if has_selections {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(5), Constraint::Length(1)])
+            .split(area);
+        (chunks[0], Some(chunks[1]))
+    } else {
+        (area, None)
+    };
+
+    // Auto log scale for skewed axes
+    let f64_cmp = |a: &f64, b: &f64| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal);
+    let mut x_vals: Vec<f64> = all_points.iter().map(|p| p.0).collect();
+    let mut y_vals: Vec<f64> = all_points.iter().map(|p| p.1).collect();
+    x_vals.sort_by(f64_cmp);
+    y_vals.sort_by(f64_cmp);
+
+    fn is_skewed(sorted: &[f64]) -> bool {
+        if sorted.len() < 5 {
+            return false;
+        }
+        let mid = sorted[sorted.len() / 2];
+        let max = sorted[sorted.len() - 1];
+        mid > 0.0 && max / mid > 5.0
+    }
+
+    let x_log = is_skewed(&x_vals);
+    let y_log = is_skewed(&y_vals);
+
+    let log_transform = |v: f64, use_log: bool| -> f64 {
+        if use_log {
+            (v.max(0.001)).ln()
+        } else {
+            v
+        }
+    };
+
+    let display_points: Vec<(f64, f64)> = all_points
+        .iter()
+        .map(|&(x, y)| (log_transform(x, x_log), log_transform(y, y_log)))
+        .collect();
+
+    let x_min = display_points
+        .iter()
+        .map(|p| p.0)
+        .fold(f64::INFINITY, f64::min);
+    let x_max = display_points
+        .iter()
+        .map(|p| p.0)
+        .fold(f64::NEG_INFINITY, f64::max);
+    let y_min = display_points
+        .iter()
+        .map(|p| p.1)
+        .fold(f64::INFINITY, f64::min);
+    let y_max = display_points
+        .iter()
+        .map(|p| p.1)
+        .fold(f64::NEG_INFINITY, f64::max);
+
+    let x_pad = (x_max - x_min).max(0.1) * 0.05;
+    let y_pad = (y_max - y_min).max(0.1) * 0.05;
+    let x_bounds = if x_log {
+        [x_min - x_pad, x_max + x_pad]
+    } else {
+        [(x_min - x_pad).max(0.0), x_max + x_pad]
+    };
+    let y_bounds = if y_log {
+        [y_min - y_pad, y_max + y_pad]
+    } else {
+        [(y_min - y_pad).max(0.0), y_max + y_pad]
+    };
+
+    // Compute average crosshair lines
+    let sx: f64 = display_points.iter().map(|p| p.0).sum();
+    let sy: f64 = display_points.iter().map(|p| p.1).sum();
+    let n = display_points.len() as f64;
+    let avg_x = sx / n;
+    let avg_y = sy / n;
+
+    let v_line = vec![(avg_x, y_bounds[0]), (avg_x, y_bounds[1])];
+    let h_line = vec![(x_bounds[0], avg_y), (x_bounds[1], avg_y)];
+
+    // Build selected model point sets + legend
+    let mut legend_entries: Vec<(String, Color, u8)> = Vec::new();
+    #[allow(clippy::type_complexity)]
+    let mut selected_data: Vec<(String, Vec<(f64, f64)>, Color)> = Vec::new();
+
+    for (sel_idx, &store_idx) in app.selections.iter().enumerate() {
+        let color = compare_colors(sel_idx);
+        if let Some(entry) = entries.get(store_idx) {
+            let name = truncate(&entry.name, 20);
+            if let (Some(x), Some(y)) = (x_extract(entry), y_extract(entry)) {
+                let tx = log_transform(x, x_log);
+                let ty = log_transform(y, y_log);
+                let in_range = tx >= x_bounds[0]
+                    && tx <= x_bounds[1]
+                    && ty >= y_bounds[0]
+                    && ty <= y_bounds[1];
+                selected_data.push((entry.name.clone(), vec![(tx, ty)], color));
+                legend_entries.push((name, color, if in_range { 1 } else { 2 }));
+            } else {
+                legend_entries.push((name, color, 0));
+            }
+        }
+    }
+
+    // Build datasets — crosshairs, background, then selected
+    let mut datasets = vec![
+        Dataset::default()
+            .marker(Marker::Braille)
+            .graph_type(GraphType::Line)
+            .style(Style::default().fg(Color::Indexed(242)))
+            .data(&v_line),
+        Dataset::default()
+            .marker(Marker::Braille)
+            .graph_type(GraphType::Line)
+            .style(Style::default().fg(Color::Indexed(242)))
+            .data(&h_line),
+        Dataset::default()
+            .marker(Marker::Dot)
+            .graph_type(GraphType::Scatter)
+            .style(Style::default().fg(Color::DarkGray))
+            .data(&display_points),
+    ];
+
+    for (_, points, color) in &selected_data {
+        datasets.push(
+            Dataset::default()
+                .marker(Marker::HalfBlock)
+                .graph_type(GraphType::Scatter)
+                .style(Style::default().fg(*color))
+                .data(points),
+        );
+    }
+
+    let x_label = app.benchmarks_app.scatter_x.label();
+    let y_label = app.benchmarks_app.scatter_y.label();
+
+    let fmt_bound = |v: f64, use_log: bool| -> String {
+        if use_log {
+            format!("{:.1}", v.exp())
+        } else {
+            format!("{:.1}", v)
+        }
+    };
+
+    let x_suffix = if x_log { " [log]" } else { "" };
+    let y_suffix = if y_log { " [log]" } else { "" };
+
+    let chart = Chart::new(datasets)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::DarkGray))
+                .title(format!(" {y_label} vs {x_label} ")),
+        )
+        .x_axis(
+            Axis::default()
+                .title(format!("{x_label}{x_suffix}"))
+                .style(Style::default().fg(Color::Gray))
+                .bounds(x_bounds)
+                .labels([fmt_bound(x_bounds[0], x_log), fmt_bound(x_bounds[1], x_log)]),
+        )
+        .y_axis(
+            Axis::default()
+                .title(format!("{y_label}{y_suffix}"))
+                .style(Style::default().fg(Color::Gray))
+                .bounds(y_bounds)
+                .labels([fmt_bound(y_bounds[0], y_log), fmt_bound(y_bounds[1], y_log)]),
+        )
+        .legend_position(None);
+
+    f.render_widget(chart, chart_area);
+
+    // Custom legend row below the chart
+    if let Some(leg_area) = legend_area {
+        let mut spans: Vec<Span> = vec![Span::raw(" ")];
+        for (i, (name, color, status)) in legend_entries.iter().enumerate() {
+            if i > 0 {
+                spans.push(Span::raw("  "));
+            }
+            match status {
+                1 => {
+                    spans.push(Span::styled("\u{25cf} ", Style::default().fg(*color)));
+                    spans.push(Span::styled(name.as_str(), Style::default().fg(*color)));
+                }
+                2 => {
+                    spans.push(Span::styled("\u{25cf} ", Style::default().fg(*color)));
+                    spans.push(Span::styled(
+                        format!("{name} (off-chart)"),
+                        Style::default().fg(*color),
+                    ));
+                }
+                _ => {
+                    spans.push(Span::styled(
+                        "\u{25cb} ",
+                        Style::default().fg(Color::DarkGray),
+                    ));
+                    spans.push(Span::styled(
+                        format!("{name} (no data)"),
+                        Style::default().fg(Color::DarkGray),
+                    ));
+                }
+            }
+        }
+        f.render_widget(Paragraph::new(Line::from(spans)), leg_area);
+    }
 }
 
 /// Create a centered rect using fixed width and height
