@@ -2576,80 +2576,148 @@ fn fmt_h2h_price(v: f64) -> String {
     format!("${:.2}", v)
 }
 
-fn h2h_metrics() -> Vec<MetricDef> {
+/// A section header or a metric row in the H2H table.
+enum H2HRow {
+    Section(&'static str),
+    Metric(MetricDef),
+}
+
+fn h2h_rows() -> Vec<H2HRow> {
     vec![
-        MetricDef {
+        // Indexes (0-100, higher better)
+        H2HRow::Section("Indexes (0\u{2013}100)"),
+        H2HRow::Metric(MetricDef {
             label: "Intelligence",
             extract: |e| e.intelligence_index,
             format: fmt_h2h_index,
             higher_is_better: true,
-        },
-        MetricDef {
+        }),
+        H2HRow::Metric(MetricDef {
             label: "Coding",
             extract: |e| e.coding_index,
             format: fmt_h2h_index,
             higher_is_better: true,
-        },
-        MetricDef {
+        }),
+        H2HRow::Metric(MetricDef {
             label: "Math",
             extract: |e| e.math_index,
             format: fmt_h2h_index,
             higher_is_better: true,
-        },
-        MetricDef {
+        }),
+        // Benchmarks (%, higher better)
+        H2HRow::Section("Benchmarks (%)"),
+        H2HRow::Metric(MetricDef {
             label: "GPQA",
             extract: |e| e.gpqa,
             format: fmt_h2h_pct,
             higher_is_better: true,
-        },
-        MetricDef {
+        }),
+        H2HRow::Metric(MetricDef {
             label: "MMLU-Pro",
             extract: |e| e.mmlu_pro,
             format: fmt_h2h_pct,
             higher_is_better: true,
-        },
-        MetricDef {
+        }),
+        H2HRow::Metric(MetricDef {
             label: "HLE",
             extract: |e| e.hle,
             format: fmt_h2h_pct,
             higher_is_better: true,
-        },
-        MetricDef {
+        }),
+        H2HRow::Metric(MetricDef {
+            label: "MATH-500",
+            extract: |e| e.math_500,
+            format: fmt_h2h_pct,
+            higher_is_better: true,
+        }),
+        H2HRow::Metric(MetricDef {
+            label: "AIME",
+            extract: |e| e.aime,
+            format: fmt_h2h_pct,
+            higher_is_better: true,
+        }),
+        H2HRow::Metric(MetricDef {
+            label: "AIME'25",
+            extract: |e| e.aime_25,
+            format: fmt_h2h_pct,
+            higher_is_better: true,
+        }),
+        H2HRow::Metric(MetricDef {
             label: "LiveCodeBench",
             extract: |e| e.livecodebench,
             format: fmt_h2h_pct,
             higher_is_better: true,
-        },
-        MetricDef {
+        }),
+        H2HRow::Metric(MetricDef {
             label: "SciCode",
             extract: |e| e.scicode,
             format: fmt_h2h_pct,
             higher_is_better: true,
-        },
-        MetricDef {
+        }),
+        H2HRow::Metric(MetricDef {
+            label: "IFBench",
+            extract: |e| e.ifbench,
+            format: fmt_h2h_pct,
+            higher_is_better: true,
+        }),
+        H2HRow::Metric(MetricDef {
+            label: "Terminal",
+            extract: |e| e.terminalbench_hard,
+            format: fmt_h2h_pct,
+            higher_is_better: true,
+        }),
+        H2HRow::Metric(MetricDef {
+            label: "Tau2",
+            extract: |e| e.tau2,
+            format: fmt_h2h_pct,
+            higher_is_better: true,
+        }),
+        H2HRow::Metric(MetricDef {
+            label: "LCR",
+            extract: |e| e.lcr,
+            format: fmt_h2h_pct,
+            higher_is_better: true,
+        }),
+        // Performance (speed ↑, latency ↓)
+        H2HRow::Section("Performance"),
+        H2HRow::Metric(MetricDef {
             label: "Speed (tok/s)",
             extract: |e| e.output_tps,
             format: fmt_h2h_speed,
             higher_is_better: true,
-        },
-        MetricDef {
-            label: "TTFT",
+        }),
+        H2HRow::Metric(MetricDef {
+            label: "TTFT (ms)",
             extract: |e| e.ttft,
             format: fmt_h2h_latency,
             higher_is_better: false,
-        },
-        MetricDef {
-            label: "Price In $/M",
+        }),
+        H2HRow::Metric(MetricDef {
+            label: "TTFAT (ms)",
+            extract: |e| e.ttfat,
+            format: fmt_h2h_latency,
+            higher_is_better: false,
+        }),
+        // Pricing ($/M tokens, lower better)
+        H2HRow::Section("Pricing ($/M)"),
+        H2HRow::Metric(MetricDef {
+            label: "Input",
             extract: |e| e.price_input,
             format: fmt_h2h_price,
             higher_is_better: false,
-        },
-        MetricDef {
-            label: "Price Out $/M",
+        }),
+        H2HRow::Metric(MetricDef {
+            label: "Output",
             extract: |e| e.price_output,
             format: fmt_h2h_price,
             higher_is_better: false,
-        },
+        }),
+        H2HRow::Metric(MetricDef {
+            label: "Blended",
+            extract: |e| e.price_blended,
+            format: fmt_h2h_price,
+            higher_is_better: false,
+        }),
     ]
 }
 
@@ -2695,11 +2763,12 @@ fn draw_h2h_table_generic(
         return;
     }
 
-    let metrics = h2h_metrics();
+    let rows = h2h_rows();
     let label_w = 14_u16;
     let num_models = selections.len();
     let available = inner.width.saturating_sub(label_w);
     let col_w = (available as usize / num_models).max(10);
+    let total_w = inner.width as usize;
 
     // Header row: model names
     let mut header_spans: Vec<Span> = vec![Span::styled(
@@ -2726,64 +2795,75 @@ fn draw_h2h_table_generic(
     let mut lines: Vec<Line> = vec![Line::from(header_spans)];
 
     // Separator
-    let sep = "\u{2500}".repeat(inner.width as usize);
+    let sep = "\u{2500}".repeat(total_w);
     lines.push(Line::from(Span::styled(
         sep,
         Style::default().fg(Color::DarkGray),
     )));
 
-    // Metric rows
-    for metric in &metrics {
-        let values: Vec<Option<f64>> = selections
-            .iter()
-            .map(|&idx| entries.get(idx).and_then(|e| (metric.extract)(e)))
-            .collect();
-        let ranks = rank_values(&values, metric.higher_is_better);
+    // Metric rows with section headers
+    for row in &rows {
+        match row {
+            H2HRow::Section(title) => {
+                let header = format!("\u{2500}\u{2500}\u{2500} {} \u{2500}", title);
+                lines.push(Line::from(Span::styled(
+                    format!("{:<width$}", header, width = total_w),
+                    Style::default().fg(Color::DarkGray),
+                )));
+            }
+            H2HRow::Metric(metric) => {
+                let values: Vec<Option<f64>> = selections
+                    .iter()
+                    .map(|&idx| entries.get(idx).and_then(|e| (metric.extract)(e)))
+                    .collect();
+                let ranks = rank_values(&values, metric.higher_is_better);
 
-        let mut row_spans: Vec<Span> = vec![Span::styled(
-            format!("{:<width$}", metric.label, width = label_w as usize),
-            Style::default().fg(Color::DarkGray),
-        )];
+                let mut row_spans: Vec<Span> = vec![Span::styled(
+                    format!("{:<width$}", metric.label, width = label_w as usize),
+                    Style::default().fg(Color::DarkGray),
+                )];
 
-        for (i, (val, rank)) in values.iter().zip(ranks.iter()).enumerate() {
-            let color = compare_colors(i);
-            match val {
-                Some(v) => {
-                    let formatted = (metric.format)(*v);
-                    if *rank == Some(1) {
-                        let value_and_star = format!("{} \u{2605}", formatted);
-                        let padded = format!("{:>width$}", value_and_star, width = col_w);
-                        let star_pos = padded.rfind('\u{2605}').unwrap_or(padded.len());
-                        row_spans.push(Span::styled(
-                            padded[..star_pos].to_string(),
-                            Style::default().fg(color).add_modifier(Modifier::BOLD),
-                        ));
-                        row_spans.push(Span::styled(
-                            "\u{2605}",
-                            Style::default()
-                                .fg(Color::Yellow)
-                                .add_modifier(Modifier::BOLD),
-                        ));
-                    } else {
-                        row_spans.push(Span::styled(
-                            format!("{:>width$}", formatted, width = col_w),
-                            Style::default().fg(color),
-                        ));
+                for (i, (val, rank)) in values.iter().zip(ranks.iter()).enumerate() {
+                    let color = compare_colors(i);
+                    match val {
+                        Some(v) => {
+                            let formatted = (metric.format)(*v);
+                            if *rank == Some(1) {
+                                let value_and_star = format!("{} \u{2605}", formatted);
+                                let padded = format!("{:>width$}", value_and_star, width = col_w);
+                                let star_pos = padded.rfind('\u{2605}').unwrap_or(padded.len());
+                                row_spans.push(Span::styled(
+                                    padded[..star_pos].to_string(),
+                                    Style::default().fg(color).add_modifier(Modifier::BOLD),
+                                ));
+                                row_spans.push(Span::styled(
+                                    "\u{2605}",
+                                    Style::default()
+                                        .fg(Color::Yellow)
+                                        .add_modifier(Modifier::BOLD),
+                                ));
+                            } else {
+                                row_spans.push(Span::styled(
+                                    format!("{:>width$}", formatted, width = col_w),
+                                    Style::default().fg(color),
+                                ));
+                            }
+                        }
+                        None => {
+                            row_spans.push(Span::styled(
+                                format!("{:>width$}", "\u{2014}", width = col_w),
+                                Style::default().fg(Color::DarkGray),
+                            ));
+                        }
                     }
                 }
-                None => {
-                    row_spans.push(Span::styled(
-                        format!("{:>width$}", "\u{2014}", width = col_w),
-                        Style::default().fg(Color::DarkGray),
-                    ));
-                }
+
+                lines.push(Line::from(row_spans));
             }
         }
-
-        lines.push(Line::from(row_spans));
     }
 
-    let paragraph = Paragraph::new(lines);
+    let paragraph = Paragraph::new(lines).scroll((0, 0));
     f.render_widget(paragraph, inner);
 }
 
