@@ -288,9 +288,13 @@ fn handle_benchmarks_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> 
         // Actions
         KeyCode::Char('c') => Some(Message::CopyBenchmarkName),
         KeyCode::Char('o') => Some(Message::OpenBenchmarkUrl),
+        KeyCode::Char(' ') => Some(Message::ToggleBenchmarkSelection),
+        KeyCode::Char('x') if !app.selections.is_empty() => Some(Message::ClearBenchmarkSelections),
+        KeyCode::Char('d') if app.selections.len() >= 2 => Some(Message::ToggleDetailOverlay),
 
         // Search
         KeyCode::Char('/') => Some(Message::EnterSearch),
+        KeyCode::Esc if app.benchmarks_app.show_detail_overlay => Some(Message::CloseDetailOverlay),
         KeyCode::Esc => Some(Message::ClearSearch),
 
         _ => None,

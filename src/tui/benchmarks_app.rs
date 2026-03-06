@@ -353,6 +353,13 @@ struct CreatorInfo {
     count: usize,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum BottomView {
+    #[default]
+    Detail,
+    H2H,
+}
+
 pub struct BenchmarksApp {
     pub filtered_indices: Vec<usize>,
     pub selected: usize,
@@ -368,6 +375,11 @@ pub struct BenchmarksApp {
     pub source_filter: SourceFilter,
     pub creator_grouping: CreatorGrouping,
     creator_info: HashMap<String, CreatorInfo>,
+    pub bottom_view: BottomView,
+    /// Phase 2: scroll position for H2H table when BenchmarkFocus::Bottom is added
+    #[allow(dead_code)]
+    pub h2h_scroll: usize,
+    pub show_detail_overlay: bool,
 }
 
 impl BenchmarksApp {
@@ -392,6 +404,9 @@ impl BenchmarksApp {
             source_filter: SourceFilter::default(),
             creator_grouping: CreatorGrouping::default(),
             creator_info: HashMap::new(),
+            bottom_view: BottomView::default(),
+            h2h_scroll: 0,
+            show_detail_overlay: false,
         };
 
         app.build_creator_list(store);
@@ -794,6 +809,16 @@ impl BenchmarksApp {
     pub fn page_up_creator(&mut self) {
         let target = self.selected_creator.saturating_sub(PAGE_SIZE);
         self.skip_to_selectable(target, true);
+    }
+
+    /// Auto-transition bottom view based on selection count.
+    pub fn update_bottom_view(&mut self, selection_count: usize) {
+        if selection_count >= 2 && self.bottom_view == BottomView::Detail {
+            self.bottom_view = BottomView::H2H;
+        } else if selection_count < 2 && self.bottom_view != BottomView::Detail {
+            self.bottom_view = BottomView::Detail;
+            self.show_detail_overlay = false;
+        }
     }
 
     // --- Focus ---

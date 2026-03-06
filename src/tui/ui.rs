@@ -1111,7 +1111,44 @@ fn draw_benchmarks_main(f: &mut Frame, area: Rect, app: &mut App) {
         .split(h_chunks[1]);
 
     draw_benchmark_list(f, v_chunks[0], app);
-    draw_benchmark_detail(f, v_chunks[1], app);
+
+    // Bottom panel: detail (0-1 selected) or H2H (2+ selected)
+    if app.selections.len() >= 2 {
+        // Sub-tab bar (1 line) + H2H table
+        let bottom_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(1), Constraint::Min(0)])
+            .split(v_chunks[1]);
+
+        // Sub-tab indicator
+        let tab_line = Line::from(vec![
+            Span::styled(
+                " [H2H] ",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                format!(" {} models selected", app.selections.len()),
+                Style::default().fg(Color::DarkGray),
+            ),
+        ]);
+        f.render_widget(Paragraph::new(tab_line), bottom_chunks[0]);
+
+        draw_h2h_table_generic(
+            f,
+            bottom_chunks[1],
+            app.benchmark_store.entries(),
+            &app.selections,
+        );
+    } else {
+        draw_benchmark_detail(f, v_chunks[1], app);
+    }
+
+    // Detail overlay (drawn last, on top of everything)
+    if app.benchmarks_app.show_detail_overlay && app.selections.len() >= 2 {
+        draw_detail_overlay(f, area, app);
+    }
 }
 
 fn draw_benchmark_creators(f: &mut Frame, area: Rect, app: &mut App) {
@@ -1248,6 +1285,21 @@ fn draw_benchmark_creators(f: &mut Frame, area: Rect, app: &mut App) {
     f.render_stateful_widget(list, chunks[1], &mut state);
 }
 
+/// Color palette for selected models in comparison mode.
+fn compare_colors(index: usize) -> Color {
+    const PALETTE: [Color; 8] = [
+        Color::Red,
+        Color::Green,
+        Color::Blue,
+        Color::Yellow,
+        Color::Magenta,
+        Color::Cyan,
+        Color::LightRed,
+        Color::LightGreen,
+    ];
+    PALETTE[index % PALETTE.len()]
+}
+
 fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
     use super::benchmarks_app::BenchmarkFocus;
 
@@ -1310,7 +1362,11 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
         .iter()
         .map(|col| benchmark_col_width(*col))
         .sum();
-    let name_width = (inner_area.width.saturating_sub(fixed_width + caret_w) as usize).max(10);
+    let selection_w: u16 = if !app.selections.is_empty() { 2 } else { 0 };
+    let name_width = (inner_area
+        .width
+        .saturating_sub(fixed_width + caret_w + selection_w) as usize)
+        .max(10);
 
     // Caret prefix for focused panel
     let caret = if is_focused { "> " } else { "  " };
@@ -1322,7 +1378,12 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
         .fg(Color::Cyan)
         .add_modifier(Modifier::BOLD);
 
-    let mut header_spans: Vec<Span> = vec![Span::raw("  ")];
+    let has_selections = !app.selections.is_empty();
+    let mut header_spans: Vec<Span> = Vec::new();
+    if has_selections {
+        header_spans.push(Span::raw("  ")); // align with selection marker column
+    }
+    header_spans.push(Span::raw("  "));
     header_spans.extend(visible_cols.iter().map(|col| {
         let style = if *col == bench_app.sort_column {
             active_header_style
@@ -1349,7 +1410,19 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
         };
 
         let prefix = if is_selected { caret } else { "  " };
-        let mut row_spans: Vec<Span> = vec![Span::styled(prefix, style)];
+        let mut row_spans: Vec<Span> = Vec::new();
+
+        // Selection marker
+        if let Some(sel_pos) = app.selections.iter().position(|&i| i == entry_idx) {
+            row_spans.push(Span::styled(
+                "\u{25CF} ",
+                Style::default().fg(compare_colors(sel_pos)),
+            ));
+        } else if has_selections {
+            row_spans.push(Span::raw("  "));
+        }
+
+        row_spans.push(Span::styled(prefix, style));
         row_spans.extend(
             visible_cols
                 .iter()
@@ -1385,6 +1458,17 @@ fn draw_benchmark_detail(f: &mut Frame, area: Rect, app: &App) {
         }
     };
 
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+    draw_benchmark_detail_content(f, inner, entry, app);
+}
+
+fn draw_benchmark_detail_content(
+    f: &mut Frame,
+    area: Rect,
+    entry: &crate::benchmarks::BenchmarkEntry,
+    app: &App,
+) {
     let mut lines: Vec<Line> = Vec::new();
 
     // Name + creator + metadata on first lines
@@ -1531,10 +1615,37 @@ fn draw_benchmark_detail(f: &mut Frame, area: Rect, app: &App) {
         Span::styled("open AA", Style::default().fg(Color::DarkGray)),
     ]));
 
-    let paragraph = Paragraph::new(lines)
-        .block(block)
-        .wrap(Wrap { trim: false });
+    let paragraph = Paragraph::new(lines).wrap(Wrap { trim: false });
     f.render_widget(paragraph, area);
+}
+
+fn draw_detail_overlay(f: &mut Frame, area: Rect, app: &App) {
+    // Centered rect: 60% width, 75% height
+    let overlay_area = centered_rect(60, 75, area);
+
+    // Clear background
+    f.render_widget(Clear, overlay_area);
+
+    let bench_app = &app.benchmarks_app;
+    let store = &app.benchmark_store;
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan))
+        .title(" Model Detail (Esc to close) ");
+
+    let entry = match bench_app.current_entry(store) {
+        Some(e) => e,
+        None => {
+            let msg = Paragraph::new("No benchmark selected").block(block);
+            f.render_widget(msg, overlay_area);
+            return;
+        }
+    };
+
+    let inner = block.inner(overlay_area);
+    f.render_widget(block, overlay_area);
+    draw_benchmark_detail_content(f, inner, entry, app);
 }
 
 /// Push a section header line like "─── Title ───"
@@ -1795,22 +1906,41 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
                     Span::styled(" r ", Style::default().fg(Color::Yellow)),
                     Span::raw("repo"),
                 ]),
-                Tab::Benchmarks => Line::from(vec![
-                    Span::styled(" 1 ", Style::default().fg(Color::Yellow)),
-                    Span::raw("intel  "),
-                    Span::styled(" 2 ", Style::default().fg(Color::Yellow)),
-                    Span::raw("date  "),
-                    Span::styled(" 3 ", Style::default().fg(Color::Yellow)),
-                    Span::raw("speed  "),
-                    Span::styled(" 4 ", Style::default().fg(Color::Yellow)),
-                    Span::raw("source  "),
-                    Span::styled(" 5-6 ", Style::default().fg(Color::Yellow)),
-                    Span::raw("group  "),
-                    Span::styled(" s ", Style::default().fg(Color::Yellow)),
-                    Span::raw("sort  "),
-                    Span::styled(" / ", Style::default().fg(Color::Yellow)),
-                    Span::raw("search"),
-                ]),
+                Tab::Benchmarks => {
+                    if app.selections.len() >= 2 {
+                        Line::from(vec![
+                            Span::styled(" Space ", Style::default().fg(Color::Yellow)),
+                            Span::raw("select  "),
+                            Span::styled(" d ", Style::default().fg(Color::Yellow)),
+                            Span::raw("detail  "),
+                            Span::styled(" x ", Style::default().fg(Color::Yellow)),
+                            Span::raw("clear  "),
+                            Span::styled(" s ", Style::default().fg(Color::Yellow)),
+                            Span::raw("sort  "),
+                            Span::styled(" / ", Style::default().fg(Color::Yellow)),
+                            Span::raw("search"),
+                        ])
+                    } else {
+                        Line::from(vec![
+                            Span::styled(" 1 ", Style::default().fg(Color::Yellow)),
+                            Span::raw("intel  "),
+                            Span::styled(" 2 ", Style::default().fg(Color::Yellow)),
+                            Span::raw("date  "),
+                            Span::styled(" 3 ", Style::default().fg(Color::Yellow)),
+                            Span::raw("speed  "),
+                            Span::styled(" 4 ", Style::default().fg(Color::Yellow)),
+                            Span::raw("source  "),
+                            Span::styled(" 5-6 ", Style::default().fg(Color::Yellow)),
+                            Span::raw("group  "),
+                            Span::styled(" s ", Style::default().fg(Color::Yellow)),
+                            Span::raw("sort  "),
+                            Span::styled(" / ", Style::default().fg(Color::Yellow)),
+                            Span::raw("search  "),
+                            Span::styled(" Space ", Style::default().fg(Color::Yellow)),
+                            Span::raw("select"),
+                        ])
+                    }
+                }
             };
 
             let right_content = Line::from(vec![
@@ -2172,6 +2302,25 @@ fn draw_help_popup(f: &mut Frame, scroll: u16, current_tab: Tab) {
                     Span::raw("Open Artificial Analysis page"),
                 ]),
                 Line::from(""),
+                Line::from(Span::styled(
+                    "Compare",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                )),
+                Line::from(vec![
+                    Span::styled("  Space         ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Toggle model for comparison (max 8)"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  x             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Clear all selections"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  d             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Show detail overlay (when 2+ selected)"),
+                ]),
+                Line::from(""),
             ]);
         }
     }
@@ -2331,6 +2480,246 @@ fn draw_picker_modal(f: &mut Frame, app: &App) {
     list_state.select(Some(agents_app.picker_selected));
 
     f.render_stateful_widget(list, area, &mut list_state);
+}
+
+// ── H2H comparison table ────────────────────────────────────────────────────
+
+struct MetricDef {
+    label: &'static str,
+    extract: fn(&crate::benchmarks::BenchmarkEntry) -> Option<f64>,
+    format: fn(f64) -> String,
+    higher_is_better: bool,
+}
+
+fn fmt_h2h_index(v: f64) -> String {
+    format!("{:.1}", v)
+}
+
+fn fmt_h2h_pct(v: f64) -> String {
+    format!("{:.1}%", v * 100.0)
+}
+
+fn fmt_h2h_speed(v: f64) -> String {
+    format!("{:.0}", v)
+}
+
+fn fmt_h2h_latency(v: f64) -> String {
+    format!("{:.0}ms", v)
+}
+
+fn fmt_h2h_price(v: f64) -> String {
+    format!("${:.2}", v)
+}
+
+fn h2h_metrics() -> Vec<MetricDef> {
+    vec![
+        MetricDef {
+            label: "Intelligence",
+            extract: |e| e.intelligence_index,
+            format: fmt_h2h_index,
+            higher_is_better: true,
+        },
+        MetricDef {
+            label: "Coding",
+            extract: |e| e.coding_index,
+            format: fmt_h2h_index,
+            higher_is_better: true,
+        },
+        MetricDef {
+            label: "Math",
+            extract: |e| e.math_index,
+            format: fmt_h2h_index,
+            higher_is_better: true,
+        },
+        MetricDef {
+            label: "GPQA",
+            extract: |e| e.gpqa,
+            format: fmt_h2h_pct,
+            higher_is_better: true,
+        },
+        MetricDef {
+            label: "MMLU-Pro",
+            extract: |e| e.mmlu_pro,
+            format: fmt_h2h_pct,
+            higher_is_better: true,
+        },
+        MetricDef {
+            label: "HLE",
+            extract: |e| e.hle,
+            format: fmt_h2h_pct,
+            higher_is_better: true,
+        },
+        MetricDef {
+            label: "LiveCodeBench",
+            extract: |e| e.livecodebench,
+            format: fmt_h2h_pct,
+            higher_is_better: true,
+        },
+        MetricDef {
+            label: "SciCode",
+            extract: |e| e.scicode,
+            format: fmt_h2h_pct,
+            higher_is_better: true,
+        },
+        MetricDef {
+            label: "Speed (tok/s)",
+            extract: |e| e.output_tps,
+            format: fmt_h2h_speed,
+            higher_is_better: true,
+        },
+        MetricDef {
+            label: "TTFT",
+            extract: |e| e.ttft,
+            format: fmt_h2h_latency,
+            higher_is_better: false,
+        },
+        MetricDef {
+            label: "Price In $/M",
+            extract: |e| e.price_input,
+            format: fmt_h2h_price,
+            higher_is_better: false,
+        },
+        MetricDef {
+            label: "Price Out $/M",
+            extract: |e| e.price_output,
+            format: fmt_h2h_price,
+            higher_is_better: false,
+        },
+    ]
+}
+
+/// Rank extracted values: 1 = best, None for missing data.
+fn rank_values(values: &[Option<f64>], higher_is_better: bool) -> Vec<Option<u32>> {
+    let mut indexed: Vec<(usize, f64)> = values
+        .iter()
+        .enumerate()
+        .filter_map(|(i, v)| v.map(|val| (i, val)))
+        .collect();
+
+    if higher_is_better {
+        indexed.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    } else {
+        indexed.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+    }
+
+    let mut ranks = vec![None; values.len()];
+    for (rank, (idx, _)) in indexed.iter().enumerate() {
+        ranks[*idx] = Some(rank as u32 + 1);
+    }
+    ranks
+}
+
+fn draw_h2h_table_generic(
+    f: &mut Frame,
+    area: Rect,
+    entries: &[crate::benchmarks::BenchmarkEntry],
+    selections: &[usize],
+) {
+    if selections.len() < 2 {
+        return;
+    }
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::DarkGray))
+        .title(" Head-to-Head ");
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+
+    if inner.width < 20 || inner.height < 3 {
+        return;
+    }
+
+    let metrics = h2h_metrics();
+    let label_w = 14_u16;
+    let num_models = selections.len();
+    let available = inner.width.saturating_sub(label_w);
+    let col_w = (available as usize / num_models).max(10);
+
+    // Header row: model names
+    let mut header_spans: Vec<Span> = vec![Span::styled(
+        format!("{:<width$}", "", width = label_w as usize),
+        Style::default(),
+    )];
+    for (i, &store_idx) in selections.iter().enumerate() {
+        let name = entries
+            .get(store_idx)
+            .map(|e| e.name.as_str())
+            .unwrap_or("?");
+        let color = compare_colors(i);
+        let truncated = if name.len() > col_w - 1 {
+            format!("{:.width$}", name, width = col_w - 2)
+        } else {
+            name.to_string()
+        };
+        header_spans.push(Span::styled(
+            format!("{:>width$}", truncated, width = col_w),
+            Style::default().fg(color).add_modifier(Modifier::BOLD),
+        ));
+    }
+
+    let mut lines: Vec<Line> = vec![Line::from(header_spans)];
+
+    // Separator
+    let sep = "\u{2500}".repeat(inner.width as usize);
+    lines.push(Line::from(Span::styled(
+        sep,
+        Style::default().fg(Color::DarkGray),
+    )));
+
+    // Metric rows
+    for metric in &metrics {
+        let values: Vec<Option<f64>> = selections
+            .iter()
+            .map(|&idx| entries.get(idx).and_then(|e| (metric.extract)(e)))
+            .collect();
+        let ranks = rank_values(&values, metric.higher_is_better);
+
+        let mut row_spans: Vec<Span> = vec![Span::styled(
+            format!("{:<width$}", metric.label, width = label_w as usize),
+            Style::default().fg(Color::DarkGray),
+        )];
+
+        for (i, (val, rank)) in values.iter().zip(ranks.iter()).enumerate() {
+            let color = compare_colors(i);
+            match val {
+                Some(v) => {
+                    let formatted = (metric.format)(*v);
+                    if *rank == Some(1) {
+                        let value_and_star = format!("{} \u{2605}", formatted);
+                        let padded = format!("{:>width$}", value_and_star, width = col_w);
+                        let star_pos = padded.rfind('\u{2605}').unwrap_or(padded.len());
+                        row_spans.push(Span::styled(
+                            padded[..star_pos].to_string(),
+                            Style::default().fg(color).add_modifier(Modifier::BOLD),
+                        ));
+                        row_spans.push(Span::styled(
+                            "\u{2605}",
+                            Style::default()
+                                .fg(Color::Yellow)
+                                .add_modifier(Modifier::BOLD),
+                        ));
+                    } else {
+                        row_spans.push(Span::styled(
+                            format!("{:>width$}", formatted, width = col_w),
+                            Style::default().fg(color),
+                        ));
+                    }
+                }
+                None => {
+                    row_spans.push(Span::styled(
+                        format!("{:>width$}", "\u{2014}", width = col_w),
+                        Style::default().fg(Color::DarkGray),
+                    ));
+                }
+            }
+        }
+
+        lines.push(Line::from(row_spans));
+    }
+
+    let paragraph = Paragraph::new(lines);
+    f.render_widget(paragraph, inner);
 }
 
 /// Create a centered rect using fixed width and height

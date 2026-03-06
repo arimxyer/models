@@ -5,6 +5,8 @@ use super::benchmarks_app::BenchmarksApp;
 
 /// Page size for page up/down navigation
 const PAGE_SIZE: usize = 10;
+
+pub const MAX_SELECTIONS: usize = 8;
 use crate::agents::{AgentsFile, FetchStatus, GitHubData};
 use std::collections::HashMap;
 
@@ -181,6 +183,10 @@ pub enum Message {
     QuickSortSpeed,
     CopyBenchmarkName,
     OpenBenchmarkUrl,
+    ToggleBenchmarkSelection,
+    ClearBenchmarkSelections,
+    ToggleDetailOverlay,
+    CloseDetailOverlay,
     // Async data messages
     GitHubDataReceived(String, GitHubData),
     GitHubFetchFailed(String, String), // (agent_id, error_message)
@@ -226,6 +232,8 @@ pub struct App {
     pub open_weights_map: HashMap<String, bool>,
     /// Cached detail panel height for search match scrolling
     pub last_detail_height: u16,
+    /// Store indices of selected models for comparison (shared between tabs)
+    pub selections: Vec<usize>,
 }
 
 impl App {
@@ -276,11 +284,24 @@ impl App {
             benchmarks_app,
             open_weights_map,
             last_detail_height: 0,
+            selections: Vec::new(),
         };
 
         app.update_provider_list();
         app.update_filtered_models();
         app
+    }
+
+    pub fn toggle_selection(&mut self, store_index: usize) {
+        if let Some(pos) = self.selections.iter().position(|&i| i == store_index) {
+            self.selections.remove(pos);
+        } else if self.selections.len() < MAX_SELECTIONS {
+            self.selections.push(store_index);
+        }
+    }
+
+    pub fn clear_selections(&mut self) {
+        self.selections.clear();
     }
 
     pub fn is_all_selected(&self) -> bool {
@@ -890,6 +911,30 @@ impl App {
                     &self.open_weights_map,
                 );
             }
+            Message::ToggleBenchmarkSelection => {
+                if let Some(&store_idx) = self
+                    .benchmarks_app
+                    .filtered_indices
+                    .get(self.benchmarks_app.selected)
+                {
+                    self.toggle_selection(store_idx);
+                    self.benchmarks_app
+                        .update_bottom_view(self.selections.len());
+                }
+            }
+            Message::ClearBenchmarkSelections => {
+                self.clear_selections();
+                self.benchmarks_app.update_bottom_view(0);
+            }
+            Message::ToggleDetailOverlay => {
+                if self.selections.len() >= 2 {
+                    self.benchmarks_app.show_detail_overlay =
+                        !self.benchmarks_app.show_detail_overlay;
+                }
+            }
+            Message::CloseDetailOverlay => {
+                self.benchmarks_app.show_detail_overlay = false;
+            }
             Message::CopyBenchmarkName | Message::OpenBenchmarkUrl => {
                 // Handled in main loop
             }
@@ -924,6 +969,7 @@ impl App {
                 }
             }
             Message::BenchmarkDataReceived(entries) => {
+                self.selections.clear();
                 self.benchmark_store = BenchmarkStore::from_entries(entries);
                 self.open_weights_map = crate::open_weights::build_open_weights_map(
                     &self.providers,
@@ -1288,5 +1334,79 @@ mod tests {
         let agents_app = app.agents_app.as_ref().expect("agents app should exist");
         assert_eq!(agents_app.pending_github_fetches, 0);
         assert!(!agents_app.loading_github);
+    }
+
+    fn make_test_app() -> App {
+        let providers = std::collections::HashMap::new();
+        App::new(providers, None, None, BenchmarkStore::empty())
+    }
+
+    #[test]
+    fn test_toggle_selection_add() {
+        let mut app = make_test_app();
+        app.toggle_selection(5);
+        assert_eq!(app.selections, vec![5]);
+    }
+
+    #[test]
+    fn test_toggle_selection_remove() {
+        let mut app = make_test_app();
+        app.toggle_selection(5);
+        app.toggle_selection(10);
+        app.toggle_selection(5);
+        assert_eq!(app.selections, vec![10]);
+    }
+
+    #[test]
+    fn test_toggle_selection_max_capacity() {
+        let mut app = make_test_app();
+        for i in 0..MAX_SELECTIONS {
+            app.toggle_selection(i);
+        }
+        assert_eq!(app.selections.len(), MAX_SELECTIONS);
+        // Adding one more should be a no-op
+        app.toggle_selection(100);
+        assert_eq!(app.selections.len(), MAX_SELECTIONS);
+        assert!(!app.selections.contains(&100));
+    }
+
+    #[test]
+    fn test_clear_selections() {
+        let mut app = make_test_app();
+        app.toggle_selection(1);
+        app.toggle_selection(2);
+        app.toggle_selection(3);
+        app.clear_selections();
+        assert!(app.selections.is_empty());
+    }
+
+    #[test]
+    fn test_update_bottom_view_transitions_to_h2h() {
+        use super::super::benchmarks_app::BottomView;
+        let mut app = make_test_app();
+        assert_eq!(app.benchmarks_app.bottom_view, BottomView::Detail);
+        app.benchmarks_app.update_bottom_view(2);
+        assert_eq!(app.benchmarks_app.bottom_view, BottomView::H2H);
+    }
+
+    #[test]
+    fn test_update_bottom_view_reverts_to_detail() {
+        use super::super::benchmarks_app::BottomView;
+        let mut app = make_test_app();
+        app.benchmarks_app.update_bottom_view(2);
+        assert_eq!(app.benchmarks_app.bottom_view, BottomView::H2H);
+        app.benchmarks_app.update_bottom_view(1);
+        assert_eq!(app.benchmarks_app.bottom_view, BottomView::Detail);
+    }
+
+    #[test]
+    fn test_update_bottom_view_closes_overlay_on_revert() {
+        use super::super::benchmarks_app::BottomView;
+        let mut app = make_test_app();
+        app.benchmarks_app.update_bottom_view(2);
+        app.benchmarks_app.show_detail_overlay = true;
+        app.benchmarks_app.update_bottom_view(1);
+        assert_eq!(app.benchmarks_app.bottom_view, BottomView::Detail);
+        assert!(!app.benchmarks_app.show_detail_overlay);
     }
 }

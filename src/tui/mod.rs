@@ -347,6 +347,51 @@ fn run_app(
                     // Picker save sets its own status message via app.update
                     last_status_time = Some(std::time::Instant::now());
                 }
+                app::Message::ToggleBenchmarkSelection => {
+                    // Look up the model name for the status message
+                    if let Some(&store_idx) = app
+                        .benchmarks_app
+                        .filtered_indices
+                        .get(app.benchmarks_app.selected)
+                    {
+                        let name = app
+                            .benchmark_store
+                            .entries()
+                            .get(store_idx)
+                            .map(|e| e.name.as_str())
+                            .unwrap_or("?");
+                        let is_already_selected = app.selections.contains(&store_idx);
+                        if is_already_selected {
+                            let count = app.selections.len() - 1;
+                            app.set_status(format!(
+                                "Removed {} ({}/{})",
+                                name,
+                                count,
+                                app::MAX_SELECTIONS
+                            ));
+                        } else if app.selections.len() < app::MAX_SELECTIONS {
+                            let count = app.selections.len() + 1;
+                            app.set_status(format!(
+                                "Added {} ({}/{})",
+                                name,
+                                count,
+                                app::MAX_SELECTIONS
+                            ));
+                        }
+                        last_status_time = Some(std::time::Instant::now());
+                    }
+                }
+                app::Message::ClearBenchmarkSelections => {
+                    let count = app.selections.len();
+                    if count > 0 {
+                        app.set_status(format!(
+                            "Cleared {} selection{}",
+                            count,
+                            if count == 1 { "" } else { "s" }
+                        ));
+                        last_status_time = Some(std::time::Instant::now());
+                    }
+                }
                 _ => {}
             }
 
