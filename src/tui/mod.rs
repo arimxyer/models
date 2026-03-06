@@ -13,6 +13,7 @@ pub mod app;
 pub mod benchmarks_app;
 pub mod event;
 pub mod markdown;
+pub mod radar;
 pub mod ui;
 
 use crate::agents::{
@@ -391,6 +392,33 @@ fn run_app(
                         ));
                         last_status_time = Some(std::time::Instant::now());
                     }
+                }
+                app::Message::CycleBenchmarkView => {
+                    // Show status after the update processes the cycle
+                    // We need to peek at what the NEXT view will be
+                    let next_view = match app.benchmarks_app.bottom_view {
+                        crate::tui::benchmarks_app::BottomView::H2H => "Scatter",
+                        crate::tui::benchmarks_app::BottomView::Scatter => "Radar",
+                        crate::tui::benchmarks_app::BottomView::Radar => "H2H",
+                        crate::tui::benchmarks_app::BottomView::Detail => "H2H",
+                    };
+                    app.set_status(format!("View: {}", next_view));
+                    last_status_time = Some(std::time::Instant::now());
+                }
+                app::Message::CycleScatterX => {
+                    let next_axis = app.benchmarks_app.scatter_x.next();
+                    app.set_status(format!("X-axis: {}", next_axis.label()));
+                    last_status_time = Some(std::time::Instant::now());
+                }
+                app::Message::CycleScatterY => {
+                    let next_axis = app.benchmarks_app.scatter_y.next();
+                    app.set_status(format!("Y-axis: {}", next_axis.label()));
+                    last_status_time = Some(std::time::Instant::now());
+                }
+                app::Message::CycleRadarPreset => {
+                    let next_preset = app.benchmarks_app.radar_preset.next();
+                    app.set_status(format!("Radar: {}", next_preset.label()));
+                    last_status_time = Some(std::time::Instant::now());
                 }
                 _ => {}
             }

@@ -286,10 +286,25 @@ fn handle_benchmarks_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> 
         KeyCode::Char('S') => Some(Message::ToggleBenchmarkSortDir),
 
         // Actions
-        KeyCode::Char('c') => Some(Message::CopyBenchmarkName),
+        KeyCode::Char('c') if !app.selections.is_empty() => Some(Message::ClearBenchmarkSelections),
         KeyCode::Char('o') => Some(Message::OpenBenchmarkUrl),
         KeyCode::Char(' ') => Some(Message::ToggleBenchmarkSelection),
-        KeyCode::Char('x') if !app.selections.is_empty() => Some(Message::ClearBenchmarkSelections),
+        KeyCode::Char('v') if app.selections.len() >= 2 => Some(Message::CycleBenchmarkView),
+        KeyCode::Char('x')
+            if app.benchmarks_app.bottom_view == super::benchmarks_app::BottomView::Scatter =>
+        {
+            Some(Message::CycleScatterX)
+        }
+        KeyCode::Char('y')
+            if app.benchmarks_app.bottom_view == super::benchmarks_app::BottomView::Scatter =>
+        {
+            Some(Message::CycleScatterY)
+        }
+        KeyCode::Char('a')
+            if app.benchmarks_app.bottom_view == super::benchmarks_app::BottomView::Radar =>
+        {
+            Some(Message::CycleRadarPreset)
+        }
         KeyCode::Char('d') if app.selections.len() >= 2 => Some(Message::ToggleDetailOverlay),
 
         // Search

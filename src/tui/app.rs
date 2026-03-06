@@ -181,12 +181,17 @@ pub enum Message {
     QuickSortIntelligence,
     QuickSortDate,
     QuickSortSpeed,
+    #[allow(dead_code)]
     CopyBenchmarkName,
     OpenBenchmarkUrl,
     ToggleBenchmarkSelection,
     ClearBenchmarkSelections,
     ToggleDetailOverlay,
     CloseDetailOverlay,
+    CycleBenchmarkView,
+    CycleScatterX,
+    CycleScatterY,
+    CycleRadarPreset,
     // Async data messages
     GitHubDataReceived(String, GitHubData),
     GitHubFetchFailed(String, String), // (agent_id, error_message)
@@ -935,6 +940,20 @@ impl App {
             Message::CloseDetailOverlay => {
                 self.benchmarks_app.show_detail_overlay = false;
             }
+            Message::CycleBenchmarkView => {
+                if self.selections.len() >= 2 {
+                    self.benchmarks_app.cycle_bottom_view();
+                }
+            }
+            Message::CycleScatterX => {
+                self.benchmarks_app.cycle_scatter_x();
+            }
+            Message::CycleScatterY => {
+                self.benchmarks_app.cycle_scatter_y();
+            }
+            Message::CycleRadarPreset => {
+                self.benchmarks_app.cycle_radar_preset();
+            }
             Message::CopyBenchmarkName | Message::OpenBenchmarkUrl => {
                 // Handled in main loop
             }
@@ -1408,5 +1427,74 @@ mod tests {
         app.benchmarks_app.update_bottom_view(1);
         assert_eq!(app.benchmarks_app.bottom_view, BottomView::Detail);
         assert!(!app.benchmarks_app.show_detail_overlay);
+    }
+
+    #[test]
+    fn test_cycle_bottom_view_order() {
+        use super::super::benchmarks_app::BottomView;
+        let mut app = make_test_app();
+        // Start at H2H
+        app.benchmarks_app.bottom_view = BottomView::H2H;
+        app.benchmarks_app.cycle_bottom_view();
+        assert_eq!(app.benchmarks_app.bottom_view, BottomView::Scatter);
+        app.benchmarks_app.cycle_bottom_view();
+        assert_eq!(app.benchmarks_app.bottom_view, BottomView::Radar);
+        app.benchmarks_app.cycle_bottom_view();
+        assert_eq!(app.benchmarks_app.bottom_view, BottomView::H2H);
+    }
+
+    #[test]
+    fn test_cycle_bottom_view_from_detail() {
+        use super::super::benchmarks_app::BottomView;
+        let mut app = make_test_app();
+        app.benchmarks_app.bottom_view = BottomView::Detail;
+        app.benchmarks_app.cycle_bottom_view();
+        assert_eq!(app.benchmarks_app.bottom_view, BottomView::H2H);
+    }
+
+    #[test]
+    fn test_scatter_axis_next_cycles() {
+        use super::super::benchmarks_app::ScatterAxis;
+        let mut axis = ScatterAxis::Intelligence;
+        axis = axis.next();
+        assert_eq!(axis, ScatterAxis::Coding);
+        axis = axis.next();
+        assert_eq!(axis, ScatterAxis::Math);
+        axis = axis.next();
+        assert_eq!(axis, ScatterAxis::Speed);
+        axis = axis.next();
+        assert_eq!(axis, ScatterAxis::Price);
+        axis = axis.next();
+        assert_eq!(axis, ScatterAxis::Intelligence);
+    }
+
+    #[test]
+    fn test_radar_preset_next_cycles() {
+        use super::super::benchmarks_app::RadarPreset;
+        let mut preset = RadarPreset::Agentic;
+        preset = preset.next();
+        assert_eq!(preset, RadarPreset::Academic);
+        preset = preset.next();
+        assert_eq!(preset, RadarPreset::Indexes);
+        preset = preset.next();
+        assert_eq!(preset, RadarPreset::Agentic);
+    }
+
+    #[test]
+    fn test_update_bottom_view_reverts_scatter_to_detail() {
+        use super::super::benchmarks_app::BottomView;
+        let mut app = make_test_app();
+        app.benchmarks_app.bottom_view = BottomView::Scatter;
+        app.benchmarks_app.update_bottom_view(1);
+        assert_eq!(app.benchmarks_app.bottom_view, BottomView::Detail);
+    }
+
+    #[test]
+    fn test_update_bottom_view_reverts_radar_to_detail() {
+        use super::super::benchmarks_app::BottomView;
+        let mut app = make_test_app();
+        app.benchmarks_app.bottom_view = BottomView::Radar;
+        app.benchmarks_app.update_bottom_view(1);
+        assert_eq!(app.benchmarks_app.bottom_view, BottomView::Detail);
     }
 }
