@@ -3268,17 +3268,37 @@ fn draw_scatter(f: &mut Frame, area: Rect, app: &App) {
         .map(|p| p.1)
         .fold(f64::NEG_INFINITY, f64::max);
 
+    // Snap non-log bounds to nice round numbers so ticks land on whole values.
+    let nice_bounds = |lo: f64, hi: f64, num_ticks: usize| -> [f64; 2] {
+        let range = hi - lo;
+        let raw_step = range / (num_ticks - 1) as f64;
+        let mag = 10_f64.powf(raw_step.log10().floor());
+        let nice_step = if raw_step / mag < 1.5 {
+            mag
+        } else if raw_step / mag < 3.5 {
+            mag * 2.0
+        } else if raw_step / mag < 7.5 {
+            mag * 5.0
+        } else {
+            mag * 10.0
+        };
+        let nice_lo = (lo / nice_step).floor() * nice_step;
+        let nice_hi = (hi / nice_step).ceil() * nice_step;
+        [nice_lo.max(0.0), nice_hi]
+    };
+
     let x_pad = (x_max - x_min).max(0.1) * 0.05;
     let y_pad = (y_max - y_min).max(0.1) * 0.05;
+    let num_ticks = 7_usize;
     let x_bounds = if x_log {
         [x_min - x_pad, x_max + x_pad]
     } else {
-        [(x_min - x_pad).max(0.0).floor(), (x_max + x_pad).ceil()]
+        nice_bounds(x_min - x_pad, x_max + x_pad, num_ticks)
     };
     let y_bounds = if y_log {
         [y_min - y_pad, y_max + y_pad]
     } else {
-        [(y_min - y_pad).max(0.0).floor(), (y_max + y_pad).ceil()]
+        nice_bounds(y_min - y_pad, y_max + y_pad, num_ticks)
     };
 
     // Compute independent averages (each axis uses all entries with data for that metric)
@@ -3368,29 +3388,48 @@ fn draw_scatter(f: &mut Frame, area: Rect, app: &App) {
 
     // Generate evenly-spaced tick labels for an axis.
     // ratatui distributes labels uniformly across the axis, so values must be evenly spaced.
-    let make_ticks = |lo: f64, hi: f64, use_log: bool, num_ticks: usize| -> Vec<String> {
-        let fmt_val = |v: f64| -> String {
-            if use_log {
-                let real = v.exp();
-                if real >= 100.0 {
-                    format!("{}", real.round() as i64)
-                } else {
-                    format!("{:.1}", real)
-                }
-            } else if v.fract().abs() < 0.01 {
-                format!("{}", v.round() as i64)
-            } else {
-                format!("{:.1}", v)
-            }
-        };
-
-        let n = num_ticks.max(2);
+    let make_ticks = |lo: f64, hi: f64, use_log: bool, n: usize| -> Vec<String> {
+        let n = n.max(2);
         let step = (hi - lo) / (n - 1) as f64;
-        (0..n).map(|i| fmt_val(lo + step * i as f64)).collect()
+        let raw: Vec<f64> = (0..n).map(|i| lo + step * i as f64).collect();
+
+        if use_log {
+            // Format log-scale ticks: convert back to real values, ensure no duplicates
+            let reals: Vec<f64> = raw.iter().map(|v| v.exp()).collect();
+            // Pick precision that avoids duplicate labels
+            for decimals in 0..=3 {
+                let labels: Vec<String> = reals
+                    .iter()
+                    .map(|v| {
+                        if decimals == 0 && *v >= 1.0 {
+                            format!("{}", v.round() as i64)
+                        } else {
+                            format!("{:.prec$}", v, prec = decimals)
+                        }
+                    })
+                    .collect();
+                let unique: std::collections::HashSet<&String> = labels.iter().collect();
+                if unique.len() == labels.len() {
+                    return labels;
+                }
+            }
+            // Fallback: 3 decimal places
+            reals.iter().map(|v| format!("{:.3}", v)).collect()
+        } else {
+            raw.iter()
+                .map(|v| {
+                    if v.fract().abs() < 0.01 {
+                        format!("{}", v.round() as i64)
+                    } else {
+                        format!("{:.1}", v)
+                    }
+                })
+                .collect()
+        }
     };
 
-    let x_ticks = make_ticks(x_bounds[0], x_bounds[1], x_log, 7);
-    let y_ticks = make_ticks(y_bounds[0], y_bounds[1], y_log, 7);
+    let x_ticks = make_ticks(x_bounds[0], x_bounds[1], x_log, num_ticks);
+    let y_ticks = make_ticks(y_bounds[0], y_bounds[1], y_log, num_ticks);
 
     let x_suffix = if x_log { " [log]" } else { "" };
     let y_suffix = if y_log { " [log]" } else { "" };
