@@ -47,6 +47,7 @@ All three must pass. CI enforces the same checks on pull requests.
 - **`data/benchmarks.json`** — auto-generated from the Artificial Analysis API every 30 minutes. Do not edit manually.
 
 See [Custom Agents](docs/custom-agents.md) for the agent entry format.
+See [Benchmark Sources](docs/benchmark-sources.md) for ideas on additional benchmark feeds that would fit this project well.
 
 ## Architecture
 

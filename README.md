@@ -374,6 +374,8 @@ Lots of gratitude to the companies who do all the hard work! Shout out to the so
 - **Agent data**: Curated catalog in [`data/agents.json`](data/agents.json) — contributions welcome!
 - **GitHub data**: Fetched from GitHub API (stars, releases, changelogs)
 
+Looking for more benchmark feeds to add to the benchmarks tab? See [Benchmark Sources](docs/benchmark-sources.md) for a shortlist of good candidates and the selection criteria that matter for this codebase.
+
 ## Contributing
 
 Contributions are welcome! Please read the [Contributing Guide](CONTRIBUTING.md) before submitting a PR.
