@@ -1106,7 +1106,11 @@ fn draw_benchmarks_main(f: &mut Frame, area: Rect, app: &mut App) {
             .constraints([Constraint::Length(list_w), Constraint::Min(0)])
             .split(area);
 
-        draw_benchmark_list_compact(f, h_chunks[0], app);
+        if app.benchmarks_app.show_creators_in_compare {
+            draw_benchmark_creators(f, h_chunks[0], app);
+        } else {
+            draw_benchmark_list_compact(f, h_chunks[0], app);
+        }
 
         // Comparison panel: sub-tab bar + view
         let v_chunks = Layout::default()
@@ -2043,6 +2047,12 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
                         let mut spans = vec![
                             Span::styled(" h/l ", Style::default().fg(Color::Yellow)),
                             Span::raw("focus  "),
+                            Span::styled(" t ", Style::default().fg(Color::Yellow)),
+                            Span::raw(if app.benchmarks_app.show_creators_in_compare {
+                                "models  "
+                            } else {
+                                "creators  "
+                            }),
                             Span::styled(" Space ", Style::default().fg(Color::Yellow)),
                             Span::raw("select  "),
                             Span::styled(" v ", Style::default().fg(Color::Yellow)),
@@ -2505,6 +2515,10 @@ fn draw_help_popup(f: &mut Frame, scroll: u16, current_tab: Tab) {
                 Line::from(vec![
                     Span::styled("  h/l           ", Style::default().fg(Color::Yellow)),
                     Span::raw("Switch focus: List ↔ Compare"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  t             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Toggle left panel: Models ↔ Creators"),
                 ]),
                 Line::from(""),
             ]);

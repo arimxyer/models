@@ -324,6 +324,7 @@ fn handle_benchmarks_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> 
             Some(Message::CycleRadarPreset)
         }
         KeyCode::Char('d') if app.selections.len() >= 2 => Some(Message::ToggleDetailOverlay),
+        KeyCode::Char('t') if app.selections.len() >= 2 => Some(Message::ToggleComparePanel),
 
         // Search
         KeyCode::Char('/') => Some(Message::EnterSearch),
