@@ -192,6 +192,11 @@ pub enum Message {
     CycleScatterX,
     CycleScatterY,
     CycleRadarPreset,
+    ScrollH2HDown,
+    ScrollH2HUp,
+    ScrollH2HTop,
+    ScrollH2HPageDown,
+    ScrollH2HPageUp,
     // Async data messages
     GitHubDataReceived(String, GitHubData),
     GitHubFetchFailed(String, String), // (agent_id, error_message)
@@ -873,7 +878,8 @@ impl App {
                     .update_filtered(&self.benchmark_store, &self.open_weights_map);
             }
             Message::SwitchBenchmarkFocus => {
-                self.benchmarks_app.switch_focus();
+                let has_compare = self.selections.len() >= 2;
+                self.benchmarks_app.switch_focus(has_compare);
             }
             Message::CycleBenchmarkSource => {
                 self.benchmarks_app
@@ -925,11 +931,37 @@ impl App {
                     self.toggle_selection(store_idx);
                     self.benchmarks_app
                         .update_bottom_view(self.selections.len());
+                    // Focus reset AFTER update_bottom_view
+                    if self.selections.len() < 2
+                        && self.benchmarks_app.focus
+                            == super::benchmarks_app::BenchmarkFocus::Compare
+                    {
+                        self.benchmarks_app.focus = super::benchmarks_app::BenchmarkFocus::List;
+                    }
                 }
             }
             Message::ClearBenchmarkSelections => {
                 self.clear_selections();
                 self.benchmarks_app.update_bottom_view(0);
+                // Focus reset AFTER update_bottom_view
+                if self.benchmarks_app.focus == super::benchmarks_app::BenchmarkFocus::Compare {
+                    self.benchmarks_app.focus = super::benchmarks_app::BenchmarkFocus::List;
+                }
+            }
+            Message::ScrollH2HDown => {
+                self.benchmarks_app.scroll_h2h_down();
+            }
+            Message::ScrollH2HUp => {
+                self.benchmarks_app.scroll_h2h_up();
+            }
+            Message::ScrollH2HTop => {
+                self.benchmarks_app.scroll_h2h_top();
+            }
+            Message::ScrollH2HPageDown => {
+                self.benchmarks_app.scroll_h2h_page_down(10);
+            }
+            Message::ScrollH2HPageUp => {
+                self.benchmarks_app.scroll_h2h_page_up(10);
             }
             Message::ToggleDetailOverlay => {
                 if self.selections.len() >= 2 {
@@ -1496,5 +1528,79 @@ mod tests {
         app.benchmarks_app.bottom_view = BottomView::Radar;
         app.benchmarks_app.update_bottom_view(1);
         assert_eq!(app.benchmarks_app.bottom_view, BottomView::Detail);
+    }
+
+    #[test]
+    fn test_switch_focus_browse_mode() {
+        use super::super::benchmarks_app::BenchmarkFocus;
+        let mut app = make_test_app();
+        app.benchmarks_app.focus = BenchmarkFocus::Creators;
+        app.benchmarks_app.switch_focus(false);
+        assert_eq!(app.benchmarks_app.focus, BenchmarkFocus::List);
+        app.benchmarks_app.switch_focus(false);
+        assert_eq!(app.benchmarks_app.focus, BenchmarkFocus::Creators);
+    }
+
+    #[test]
+    fn test_switch_focus_compare_mode() {
+        use super::super::benchmarks_app::BenchmarkFocus;
+        let mut app = make_test_app();
+        app.benchmarks_app.focus = BenchmarkFocus::List;
+        app.benchmarks_app.switch_focus(true);
+        assert_eq!(app.benchmarks_app.focus, BenchmarkFocus::Compare);
+        app.benchmarks_app.switch_focus(true);
+        assert_eq!(app.benchmarks_app.focus, BenchmarkFocus::List);
+    }
+
+    #[test]
+    fn test_focus_resets_when_selections_drop_below_2() {
+        use super::super::benchmarks_app::BenchmarkFocus;
+        let mut app = make_test_app();
+        app.benchmarks_app.focus = BenchmarkFocus::Compare;
+        // Simulate clearing selections
+        app.benchmarks_app.update_bottom_view(0);
+        if app.benchmarks_app.focus == BenchmarkFocus::Compare {
+            app.benchmarks_app.focus = BenchmarkFocus::List;
+        }
+        assert_eq!(app.benchmarks_app.focus, BenchmarkFocus::List);
+    }
+
+    #[test]
+    fn test_h2h_scroll_methods() {
+        let mut app = make_test_app();
+        assert_eq!(app.benchmarks_app.h2h_scroll, 0);
+
+        app.benchmarks_app.scroll_h2h_down();
+        assert_eq!(app.benchmarks_app.h2h_scroll, 1);
+
+        app.benchmarks_app.scroll_h2h_down();
+        app.benchmarks_app.scroll_h2h_down();
+        assert_eq!(app.benchmarks_app.h2h_scroll, 3);
+
+        app.benchmarks_app.scroll_h2h_up();
+        assert_eq!(app.benchmarks_app.h2h_scroll, 2);
+
+        app.benchmarks_app.scroll_h2h_top();
+        assert_eq!(app.benchmarks_app.h2h_scroll, 0);
+
+        app.benchmarks_app.scroll_h2h_page_down(10);
+        assert_eq!(app.benchmarks_app.h2h_scroll, 10);
+
+        app.benchmarks_app.scroll_h2h_page_up(5);
+        assert_eq!(app.benchmarks_app.h2h_scroll, 5);
+
+        // Saturating sub: can't go below 0
+        app.benchmarks_app.scroll_h2h_page_up(100);
+        assert_eq!(app.benchmarks_app.h2h_scroll, 0);
+    }
+
+    #[test]
+    fn test_h2h_scroll_resets_on_view_change() {
+        use super::super::benchmarks_app::BottomView;
+        let mut app = make_test_app();
+        app.benchmarks_app.h2h_scroll = 15;
+        app.benchmarks_app.update_bottom_view(3);
+        assert_eq!(app.benchmarks_app.bottom_view, BottomView::H2H);
+        assert_eq!(app.benchmarks_app.h2h_scroll, 0);
     }
 }

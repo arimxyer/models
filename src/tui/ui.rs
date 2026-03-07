@@ -1096,48 +1096,56 @@ fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
 }
 
 fn draw_benchmarks_main(f: &mut Frame, area: Rect, app: &mut App) {
-    // Horizontal split: creator sidebar (25%) | main content (75%)
-    let h_chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(25), Constraint::Percentage(75)])
-        .split(area);
+    let in_compare = app.selections.len() >= 2;
 
-    draw_benchmark_creators(f, h_chunks[0], app);
+    if in_compare {
+        // Compare mode: compact list (30%, min 35 chars) | comparison (remainder), full height
+        let list_w = (area.width * 30 / 100).max(35);
+        let h_chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Length(list_w), Constraint::Min(0)])
+            .split(area);
 
-    // Vertical split of right side: table (55%) | detail (45%)
-    let v_chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Percentage(55), Constraint::Percentage(45)])
-        .split(h_chunks[1]);
+        draw_benchmark_list_compact(f, h_chunks[0], app);
 
-    draw_benchmark_list(f, v_chunks[0], app);
-
-    // Bottom panel: detail (0-1 selected) or comparison views (2+ selected)
-    if app.selections.len() >= 2 {
-        // Sub-tab bar (1 line) + view content
-        let bottom_chunks = Layout::default()
+        // Comparison panel: sub-tab bar + view
+        let v_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Length(1), Constraint::Min(0)])
-            .split(v_chunks[1]);
+            .split(h_chunks[1]);
 
-        // Sub-tab bar: [H2H] [Scatter] [Radar]
-        draw_benchmark_subtab_bar(f, bottom_chunks[0], &app.benchmarks_app);
+        draw_benchmark_subtab_bar(f, v_chunks[0], &app.benchmarks_app);
 
         match app.benchmarks_app.bottom_view {
             super::benchmarks_app::BottomView::H2H => {
-                draw_h2h_table_generic(f, bottom_chunks[1], app);
+                draw_h2h_table_generic(f, v_chunks[1], app);
             }
             super::benchmarks_app::BottomView::Scatter => {
-                draw_scatter(f, bottom_chunks[1], app);
+                draw_scatter(f, v_chunks[1], app);
             }
             super::benchmarks_app::BottomView::Radar => {
-                super::radar::draw_radar(f, bottom_chunks[1], app);
+                super::radar::draw_radar(f, v_chunks[1], app);
             }
             super::benchmarks_app::BottomView::Detail => {
-                draw_benchmark_detail(f, bottom_chunks[1], app);
+                draw_benchmark_detail(f, v_chunks[1], app);
             }
         }
     } else {
+        // Browse mode: creators (25%) | list+detail (75%)
+        let h_chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(25), Constraint::Percentage(75)])
+            .split(area);
+
+        draw_benchmark_creators(f, h_chunks[0], app);
+
+        // Vertical split: list (65%) | detail (35%)
+        let v_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Percentage(65), Constraint::Percentage(35)])
+            .split(h_chunks[1]);
+
+        draw_benchmark_list(f, v_chunks[0], app);
         draw_benchmark_detail(f, v_chunks[1], app);
     }
 
@@ -1319,6 +1327,89 @@ pub(super) fn compare_colors(index: usize) -> Color {
         Color::LightGreen,
     ];
     PALETTE[index % PALETTE.len()]
+}
+
+/// Compact list for compare mode: selection marker + name only, full height.
+fn draw_benchmark_list_compact(f: &mut Frame, area: Rect, app: &mut App) {
+    use super::benchmarks_app::BenchmarkFocus;
+
+    let bench_app = &mut app.benchmarks_app;
+    let store = &app.benchmark_store;
+
+    let is_focused = bench_app.focus == BenchmarkFocus::List;
+    let border_style = if is_focused {
+        Style::default().fg(Color::Cyan)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+
+    let title = if bench_app.search_query.is_empty() {
+        format!(" Models ({}) ", bench_app.filtered_indices.len())
+    } else {
+        format!(
+            " Models ({}) [/{}] ",
+            bench_app.filtered_indices.len(),
+            bench_app.search_query
+        )
+    };
+
+    let outer_block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(border_style)
+        .title(title);
+    let inner_area = outer_block.inner(area);
+    f.render_widget(outer_block, area);
+
+    let caret = if is_focused { "> " } else { "  " };
+    let entries = store.entries();
+    let name_width = inner_area.width.saturating_sub(4) as usize; // 2 caret + 2 marker
+
+    let items: Vec<ListItem> = bench_app
+        .filtered_indices
+        .iter()
+        .enumerate()
+        .map(|(display_idx, &entry_idx)| {
+            let entry = &entries[entry_idx];
+            let is_selected = display_idx == bench_app.selected;
+
+            let style = if is_selected {
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default()
+            };
+
+            let prefix = if is_selected { caret } else { "  " };
+            let mut row_spans: Vec<Span> = Vec::new();
+
+            // Selection marker
+            if let Some(sel_pos) = app.selections.iter().position(|&i| i == entry_idx) {
+                row_spans.push(Span::styled(
+                    "\u{25CF} ",
+                    Style::default().fg(compare_colors(sel_pos)),
+                ));
+            } else {
+                row_spans.push(Span::raw("  "));
+            }
+
+            row_spans.push(Span::styled(prefix, style));
+            row_spans.push(Span::styled(truncate(&entry.name, name_width), style));
+            ListItem::new(Line::from(row_spans))
+        })
+        .collect();
+
+    let list = List::new(items)
+        .highlight_style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol("");
+
+    let mut state = bench_app.list_state.clone();
+    state.select(Some(bench_app.selected));
+    f.render_stateful_widget(list, inner_area, &mut state);
 }
 
 fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
@@ -1929,8 +2020,10 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
                 ]),
                 Tab::Benchmarks => {
                     if app.selections.len() >= 2 {
-                        use super::benchmarks_app::BottomView;
+                        use super::benchmarks_app::{BenchmarkFocus, BottomView};
                         let mut spans = vec![
+                            Span::styled(" h/l ", Style::default().fg(Color::Yellow)),
+                            Span::raw("focus  "),
                             Span::styled(" Space ", Style::default().fg(Color::Yellow)),
                             Span::raw("select  "),
                             Span::styled(" v ", Style::default().fg(Color::Yellow)),
@@ -1942,6 +2035,12 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
                                     Span::styled(" d ", Style::default().fg(Color::Yellow)),
                                     Span::raw("detail  "),
                                 ]);
+                                if app.benchmarks_app.focus == BenchmarkFocus::Compare {
+                                    spans.extend([
+                                        Span::styled(" j/k ", Style::default().fg(Color::Yellow)),
+                                        Span::raw("scroll  "),
+                                    ]);
+                                }
                             }
                             BottomView::Scatter => {
                                 spans.extend([
@@ -2380,6 +2479,14 @@ fn draw_help_popup(f: &mut Frame, scroll: u16, current_tab: Tab) {
                     Span::styled("  a             ", Style::default().fg(Color::Yellow)),
                     Span::raw("Cycle radar preset"),
                 ]),
+                Line::from(vec![
+                    Span::styled("  j/k           ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Scroll H2H table (when Compare focused)"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  h/l           ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Switch focus: List ↔ Compare"),
+                ]),
                 Line::from(""),
             ]);
         }
@@ -2745,9 +2852,15 @@ fn draw_h2h_table_generic(f: &mut Frame, area: Rect, app: &App) {
         return;
     }
 
+    let is_focused = app.benchmarks_app.focus == super::benchmarks_app::BenchmarkFocus::Compare;
+    let border_color = if is_focused {
+        Color::Cyan
+    } else {
+        Color::DarkGray
+    };
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::DarkGray))
+        .border_style(Style::default().fg(border_color))
         .title(" Head-to-Head ");
     let inner = block.inner(area);
     f.render_widget(block, area);
@@ -3025,7 +3138,9 @@ fn draw_h2h_table_generic(f: &mut Frame, area: Rect, app: &App) {
         }
     }
 
-    let paragraph = Paragraph::new(lines).scroll((0, 0));
+    let max_scroll = lines.len().saturating_sub(inner.height as usize);
+    let scroll_y = app.benchmarks_app.h2h_scroll.min(max_scroll);
+    let paragraph = Paragraph::new(lines).scroll((scroll_y as u16, 0));
     f.render_widget(paragraph, inner);
 }
 
@@ -3210,11 +3325,18 @@ fn draw_scatter(f: &mut Frame, area: Rect, app: &App) {
     let x_suffix = if x_log { " [log]" } else { "" };
     let y_suffix = if y_log { " [log]" } else { "" };
 
+    let compare_focused =
+        app.benchmarks_app.focus == super::benchmarks_app::BenchmarkFocus::Compare;
+    let scatter_border = if compare_focused {
+        Color::Cyan
+    } else {
+        Color::DarkGray
+    };
     let chart = Chart::new(datasets)
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::DarkGray))
+                .border_style(Style::default().fg(scatter_border))
                 .title(format!(" {y_label} vs {x_label} ")),
         )
         .x_axis(

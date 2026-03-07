@@ -269,10 +269,18 @@ pub fn draw_radar(f: &mut Frame, area: Rect, app: &super::app::App) {
         })
         .collect();
 
+    let compare_focused =
+        app.benchmarks_app.focus == super::benchmarks_app::BenchmarkFocus::Compare;
+    let radar_border = if compare_focused {
+        Color::Cyan
+    } else {
+        Color::DarkGray
+    };
     let canvas = Canvas::default()
         .block(
             Block::default()
                 .borders(Borders::ALL)
+                .border_style(Style::default().fg(radar_border))
                 .title(format!(" Radar [{preset_label}] ")),
         )
         .x_bounds([-60.0, 60.0])

@@ -163,6 +163,7 @@ pub enum BenchmarkFocus {
     Creators,
     #[default]
     List,
+    Compare,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -446,8 +447,6 @@ pub struct BenchmarksApp {
     pub creator_grouping: CreatorGrouping,
     creator_info: HashMap<String, CreatorInfo>,
     pub bottom_view: BottomView,
-    /// Phase 2: scroll position for H2H table when BenchmarkFocus::Bottom is added
-    #[allow(dead_code)]
     pub h2h_scroll: usize,
     pub show_detail_overlay: bool,
     pub scatter_x: ScatterAxis,
@@ -912,19 +911,50 @@ impl BenchmarksApp {
     pub fn update_bottom_view(&mut self, selection_count: usize) {
         if selection_count >= 2 && self.bottom_view == BottomView::Detail {
             self.bottom_view = BottomView::H2H;
+            self.h2h_scroll = 0;
         } else if selection_count < 2 && self.bottom_view != BottomView::Detail {
             self.bottom_view = BottomView::Detail;
             self.show_detail_overlay = false;
+            self.h2h_scroll = 0;
         }
     }
 
     // --- Focus ---
 
-    pub fn switch_focus(&mut self) {
-        self.focus = match self.focus {
-            BenchmarkFocus::Creators => BenchmarkFocus::List,
-            BenchmarkFocus::List => BenchmarkFocus::Creators,
+    pub fn switch_focus(&mut self, has_compare: bool) {
+        self.focus = if has_compare {
+            match self.focus {
+                BenchmarkFocus::List => BenchmarkFocus::Compare,
+                _ => BenchmarkFocus::List,
+            }
+        } else {
+            match self.focus {
+                BenchmarkFocus::Creators => BenchmarkFocus::List,
+                _ => BenchmarkFocus::Creators,
+            }
         };
+    }
+
+    // --- H2H Scroll ---
+
+    pub fn scroll_h2h_down(&mut self) {
+        self.h2h_scroll = self.h2h_scroll.saturating_add(1);
+    }
+
+    pub fn scroll_h2h_up(&mut self) {
+        self.h2h_scroll = self.h2h_scroll.saturating_sub(1);
+    }
+
+    pub fn scroll_h2h_top(&mut self) {
+        self.h2h_scroll = 0;
+    }
+
+    pub fn scroll_h2h_page_down(&mut self, page: usize) {
+        self.h2h_scroll = self.h2h_scroll.saturating_add(page);
+    }
+
+    pub fn scroll_h2h_page_up(&mut self, page: usize) {
+        self.h2h_scroll = self.h2h_scroll.saturating_sub(page);
     }
 }
 
