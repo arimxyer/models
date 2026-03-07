@@ -1125,12 +1125,7 @@ fn draw_benchmarks_main(f: &mut Frame, area: Rect, app: &mut App) {
 
         match app.benchmarks_app.bottom_view {
             super::benchmarks_app::BottomView::H2H => {
-                draw_h2h_table_generic(
-                    f,
-                    bottom_chunks[1],
-                    app.benchmark_store.entries(),
-                    &app.selections,
-                );
+                draw_h2h_table_generic(f, bottom_chunks[1], app);
             }
             super::benchmarks_app::BottomView::Scatter => {
                 draw_scatter(f, bottom_chunks[1], app);
@@ -2742,12 +2737,10 @@ fn rank_values(values: &[Option<f64>], higher_is_better: bool) -> Vec<Option<u32
     ranks
 }
 
-fn draw_h2h_table_generic(
-    f: &mut Frame,
-    area: Rect,
-    entries: &[crate::benchmarks::BenchmarkEntry],
-    selections: &[usize],
-) {
+fn draw_h2h_table_generic(f: &mut Frame, area: Rect, app: &App) {
+    let entries = app.benchmark_store.entries();
+    let selections = &app.selections;
+
     if selections.len() < 2 {
         return;
     }
@@ -2801,7 +2794,159 @@ fn draw_h2h_table_generic(
         Style::default().fg(Color::DarkGray),
     )));
 
-    // Metric rows with section headers
+    // ── Pre-compute win counts (need them near the top) ──
+    let mut win_counts = vec![0u32; num_models];
+    for row in &rows {
+        if let H2HRow::Metric(metric) = row {
+            let values: Vec<Option<f64>> = selections
+                .iter()
+                .map(|&idx| entries.get(idx).and_then(|e| (metric.extract)(e)))
+                .collect();
+            let ranks = rank_values(&values, metric.higher_is_better);
+            for (i, rank) in ranks.iter().enumerate() {
+                if *rank == Some(1) {
+                    win_counts[i] += 1;
+                }
+            }
+        }
+    }
+
+    // ── Model Info section ──
+    let info_header = "\u{2500}\u{2500}\u{2500} Model Info \u{2500}".to_string();
+    lines.push(Line::from(Span::styled(
+        format!("{:<width$}", info_header, width = total_w),
+        Style::default().fg(Color::DarkGray),
+    )));
+
+    // Helper to render an info row with per-value colors
+    let render_info_row = |lines: &mut Vec<Line>, label: &str, values: Vec<(String, Color)>| {
+        let mut spans: Vec<Span> = vec![Span::styled(
+            format!("{:<width$}", label, width = label_w as usize),
+            Style::default().fg(Color::DarkGray),
+        )];
+        for (val, color) in values.iter() {
+            let truncated = if val.len() > col_w - 1 {
+                format!("{:.width$}", val, width = col_w - 2)
+            } else {
+                val.clone()
+            };
+            spans.push(Span::styled(
+                format!("{:>width$}", truncated, width = col_w),
+                Style::default().fg(*color),
+            ));
+        }
+        lines.push(Line::from(spans));
+    };
+
+    // Creator
+    let creators: Vec<(String, Color)> = selections
+        .iter()
+        .map(|&idx| {
+            let name = entries
+                .get(idx)
+                .map(|e| {
+                    if !e.creator_name.is_empty() {
+                        e.creator_name.clone()
+                    } else {
+                        e.creator.clone()
+                    }
+                })
+                .unwrap_or_default();
+            (name, Color::White)
+        })
+        .collect();
+    render_info_row(&mut lines, "Creator", creators);
+
+    // Source (Open/Closed) with color
+    let sources: Vec<(String, Color)> = selections
+        .iter()
+        .map(|&idx| {
+            entries
+                .get(idx)
+                .and_then(|e| app.open_weights_map.get(&e.slug))
+                .map(|&open| {
+                    if open {
+                        ("Open".to_string(), Color::Green)
+                    } else {
+                        ("Closed".to_string(), Color::Red)
+                    }
+                })
+                .unwrap_or_else(|| ("\u{2014}".to_string(), Color::DarkGray))
+        })
+        .collect();
+    render_info_row(&mut lines, "Source", sources);
+
+    // Region with creator region colors
+    let regions: Vec<(String, Color)> = selections
+        .iter()
+        .map(|&idx| {
+            entries
+                .get(idx)
+                .map(|e| {
+                    let region = super::benchmarks_app::CreatorRegion::from_creator(&e.creator);
+                    (region.label().to_string(), region.color())
+                })
+                .unwrap_or_default()
+        })
+        .collect();
+    render_info_row(&mut lines, "Region", regions);
+
+    // Type with creator type colors
+    let types: Vec<(String, Color)> = selections
+        .iter()
+        .map(|&idx| {
+            entries
+                .get(idx)
+                .map(|e| {
+                    let ct = super::benchmarks_app::CreatorType::from_creator(&e.creator);
+                    (ct.label().to_string(), ct.color())
+                })
+                .unwrap_or_default()
+        })
+        .collect();
+    render_info_row(&mut lines, "Type", types);
+
+    // Release date
+    let dates: Vec<(String, Color)> = selections
+        .iter()
+        .map(|&idx| {
+            let d = entries
+                .get(idx)
+                .and_then(|e| e.release_date.clone())
+                .unwrap_or_else(|| "\u{2014}".to_string());
+            (d, Color::White)
+        })
+        .collect();
+    render_info_row(&mut lines, "Released", dates);
+
+    // ── Win count (near top, after metadata) ──
+    let mut wins_spans: Vec<Span> = vec![Span::styled(
+        format!("{:<width$}", "\u{2605} Wins", width = label_w as usize),
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD),
+    )];
+    let max_wins = win_counts.iter().copied().max().unwrap_or(0);
+    for (i, &count) in win_counts.iter().enumerate() {
+        let color = compare_colors(i);
+        let label = if count == max_wins && max_wins > 0 {
+            format!("{} \u{2605}", count)
+        } else {
+            format!("{}", count)
+        };
+        let style = if count == max_wins && max_wins > 0 {
+            Style::default().fg(color).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(color)
+        };
+        wins_spans.push(Span::styled(
+            format!("{:>width$}", label, width = col_w),
+            style,
+        ));
+    }
+    lines.push(Line::from(wins_spans));
+
+    // ── Metric rows with section headers and ranks ──
     for row in &rows {
         match row {
             H2HRow::Section(title) => {
@@ -2829,6 +2974,7 @@ fn draw_h2h_table_generic(
                         Some(v) => {
                             let formatted = (metric.format)(*v);
                             if *rank == Some(1) {
+                                // Best: value ★
                                 let value_and_star = format!("{} \u{2605}", formatted);
                                 let padded = format!("{:>width$}", value_and_star, width = col_w);
                                 let star_pos = padded.rfind('\u{2605}').unwrap_or(padded.len());
@@ -2843,9 +2989,25 @@ fn draw_h2h_table_generic(
                                         .add_modifier(Modifier::BOLD),
                                 ));
                             } else {
+                                // Non-best: value in model color, rank in medal colors
+                                let rank_num = rank.unwrap_or(0);
+                                let suffix = format!(" #{}", rank_num);
+                                let rank_color = match rank_num {
+                                    2 => Color::Indexed(250), // silver
+                                    3 => Color::Indexed(172), // bronze
+                                    _ => Color::DarkGray,
+                                };
+
+                                let combined = format!("{}{}", formatted, suffix);
+                                let padded = format!("{:>width$}", combined, width = col_w);
+                                let suffix_start = padded.len().saturating_sub(suffix.len());
                                 row_spans.push(Span::styled(
-                                    format!("{:>width$}", formatted, width = col_w),
+                                    padded[..suffix_start].to_string(),
                                     Style::default().fg(color),
+                                ));
+                                row_spans.push(Span::styled(
+                                    padded[suffix_start..].to_string(),
+                                    Style::default().fg(rank_color),
                                 ));
                             }
                         }
