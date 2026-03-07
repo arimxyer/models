@@ -1343,13 +1343,32 @@ fn draw_benchmark_list_compact(f: &mut Frame, area: Rect, app: &mut App) {
         Style::default().fg(Color::DarkGray)
     };
 
+    let sort_dir = if bench_app.sort_descending {
+        "\u{2193}"
+    } else {
+        "\u{2191}"
+    };
+    let sort_indicator = format!(" {}{}", sort_dir, bench_app.sort_column.label());
+
+    let source_indicator = match bench_app.source_filter {
+        super::benchmarks_app::SourceFilter::All => String::new(),
+        filter => format!(" [{}]", filter.label()),
+    };
+
     let title = if bench_app.search_query.is_empty() {
-        format!(" Models ({}) ", bench_app.filtered_indices.len())
+        format!(
+            " Models ({}){}{} ",
+            bench_app.filtered_indices.len(),
+            source_indicator,
+            sort_indicator
+        )
     } else {
         format!(
-            " Models ({}) [/{}] ",
+            " Models ({}) [/{}]{}{} ",
             bench_app.filtered_indices.len(),
-            bench_app.search_query
+            bench_app.search_query,
+            source_indicator,
+            sort_indicator
         )
     };
 
