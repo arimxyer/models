@@ -2811,6 +2811,33 @@ fn draw_h2h_table_generic(f: &mut Frame, area: Rect, app: &App) {
         }
     }
 
+    // ── Win count (right under model names) ──
+    let mut wins_spans: Vec<Span> = vec![Span::styled(
+        format!("{:<width$}", "\u{2605} Wins", width = label_w as usize),
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD),
+    )];
+    let max_wins = win_counts.iter().copied().max().unwrap_or(0);
+    for (i, &count) in win_counts.iter().enumerate() {
+        let color = compare_colors(i);
+        let label = if count == max_wins && max_wins > 0 {
+            format!("{} \u{2605}", count)
+        } else {
+            format!("{}", count)
+        };
+        let style = if count == max_wins && max_wins > 0 {
+            Style::default().fg(color).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(color)
+        };
+        wins_spans.push(Span::styled(
+            format!("{:>width$}", label, width = col_w),
+            style,
+        ));
+    }
+    lines.push(Line::from(wins_spans));
+
     // ── Model Info section ──
     let info_header = "\u{2500}\u{2500}\u{2500} Model Info \u{2500}".to_string();
     lines.push(Line::from(Span::styled(
@@ -2918,33 +2945,6 @@ fn draw_h2h_table_generic(f: &mut Frame, area: Rect, app: &App) {
         })
         .collect();
     render_info_row(&mut lines, "Released", dates);
-
-    // ── Win count (near top, after metadata) ──
-    let mut wins_spans: Vec<Span> = vec![Span::styled(
-        format!("{:<width$}", "\u{2605} Wins", width = label_w as usize),
-        Style::default()
-            .fg(Color::Yellow)
-            .add_modifier(Modifier::BOLD),
-    )];
-    let max_wins = win_counts.iter().copied().max().unwrap_or(0);
-    for (i, &count) in win_counts.iter().enumerate() {
-        let color = compare_colors(i);
-        let label = if count == max_wins && max_wins > 0 {
-            format!("{} \u{2605}", count)
-        } else {
-            format!("{}", count)
-        };
-        let style = if count == max_wins && max_wins > 0 {
-            Style::default().fg(color).add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(color)
-        };
-        wins_spans.push(Span::styled(
-            format!("{:>width$}", label, width = col_w),
-            style,
-        ));
-    }
-    lines.push(Line::from(wins_spans));
 
     // ── Metric rows with section headers and ranks ──
     for row in &rows {
