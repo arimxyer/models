@@ -187,6 +187,7 @@ pub enum Message {
     ToggleBenchmarkSelection,
     ClearBenchmarkSelections,
     ToggleDetailOverlay,
+    ToggleComparePanel,
     CloseDetailOverlay,
     CycleBenchmarkView,
     CycleScatterX,
@@ -971,6 +972,18 @@ impl App {
             }
             Message::CloseDetailOverlay => {
                 self.benchmarks_app.show_detail_overlay = false;
+            }
+            Message::ToggleComparePanel => {
+                self.benchmarks_app.show_creators_in_compare =
+                    !self.benchmarks_app.show_creators_in_compare;
+                // Update focus to match the new left panel
+                if self.benchmarks_app.focus != super::benchmarks_app::BenchmarkFocus::Compare {
+                    self.benchmarks_app.focus = if self.benchmarks_app.show_creators_in_compare {
+                        super::benchmarks_app::BenchmarkFocus::Creators
+                    } else {
+                        super::benchmarks_app::BenchmarkFocus::List
+                    };
+                }
             }
             Message::CycleBenchmarkView => {
                 if self.selections.len() >= 2 {

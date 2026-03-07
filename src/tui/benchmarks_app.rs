@@ -449,6 +449,7 @@ pub struct BenchmarksApp {
     pub bottom_view: BottomView,
     pub h2h_scroll: usize,
     pub show_detail_overlay: bool,
+    pub show_creators_in_compare: bool,
     pub scatter_x: ScatterAxis,
     pub scatter_y: ScatterAxis,
     pub radar_preset: RadarPreset,
@@ -479,6 +480,7 @@ impl BenchmarksApp {
             bottom_view: BottomView::default(),
             h2h_scroll: 0,
             show_detail_overlay: false,
+            show_creators_in_compare: false,
             scatter_x: ScatterAxis::default(),
             scatter_y: ScatterAxis::Coding,
             radar_preset: RadarPreset::default(),
@@ -923,9 +925,14 @@ impl BenchmarksApp {
 
     pub fn switch_focus(&mut self, has_compare: bool) {
         self.focus = if has_compare {
+            let left = if self.show_creators_in_compare {
+                BenchmarkFocus::Creators
+            } else {
+                BenchmarkFocus::List
+            };
             match self.focus {
-                BenchmarkFocus::List => BenchmarkFocus::Compare,
-                _ => BenchmarkFocus::List,
+                BenchmarkFocus::Compare => left,
+                _ => BenchmarkFocus::Compare,
             }
         } else {
             match self.focus {
