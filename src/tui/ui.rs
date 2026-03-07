@@ -3273,20 +3273,39 @@ fn draw_scatter(f: &mut Frame, area: Rect, app: &App) {
     let x_bounds = if x_log {
         [x_min - x_pad, x_max + x_pad]
     } else {
-        [(x_min - x_pad).max(0.0), x_max + x_pad]
+        [(x_min - x_pad).max(0.0).floor(), (x_max + x_pad).ceil()]
     };
     let y_bounds = if y_log {
         [y_min - y_pad, y_max + y_pad]
     } else {
-        [(y_min - y_pad).max(0.0), y_max + y_pad]
+        [(y_min - y_pad).max(0.0).floor(), (y_max + y_pad).ceil()]
     };
 
-    // Compute average crosshair lines
-    let sx: f64 = display_points.iter().map(|p| p.0).sum();
-    let sy: f64 = display_points.iter().map(|p| p.1).sum();
-    let n = display_points.len() as f64;
-    let avg_x = sx / n;
-    let avg_y = sy / n;
+    // Compute independent averages (each axis uses all entries with data for that metric)
+    let (x_sum, x_count) = entries.iter().fold((0.0_f64, 0_u32), |(s, c), e| {
+        if let Some(v) = x_extract(e) {
+            (s + log_transform(v, x_log), c + 1)
+        } else {
+            (s, c)
+        }
+    });
+    let (y_sum, y_count) = entries.iter().fold((0.0_f64, 0_u32), |(s, c), e| {
+        if let Some(v) = y_extract(e) {
+            (s + log_transform(v, y_log), c + 1)
+        } else {
+            (s, c)
+        }
+    });
+    let avg_x = if x_count > 0 {
+        x_sum / x_count as f64
+    } else {
+        (x_bounds[0] + x_bounds[1]) / 2.0
+    };
+    let avg_y = if y_count > 0 {
+        y_sum / y_count as f64
+    } else {
+        (y_bounds[0] + y_bounds[1]) / 2.0
+    };
 
     let v_line = vec![(avg_x, y_bounds[0]), (avg_x, y_bounds[1])];
     let h_line = vec![(x_bounds[0], avg_y), (x_bounds[1], avg_y)];
@@ -3347,16 +3366,60 @@ fn draw_scatter(f: &mut Frame, area: Rect, app: &App) {
     let x_label = app.benchmarks_app.scatter_x.label();
     let y_label = app.benchmarks_app.scatter_y.label();
 
-    let fmt_bound = |v: f64, use_log: bool| -> String {
-        if use_log {
-            format!("{:.1}", v.exp())
+    // Generate evenly-spaced tick labels for an axis.
+    // ratatui distributes labels uniformly across the axis, so values must be evenly spaced.
+    let make_ticks = |lo: f64, hi: f64, use_log: bool, num_ticks: usize| -> Vec<String> {
+        let fmt_val = |v: f64| -> String {
+            if use_log {
+                let real = v.exp();
+                if real >= 100.0 {
+                    format!("{}", real.round() as i64)
+                } else {
+                    format!("{:.1}", real)
+                }
+            } else if v.fract().abs() < 0.01 {
+                format!("{}", v.round() as i64)
+            } else {
+                format!("{:.1}", v)
+            }
+        };
+
+        let n = num_ticks.max(2);
+        let step = (hi - lo) / (n - 1) as f64;
+        (0..n).map(|i| fmt_val(lo + step * i as f64)).collect()
+    };
+
+    let x_ticks = make_ticks(x_bounds[0], x_bounds[1], x_log, 7);
+    let y_ticks = make_ticks(y_bounds[0], y_bounds[1], y_log, 7);
+
+    let x_suffix = if x_log { " [log]" } else { "" };
+    let y_suffix = if y_log { " [log]" } else { "" };
+
+    // Format average for display (use original scale for log axes)
+    let fmt_avg = |avg: f64, use_log: bool| -> String {
+        let v = if use_log { avg.exp() } else { avg };
+        if v >= 100.0 {
+            format!("{}", v.round() as i64)
         } else {
             format!("{:.1}", v)
         }
     };
+    let avg_style = Style::default().fg(Color::Indexed(242));
 
-    let x_suffix = if x_log { " [log]" } else { "" };
-    let y_suffix = if y_log { " [log]" } else { "" };
+    let x_title = Line::from(vec![
+        Span::styled(
+            format!("{x_label}{x_suffix}"),
+            Style::default().fg(Color::Gray),
+        ),
+        Span::styled(format!("  avg:{}", fmt_avg(avg_x, x_log)), avg_style),
+    ]);
+    let y_title = Line::from(vec![
+        Span::styled(
+            format!("{y_label}{y_suffix}"),
+            Style::default().fg(Color::Gray),
+        ),
+        Span::styled(format!("  avg:{}", fmt_avg(avg_y, y_log)), avg_style),
+    ]);
 
     let compare_focused =
         app.benchmarks_app.focus == super::benchmarks_app::BenchmarkFocus::Compare;
@@ -3374,17 +3437,17 @@ fn draw_scatter(f: &mut Frame, area: Rect, app: &App) {
         )
         .x_axis(
             Axis::default()
-                .title(format!("{x_label}{x_suffix}"))
+                .title(x_title)
                 .style(Style::default().fg(Color::Gray))
                 .bounds(x_bounds)
-                .labels([fmt_bound(x_bounds[0], x_log), fmt_bound(x_bounds[1], x_log)]),
+                .labels(x_ticks),
         )
         .y_axis(
             Axis::default()
-                .title(format!("{y_label}{y_suffix}"))
+                .title(y_title)
                 .style(Style::default().fg(Color::Gray))
                 .bounds(y_bounds)
-                .labels([fmt_bound(y_bounds[0], y_log), fmt_bound(y_bounds[1], y_log)]),
+                .labels(y_ticks),
         )
         .legend_position(None);
 
