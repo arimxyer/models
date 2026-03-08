@@ -93,7 +93,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install packaging tools
-        run: cargo install cargo-deb cargo-generate-rpm
+        run: cargo install cargo-deb cargo-generate-rpm --locked
 
       - name: Download compiled binary
         uses: actions/download-artifact@v4
@@ -137,10 +137,18 @@ jobs:
         with:
           path: artifacts
 
+      - name: Generate checksums
+        run: |
+          cd artifacts
+          find . -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.deb' -o -name '*.rpm' \) -exec sha256sum {} \; | sed 's|  \./[^/]*/|  |' > ../SHA256SUMS
+          cd ..
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: artifacts/**/*
+          files: |
+            artifacts/**/*
+            SHA256SUMS
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-') }}
         env:
