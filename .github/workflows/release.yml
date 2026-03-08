@@ -75,9 +75,58 @@ jobs:
           name: models-${{ matrix.target }}
           path: models-${{ matrix.target }}.${{ matrix.archive }}
 
+  package-linux:
+    name: Package Linux (${{ matrix.arch }})
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            target: x86_64-unknown-linux-gnu
+          - arch: aarch64
+            target: aarch64-unknown-linux-gnu
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install packaging tools
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall -y --version 3.6.3 cargo-deb
+          cargo binstall -y --version 0.20.0 cargo-generate-rpm
+
+      - name: Download compiled binary
+        uses: actions/download-artifact@v4
+        with:
+          name: models-${{ matrix.target }}
+          path: artifacts
+
+      - name: Place binary for packagers
+        run: |
+          mkdir -p target/${{ matrix.target }}/release
+          tar xzf artifacts/models-${{ matrix.target }}.tar.gz -C target/${{ matrix.target }}/release/
+
+      - name: Build .deb
+        run: cargo deb --no-build --no-strip --target ${{ matrix.target }}
+
+      - name: Build .rpm
+        run: cargo generate-rpm --target ${{ matrix.target }}
+
+      - name: Upload .deb
+        uses: actions/upload-artifact@v4
+        with:
+          name: models-deb-${{ matrix.arch }}
+          path: target/${{ matrix.target }}/debian/*.deb
+
+      - name: Upload .rpm
+        uses: actions/upload-artifact@v4
+        with:
+          name: models-rpm-${{ matrix.arch }}
+          path: target/${{ matrix.target }}/generate-rpm/*.rpm
+
   release:
     name: Create Release
-    needs: build
+    needs: [build, package-linux]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -87,10 +136,18 @@ jobs:
         with:
           path: artifacts
 
+      - name: Generate checksums
+        run: |
+          cd artifacts
+          find . -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.deb' -o -name '*.rpm' \) -exec sha256sum {} \; | sed 's|  \./[^/]*/|  |' > ../SHA256SUMS
+          cd ..
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: artifacts/**/*
+          files: |
+            artifacts/**/*
+            SHA256SUMS
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-') }}
         env:
