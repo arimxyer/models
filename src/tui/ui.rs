@@ -1154,6 +1154,11 @@ fn draw_benchmarks_main(f: &mut Frame, area: Rect, app: &mut App) {
     if app.benchmarks_app.show_detail_overlay && app.selections.len() >= 2 {
         draw_detail_overlay(f, area, app);
     }
+
+    // Sort picker popup
+    if app.benchmarks_app.show_sort_picker {
+        draw_sort_picker(f, area, &app.benchmarks_app);
+    }
 }
 
 fn draw_benchmark_subtab_bar(
@@ -3781,6 +3786,55 @@ fn draw_scatter(f: &mut Frame, area: Rect, app: &App) {
         }
         f.render_widget(Paragraph::new(Line::from(spans)), leg_area);
     }
+}
+
+fn draw_sort_picker(f: &mut Frame, area: Rect, bench_app: &super::benchmarks_app::BenchmarksApp) {
+    use super::benchmarks_app::BenchmarkSortColumn;
+
+    let columns = BenchmarkSortColumn::ALL;
+    let selected = bench_app.sort_picker_selected;
+
+    // Fixed-size popup: 30 wide, enough for all items + border
+    let height = (columns.len() as u16 + 2).min(area.height);
+    let width = 30u16.min(area.width);
+    let popup_area = centered_rect_fixed(width, height, area);
+
+    f.render_widget(Clear, popup_area);
+
+    let items: Vec<ListItem> = columns
+        .iter()
+        .map(|col| {
+            let marker = if *col == bench_app.sort_column {
+                let arrow = if bench_app.sort_descending {
+                    "\u{25bc}"
+                } else {
+                    "\u{25b2}"
+                };
+                format!(" {arrow}")
+            } else {
+                String::new()
+            };
+            ListItem::new(Line::from(format!(" {}{}", col.picker_label(), marker)))
+        })
+        .collect();
+
+    let mut list_state = ListState::default();
+    list_state.select(Some(selected));
+
+    let list = List::new(items)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Cyan))
+                .title(" Sort By "),
+        )
+        .highlight_style(
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        );
+
+    f.render_stateful_widget(list, popup_area, &mut list_state);
 }
 
 /// Create a centered rect using fixed width and height

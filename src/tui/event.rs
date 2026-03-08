@@ -228,8 +228,22 @@ fn handle_agents_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Opti
     }
 }
 
+fn handle_sort_picker_keys(code: KeyCode) -> Option<Message> {
+    match code {
+        KeyCode::Char('j') | KeyCode::Down => Some(Message::SortPickerNext),
+        KeyCode::Char('k') | KeyCode::Up => Some(Message::SortPickerPrev),
+        KeyCode::Enter => Some(Message::SortPickerConfirm),
+        KeyCode::Esc | KeyCode::Char('s') => Some(Message::CloseSortPicker),
+        _ => None,
+    }
+}
+
 fn handle_benchmarks_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Option<Message> {
     use super::benchmarks_app::BenchmarkFocus;
+
+    if app.benchmarks_app.show_sort_picker {
+        return handle_sort_picker_keys(code);
+    }
 
     let focus = app.benchmarks_app.focus;
 
@@ -301,7 +315,7 @@ fn handle_benchmarks_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> 
         KeyCode::Char('7') => Some(Message::CycleReasoningFilter),
 
         // Sort
-        KeyCode::Char('s') => Some(Message::CycleBenchmarkSort),
+        KeyCode::Char('s') => Some(Message::OpenSortPicker),
         KeyCode::Char('S') => Some(Message::ToggleBenchmarkSortDir),
 
         // Actions

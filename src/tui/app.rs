@@ -177,8 +177,12 @@ pub enum Message {
     CycleReasoningFilter,
     ToggleRegionGrouping,
     ToggleTypeGrouping,
-    CycleBenchmarkSort,
     ToggleBenchmarkSortDir,
+    OpenSortPicker,
+    SortPickerNext,
+    SortPickerPrev,
+    SortPickerConfirm,
+    CloseSortPicker,
     QuickSortIntelligence,
     QuickSortDate,
     QuickSortSpeed,
@@ -900,13 +904,37 @@ impl App {
                 self.benchmarks_app
                     .toggle_type_grouping(&self.benchmark_store);
             }
-            Message::CycleBenchmarkSort => {
-                self.benchmarks_app
-                    .cycle_sort(&self.benchmark_store, &self.open_weights_map);
-            }
             Message::ToggleBenchmarkSortDir => {
                 self.benchmarks_app
                     .toggle_sort_direction(&self.benchmark_store);
+            }
+            Message::OpenSortPicker => {
+                let current = self.benchmarks_app.sort_column;
+                self.benchmarks_app.sort_picker_selected =
+                    super::benchmarks_app::BenchmarkSortColumn::ALL
+                        .iter()
+                        .position(|&c| c == current)
+                        .unwrap_or(0);
+                self.benchmarks_app.show_sort_picker = true;
+            }
+            Message::SortPickerNext => {
+                let len = super::benchmarks_app::BenchmarkSortColumn::ALL.len();
+                self.benchmarks_app.sort_picker_selected =
+                    (self.benchmarks_app.sort_picker_selected + 1).min(len - 1);
+            }
+            Message::SortPickerPrev => {
+                self.benchmarks_app.sort_picker_selected =
+                    self.benchmarks_app.sort_picker_selected.saturating_sub(1);
+            }
+            Message::SortPickerConfirm => {
+                let col = super::benchmarks_app::BenchmarkSortColumn::ALL
+                    [self.benchmarks_app.sort_picker_selected];
+                self.benchmarks_app.show_sort_picker = false;
+                self.benchmarks_app
+                    .quick_sort(col, &self.benchmark_store, &self.open_weights_map);
+            }
+            Message::CloseSortPicker => {
+                self.benchmarks_app.show_sort_picker = false;
             }
             Message::QuickSortIntelligence => {
                 self.benchmarks_app.quick_sort(

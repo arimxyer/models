@@ -34,28 +34,51 @@ pub enum BenchmarkSortColumn {
 }
 
 impl BenchmarkSortColumn {
-    pub fn next(self) -> Self {
+    pub const ALL: &[Self] = &[
+        Self::Intelligence,
+        Self::Coding,
+        Self::Math,
+        Self::Gpqa,
+        Self::MMLUPro,
+        Self::Hle,
+        Self::LiveCode,
+        Self::SciCode,
+        Self::IFBench,
+        Self::Lcr,
+        Self::Terminal,
+        Self::Tau2,
+        Self::Speed,
+        Self::Ttft,
+        Self::Ttfat,
+        Self::PriceInput,
+        Self::PriceOutput,
+        Self::PriceBlended,
+        Self::Name,
+        Self::ReleaseDate,
+    ];
+
+    pub fn picker_label(&self) -> &'static str {
         match self {
-            Self::Intelligence => Self::Coding,
-            Self::Coding => Self::Math,
-            Self::Math => Self::Gpqa,
-            Self::Gpqa => Self::MMLUPro,
-            Self::MMLUPro => Self::Hle,
-            Self::Hle => Self::LiveCode,
-            Self::LiveCode => Self::SciCode,
-            Self::SciCode => Self::IFBench,
-            Self::IFBench => Self::Lcr,
-            Self::Lcr => Self::Terminal,
-            Self::Terminal => Self::Tau2,
-            Self::Tau2 => Self::Speed,
-            Self::Speed => Self::Ttft,
-            Self::Ttft => Self::Ttfat,
-            Self::Ttfat => Self::PriceInput,
-            Self::PriceInput => Self::PriceOutput,
-            Self::PriceOutput => Self::PriceBlended,
-            Self::PriceBlended => Self::Name,
-            Self::Name => Self::ReleaseDate,
-            Self::ReleaseDate => Self::Intelligence,
+            Self::Intelligence => "Intelligence Index",
+            Self::Coding => "Coding Index",
+            Self::Math => "Math Index",
+            Self::Gpqa => "GPQA Diamond",
+            Self::MMLUPro => "MMLU-Pro",
+            Self::Hle => "HLE",
+            Self::LiveCode => "LiveCodeBench",
+            Self::SciCode => "SciCode",
+            Self::IFBench => "IFBench",
+            Self::Lcr => "LCR",
+            Self::Terminal => "TerminalBench",
+            Self::Tau2 => "Tau2",
+            Self::Speed => "Output Speed (tok/s)",
+            Self::Ttft => "Time to First Token",
+            Self::Ttfat => "Time to First Action Token",
+            Self::PriceInput => "Price: Input $/M",
+            Self::PriceOutput => "Price: Output $/M",
+            Self::PriceBlended => "Price: Blended $/M",
+            Self::Name => "Name",
+            Self::ReleaseDate => "Release Date",
         }
     }
 
@@ -454,6 +477,8 @@ pub struct BenchmarksApp {
     pub scatter_x: ScatterAxis,
     pub scatter_y: ScatterAxis,
     pub radar_preset: RadarPreset,
+    pub show_sort_picker: bool,
+    pub sort_picker_selected: usize,
 }
 
 impl BenchmarksApp {
@@ -486,6 +511,8 @@ impl BenchmarksApp {
             scatter_x: ScatterAxis::default(),
             scatter_y: ScatterAxis::Coding,
             radar_preset: RadarPreset::default(),
+            show_sort_picker: false,
+            sort_picker_selected: 0,
         };
 
         app.build_creator_list(store);
@@ -720,12 +747,6 @@ impl BenchmarksApp {
                 ord
             }
         });
-    }
-
-    pub fn cycle_sort(&mut self, store: &BenchmarkStore, open_weights_map: &HashMap<String, bool>) {
-        self.sort_column = self.sort_column.next();
-        self.sort_descending = self.sort_column.default_descending();
-        self.update_filtered(store, open_weights_map);
     }
 
     pub fn toggle_sort_direction(&mut self, store: &BenchmarkStore) {
