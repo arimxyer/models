@@ -95,19 +95,20 @@ yay -S modelsdev-git
 
 ### Debian / Ubuntu
 
-Download the `.deb` from [GitHub Releases](https://github.com/arimxyer/models/releases):
+Download the `.deb` from [GitHub Releases](https://github.com/arimxyer/models/releases) and install:
 
 ```bash
-curl -LO https://github.com/arimxyer/models/releases/latest/download/modelsdev_<version>_amd64.deb
-sudo dpkg -i modelsdev_<version>_amd64.deb
+# Download the latest .deb for your architecture (amd64 or arm64)
+sudo dpkg -i modelsdev_*_amd64.deb
 ```
 
 ### Fedora / RHEL
 
-Download the `.rpm` from [GitHub Releases](https://github.com/arimxyer/models/releases):
+Download the `.rpm` from [GitHub Releases](https://github.com/arimxyer/models/releases) and install:
 
 ```bash
-sudo rpm -i https://github.com/arimxyer/models/releases/latest/download/modelsdev-<version>-1.x86_64.rpm
+# Download the latest .rpm for your architecture (x86_64 or aarch64)
+sudo rpm -i modelsdev-*.x86_64.rpm
 ```
 
 ### Nix
@@ -119,6 +120,8 @@ nix run github:arimxyer/models
 # Install to profile
 nix profile install github:arimxyer/models
 ```
+
+> **Verifying downloads**: Each GitHub Release includes SHA256 checksums in the release assets. Verify your download with `sha256sum` before installing.
 
 ### Pre-built binaries
 

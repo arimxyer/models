@@ -103,8 +103,9 @@ jobs:
 
       - name: Place binary for packagers
         run: |
-          mkdir -p target/${{ matrix.target }}/release
+          mkdir -p target/${{ matrix.target }}/release target/release
           tar xzf artifacts/models-${{ matrix.target }}.tar.gz -C target/${{ matrix.target }}/release/
+          cp target/${{ matrix.target }}/release/models target/release/models
 
       - name: Build .deb
         run: cargo deb --no-build --no-strip --target ${{ matrix.target }}

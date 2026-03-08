@@ -1,6 +1,6 @@
 # Maintainer: arimxyer
 pkgname=modelsdev-git
-pkgver=0.9.7
+pkgver=0.0.0
 pkgrel=1
 pkgdesc='Browse AI models, benchmarks, and coding agents from the terminal'
 arch=('x86_64' 'aarch64')
