@@ -89,11 +89,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
       - name: Install packaging tools
-        run: cargo install cargo-deb cargo-generate-rpm --locked
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall -y --version 3.6.3 cargo-deb
+          cargo binstall -y --version 0.20.0 cargo-generate-rpm
 
       - name: Download compiled binary
         uses: actions/download-artifact@v4
@@ -103,9 +103,8 @@ jobs:
 
       - name: Place binary for packagers
         run: |
-          mkdir -p target/${{ matrix.target }}/release target/release
+          mkdir -p target/${{ matrix.target }}/release
           tar xzf artifacts/models-${{ matrix.target }}.tar.gz -C target/${{ matrix.target }}/release/
-          cp target/${{ matrix.target }}/release/models target/release/models
 
       - name: Build .deb
         run: cargo deb --no-build --no-strip --target ${{ matrix.target }}
