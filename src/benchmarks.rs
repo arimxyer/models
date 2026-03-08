@@ -152,9 +152,12 @@ impl BenchmarkEntry {
                 continue;
             }
 
-            // Pure effort keyword without reasoning context
+            // Pure effort keyword — implies reasoning (effort controls thinking budget)
             if EFFORT_ONLY_RE.is_match(content) {
                 self.effort_level = extract_effort(content);
+                if self.reasoning_status == ReasoningStatus::None {
+                    self.reasoning_status = ReasoningStatus::Reasoning;
+                }
                 continue;
             }
 
@@ -174,6 +177,14 @@ impl BenchmarkEntry {
         } else {
             trimmed
         };
+
+        // Check base name (outside parens) for reasoning/thinking keywords
+        if self.reasoning_status == ReasoningStatus::None {
+            let base_lower = self.display_name.to_lowercase();
+            if base_lower.contains("reasoning") || base_lower.contains("thinking") {
+                self.reasoning_status = ReasoningStatus::Reasoning;
+            }
+        }
     }
 }
 
@@ -184,6 +195,10 @@ pub struct BenchmarkStore {
 impl BenchmarkStore {
     pub fn entries(&self) -> &[BenchmarkEntry] {
         &self.entries
+    }
+
+    pub fn entries_mut(&mut self) -> &mut [BenchmarkEntry] {
+        &mut self.entries
     }
 
     /// Create an empty store (no benchmark data loaded yet).
@@ -385,6 +400,33 @@ mod tests {
         assert!(non_reasoning.matches(&nr_entry));
         assert!(!non_reasoning.matches(&reasoning_entry));
         assert!(!non_reasoning.matches(&plain_entry));
+    }
+
+    #[test]
+    fn test_parse_metadata_effort_implies_reasoning() {
+        let mut e = make_entry(|e| e.name = "o4-mini (high)".to_string());
+        e.parse_metadata();
+        assert_eq!(e.reasoning_status, ReasoningStatus::Reasoning);
+        assert_eq!(e.effort_level, Some("high".to_string()));
+        assert_eq!(e.display_name, "o4-mini");
+    }
+
+    #[test]
+    fn test_parse_metadata_reasoning_in_base_name() {
+        let mut e = make_entry(|e| e.name = "Grok 3 mini Reasoning (high)".to_string());
+        e.parse_metadata();
+        assert_eq!(e.reasoning_status, ReasoningStatus::Reasoning);
+        assert_eq!(e.effort_level, Some("high".to_string()));
+        assert_eq!(e.display_name, "Grok 3 mini Reasoning");
+    }
+
+    #[test]
+    fn test_parse_metadata_thinking_in_base_name() {
+        let mut e =
+            make_entry(|e| e.name = "Gemini 2.0 Flash Thinking Experimental (Jan '25)".to_string());
+        e.parse_metadata();
+        assert_eq!(e.reasoning_status, ReasoningStatus::Reasoning);
+        assert_eq!(e.display_name, "Gemini 2.0 Flash Thinking Experimental");
     }
 
     #[test]

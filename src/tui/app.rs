@@ -253,7 +253,7 @@ impl App {
         providers_map: ProvidersMap,
         agents_file: Option<&AgentsFile>,
         config: Option<Config>,
-        benchmark_store: BenchmarkStore,
+        mut benchmark_store: BenchmarkStore,
     ) -> Self {
         let mut providers: Vec<(String, Provider)> = providers_map.into_iter().collect();
         providers.sort_by(|a, b| a.0.cmp(&b.0));
@@ -267,6 +267,10 @@ impl App {
         let agents_app = agents_file.map(|af| AgentsApp::new(af, &config));
         let open_weights_map =
             crate::open_weights::build_open_weights_map(&providers, benchmark_store.entries());
+        crate::open_weights::apply_reasoning_from_models_dev(
+            &providers,
+            benchmark_store.entries_mut(),
+        );
         let benchmarks_app = BenchmarksApp::new(&benchmark_store, &open_weights_map);
 
         let mut app = Self {
@@ -1043,6 +1047,10 @@ impl App {
                 self.open_weights_map = crate::open_weights::build_open_weights_map(
                     &self.providers,
                     self.benchmark_store.entries(),
+                );
+                crate::open_weights::apply_reasoning_from_models_dev(
+                    &self.providers,
+                    self.benchmark_store.entries_mut(),
                 );
                 self.benchmarks_app
                     .rebuild(&self.benchmark_store, &self.open_weights_map);
