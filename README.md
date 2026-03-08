@@ -87,10 +87,10 @@ scoop install extras/models
 
 ```bash
 # Binary package (pre-built, faster)
-yay -S modelsdev-bin
+paru -S modelsdev-bin   # or: yay -S modelsdev-bin
 
 # Or build from source
-yay -S modelsdev-git
+paru -S modelsdev-git   # or: yay -S modelsdev-git
 ```
 
 ### Debian / Ubuntu
