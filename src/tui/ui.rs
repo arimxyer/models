@@ -1630,12 +1630,8 @@ fn draw_benchmark_detail_content(
 ) {
     let mut lines: Vec<Line> = Vec::new();
 
-    // Dynamic column widths based on available area
-    // Layout: [indent 2] [label lw] [value vw] [label lw] [value remainder]
-    let w = area.width as usize;
-    let lw = (w * 28 / 100).max(8); // label width ~28%
-    let vw = (w * 22 / 100).max(6); // value width ~22%
-    let col = DetailCols { lw, vw };
+    // Dynamic column widths via ratatui's constraint solver
+    let cw = ColumnWidths::from_width(area.width);
 
     // Name + creator + metadata on first lines
     let creator_display = if !entry.creator_name.is_empty() {
@@ -1662,13 +1658,13 @@ fn draw_benchmark_detail_content(
     };
     push_meta_row(
         &mut lines,
-        &col,
+        &cw,
         ("Creator", creator_display, Color::Reset),
         ("Source", source_label, source_color),
     );
     push_meta_row(
         &mut lines,
-        &col,
+        &cw,
         ("Region", region.label(), Color::Reset),
         ("Type", creator_type.label(), Color::Reset),
     );
@@ -1684,7 +1680,7 @@ fn draw_benchmark_detail_content(
     };
     push_meta_row(
         &mut lines,
-        &col,
+        &cw,
         ("Released", date_str, Color::Reset),
         ("Reason", reasoning_label, reasoning_color),
     );
@@ -1696,7 +1692,7 @@ fn draw_benchmark_detail_content(
         let variant_str = entry.variant_tag.as_deref().unwrap_or(em);
         push_meta_row(
             &mut lines,
-            &col,
+            &cw,
             ("Effort", effort_str, Color::Reset),
             ("Variant", variant_str, Color::Reset),
         );
@@ -1718,7 +1714,7 @@ fn draw_benchmark_detail_content(
         .unwrap_or_else(|| em.to_string());
     push_meta_row(
         &mut lines,
-        &col,
+        &cw,
         ("Tools", tools_str, tools_color),
         ("Context", &ctx_str, Color::Reset),
     );
@@ -1729,7 +1725,7 @@ fn draw_benchmark_detail_content(
         .unwrap_or_else(|| em.to_string());
     push_meta_row(
         &mut lines,
-        &col,
+        &cw,
         ("Output", &out_str, Color::Reset),
         ("", "", Color::Reset),
     );
@@ -1737,74 +1733,40 @@ fn draw_benchmark_detail_content(
     // Composite Indexes (0-100 scale, higher is better)
     lines.push(Line::from(""));
     push_section_header(&mut lines, "Indexes (0\u{2013}100, \u{2191} better)");
-    push_two_col(
+    let int_idx = fmt_idx(entry.intelligence_index);
+    let cod_idx = fmt_idx(entry.coding_index);
+    push_detail_row(
         &mut lines,
-        &col,
+        &cw,
         "Intelligence",
-        fmt_idx(entry.intelligence_index),
+        &int_idx,
         "Coding",
-        fmt_idx(entry.coding_index),
+        &cod_idx,
     );
-    push_two_col(
-        &mut lines,
-        &col,
-        "Math",
-        fmt_idx(entry.math_index),
-        "",
-        String::new(),
-    );
+    let math_idx = fmt_idx(entry.math_index);
+    push_detail_row(&mut lines, &cw, "Math", &math_idx, "", "");
 
     // Benchmark Scores (percentage, higher is better)
     lines.push(Line::from(""));
     push_section_header(&mut lines, "Benchmarks (%, \u{2191} better)");
-    push_two_col(
-        &mut lines,
-        &col,
-        "GPQA",
-        fmt_pct(entry.gpqa),
-        "MMLU-Pro",
-        fmt_pct(entry.mmlu_pro),
-    );
-    push_two_col(
-        &mut lines,
-        &col,
-        "HLE",
-        fmt_pct(entry.hle),
-        "LiveCode",
-        fmt_pct(entry.livecodebench),
-    );
-    push_two_col(
-        &mut lines,
-        &col,
-        "SciCode",
-        fmt_pct(entry.scicode),
-        "IFBench",
-        fmt_pct(entry.ifbench),
-    );
-    push_two_col(
-        &mut lines,
-        &col,
-        "Terminal",
-        fmt_pct(entry.terminalbench_hard),
-        "Tau2",
-        fmt_pct(entry.tau2),
-    );
-    push_two_col(
-        &mut lines,
-        &col,
-        "LCR",
-        fmt_pct(entry.lcr),
-        "MATH-500",
-        fmt_pct(entry.math_500),
-    );
-    push_two_col(
-        &mut lines,
-        &col,
-        "AIME",
-        fmt_pct(entry.aime),
-        "AIME'25",
-        fmt_pct(entry.aime_25),
-    );
+    let gpqa = fmt_pct(entry.gpqa);
+    let mmlu = fmt_pct(entry.mmlu_pro);
+    push_detail_row(&mut lines, &cw, "GPQA", &gpqa, "MMLU-Pro", &mmlu);
+    let hle = fmt_pct(entry.hle);
+    let livecode = fmt_pct(entry.livecodebench);
+    push_detail_row(&mut lines, &cw, "HLE", &hle, "LiveCode", &livecode);
+    let scicode = fmt_pct(entry.scicode);
+    let ifbench = fmt_pct(entry.ifbench);
+    push_detail_row(&mut lines, &cw, "SciCode", &scicode, "IFBench", &ifbench);
+    let terminal = fmt_pct(entry.terminalbench_hard);
+    let tau2 = fmt_pct(entry.tau2);
+    push_detail_row(&mut lines, &cw, "Terminal", &terminal, "Tau2", &tau2);
+    let lcr = fmt_pct(entry.lcr);
+    let math500 = fmt_pct(entry.math_500);
+    push_detail_row(&mut lines, &cw, "LCR", &lcr, "MATH-500", &math500);
+    let aime = fmt_pct(entry.aime);
+    let aime25 = fmt_pct(entry.aime_25);
+    push_detail_row(&mut lines, &cw, "AIME", &aime, "AIME'25", &aime25);
 
     // Performance (speed: higher better, TTFT/TTFAT: lower better)
     lines.push(Line::from(""));
@@ -1824,25 +1786,27 @@ fn draw_benchmark_detail_content(
         .ttfat
         .map(|v| format!("{:.2}s", v))
         .unwrap_or_else(|| em.to_string());
-    push_two_col(&mut lines, &col, "Speed", tps_str, "TTFT", ttft_str);
-    push_two_col(&mut lines, &col, "TTFAT", ttfat_str, "", String::new());
+    push_detail_row(&mut lines, &cw, "Speed", &tps_str, "TTFT", &ttft_str);
+    push_detail_row(&mut lines, &cw, "TTFAT", &ttfat_str, "", "");
 
     // Pricing ($/M tokens, lower is better)
     lines.push(Line::from(""));
     push_section_header(&mut lines, "Pricing ($/M tokens, \u{2193} better)");
-    push_two_col(
+    let input_price = fmt_price(entry.price_input);
+    let output_price = fmt_price(entry.price_output);
+    push_detail_row(
         &mut lines,
-        &col,
+        &cw,
         "Input",
-        fmt_price(entry.price_input),
+        &input_price,
         "Output",
-        fmt_price(entry.price_output),
+        &output_price,
     );
     let blended_str = entry
         .price_blended
         .map(|v| format!("${:.2}", v))
         .unwrap_or_else(|| em.to_string());
-    push_two_col(&mut lines, &col, "Blended", blended_str, "", String::new());
+    push_detail_row(&mut lines, &cw, "Blended", &blended_str, "", "");
 
     // Keybinding hints
     lines.push(Line::from(""));
@@ -1897,14 +1861,38 @@ fn push_section_header(lines: &mut Vec<Line>, title: &str) {
     )));
 }
 
-struct DetailCols {
-    lw: usize,
-    vw: usize,
+struct ColumnWidths {
+    indent: u16,
+    label: u16,
+    value: u16,
+    label2: u16,
+}
+
+impl ColumnWidths {
+    fn from_width(width: u16) -> Self {
+        let indent: u16 = 2;
+        let usable = width.saturating_sub(indent);
+        let chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage(28),
+                Constraint::Percentage(22),
+                Constraint::Percentage(28),
+                Constraint::Percentage(22),
+            ])
+            .split(Rect::new(0, 0, usable, 1));
+        Self {
+            indent,
+            label: chunks[0].width.max(8),
+            value: chunks[1].width.max(6),
+            label2: chunks[2].width.max(8),
+        }
+    }
 }
 
 fn push_meta_row(
     lines: &mut Vec<Line>,
-    col: &DetailCols,
+    cw: &ColumnWidths,
     left: (&str, &str, Color),
     right: (&str, &str, Color),
 ) {
@@ -1918,18 +1906,24 @@ fn push_meta_row(
 
     let mut spans = vec![
         Span::styled(
-            format!("  {:<width$}", left.0, width = col.lw),
+            format!(
+                "{:indent$}{:<w$}",
+                "",
+                left.0,
+                indent = cw.indent as usize,
+                w = cw.label as usize
+            ),
             Style::default().fg(Color::DarkGray),
         ),
         Span::styled(
-            format!("{:<width$}", left.1, width = col.vw),
+            format!("{:<w$}", left.1, w = cw.value as usize),
             style_for(left.2),
         ),
     ];
 
     if !right.0.is_empty() {
         spans.push(Span::styled(
-            format!("{:<width$}", right.0, width = col.lw),
+            format!("{:<w$}", right.0, w = cw.label2 as usize),
             Style::default().fg(Color::DarkGray),
         ));
         spans.push(Span::styled(right.1.to_string(), style_for(right.2)));
@@ -1938,16 +1932,16 @@ fn push_meta_row(
     lines.push(Line::from(spans));
 }
 
-fn push_two_col(
+fn push_detail_row(
     lines: &mut Vec<Line>,
-    col: &DetailCols,
+    cw: &ColumnWidths,
     l1: &str,
-    v1: String,
+    v1: &str,
     l2: &str,
-    v2: String,
+    v2: &str,
 ) {
     let em = "\u{2014}";
-    let color = |s: &str| {
+    let val_color = |s: &str| {
         if s == em {
             Color::DarkGray
         } else {
@@ -1957,21 +1951,30 @@ fn push_two_col(
 
     let mut spans = vec![
         Span::styled(
-            format!("  {:<width$}", l1, width = col.lw),
+            format!(
+                "{:indent$}{:<w$}",
+                "",
+                l1,
+                indent = cw.indent as usize,
+                w = cw.label as usize
+            ),
             Style::default().fg(Color::Gray),
         ),
         Span::styled(
-            format!("{:<width$}", v1, width = col.vw),
-            Style::default().fg(color(&v1)),
+            format!("{:<w$}", v1, w = cw.value as usize),
+            Style::default().fg(val_color(v1)),
         ),
     ];
 
     if !l2.is_empty() {
         spans.push(Span::styled(
-            format!("{:<width$}", l2, width = col.lw),
+            format!("{:<w$}", l2, w = cw.label2 as usize),
             Style::default().fg(Color::Gray),
         ));
-        spans.push(Span::styled(v2.clone(), Style::default().fg(color(&v2))));
+        spans.push(Span::styled(
+            v2.to_string(),
+            Style::default().fg(val_color(v2)),
+        ));
     }
 
     lines.push(Line::from(spans));
