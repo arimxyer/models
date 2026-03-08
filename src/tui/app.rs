@@ -267,10 +267,7 @@ impl App {
         let agents_app = agents_file.map(|af| AgentsApp::new(af, &config));
         let open_weights_map =
             crate::open_weights::build_open_weights_map(&providers, benchmark_store.entries());
-        crate::open_weights::apply_reasoning_from_models_dev(
-            &providers,
-            benchmark_store.entries_mut(),
-        );
+        crate::open_weights::apply_model_traits(&providers, benchmark_store.entries_mut());
         let benchmarks_app = BenchmarksApp::new(&benchmark_store, &open_weights_map);
 
         let mut app = Self {
@@ -1048,7 +1045,7 @@ impl App {
                     &self.providers,
                     self.benchmark_store.entries(),
                 );
-                crate::open_weights::apply_reasoning_from_models_dev(
+                crate::open_weights::apply_model_traits(
                     &self.providers,
                     self.benchmark_store.entries_mut(),
                 );
