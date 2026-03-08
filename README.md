@@ -83,6 +83,43 @@ scoop install extras/models
 
 > **Migrating from the custom bucket?** Run `scoop bucket rm arimxyer` — Scoop Extras handles updates automatically.
 
+### Arch Linux (AUR)
+
+```bash
+# Binary package (pre-built, faster)
+yay -S modelsdev-bin
+
+# Or build from source
+yay -S modelsdev-git
+```
+
+### Debian / Ubuntu
+
+Download the `.deb` from [GitHub Releases](https://github.com/arimxyer/models/releases):
+
+```bash
+curl -LO https://github.com/arimxyer/models/releases/latest/download/modelsdev_<version>_amd64.deb
+sudo dpkg -i modelsdev_<version>_amd64.deb
+```
+
+### Fedora / RHEL
+
+Download the `.rpm` from [GitHub Releases](https://github.com/arimxyer/models/releases):
+
+```bash
+sudo rpm -i https://github.com/arimxyer/models/releases/latest/download/modelsdev-<version>-1.x86_64.rpm
+```
+
+### Nix
+
+```bash
+# Run without installing
+nix run github:arimxyer/models
+
+# Install to profile
+nix profile install github:arimxyer/models
+```
+
 ### Pre-built binaries
 
 Download the latest release for your platform from [GitHub Releases](https://github.com/arimxyer/models/releases).
