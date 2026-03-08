@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use ratatui::style::Color;
 use ratatui::widgets::ListState;
 
-use crate::benchmarks::{BenchmarkEntry, BenchmarkStore};
+use crate::benchmarks::{BenchmarkEntry, BenchmarkStore, ReasoningFilter};
 
 /// Page size for page up/down navigation
 const PAGE_SIZE: usize = 10;
@@ -444,6 +444,7 @@ pub struct BenchmarksApp {
     pub selected_creator: usize,
     pub creator_list_state: ListState,
     pub source_filter: SourceFilter,
+    pub reasoning_filter: ReasoningFilter,
     pub creator_grouping: CreatorGrouping,
     creator_info: HashMap<String, CreatorInfo>,
     pub bottom_view: BottomView,
@@ -475,6 +476,7 @@ impl BenchmarksApp {
             selected_creator: 0,
             creator_list_state,
             source_filter: SourceFilter::default(),
+            reasoning_filter: ReasoningFilter::default(),
             creator_grouping: CreatorGrouping::default(),
             creator_info: HashMap::new(),
             bottom_view: BottomView::default(),
@@ -619,6 +621,7 @@ impl BenchmarksApp {
         let query_lower = self.search_query.to_lowercase();
         let creator_slug = self.selected_creator_slug().map(|s| s.to_owned());
         let source_filter = self.source_filter;
+        let reasoning_filter = self.reasoning_filter.clone();
 
         self.filtered_indices = store
             .entries()
@@ -627,6 +630,10 @@ impl BenchmarksApp {
             .filter(|(_, entry)| {
                 // Per-model source filter (open/closed)
                 if !source_filter.matches(entry, open_weights_map) {
+                    return false;
+                }
+                // Reasoning filter
+                if !reasoning_filter.matches(entry) {
                     return false;
                 }
                 // Creator filter
@@ -800,6 +807,15 @@ impl BenchmarksApp {
         open_weights_map: &HashMap<String, bool>,
     ) {
         self.source_filter = self.source_filter.next();
+        self.update_filtered(store, open_weights_map);
+    }
+
+    pub fn cycle_reasoning_filter(
+        &mut self,
+        store: &BenchmarkStore,
+        open_weights_map: &HashMap<String, bool>,
+    ) {
+        self.reasoning_filter = self.reasoning_filter.next();
         self.update_filtered(store, open_weights_map);
     }
 

@@ -253,6 +253,10 @@ mod tests {
             price_input: None,
             price_output: None,
             price_blended: None,
+            reasoning_status: Default::default(),
+            effort_level: None,
+            variant_tag: None,
+            display_name: String::new(),
         }
     }
 

@@ -174,6 +174,7 @@ pub enum Message {
     PageUpBenchmarkCreator,
     SwitchBenchmarkFocus,
     CycleBenchmarkSource,
+    CycleReasoningFilter,
     ToggleRegionGrouping,
     ToggleTypeGrouping,
     CycleBenchmarkSort,
@@ -885,6 +886,10 @@ impl App {
             Message::CycleBenchmarkSource => {
                 self.benchmarks_app
                     .cycle_source_filter(&self.benchmark_store, &self.open_weights_map);
+            }
+            Message::CycleReasoningFilter => {
+                self.benchmarks_app
+                    .cycle_reasoning_filter(&self.benchmark_store, &self.open_weights_map);
             }
             Message::ToggleRegionGrouping => {
                 self.benchmarks_app

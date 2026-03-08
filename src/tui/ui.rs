@@ -1417,7 +1417,10 @@ fn draw_benchmark_list_compact(f: &mut Frame, area: Rect, app: &mut App) {
             }
 
             row_spans.push(Span::styled(prefix, style));
-            row_spans.push(Span::styled(truncate(&entry.name, name_width), style));
+            row_spans.push(Span::styled(
+                truncate(&entry.display_name, name_width),
+                style,
+            ));
             ListItem::new(Line::from(row_spans))
         })
         .collect();
@@ -1460,23 +1463,34 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
         filter => format!(" [{}]", filter.label()),
     };
 
+    let reasoning_indicator = {
+        let label = bench_app.reasoning_filter.label();
+        if label.is_empty() {
+            String::new()
+        } else {
+            format!(" [{}]", label)
+        }
+    };
+
     let creator_label = bench_app.selected_creator_name().unwrap_or("Benchmarks");
 
     let title = if bench_app.search_query.is_empty() {
         format!(
-            " {} ({}){}{} ",
+            " {} ({}){}{}{} ",
             creator_label,
             bench_app.filtered_indices.len(),
             source_indicator,
+            reasoning_indicator,
             sort_indicator
         )
     } else {
         format!(
-            " {} ({}) [/{}]{}{} ",
+            " {} ({}) [/{}]{}{}{} ",
             creator_label,
             bench_app.filtered_indices.len(),
             bench_app.search_query,
             source_indicator,
+            reasoning_indicator,
             sort_indicator
         )
     };
@@ -1491,8 +1505,9 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
     // Dynamic columns based on active sort
     let visible_cols = bench_app.sort_column.visible_columns();
 
-    // Compute dynamic name column width from available space (minus 2 for caret)
+    // Compute dynamic name column width from available space (minus 2 for caret, 3 for reasoning indicator)
     let caret_w: u16 = 2;
+    let reasoning_col_w: u16 = 3;
     let fixed_width: u16 = visible_cols
         .iter()
         .map(|col| benchmark_col_width(*col))
@@ -1500,7 +1515,8 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
     let selection_w: u16 = if !app.selections.is_empty() { 2 } else { 0 };
     let name_width = (inner_area
         .width
-        .saturating_sub(fixed_width + caret_w + selection_w) as usize)
+        .saturating_sub(fixed_width + caret_w + selection_w + reasoning_col_w)
+        as usize)
         .max(10);
 
     // Caret prefix for focused panel
@@ -1519,6 +1535,7 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
         header_spans.push(Span::raw("  ")); // align with selection marker column
     }
     header_spans.push(Span::raw("  "));
+    header_spans.push(Span::styled("   ", header_style)); // reasoning indicator header
     header_spans.extend(visible_cols.iter().map(|col| {
         let style = if *col == bench_app.sort_column {
             active_header_style
@@ -1558,6 +1575,16 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
         }
 
         row_spans.push(Span::styled(prefix, style));
+
+        // Reasoning status indicator
+        let (rs_label, rs_color) = match entry.reasoning_status {
+            crate::benchmarks::ReasoningStatus::Reasoning => ("R  ", Color::Cyan),
+            crate::benchmarks::ReasoningStatus::NonReasoning => ("NR ", Color::DarkGray),
+            crate::benchmarks::ReasoningStatus::Adaptive => ("AR ", Color::Yellow),
+            crate::benchmarks::ReasoningStatus::None => ("   ", Color::Reset),
+        };
+        row_spans.push(Span::styled(rs_label, Style::default().fg(rs_color)));
+
         row_spans.extend(
             visible_cols
                 .iter()
@@ -1617,7 +1644,7 @@ fn draw_benchmark_detail_content(
 
     // Line 1: Name
     lines.push(Line::from(Span::styled(
-        &entry.name,
+        &entry.display_name,
         Style::default()
             .fg(Color::Cyan)
             .add_modifier(Modifier::BOLD),
@@ -1963,7 +1990,7 @@ fn benchmark_col_value<'a>(
         Name => Span::styled(
             format!(
                 "{:<width$}",
-                truncate(&entry.name, name_width.saturating_sub(1)),
+                truncate(&entry.display_name, name_width.saturating_sub(1)),
                 width = name_width
             ),
             style,
@@ -2108,6 +2135,8 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
                             Span::raw("source  "),
                             Span::styled(" 5-6 ", Style::default().fg(Color::Yellow)),
                             Span::raw("group  "),
+                            Span::styled(" 7 ", Style::default().fg(Color::Yellow)),
+                            Span::raw("reasoning  "),
                             Span::styled(" s ", Style::default().fg(Color::Yellow)),
                             Span::raw("sort  "),
                             Span::styled(" / ", Style::default().fg(Color::Yellow)),
@@ -2279,7 +2308,7 @@ fn draw_help_popup(f: &mut Frame, scroll: u16, current_tab: Tab) {
                 ]),
                 Line::from(vec![
                     Span::styled("  1             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Toggle reasoning filter"),
+                    Span::raw("Toggle reasoning models filter"),
                 ]),
                 Line::from(vec![
                     Span::styled("  2             ", Style::default().fg(Color::Yellow)),
@@ -2446,6 +2475,10 @@ fn draw_help_popup(f: &mut Frame, scroll: u16, current_tab: Tab) {
                 Line::from(vec![
                     Span::styled("  6             ", Style::default().fg(Color::Yellow)),
                     Span::raw("Cycle type filter (Startup/Big Tech/Research)"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  7             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Cycle reasoning filter (All/Reasoning/Non-reasoning)"),
                 ]),
                 Line::from(""),
                 Line::from(Span::styled(
@@ -3338,7 +3371,7 @@ fn draw_scatter(f: &mut Frame, area: Rect, app: &App) {
     for (sel_idx, &store_idx) in app.selections.iter().enumerate() {
         let color = compare_colors(sel_idx);
         if let Some(entry) = entries.get(store_idx) {
-            let name = truncate(&entry.name, 20);
+            let name = truncate(&entry.display_name, 20);
             if let (Some(x), Some(y)) = (x_extract(entry), y_extract(entry)) {
                 let tx = log_transform(x, x_log);
                 let ty = log_transform(y, y_log);
@@ -3346,7 +3379,7 @@ fn draw_scatter(f: &mut Frame, area: Rect, app: &App) {
                     && tx <= x_bounds[1]
                     && ty >= y_bounds[0]
                     && ty <= y_bounds[1];
-                selected_data.push((entry.name.clone(), vec![(tx, ty)], color));
+                selected_data.push((entry.display_name.clone(), vec![(tx, ty)], color));
                 legend_entries.push((name, color, if in_range { 1 } else { 2 }));
             } else {
                 legend_entries.push((name, color, 0));
