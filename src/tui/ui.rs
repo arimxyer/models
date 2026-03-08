@@ -1713,11 +1713,11 @@ fn draw_benchmark_detail_content(
     };
     let ctx_str = entry
         .context_window
-        .map(|v| format!("{}k", v / 1000))
+        .map(fmt_tokens)
         .unwrap_or_else(|| em.to_string());
     let out_str = entry
         .max_output
-        .map(|v| format!("{}k", v / 1000))
+        .map(fmt_tokens)
         .unwrap_or_else(|| em.to_string());
     lines.push(Line::from(vec![
         Span::styled("Tools    ", Style::default().fg(Color::DarkGray)),
@@ -1922,6 +1922,17 @@ fn push_three_col(
 }
 
 /// Format a 0-100 index value
+/// Format a token count as "128k" or "1M" / "2M" for million-scale values.
+fn fmt_tokens(value: u64) -> String {
+    if value >= 1_000_000 && value.is_multiple_of(1_000_000) {
+        format!("{}M", value / 1_000_000)
+    } else if value >= 1_000_000 {
+        format!("{:.1}M", value as f64 / 1_000_000.0)
+    } else {
+        format!("{}k", value / 1_000)
+    }
+}
+
 fn fmt_idx(value: Option<f64>) -> String {
     match value {
         Some(v) => format!("{:.1}", v),
@@ -3258,7 +3269,7 @@ fn draw_h2h_table_generic(f: &mut Frame, area: Rect, app: &App) {
             entries
                 .get(idx)
                 .and_then(|e| e.context_window)
-                .map(|v| (format!("{}k", v / 1000), Color::White))
+                .map(|v| (fmt_tokens(v), Color::White))
                 .unwrap_or_else(|| ("\u{2014}".to_string(), Color::DarkGray))
         })
         .collect();
@@ -3271,7 +3282,7 @@ fn draw_h2h_table_generic(f: &mut Frame, area: Rect, app: &App) {
             entries
                 .get(idx)
                 .and_then(|e| e.max_output)
-                .map(|v| (format!("{}k", v / 1000), Color::White))
+                .map(|v| (fmt_tokens(v), Color::White))
                 .unwrap_or_else(|| ("\u{2014}".to_string(), Color::DarkGray))
         })
         .collect();
