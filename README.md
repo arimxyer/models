@@ -111,17 +111,20 @@ Download the `.rpm` from [GitHub Releases](https://github.com/arimxyer/models/re
 sudo rpm -i modelsdev-*.x86_64.rpm
 ```
 
+> **Verifying downloads**: Each GitHub Release includes a `SHA256SUMS` file. After downloading, verify with: `sha256sum -c SHA256SUMS --ignore-missing`
+
 ### Nix
 
 ```bash
-# Run without installing
+# Run without installing (pinned to latest commit on main)
 nix run github:arimxyer/models
 
 # Install to profile
 nix profile install github:arimxyer/models
-```
 
-> **Verifying downloads**: Each GitHub Release includes SHA256 checksums in the release assets. Verify your download with `sha256sum` before installing.
+# Or pin to a specific release tag
+nix run github:arimxyer/models/v0.9.7
+```
 
 ### Pre-built binaries
 
