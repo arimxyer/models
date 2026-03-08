@@ -113,19 +113,6 @@ sudo rpm -i modelsdev-*.x86_64.rpm
 
 > **Verifying downloads**: Each GitHub Release includes a `SHA256SUMS` file. After downloading, verify with: `sha256sum -c SHA256SUMS --ignore-missing`
 
-### Nix
-
-```bash
-# Run without installing (pinned to latest commit on main)
-nix run github:arimxyer/models
-
-# Install to profile
-nix profile install github:arimxyer/models
-
-# Or pin to a specific release tag
-nix run github:arimxyer/models/v0.9.7
-```
-
 ### Pre-built binaries
 
 Download the latest release for your platform from [GitHub Releases](https://github.com/arimxyer/models/releases).
@@ -416,6 +403,10 @@ Lots of gratitude to the companies who do all the hard work! Shout out to the so
 - **Benchmark data**: Fetched from [Artificial Analysis](https://artificialanalysis.ai) — quality indexes, benchmark scores, speed, and pricing for ~400 model entries
 - **Agent data**: Curated catalog in [`data/agents.json`](data/agents.json) — contributions welcome!
 - **GitHub data**: Fetched from GitHub API (stars, releases, changelogs)
+
+## Roadmap
+
+- **Nix flake** — Nix packaging with a proper `flake.lock` for reproducible builds (PRs welcome!)
 
 ## Contributing
 
