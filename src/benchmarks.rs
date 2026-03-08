@@ -57,6 +57,12 @@ pub struct BenchmarkEntry {
     pub variant_tag: Option<String>,
     #[serde(default)]
     pub display_name: String,
+    #[serde(default)]
+    pub tool_call: Option<bool>,
+    #[serde(default)]
+    pub context_window: Option<u64>,
+    #[serde(default)]
+    pub max_output: Option<u64>,
 }
 
 // Matches a parenthetical group: captures the content inside parens.
@@ -294,6 +300,9 @@ mod tests {
             effort_level: None,
             variant_tag: None,
             display_name: String::new(),
+            tool_call: None,
+            context_window: None,
+            max_output: None,
         };
         overrides(&mut entry);
         entry

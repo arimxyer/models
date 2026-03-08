@@ -1700,6 +1700,37 @@ fn draw_benchmark_detail_content(
         ]));
     }
 
+    // Tools + Context window
+    let tools_str = match entry.tool_call {
+        Some(true) => "Yes",
+        Some(false) => "No",
+        None => em,
+    };
+    let tools_color = match entry.tool_call {
+        Some(true) => Color::Green,
+        Some(false) => Color::DarkGray,
+        None => Color::DarkGray,
+    };
+    let ctx_str = entry
+        .context_window
+        .map(|v| format!("{}k", v / 1000))
+        .unwrap_or_else(|| em.to_string());
+    let out_str = entry
+        .max_output
+        .map(|v| format!("{}k", v / 1000))
+        .unwrap_or_else(|| em.to_string());
+    lines.push(Line::from(vec![
+        Span::styled("Tools    ", Style::default().fg(Color::DarkGray)),
+        Span::styled(
+            format!("{:<16}", tools_str),
+            Style::default().fg(tools_color),
+        ),
+        Span::styled("Context ", Style::default().fg(Color::DarkGray)),
+        Span::raw(format!("{:<8}", ctx_str)),
+        Span::styled("Output ", Style::default().fg(Color::DarkGray)),
+        Span::raw(out_str),
+    ]));
+
     // Composite Indexes (0-100 scale, higher is better)
     lines.push(Line::from(""));
     push_section_header(&mut lines, "Indexes (0\u{2013}100, \u{2191} better)");
@@ -3200,6 +3231,51 @@ fn draw_h2h_table_generic(f: &mut Frame, area: Rect, app: &App) {
     if variant_vals.iter().any(|(v, _)| v != "\u{2014}") {
         render_info_row(&mut lines, "Variant", variant_vals);
     }
+
+    // Tool call support with color
+    let tool_vals: Vec<(String, Color)> = selections
+        .iter()
+        .map(|&idx| {
+            entries
+                .get(idx)
+                .and_then(|e| e.tool_call)
+                .map(|tc| {
+                    if tc {
+                        ("Yes".to_string(), Color::Green)
+                    } else {
+                        ("No".to_string(), Color::DarkGray)
+                    }
+                })
+                .unwrap_or_else(|| ("\u{2014}".to_string(), Color::DarkGray))
+        })
+        .collect();
+    render_info_row(&mut lines, "Tools", tool_vals);
+
+    // Context window
+    let ctx_vals: Vec<(String, Color)> = selections
+        .iter()
+        .map(|&idx| {
+            entries
+                .get(idx)
+                .and_then(|e| e.context_window)
+                .map(|v| (format!("{}k", v / 1000), Color::White))
+                .unwrap_or_else(|| ("\u{2014}".to_string(), Color::DarkGray))
+        })
+        .collect();
+    render_info_row(&mut lines, "Context", ctx_vals);
+
+    // Max output
+    let out_vals: Vec<(String, Color)> = selections
+        .iter()
+        .map(|&idx| {
+            entries
+                .get(idx)
+                .and_then(|e| e.max_output)
+                .map(|v| (format!("{}k", v / 1000), Color::White))
+                .unwrap_or_else(|| ("\u{2014}".to_string(), Color::DarkGray))
+        })
+        .collect();
+    render_info_row(&mut lines, "Max Output", out_vals);
 
     // ── Metric rows with section headers and ranks ──
     for row in &rows {

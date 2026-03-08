@@ -58,6 +58,21 @@ fn known_creator_openness(creator: &str) -> Option<bool> {
 struct ModelTraits {
     open_weights: bool,
     reasoning: bool,
+    tool_call: bool,
+    context_window: Option<u64>,
+    max_output: Option<u64>,
+}
+
+impl ModelTraits {
+    fn from_model(model: &crate::data::Model) -> Self {
+        Self {
+            open_weights: model.open_weights,
+            reasoning: model.reasoning,
+            tool_call: model.tool_call,
+            context_window: model.limit.as_ref().and_then(|l| l.context),
+            max_output: model.limit.as_ref().and_then(|l| l.output),
+        }
+    }
 }
 
 /// Build a map from AA benchmark entry slug → open_weights bool,
@@ -82,19 +97,25 @@ pub fn build_open_weights_map(
         .collect()
 }
 
-/// Augment benchmark entries with reasoning status from models.dev.
-/// Only sets reasoning_status when it's currently None and models.dev says reasoning=true.
-pub fn apply_reasoning_from_models_dev(
-    providers: &[(String, Provider)],
-    entries: &mut [BenchmarkEntry],
-) {
+/// Augment benchmark entries with traits from models.dev:
+/// reasoning status (when not already set), tool_call, context_window, max_output.
+pub fn apply_model_traits(providers: &[(String, Provider)], entries: &mut [BenchmarkEntry]) {
     let matched = match_entries(providers, entries);
     for entry in entries {
-        if entry.reasoning_status == crate::benchmarks::ReasoningStatus::None {
-            if let Some(traits) = matched.get(&entry.slug) {
-                if traits.reasoning {
-                    entry.reasoning_status = crate::benchmarks::ReasoningStatus::Reasoning;
-                }
+        if let Some(traits) = matched.get(&entry.slug) {
+            if entry.reasoning_status == crate::benchmarks::ReasoningStatus::None
+                && traits.reasoning
+            {
+                entry.reasoning_status = crate::benchmarks::ReasoningStatus::Reasoning;
+            }
+            if entry.tool_call.is_none() {
+                entry.tool_call = Some(traits.tool_call);
+            }
+            if entry.context_window.is_none() {
+                entry.context_window = traits.context_window;
+            }
+            if entry.max_output.is_none() {
+                entry.max_output = traits.max_output;
             }
         }
     }
@@ -116,15 +137,7 @@ fn match_entries(
         let models: Vec<(String, ModelTraits)> = provider
             .models
             .iter()
-            .map(|(model_id, model)| {
-                (
-                    normalize(model_id),
-                    ModelTraits {
-                        open_weights: model.open_weights,
-                        reasoning: model.reasoning,
-                    },
-                )
-            })
+            .map(|(model_id, model)| (normalize(model_id), ModelTraits::from_model(model)))
             .collect();
         model_lookup.insert(norm_provider, models);
     }
@@ -133,15 +146,10 @@ fn match_entries(
     let all_models: Vec<(String, ModelTraits)> = providers
         .iter()
         .flat_map(|(_, provider)| {
-            provider.models.iter().map(|(model_id, model)| {
-                (
-                    normalize(model_id),
-                    ModelTraits {
-                        open_weights: model.open_weights,
-                        reasoning: model.reasoning,
-                    },
-                )
-            })
+            provider
+                .models
+                .iter()
+                .map(|(model_id, model)| (normalize(model_id), ModelTraits::from_model(model)))
         })
         .collect();
 
@@ -210,6 +218,9 @@ fn match_entries(
                     ModelTraits {
                         open_weights: traits.open_weights,
                         reasoning: traits.reasoning,
+                        tool_call: traits.tool_call,
+                        context_window: traits.context_window,
+                        max_output: traits.max_output,
                     },
                 );
                 continue;
@@ -223,6 +234,9 @@ fn match_entries(
                 ModelTraits {
                     open_weights: ow,
                     reasoning: false,
+                    tool_call: false,
+                    context_window: None,
+                    max_output: None,
                 },
             );
         }
@@ -318,6 +332,9 @@ mod tests {
             effort_level: None,
             variant_tag: None,
             display_name: String::new(),
+            tool_call: None,
+            context_window: None,
+            max_output: None,
         }
     }
 
