@@ -1135,22 +1135,19 @@ fn draw_benchmarks_main(f: &mut Frame, area: Rect, app: &mut App) {
             }
         }
     } else {
-        // Browse mode: creators (25%) | list+detail (75%)
+        // Browse mode: creators (20%) | list (40%) | detail (40%)
         let h_chunks = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(25), Constraint::Percentage(75)])
+            .constraints([
+                Constraint::Percentage(20),
+                Constraint::Percentage(40),
+                Constraint::Percentage(40),
+            ])
             .split(area);
 
         draw_benchmark_creators(f, h_chunks[0], app);
-
-        // Vertical split: list (65%) | detail (35%)
-        let v_chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Percentage(65), Constraint::Percentage(35)])
-            .split(h_chunks[1]);
-
-        draw_benchmark_list(f, v_chunks[0], app);
-        draw_benchmark_detail(f, v_chunks[1], app);
+        draw_benchmark_list(f, h_chunks[1], app);
+        draw_benchmark_detail(f, h_chunks[2], app);
     }
 
     // Detail overlay (drawn last, on top of everything)
