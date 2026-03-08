@@ -1646,7 +1646,7 @@ fn draw_benchmark_detail_content(
             .fg(Color::Cyan)
             .add_modifier(Modifier::BOLD),
     )));
-    // Line 2: Creator + Source (per-model only, no fallback)
+    // Metadata rows (2-wide)
     let em = "\u{2014}";
     let (source_label, source_color) = match app.open_weights_map.get(&entry.slug) {
         Some(true) => ("Open", Color::Green),
@@ -1654,19 +1654,17 @@ fn draw_benchmark_detail_content(
         None => (em, Color::DarkGray),
     };
     lines.push(Line::from(vec![
-        Span::styled("Creator  ", Style::default().fg(Color::DarkGray)),
-        Span::raw(format!("{:<16}", creator_display)),
+        Span::styled("  Creator   ", Style::default().fg(Color::DarkGray)),
+        Span::raw(format!("{:<14}", creator_display)),
         Span::styled("Source  ", Style::default().fg(Color::DarkGray)),
         Span::styled(source_label, Style::default().fg(source_color)),
     ]));
-    // Line 3: Region + Type
     lines.push(Line::from(vec![
-        Span::styled("Region   ", Style::default().fg(Color::DarkGray)),
-        Span::raw(format!("{:<16}", region.label())),
+        Span::styled("  Region    ", Style::default().fg(Color::DarkGray)),
+        Span::raw(format!("{:<14}", region.label())),
         Span::styled("Type    ", Style::default().fg(Color::DarkGray)),
         Span::raw(creator_type.label()),
     ]));
-    // Line 4: Release date + Reasoning status
     let date_str = entry.release_date.as_deref().unwrap_or(em);
     let (reasoning_label, reasoning_color) = {
         use crate::benchmarks::ReasoningStatus;
@@ -1678,26 +1676,25 @@ fn draw_benchmark_detail_content(
         }
     };
     lines.push(Line::from(vec![
-        Span::styled("Released ", Style::default().fg(Color::DarkGray)),
-        Span::raw(format!("{:<16}", date_str)),
+        Span::styled("  Released  ", Style::default().fg(Color::DarkGray)),
+        Span::raw(format!("{:<14}", date_str)),
         Span::styled("Reason  ", Style::default().fg(Color::DarkGray)),
         Span::styled(reasoning_label, Style::default().fg(reasoning_color)),
     ]));
-    // Line 5: Effort + Variant (only if present)
+    // Effort + Variant (only if present)
     let has_effort = entry.effort_level.is_some();
     let has_variant = entry.variant_tag.is_some();
     if has_effort || has_variant {
         let effort_str = entry.effort_level.as_deref().unwrap_or(em);
         let variant_str = entry.variant_tag.as_deref().unwrap_or(em);
         lines.push(Line::from(vec![
-            Span::styled("Effort   ", Style::default().fg(Color::DarkGray)),
-            Span::raw(format!("{:<16}", effort_str)),
+            Span::styled("  Effort    ", Style::default().fg(Color::DarkGray)),
+            Span::raw(format!("{:<14}", effort_str)),
             Span::styled("Variant ", Style::default().fg(Color::DarkGray)),
             Span::raw(variant_str),
         ]));
     }
-
-    // Tools + Context window
+    // Tools + Context
     let tools_str = match entry.tool_call {
         Some(true) => "Yes",
         Some(false) => "No",
@@ -1712,69 +1709,83 @@ fn draw_benchmark_detail_content(
         .context_window
         .map(fmt_tokens)
         .unwrap_or_else(|| em.to_string());
+    lines.push(Line::from(vec![
+        Span::styled("  Tools     ", Style::default().fg(Color::DarkGray)),
+        Span::styled(
+            format!("{:<14}", tools_str),
+            Style::default().fg(tools_color),
+        ),
+        Span::styled("Context ", Style::default().fg(Color::DarkGray)),
+        Span::raw(ctx_str),
+    ]));
+    // Max output
     let out_str = entry
         .max_output
         .map(fmt_tokens)
         .unwrap_or_else(|| em.to_string());
     lines.push(Line::from(vec![
-        Span::styled("Tools    ", Style::default().fg(Color::DarkGray)),
-        Span::styled(
-            format!("{:<16}", tools_str),
-            Style::default().fg(tools_color),
-        ),
-        Span::styled("Context ", Style::default().fg(Color::DarkGray)),
-        Span::raw(format!("{:<8}", ctx_str)),
-        Span::styled("Output ", Style::default().fg(Color::DarkGray)),
+        Span::styled("  Output    ", Style::default().fg(Color::DarkGray)),
         Span::raw(out_str),
     ]));
 
     // Composite Indexes (0-100 scale, higher is better)
     lines.push(Line::from(""));
     push_section_header(&mut lines, "Indexes (0\u{2013}100, \u{2191} better)");
-    push_three_col(
+    push_two_col(
         &mut lines,
         "Intelligence",
         fmt_idx(entry.intelligence_index),
         "Coding",
         fmt_idx(entry.coding_index),
+    );
+    push_two_col(
+        &mut lines,
         "Math",
         fmt_idx(entry.math_index),
+        "",
+        String::new(),
     );
 
     // Benchmark Scores (percentage, higher is better)
     lines.push(Line::from(""));
     push_section_header(&mut lines, "Benchmarks (%, \u{2191} better)");
-    push_three_col(
+    push_two_col(
         &mut lines,
         "GPQA",
         fmt_pct(entry.gpqa),
         "MMLU-Pro",
         fmt_pct(entry.mmlu_pro),
+    );
+    push_two_col(
+        &mut lines,
         "HLE",
         fmt_pct(entry.hle),
-    );
-    push_three_col(
-        &mut lines,
         "LiveCode",
         fmt_pct(entry.livecodebench),
+    );
+    push_two_col(
+        &mut lines,
         "SciCode",
         fmt_pct(entry.scicode),
         "IFBench",
         fmt_pct(entry.ifbench),
     );
-    push_three_col(
+    push_two_col(
         &mut lines,
         "Terminal",
         fmt_pct(entry.terminalbench_hard),
         "Tau2",
         fmt_pct(entry.tau2),
+    );
+    push_two_col(
+        &mut lines,
         "LCR",
         fmt_pct(entry.lcr),
-    );
-    push_three_col(
-        &mut lines,
         "MATH-500",
         fmt_pct(entry.math_500),
+    );
+    push_two_col(
+        &mut lines,
         "AIME",
         fmt_pct(entry.aime),
         "AIME'25",
@@ -1799,26 +1810,24 @@ fn draw_benchmark_detail_content(
         .ttfat
         .map(|v| format!("{:.2}s", v))
         .unwrap_or_else(|| em.to_string());
-    push_three_col(
-        &mut lines, "Speed", tps_str, "TTFT", ttft_str, "TTFAT", ttfat_str,
-    );
+    push_two_col(&mut lines, "Speed", tps_str, "TTFT", ttft_str);
+    push_two_col(&mut lines, "TTFAT", ttfat_str, "", String::new());
 
     // Pricing ($/M tokens, lower is better)
     lines.push(Line::from(""));
     push_section_header(&mut lines, "Pricing ($/M tokens, \u{2193} better)");
-    let blended_str = entry
-        .price_blended
-        .map(|v| format!("${:.2}", v))
-        .unwrap_or_else(|| em.to_string());
-    push_three_col(
+    push_two_col(
         &mut lines,
         "Input",
         fmt_price(entry.price_input),
         "Output",
         fmt_price(entry.price_output),
-        "Blended",
-        blended_str,
     );
+    let blended_str = entry
+        .price_blended
+        .map(|v| format!("${:.2}", v))
+        .unwrap_or_else(|| em.to_string());
+    push_two_col(&mut lines, "Blended", blended_str, "", String::new());
 
     // Keybinding hints
     lines.push(Line::from(""));
@@ -1873,15 +1882,7 @@ fn push_section_header(lines: &mut Vec<Line>, title: &str) {
     )));
 }
 
-fn push_three_col(
-    lines: &mut Vec<Line>,
-    l1: &str,
-    v1: String,
-    l2: &str,
-    v2: String,
-    l3: &str,
-    v3: String,
-) {
+fn push_two_col(lines: &mut Vec<Line>, l1: &str, v1: String, l2: &str, v2: String) {
     let em = "\u{2014}";
     let color = |s: &str| {
         if s == em {
@@ -1892,27 +1893,16 @@ fn push_three_col(
     };
 
     let mut spans = vec![
-        Span::styled(format!("  {:<13}", l1), Style::default().fg(Color::Gray)),
+        Span::styled(format!("  {:<11}", l1), Style::default().fg(Color::Gray)),
         Span::styled(format!("{:<10}", v1), Style::default().fg(color(&v1))),
     ];
 
     if !l2.is_empty() {
         spans.push(Span::styled(
-            format!("{:<13}", l2),
+            format!("{:<11}", l2),
             Style::default().fg(Color::Gray),
         ));
-        spans.push(Span::styled(
-            format!("{:<10}", v2),
-            Style::default().fg(color(&v2)),
-        ));
-    }
-
-    if !l3.is_empty() {
-        spans.push(Span::styled(
-            format!("{:<13}", l3),
-            Style::default().fg(Color::Gray),
-        ));
-        spans.push(Span::styled(v3.clone(), Style::default().fg(color(&v3))));
+        spans.push(Span::styled(v2.clone(), Style::default().fg(color(&v2))));
     }
 
     lines.push(Line::from(spans));
