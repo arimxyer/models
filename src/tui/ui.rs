@@ -2018,7 +2018,8 @@ fn fmt_col_price(value: Option<f64>) -> String {
 /// Format a price value
 fn fmt_price(value: Option<f64>) -> String {
     match value {
-        Some(v) => format!("${:.3}", v),
+        Some(v) if v.fract() == 0.0 => format!("${:.0}", v),
+        Some(v) => format!("${:.2}", v),
         None => "\u{2014}".to_string(),
     }
 }
