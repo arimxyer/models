@@ -1630,6 +1630,13 @@ fn draw_benchmark_detail_content(
 ) {
     let mut lines: Vec<Line> = Vec::new();
 
+    // Dynamic column widths based on available area
+    // Layout: [indent 2] [label lw] [value vw] [label lw] [value remainder]
+    let w = area.width as usize;
+    let lw = (w * 28 / 100).max(8); // label width ~28%
+    let vw = (w * 22 / 100).max(6); // value width ~22%
+    let col = DetailCols { lw, vw };
+
     // Name + creator + metadata on first lines
     let creator_display = if !entry.creator_name.is_empty() {
         &entry.creator_name
@@ -1646,25 +1653,25 @@ fn draw_benchmark_detail_content(
             .fg(Color::Cyan)
             .add_modifier(Modifier::BOLD),
     )));
-    // Metadata rows (2-wide)
+    // Metadata rows (2-wide, dynamic)
     let em = "\u{2014}";
     let (source_label, source_color) = match app.open_weights_map.get(&entry.slug) {
         Some(true) => ("Open", Color::Green),
         Some(false) => ("Closed", Color::Red),
         None => (em, Color::DarkGray),
     };
-    lines.push(Line::from(vec![
-        Span::styled("  Creator   ", Style::default().fg(Color::DarkGray)),
-        Span::raw(format!("{:<14}", creator_display)),
-        Span::styled("Source  ", Style::default().fg(Color::DarkGray)),
-        Span::styled(source_label, Style::default().fg(source_color)),
-    ]));
-    lines.push(Line::from(vec![
-        Span::styled("  Region    ", Style::default().fg(Color::DarkGray)),
-        Span::raw(format!("{:<14}", region.label())),
-        Span::styled("Type    ", Style::default().fg(Color::DarkGray)),
-        Span::raw(creator_type.label()),
-    ]));
+    push_meta_row(
+        &mut lines,
+        &col,
+        ("Creator", creator_display, Color::Reset),
+        ("Source", source_label, source_color),
+    );
+    push_meta_row(
+        &mut lines,
+        &col,
+        ("Region", region.label(), Color::Reset),
+        ("Type", creator_type.label(), Color::Reset),
+    );
     let date_str = entry.release_date.as_deref().unwrap_or(em);
     let (reasoning_label, reasoning_color) = {
         use crate::benchmarks::ReasoningStatus;
@@ -1675,24 +1682,24 @@ fn draw_benchmark_detail_content(
             ReasoningStatus::None => (em, Color::DarkGray),
         }
     };
-    lines.push(Line::from(vec![
-        Span::styled("  Released  ", Style::default().fg(Color::DarkGray)),
-        Span::raw(format!("{:<14}", date_str)),
-        Span::styled("Reason  ", Style::default().fg(Color::DarkGray)),
-        Span::styled(reasoning_label, Style::default().fg(reasoning_color)),
-    ]));
+    push_meta_row(
+        &mut lines,
+        &col,
+        ("Released", date_str, Color::Reset),
+        ("Reason", reasoning_label, reasoning_color),
+    );
     // Effort + Variant (only if present)
     let has_effort = entry.effort_level.is_some();
     let has_variant = entry.variant_tag.is_some();
     if has_effort || has_variant {
         let effort_str = entry.effort_level.as_deref().unwrap_or(em);
         let variant_str = entry.variant_tag.as_deref().unwrap_or(em);
-        lines.push(Line::from(vec![
-            Span::styled("  Effort    ", Style::default().fg(Color::DarkGray)),
-            Span::raw(format!("{:<14}", effort_str)),
-            Span::styled("Variant ", Style::default().fg(Color::DarkGray)),
-            Span::raw(variant_str),
-        ]));
+        push_meta_row(
+            &mut lines,
+            &col,
+            ("Effort", effort_str, Color::Reset),
+            ("Variant", variant_str, Color::Reset),
+        );
     }
     // Tools + Context
     let tools_str = match entry.tool_call {
@@ -1709,30 +1716,30 @@ fn draw_benchmark_detail_content(
         .context_window
         .map(fmt_tokens)
         .unwrap_or_else(|| em.to_string());
-    lines.push(Line::from(vec![
-        Span::styled("  Tools     ", Style::default().fg(Color::DarkGray)),
-        Span::styled(
-            format!("{:<14}", tools_str),
-            Style::default().fg(tools_color),
-        ),
-        Span::styled("Context ", Style::default().fg(Color::DarkGray)),
-        Span::raw(ctx_str),
-    ]));
+    push_meta_row(
+        &mut lines,
+        &col,
+        ("Tools", tools_str, tools_color),
+        ("Context", &ctx_str, Color::Reset),
+    );
     // Max output
     let out_str = entry
         .max_output
         .map(fmt_tokens)
         .unwrap_or_else(|| em.to_string());
-    lines.push(Line::from(vec![
-        Span::styled("  Output    ", Style::default().fg(Color::DarkGray)),
-        Span::raw(out_str),
-    ]));
+    push_meta_row(
+        &mut lines,
+        &col,
+        ("Output", &out_str, Color::Reset),
+        ("", "", Color::Reset),
+    );
 
     // Composite Indexes (0-100 scale, higher is better)
     lines.push(Line::from(""));
     push_section_header(&mut lines, "Indexes (0\u{2013}100, \u{2191} better)");
     push_two_col(
         &mut lines,
+        &col,
         "Intelligence",
         fmt_idx(entry.intelligence_index),
         "Coding",
@@ -1740,6 +1747,7 @@ fn draw_benchmark_detail_content(
     );
     push_two_col(
         &mut lines,
+        &col,
         "Math",
         fmt_idx(entry.math_index),
         "",
@@ -1751,6 +1759,7 @@ fn draw_benchmark_detail_content(
     push_section_header(&mut lines, "Benchmarks (%, \u{2191} better)");
     push_two_col(
         &mut lines,
+        &col,
         "GPQA",
         fmt_pct(entry.gpqa),
         "MMLU-Pro",
@@ -1758,6 +1767,7 @@ fn draw_benchmark_detail_content(
     );
     push_two_col(
         &mut lines,
+        &col,
         "HLE",
         fmt_pct(entry.hle),
         "LiveCode",
@@ -1765,6 +1775,7 @@ fn draw_benchmark_detail_content(
     );
     push_two_col(
         &mut lines,
+        &col,
         "SciCode",
         fmt_pct(entry.scicode),
         "IFBench",
@@ -1772,6 +1783,7 @@ fn draw_benchmark_detail_content(
     );
     push_two_col(
         &mut lines,
+        &col,
         "Terminal",
         fmt_pct(entry.terminalbench_hard),
         "Tau2",
@@ -1779,6 +1791,7 @@ fn draw_benchmark_detail_content(
     );
     push_two_col(
         &mut lines,
+        &col,
         "LCR",
         fmt_pct(entry.lcr),
         "MATH-500",
@@ -1786,6 +1799,7 @@ fn draw_benchmark_detail_content(
     );
     push_two_col(
         &mut lines,
+        &col,
         "AIME",
         fmt_pct(entry.aime),
         "AIME'25",
@@ -1810,14 +1824,15 @@ fn draw_benchmark_detail_content(
         .ttfat
         .map(|v| format!("{:.2}s", v))
         .unwrap_or_else(|| em.to_string());
-    push_two_col(&mut lines, "Speed", tps_str, "TTFT", ttft_str);
-    push_two_col(&mut lines, "TTFAT", ttfat_str, "", String::new());
+    push_two_col(&mut lines, &col, "Speed", tps_str, "TTFT", ttft_str);
+    push_two_col(&mut lines, &col, "TTFAT", ttfat_str, "", String::new());
 
     // Pricing ($/M tokens, lower is better)
     lines.push(Line::from(""));
     push_section_header(&mut lines, "Pricing ($/M tokens, \u{2193} better)");
     push_two_col(
         &mut lines,
+        &col,
         "Input",
         fmt_price(entry.price_input),
         "Output",
@@ -1827,7 +1842,7 @@ fn draw_benchmark_detail_content(
         .price_blended
         .map(|v| format!("${:.2}", v))
         .unwrap_or_else(|| em.to_string());
-    push_two_col(&mut lines, "Blended", blended_str, "", String::new());
+    push_two_col(&mut lines, &col, "Blended", blended_str, "", String::new());
 
     // Keybinding hints
     lines.push(Line::from(""));
@@ -1882,7 +1897,55 @@ fn push_section_header(lines: &mut Vec<Line>, title: &str) {
     )));
 }
 
-fn push_two_col(lines: &mut Vec<Line>, l1: &str, v1: String, l2: &str, v2: String) {
+struct DetailCols {
+    lw: usize,
+    vw: usize,
+}
+
+fn push_meta_row(
+    lines: &mut Vec<Line>,
+    col: &DetailCols,
+    left: (&str, &str, Color),
+    right: (&str, &str, Color),
+) {
+    let style_for = |c: Color| {
+        if c == Color::Reset {
+            Style::default()
+        } else {
+            Style::default().fg(c)
+        }
+    };
+
+    let mut spans = vec![
+        Span::styled(
+            format!("  {:<width$}", left.0, width = col.lw),
+            Style::default().fg(Color::DarkGray),
+        ),
+        Span::styled(
+            format!("{:<width$}", left.1, width = col.vw),
+            style_for(left.2),
+        ),
+    ];
+
+    if !right.0.is_empty() {
+        spans.push(Span::styled(
+            format!("{:<width$}", right.0, width = col.lw),
+            Style::default().fg(Color::DarkGray),
+        ));
+        spans.push(Span::styled(right.1.to_string(), style_for(right.2)));
+    }
+
+    lines.push(Line::from(spans));
+}
+
+fn push_two_col(
+    lines: &mut Vec<Line>,
+    col: &DetailCols,
+    l1: &str,
+    v1: String,
+    l2: &str,
+    v2: String,
+) {
     let em = "\u{2014}";
     let color = |s: &str| {
         if s == em {
@@ -1893,13 +1956,19 @@ fn push_two_col(lines: &mut Vec<Line>, l1: &str, v1: String, l2: &str, v2: Strin
     };
 
     let mut spans = vec![
-        Span::styled(format!("  {:<11}", l1), Style::default().fg(Color::Gray)),
-        Span::styled(format!("{:<10}", v1), Style::default().fg(color(&v1))),
+        Span::styled(
+            format!("  {:<width$}", l1, width = col.lw),
+            Style::default().fg(Color::Gray),
+        ),
+        Span::styled(
+            format!("{:<width$}", v1, width = col.vw),
+            Style::default().fg(color(&v1)),
+        ),
     ];
 
     if !l2.is_empty() {
         spans.push(Span::styled(
-            format!("{:<11}", l2),
+            format!("{:<width$}", l2, width = col.lw),
             Style::default().fg(Color::Gray),
         ));
         spans.push(Span::styled(v2.clone(), Style::default().fg(color(&v2))));
