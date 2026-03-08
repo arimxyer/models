@@ -83,6 +83,36 @@ scoop install extras/models
 
 > **Migrating from the custom bucket?** Run `scoop bucket rm arimxyer` — Scoop Extras handles updates automatically.
 
+### Arch Linux (AUR)
+
+```bash
+# Binary package (pre-built, faster)
+yay -S modelsdev-bin
+
+# Or build from source
+yay -S modelsdev-git
+```
+
+### Debian / Ubuntu
+
+Download the `.deb` from [GitHub Releases](https://github.com/arimxyer/models/releases) and install:
+
+```bash
+# Download the latest .deb for your architecture (amd64 or arm64)
+sudo dpkg -i modelsdev_*_amd64.deb
+```
+
+### Fedora / RHEL
+
+Download the `.rpm` from [GitHub Releases](https://github.com/arimxyer/models/releases) and install:
+
+```bash
+# Download the latest .rpm for your architecture (x86_64 or aarch64)
+sudo rpm -i modelsdev-*.x86_64.rpm
+```
+
+> **Verifying downloads**: Each GitHub Release includes a `SHA256SUMS` file. After downloading, verify with: `sha256sum -c SHA256SUMS --ignore-missing`
+
 ### Pre-built binaries
 
 Download the latest release for your platform from [GitHub Releases](https://github.com/arimxyer/models/releases).
@@ -373,6 +403,10 @@ Lots of gratitude to the companies who do all the hard work! Shout out to the so
 - **Benchmark data**: Fetched from [Artificial Analysis](https://artificialanalysis.ai) — quality indexes, benchmark scores, speed, and pricing for ~400 model entries
 - **Agent data**: Curated catalog in [`data/agents.json`](data/agents.json) — contributions welcome!
 - **GitHub data**: Fetched from GitHub API (stars, releases, changelogs)
+
+## Roadmap
+
+- **Nix flake** — Nix packaging with a proper `flake.lock` for reproducible builds (PRs welcome!)
 
 ## Contributing
 

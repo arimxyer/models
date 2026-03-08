@@ -75,3 +75,20 @@ strip = true
 lto = true
 codegen-units = 1
 panic = "abort"
+
+[package.metadata.deb]
+maintainer = "arimxyer"
+copyright = "2024-2026 arimxyer"
+license-file = ["LICENSE", "0"]
+section = "utils"
+priority = "optional"
+assets = [
+    ["target/release/models", "usr/bin/", "755"],
+]
+extended-description = "Browse AI models, benchmarks, and coding agents from the terminal"
+depends = "libc6"
+
+[package.metadata.generate-rpm]
+assets = [
+    { source = "target/release/models", dest = "/usr/bin/models", mode = "0755" },
+]
