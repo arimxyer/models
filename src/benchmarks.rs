@@ -63,9 +63,9 @@ pub struct BenchmarkEntry {
 static PAREN_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\(([^)]*)\)").expect("valid regex"));
 
-// Matches a date like "Dec '24", "Feb 2026", "Sep '25", "May' 25", "Nov '24"
+// Matches a date like "Dec '24", "Feb 2026", "June '24", "March 2025"
 static DATE_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*'?\s*\d{2,4}$")
+    Regex::new(r"(?i)^(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*'?\s*\d{2,4}$")
         .expect("valid regex")
 });
 
@@ -101,9 +101,19 @@ impl BenchmarkEntry {
 
             let lower = content.to_lowercase();
 
-            // Date pattern — drop entirely
+            // Date pattern — drop date part; if comma-separated, keep non-date parts as variant
             if DATE_RE.is_match(content) {
                 continue;
+            }
+            if let Some(comma_pos) = content.find(',') {
+                let first = content[..comma_pos].trim();
+                if DATE_RE.is_match(first) {
+                    let rest = content[comma_pos + 1..].trim();
+                    if !rest.is_empty() {
+                        variant_parts.push(rest.to_string());
+                    }
+                    continue;
+                }
             }
 
             // Adaptive Reasoning (may have comma-separated effort)
@@ -375,6 +385,25 @@ mod tests {
         assert!(non_reasoning.matches(&nr_entry));
         assert!(!non_reasoning.matches(&reasoning_entry));
         assert!(!non_reasoning.matches(&plain_entry));
+    }
+
+    #[test]
+    fn test_parse_metadata_full_month_date() {
+        let mut e = make_entry(|e| e.name = "Claude 3.5 Sonnet (June '24)".to_string());
+        e.parse_metadata();
+        assert_eq!(e.reasoning_status, ReasoningStatus::None);
+        assert!(e.variant_tag.is_none());
+        assert_eq!(e.display_name, "Claude 3.5 Sonnet");
+    }
+
+    #[test]
+    fn test_parse_metadata_date_with_variant() {
+        let mut e = make_entry(|e| {
+            e.name = "GPT-4o (March 2025, chatgpt-4o-latest)".to_string();
+        });
+        e.parse_metadata();
+        assert_eq!(e.variant_tag, Some("chatgpt-4o-latest".to_string()));
+        assert_eq!(e.display_name, "GPT-4o");
     }
 
     #[test]

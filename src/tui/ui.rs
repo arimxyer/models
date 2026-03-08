@@ -1669,12 +1669,36 @@ fn draw_benchmark_detail_content(
         Span::styled("Type    ", Style::default().fg(Color::DarkGray)),
         Span::raw(creator_type.label()),
     ]));
-    // Line 4: Release date
+    // Line 4: Release date + Reasoning status
     let date_str = entry.release_date.as_deref().unwrap_or(em);
+    let (reasoning_label, reasoning_color) = {
+        use crate::benchmarks::ReasoningStatus;
+        match entry.reasoning_status {
+            ReasoningStatus::Reasoning => ("Reasoning", Color::Cyan),
+            ReasoningStatus::NonReasoning => ("Non-reasoning", Color::DarkGray),
+            ReasoningStatus::Adaptive => ("Adaptive", Color::Yellow),
+            ReasoningStatus::None => (em, Color::DarkGray),
+        }
+    };
     lines.push(Line::from(vec![
         Span::styled("Released ", Style::default().fg(Color::DarkGray)),
-        Span::raw(date_str),
+        Span::raw(format!("{:<16}", date_str)),
+        Span::styled("Reason  ", Style::default().fg(Color::DarkGray)),
+        Span::styled(reasoning_label, Style::default().fg(reasoning_color)),
     ]));
+    // Line 5: Effort + Variant (only if present)
+    let has_effort = entry.effort_level.is_some();
+    let has_variant = entry.variant_tag.is_some();
+    if has_effort || has_variant {
+        let effort_str = entry.effort_level.as_deref().unwrap_or(em);
+        let variant_str = entry.variant_tag.as_deref().unwrap_or(em);
+        lines.push(Line::from(vec![
+            Span::styled("Effort   ", Style::default().fg(Color::DarkGray)),
+            Span::raw(format!("{:<16}", effort_str)),
+            Span::styled("Variant ", Style::default().fg(Color::DarkGray)),
+            Span::raw(variant_str),
+        ]));
+    }
 
     // Composite Indexes (0-100 scale, higher is better)
     lines.push(Line::from(""));
@@ -2950,7 +2974,7 @@ fn draw_h2h_table_generic(f: &mut Frame, area: Rect, app: &App) {
     for (i, &store_idx) in selections.iter().enumerate() {
         let name = entries
             .get(store_idx)
-            .map(|e| e.name.as_str())
+            .map(|e| e.display_name.as_str())
             .unwrap_or("?");
         let color = compare_colors(i);
         let truncated = if name.len() > col_w - 1 {
@@ -3124,6 +3148,58 @@ fn draw_h2h_table_generic(f: &mut Frame, area: Rect, app: &App) {
         })
         .collect();
     render_info_row(&mut lines, "Released", dates);
+
+    // Reasoning status with color
+    let reasoning_vals: Vec<(String, Color)> = selections
+        .iter()
+        .map(|&idx| {
+            entries
+                .get(idx)
+                .map(|e| {
+                    use crate::benchmarks::ReasoningStatus;
+                    match e.reasoning_status {
+                        ReasoningStatus::Reasoning => ("Reasoning".to_string(), Color::Cyan),
+                        ReasoningStatus::NonReasoning => {
+                            ("Non-reasoning".to_string(), Color::DarkGray)
+                        }
+                        ReasoningStatus::Adaptive => ("Adaptive".to_string(), Color::Yellow),
+                        ReasoningStatus::None => ("\u{2014}".to_string(), Color::DarkGray),
+                    }
+                })
+                .unwrap_or_else(|| ("\u{2014}".to_string(), Color::DarkGray))
+        })
+        .collect();
+    render_info_row(&mut lines, "Reasoning", reasoning_vals);
+
+    // Effort level (if any model has one)
+    let effort_vals: Vec<(String, Color)> = selections
+        .iter()
+        .map(|&idx| {
+            entries
+                .get(idx)
+                .and_then(|e| e.effort_level.as_ref())
+                .map(|lvl| (lvl.clone(), Color::White))
+                .unwrap_or_else(|| ("\u{2014}".to_string(), Color::DarkGray))
+        })
+        .collect();
+    if effort_vals.iter().any(|(v, _)| v != "\u{2014}") {
+        render_info_row(&mut lines, "Effort", effort_vals);
+    }
+
+    // Variant tag (if any model has one)
+    let variant_vals: Vec<(String, Color)> = selections
+        .iter()
+        .map(|&idx| {
+            entries
+                .get(idx)
+                .and_then(|e| e.variant_tag.as_ref())
+                .map(|tag| (tag.clone(), Color::White))
+                .unwrap_or_else(|| ("\u{2014}".to_string(), Color::DarkGray))
+        })
+        .collect();
+    if variant_vals.iter().any(|(v, _)| v != "\u{2014}") {
+        render_info_row(&mut lines, "Variant", variant_vals);
+    }
 
     // ── Metric rows with section headers and ranks ──
     for row in &rows {
