@@ -86,13 +86,10 @@ scoop install extras/models
 ### Arch Linux (AUR)
 
 ```bash
-# Community-maintained binary package (thanks @Dominiquini!)
-paru -S models-bin
-
-# Official packages
-paru -S modelsdev-bin   # pre-built binary
-paru -S modelsdev-git   # build from source
+paru -S models-bin   # or: yay -S models-bin
 ```
+
+> Maintained by [@Dominiquini](https://aur.archlinux.org/packages/models-bin)
 
 ### Debian / Ubuntu
 
