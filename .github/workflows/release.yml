@@ -261,12 +261,12 @@ jobs:
     if: "!contains(github.ref_name, '-')"
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-
-      - uses: actions/checkout@v4
 
       - name: Calculate SHA256 hashes
         id: hashes
