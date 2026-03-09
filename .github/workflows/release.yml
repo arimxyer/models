@@ -281,6 +281,7 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           mkdir -p aur
           cat > aur/PKGBUILD << 'PKGEOF'
+          # Maintainer: arimxyer <https://github.com/arimxyer>
           # Maintainer: Rafael Dominiquini <rafaeldominiquini at gmail dot com>
 
           _pkgauthor=arimxyer
