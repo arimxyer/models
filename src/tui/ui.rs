@@ -196,7 +196,9 @@ fn provider_detail_lines(app: &App) -> Vec<Line<'static>> {
 fn draw_right_panel(f: &mut Frame, area: Rect, app: &App) {
     let lines = provider_detail_lines(app);
 
-    // Compute actual visual height: sum of wrapped line heights + 2 for borders
+    // Compute visual height: sum of wrapped line heights + 2 for borders.
+    // Word-wrapping can use more lines than char-level div_ceil predicts,
+    // so we add 1 extra line for each line that wraps as a buffer.
     let border_block = Block::default().borders(Borders::ALL);
     let inner_w = border_block.inner(area).width as usize;
     let visual_lines: u16 = if inner_w == 0 {
@@ -205,8 +207,13 @@ fn draw_right_panel(f: &mut Frame, area: Rect, app: &App) {
         lines
             .iter()
             .map(|line| {
-                let span_width: usize = line.spans.iter().map(|s| s.content.len()).sum();
-                span_width.div_ceil(inner_w).max(1) as u16
+                let w = line.width();
+                if w <= inner_w {
+                    1u16
+                } else {
+                    // div_ceil for char-level + 1 for word-wrap slack
+                    w.div_ceil(inner_w) as u16 + 1
+                }
             })
             .sum()
     };
@@ -939,7 +946,7 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &mut App) {
     let mut visual_total: u16 = 0;
     for line in &lines {
         visual_offsets.push(visual_total);
-        let line_width: usize = line.spans.iter().map(|s| s.content.len()).sum();
+        let line_width = line.width();
         let wrapped_lines = if wrap_width == 0 || line_width == 0 {
             1
         } else {
