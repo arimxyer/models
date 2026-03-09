@@ -1062,11 +1062,40 @@ fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
     let has_updated = model.last_updated.is_some();
     let dates_rows: u16 = if has_updated { 2 } else { 1 };
 
+    // ── Pre-build modalities paragraph for dynamic height ────────────────
+    let (mod_in, mod_out) = match &model.modalities {
+        Some(m) => (
+            if m.input.is_empty() {
+                "text".to_string()
+            } else {
+                m.input.join(", ")
+            },
+            if m.output.is_empty() {
+                "text".to_string()
+            } else {
+                m.output.join(", ")
+            },
+        ),
+        None => ("text".to_string(), "text".to_string()),
+    };
+    let mod_para = Paragraph::new(vec![
+        Line::from(vec![
+            Span::styled("Input:  ", Style::default().fg(label_color)),
+            Span::styled(mod_in, Style::default().fg(text_color)),
+        ]),
+        Line::from(vec![
+            Span::styled("Output: ", Style::default().fg(label_color)),
+            Span::styled(mod_out, Style::default().fg(text_color)),
+        ]),
+    ])
+    .wrap(Wrap { trim: false });
+    let mod_rows = mod_para.line_count(inner.width) as u16;
+
     // ── Vertical layout ───────────────────────────────────────────────────
-    // identity(2) + gap(1) + cap_hdr(1) + cap(1) + gap(1)
+    // identity(3) + gap(1) + cap_hdr(1) + cap(3) + gap(1)
     // + price_hdr(1) + price_tbl(2) + gap(1)
     // + limits_hdr(1) + limits_tbl(1) + gap(1)
-    // + mod_hdr(1) + mod(1) + gap(1)
+    // + mod_hdr(1) + mod(dynamic) + gap(1)
     // + dates_hdr(1) + dates_tbl(1 or 2) + remainder
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -1083,7 +1112,7 @@ fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
             Constraint::Length(1),          // 9: limits table
             Constraint::Length(1),          // 10: gap
             Constraint::Length(1),          // 11: modalities header
-            Constraint::Length(1),          // 12: modalities content
+            Constraint::Length(mod_rows),   // 12: modalities content (dynamic)
             Constraint::Length(1),          // 13: gap
             Constraint::Length(1),          // 14: dates header
             Constraint::Length(dates_rows), // 15: dates table
@@ -1290,37 +1319,7 @@ fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
 
     // ── Modalities ────────────────────────────────────────────────────────
     render_section_header(f, chunks[11], "Modalities");
-
-    let (mod_in, mod_out) = match &model.modalities {
-        Some(m) => (
-            if m.input.is_empty() {
-                "text".to_string()
-            } else {
-                m.input.join(", ")
-            },
-            if m.output.is_empty() {
-                "text".to_string()
-            } else {
-                m.output.join(", ")
-            },
-        ),
-        None => ("text".to_string(), "text".to_string()),
-    };
-    let modalities_table = Table::new(
-        vec![Row::new(vec![
-            Cell::from(Span::styled("Input:", Style::default().fg(label_color))),
-            Cell::from(Span::styled(mod_in, Style::default().fg(text_color))),
-            Cell::from(Span::styled("Output:", Style::default().fg(label_color))),
-            Cell::from(Span::styled(mod_out, Style::default().fg(text_color))),
-        ])],
-        [
-            Constraint::Length(7),
-            Constraint::Fill(1),
-            Constraint::Length(8),
-            Constraint::Fill(1),
-        ],
-    );
-    f.render_widget(modalities_table, chunks[12]);
+    f.render_widget(mod_para, chunks[12]);
 
     // ── Dates ─────────────────────────────────────────────────────────────
     render_section_header(f, chunks[14], "Dates");
