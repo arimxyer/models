@@ -6172,12 +6172,12 @@
     "math_500": null,
     "aime": null,
     "aime_25": null,
-    "output_tps": null,
-    "ttft": null,
-    "ttfat": null,
-    "price_input": 0,
-    "price_output": 0,
-    "price_blended": 0
+    "output_tps": 137.097,
+    "ttft": 4.279,
+    "ttfat": 18.867,
+    "price_input": 0.1,
+    "price_output": 0.15,
+    "price_blended": 0.113
   },
   {
     "id": "cbac8c35-e069-4c73-823e-0953e6ed0e85",
