@@ -13,17 +13,11 @@ use crate::agents::{format_stars, FetchStatus};
 use crate::provider_category::{provider_category, ProviderCategory};
 
 pub fn draw(f: &mut Frame, app: &mut App) {
-    let (main_constraint, detail_constraint) = match app.current_tab {
-        Tab::Models => (Constraint::Min(0), Constraint::Percentage(35)),
-        Tab::Agents | Tab::Benchmarks => (Constraint::Min(0), Constraint::Length(0)),
-    };
-
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(1), // Header
-            main_constraint,       // Main content
-            detail_constraint,     // Detail panel (Models only)
+            Constraint::Min(0),    // Main content
             Constraint::Length(1), // Footer/search
         ])
         .split(f.area());
@@ -33,7 +27,6 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     match app.current_tab {
         Tab::Models => {
             draw_main(f, chunks[1], app);
-            draw_details_row(f, chunks[2], app);
         }
         Tab::Agents => {
             draw_agents_main(f, chunks[1], app);
@@ -43,7 +36,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         }
     }
 
-    draw_footer(f, chunks[3], app);
+    draw_footer(f, chunks[2], app);
 
     // Draw help popup on top if visible
     if app.show_help {
@@ -84,13 +77,148 @@ fn draw_header(f: &mut Frame, area: Rect, app: &App) {
 }
 
 fn draw_main(f: &mut Frame, area: Rect, app: &mut App) {
-    let chunks = Layout::default()
+    // Compute provider column width from content before any mutable borrows.
+    // Only consider Provider(idx) variants — skip All and CategoryHeader since
+    // those have synthetic display text that doesn't reflect provider name lengths.
+    let provider_width = {
+        let max_name_len = app
+            .provider_list_items
+            .iter()
+            .filter_map(|item| {
+                if let ProviderListItem::Provider(idx) = item {
+                    app.providers.get(*idx).map(|(id, p)| {
+                        // Display format: "{id} ({count}) {short_label}"
+                        // short_label is at most 4 chars, count at most 4 digits,
+                        // parens+spaces = 4, plus 2 borders + 2 highlight = 8 overhead
+                        id.len() + p.models.len().to_string().len() + 2 + 1 + 4
+                    })
+                } else {
+                    None
+                }
+            })
+            .max()
+            .unwrap_or(16);
+        // 2 borders + 2 highlight symbol width
+        ((max_name_len + 4) as u16).clamp(16, 24)
+    };
+
+    // Left side (providers + models) gets 60%, right panel gets 40%
+    let right_w = area.width * 40 / 100;
+    let left_w = area.width - right_w;
+
+    // Split left side into providers (adaptive) + models (remainder)
+    let left_chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(25), Constraint::Percentage(75)])
-        .split(area);
+        .constraints([Constraint::Length(provider_width), Constraint::Min(0)])
+        .split(Rect::new(area.x, area.y, left_w, area.height));
+
+    let right_area = Rect::new(area.x + left_w, area.y, right_w, area.height);
+
+    let chunks = [left_chunks[0], left_chunks[1], right_area];
 
     draw_providers(f, chunks[0], app);
     draw_models(f, chunks[1], app);
+    draw_right_panel(f, chunks[2], app);
+}
+
+fn provider_detail_lines(app: &App) -> Vec<Line<'static>> {
+    let Some(entry) = app.current_model() else {
+        return vec![Line::from(Span::styled(
+            "No model selected",
+            Style::default().fg(Color::DarkGray),
+        ))];
+    };
+    let provider = app
+        .providers
+        .iter()
+        .find(|(id, _)| id == &entry.provider_id)
+        .map(|(_, p)| p);
+    let Some(provider) = provider else {
+        return vec![Line::from(Span::styled(
+            "Provider not found",
+            Style::default().fg(Color::DarkGray),
+        ))];
+    };
+
+    let cat = provider_category(&entry.provider_id);
+    let has_doc = provider.doc.is_some();
+    let has_api = provider.api.is_some();
+
+    let mut lines = vec![
+        Line::from(vec![Span::styled(
+            provider.name.clone(),
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )]),
+        Line::from(vec![
+            Span::styled("Category: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(cat.label(), Style::default().fg(cat.color())),
+        ]),
+        Line::from(vec![
+            Span::styled("Docs: ", Style::default().fg(Color::DarkGray)),
+            Span::raw(provider.doc.clone().unwrap_or_else(|| "-".into())),
+        ]),
+        Line::from(vec![
+            Span::styled("API:  ", Style::default().fg(Color::DarkGray)),
+            Span::raw(provider.api.clone().unwrap_or_else(|| "-".into())),
+        ]),
+        Line::from(vec![
+            Span::styled("Env:  ", Style::default().fg(Color::DarkGray)),
+            Span::raw(if provider.env.is_empty() {
+                "-".to_string()
+            } else {
+                provider.env.join(", ")
+            }),
+        ]),
+    ];
+
+    // Only show keybinding hints for available URLs
+    let mut hints: Vec<Span<'static>> = Vec::new();
+    if has_doc {
+        hints.push(Span::styled("o ", Style::default().fg(Color::Yellow)));
+        hints.push(Span::raw("docs"));
+    }
+    if has_doc && has_api {
+        hints.push(Span::raw("  "));
+    }
+    if has_api {
+        hints.push(Span::styled("A ", Style::default().fg(Color::Yellow)));
+        hints.push(Span::raw("api"));
+    }
+    if !hints.is_empty() {
+        lines.push(Line::from(hints));
+    }
+
+    lines
+}
+
+fn draw_right_panel(f: &mut Frame, area: Rect, app: &App) {
+    let lines = provider_detail_lines(app);
+
+    // Compute actual visual height: sum of wrapped line heights + 2 for borders
+    let border_block = Block::default().borders(Borders::ALL);
+    let inner_w = border_block.inner(area).width as usize;
+    let visual_lines: u16 = if inner_w == 0 {
+        lines.len() as u16
+    } else {
+        lines
+            .iter()
+            .map(|line| {
+                let span_width: usize = line.spans.iter().map(|s| s.content.len()).sum();
+                span_width.div_ceil(inner_w).max(1) as u16
+            })
+            .sum()
+    };
+    let provider_h = visual_lines + 2; // +2 for borders
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(provider_h), Constraint::Min(0)])
+        .split(area);
+
+    draw_provider_detail(f, chunks[0], lines);
+    draw_model_detail(f, chunks[1], app);
 }
 
 fn draw_providers(f: &mut Frame, area: Rect, app: &mut App) {
@@ -204,7 +332,6 @@ fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
     };
 
     let models = app.filtered_models();
-    let show_provider_col = app.is_all_selected();
 
     let sort_indicator = match app.sort_order {
         SortOrder::Default => String::new(),
@@ -268,14 +395,13 @@ fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
     let inner_area = outer_block.inner(area);
     f.render_widget(outer_block, area);
 
-    // Fixed column widths: caret(2) + Input(8) Output(8) Context(8) + provider(18 optional)
+    // Fixed column widths: caret(2) + Input(8) Output(8) Context(8) + gaps(3)
     let caret_w: u16 = 2;
     let input_w: u16 = 8;
     let output_w: u16 = 8;
     let ctx_w: u16 = 8;
-    let provider_w: u16 = if show_provider_col { 18 } else { 0 };
-    let num_gaps: u16 = if show_provider_col { 4 } else { 3 };
-    let fixed_w = caret_w + provider_w + input_w + output_w + ctx_w + num_gaps;
+    let num_gaps: u16 = 3;
+    let fixed_w = caret_w + input_w + output_w + ctx_w + num_gaps;
     let name_width = (inner_area.width.saturating_sub(fixed_w) as usize).max(10);
 
     let header_style = Style::default()
@@ -313,9 +439,6 @@ fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
             },
         ),
     ];
-    if show_provider_col {
-        header_spans.push(Span::styled(format!(" {:<18}", "Provider"), header_style));
-    }
     header_spans.push(Span::styled(format!(" {:>8}", "Input"), cost_style));
     header_spans.push(Span::styled(format!(" {:>8}", "Output"), cost_style));
     header_spans.push(Span::styled(
@@ -359,12 +482,6 @@ fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
                 style,
             ),
         ];
-        if show_provider_col {
-            row_spans.push(Span::styled(
-                format!(" {:<18}", truncate(&entry.provider_id, 18)),
-                style,
-            ));
-        }
         row_spans.push(Span::styled(format!(" {:>8}", input_cost), style));
         row_spans.push(Span::styled(format!(" {:>8}", output_cost), style));
         row_spans.push(Span::styled(format!(" {:>8}", ctx), style));
@@ -375,16 +492,6 @@ fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
     let list = List::new(items);
     let mut state = app.model_list_state.clone();
     f.render_stateful_widget(list, inner_area, &mut state);
-}
-
-fn draw_details_row(f: &mut Frame, area: Rect, app: &App) {
-    let chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
-        .split(area);
-
-    draw_provider_detail(f, chunks[0], app);
-    draw_model_detail(f, chunks[1], app);
 }
 
 fn draw_agents_main(f: &mut Frame, area: Rect, app: &mut App) {
@@ -889,212 +996,345 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &mut App) {
     }
 }
 
-fn draw_provider_detail(f: &mut Frame, area: Rect, app: &App) {
-    let lines: Vec<Line> = if let Some(entry) = app.current_model() {
-        // Find the provider
-        let provider = app
-            .providers
-            .iter()
-            .find(|(id, _)| id == &entry.provider_id)
-            .map(|(_, p)| p);
-
-        if let Some(provider) = provider {
-            let cat = provider_category(&entry.provider_id);
-            vec![
-                Line::from(vec![Span::styled(
-                    &provider.name,
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD),
-                )]),
-                Line::from(""),
-                Line::from(vec![
-                    Span::styled("Category: ", Style::default().fg(Color::DarkGray)),
-                    Span::styled(cat.label(), Style::default().fg(cat.color())),
-                ]),
-                Line::from(vec![
-                    Span::styled("Docs: ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(provider.doc.as_deref().unwrap_or("-")),
-                ]),
-                Line::from(vec![
-                    Span::styled("API:  ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(provider.api.as_deref().unwrap_or("-")),
-                ]),
-                Line::from(vec![
-                    Span::styled("NPM:  ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(provider.npm.as_deref().unwrap_or("-")),
-                ]),
-                Line::from(vec![
-                    Span::styled("Env:  ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(if provider.env.is_empty() {
-                        "-".to_string()
-                    } else {
-                        provider.env.join(", ")
-                    }),
-                ]),
-                Line::from(""),
-                Line::from(vec![
-                    Span::styled("o ", Style::default().fg(Color::Yellow)),
-                    Span::raw("open docs - web  "),
-                    Span::styled("A ", Style::default().fg(Color::Yellow)),
-                    Span::raw("copy api"),
-                ]),
-            ]
-        } else {
-            vec![Line::from(Span::styled(
-                "Provider not found",
-                Style::default().fg(Color::DarkGray),
-            ))]
-        }
-    } else {
-        vec![Line::from(Span::styled(
-            "No model selected",
-            Style::default().fg(Color::DarkGray),
-        ))]
-    };
-
+fn draw_provider_detail(f: &mut Frame, area: Rect, lines: Vec<Line<'static>>) {
     let paragraph = Paragraph::new(lines)
         .block(Block::default().borders(Borders::ALL).title(" Provider "))
-        .wrap(Wrap { trim: true });
+        .wrap(Wrap { trim: false });
 
     f.render_widget(paragraph, area);
 }
 
-fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
-    let lines: Vec<Line> = if let Some(entry) = app.current_model() {
-        let model = &entry.model;
-        let provider_id = &entry.provider_id;
-
-        let caps = model.capabilities_str();
-        let modalities = model.modalities_str();
-
-        // Format cache costs
-        let cache_read = model
-            .cost
-            .as_ref()
-            .and_then(|c| c.cache_read)
-            .map(|v| format!("${}/M", v))
-            .unwrap_or("-".into());
-        let cache_write = model
-            .cost
-            .as_ref()
-            .and_then(|c| c.cache_write)
-            .map(|v| format!("${}/M", v))
-            .unwrap_or("-".into());
-
-        let mut detail_lines = vec![
-            // Row 1: Name and ID
-            Line::from(vec![
-                Span::styled(
-                    &model.name,
-                    Style::default()
-                        .fg(Color::White)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::raw("  "),
-                Span::styled(
-                    format!("({})", entry.id),
-                    Style::default().fg(Color::DarkGray),
-                ),
-            ]),
-            // Row 2: Provider and Family
-            Line::from(vec![
-                Span::styled("Provider: ", Style::default().fg(Color::DarkGray)),
-                Span::styled(
-                    format!("{:<16}", provider_id),
-                    Style::default().fg(Color::Cyan),
-                ),
-                Span::styled("Family: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(model.family.as_deref().unwrap_or("-")),
-            ]),
-            // Row 3: Status
-            Line::from(vec![
-                Span::styled("Status: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(model.status.as_deref().unwrap_or("active")),
-            ]),
-            Line::from(""),
-            // Row 4: Context, Input, and Output limits
-            Line::from(vec![
-                Span::styled("Context: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(format!("{:<10}", model.context_str())),
-                Span::styled("Input: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(format!("{:<10}", model.input_limit_str())),
-                Span::styled("Output: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(model.output_str()),
-            ]),
-            // Row 5: Input and Output cost
-            Line::from(vec![
-                Span::styled("Input: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(format!(
-                    "{:<14}",
-                    model
-                        .cost
-                        .as_ref()
-                        .and_then(|c| c.input)
-                        .map(|v| format!("${}/M", v))
-                        .unwrap_or("-".into())
-                )),
-                Span::styled("Output: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(
-                    model
-                        .cost
-                        .as_ref()
-                        .and_then(|c| c.output)
-                        .map(|v| format!("${}/M", v))
-                        .unwrap_or("-".into()),
-                ),
-            ]),
-            // Row 6: Cache read and write costs
-            Line::from(vec![
-                Span::styled("Cache Read: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(format!("{:<10}", cache_read)),
-                Span::styled("Cache Write: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(cache_write),
-            ]),
-            Line::from(""),
-            // Row 7: Capabilities
-            Line::from(vec![
-                Span::styled("Capabilities: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(caps),
-            ]),
-            // Row 8: Modalities
-            Line::from(vec![
-                Span::styled("Modalities: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(modalities),
-            ]),
-            // Row 9: Dates
-            Line::from(vec![
-                Span::styled("Released: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(format!(
-                    "{:<14}",
-                    model.release_date.as_deref().unwrap_or("-")
-                )),
-                Span::styled("Knowledge: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(model.knowledge.as_deref().unwrap_or("-")),
-            ]),
-        ];
-
-        // Add last updated if available
-        if let Some(updated) = &model.last_updated {
-            detail_lines.push(Line::from(vec![
-                Span::styled("Updated: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(updated),
-            ]));
-        }
-
-        detail_lines
+fn capability_badge(
+    label: &'static str,
+    active: bool,
+    active_color: Color,
+) -> Option<Span<'static>> {
+    if active {
+        Some(Span::styled(label, Style::default().fg(active_color)))
     } else {
-        vec![Line::from(Span::styled(
+        None
+    }
+}
+
+fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
+    let block = Block::default().borders(Borders::ALL).title(" Details ");
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+
+    let Some(entry) = app.current_model() else {
+        let para = Paragraph::new(Line::from(Span::styled(
             "No model selected",
             Style::default().fg(Color::DarkGray),
-        ))]
+        )));
+        f.render_widget(para, inner);
+        return;
     };
 
-    let paragraph = Paragraph::new(lines)
-        .block(Block::default().borders(Borders::ALL).title(" Details "))
-        .wrap(Wrap { trim: true });
+    let model = &entry.model;
+    let provider_id = &entry.provider_id;
+    let is_deprecated = model.status.as_deref() == Some("deprecated");
+    let text_color = if is_deprecated {
+        Color::DarkGray
+    } else {
+        Color::White
+    };
+    let label_color = Color::DarkGray;
+    let em = "\u{2014}";
 
-    f.render_widget(paragraph, area);
+    // Helper: render a dash-padded section header into a 1-line rect
+    let render_section_header = |f: &mut Frame, rect: Rect, title: &str| {
+        let w = rect.width as usize;
+        let prefix = format!("\u{2500}\u{2500} {} ", title);
+        let fill_len = w.saturating_sub(prefix.chars().count());
+        let header = format!("{}{}", prefix, "\u{2500}".repeat(fill_len));
+        let para = Paragraph::new(Line::from(Span::styled(
+            header,
+            Style::default()
+                .fg(Color::DarkGray)
+                .add_modifier(Modifier::BOLD),
+        )));
+        f.render_widget(para, rect);
+    };
+
+    // Helper: label width for Table columns (longest label + 1 space)
+    // Pricing labels: "Cache Read: " = 12, "Cache Write: " = 13 → use 13
+    // Limits labels:  "Context: " = 9, "Input: " = 7, "Output: " = 8 → use 9
+    // Dates labels:   "Released: " = 10, "Knowledge: " = 11, "Updated: " = 9 → use 11
+    let pricing_lw: u16 = 13;
+    let limits_lw: u16 = 9;
+    let dates_lw: u16 = 11;
+
+    // ── Determine dates table height (1 or 2 rows) ────────────────────────
+    let has_updated = model.last_updated.is_some();
+    let dates_rows: u16 = if has_updated { 2 } else { 1 };
+
+    // ── Vertical layout ───────────────────────────────────────────────────
+    // identity(2) + gap(1) + cap_hdr(1) + cap(1) + gap(1)
+    // + price_hdr(1) + price_tbl(2) + gap(1)
+    // + limits_hdr(1) + limits_tbl(1) + gap(1)
+    // + mod_hdr(1) + mod(1) + gap(1)
+    // + dates_hdr(1) + dates_tbl(1 or 2) + remainder
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(2),          // 0: identity
+            Constraint::Length(1),          // 1: gap
+            Constraint::Length(1),          // 2: capabilities header
+            Constraint::Length(1),          // 3: capabilities content
+            Constraint::Length(1),          // 4: gap
+            Constraint::Length(1),          // 5: pricing header
+            Constraint::Length(2),          // 6: pricing table
+            Constraint::Length(1),          // 7: gap
+            Constraint::Length(1),          // 8: limits header
+            Constraint::Length(1),          // 9: limits table
+            Constraint::Length(1),          // 10: gap
+            Constraint::Length(1),          // 11: modalities header
+            Constraint::Length(1),          // 12: modalities content
+            Constraint::Length(1),          // 13: gap
+            Constraint::Length(1),          // 14: dates header
+            Constraint::Length(dates_rows), // 15: dates table
+            Constraint::Min(0),             // 16: remainder
+        ])
+        .split(inner);
+
+    // ── Identity ──────────────────────────────────────────────────────────
+    let mut header_spans: Vec<Span> = vec![
+        Span::styled(
+            model.name.clone(),
+            Style::default().fg(text_color).add_modifier(Modifier::BOLD),
+        ),
+        Span::raw("  "),
+        Span::styled(
+            format!("({})", entry.id),
+            Style::default().fg(Color::DarkGray),
+        ),
+    ];
+    if let Some(status) = model.status.as_deref() {
+        if status != "active" {
+            header_spans.push(Span::raw("  "));
+            let badge_color = if status == "deprecated" {
+                Color::Red
+            } else {
+                Color::DarkGray
+            };
+            header_spans.push(Span::styled(
+                format!("[{}]", status),
+                Style::default().fg(badge_color),
+            ));
+        }
+    }
+    let row_provider = Line::from(vec![
+        Span::styled("Provider: ", Style::default().fg(label_color)),
+        Span::styled(provider_id.clone(), Style::default().fg(Color::Cyan)),
+        Span::raw("     "),
+        Span::styled("Family: ", Style::default().fg(label_color)),
+        Span::raw(model.family.clone().unwrap_or_else(|| em.to_string())),
+    ]);
+    let identity_para = Paragraph::new(vec![Line::from(header_spans), row_provider]);
+    f.render_widget(identity_para, chunks[0]);
+
+    // ── Capabilities ──────────────────────────────────────────────────────
+    render_section_header(f, chunks[2], "Capabilities");
+
+    let badges: &[Option<Span<'static>>] = &[
+        capability_badge("Reasoning", model.reasoning, Color::Yellow),
+        capability_badge("Tools", model.tool_call, Color::Cyan),
+        capability_badge("Files", model.attachment, Color::Blue),
+        capability_badge("Open Weights", model.open_weights, Color::Magenta),
+        capability_badge("Temperature", model.temperature, Color::White),
+    ];
+    let active_badges: Vec<&Span<'static>> = badges.iter().filter_map(|b| b.as_ref()).collect();
+    let row_badges = if active_badges.is_empty() {
+        Line::from(Span::styled("None", Style::default().fg(Color::DarkGray)))
+    } else {
+        let mut spans: Vec<Span<'static>> = Vec::new();
+        for (i, badge) in active_badges.iter().enumerate() {
+            if i > 0 {
+                spans.push(Span::raw(", "));
+            }
+            spans.push((*badge).clone());
+        }
+        Line::from(spans)
+    };
+    f.render_widget(Paragraph::new(row_badges), chunks[3]);
+
+    // ── Pricing ───────────────────────────────────────────────────────────
+    render_section_header(f, chunks[5], "Pricing");
+
+    let free = model.is_free();
+    let cost_color = if free { Color::Green } else { text_color };
+    let fmt_cost = |val: Option<f64>| -> (String, Color) {
+        match val {
+            None => {
+                if free {
+                    ("Free".to_string(), Color::Green)
+                } else {
+                    (em.to_string(), Color::DarkGray)
+                }
+            }
+            Some(0.0) => ("$0/M".to_string(), Color::Green),
+            Some(v) => {
+                let formatted = if v.fract() == 0.0 {
+                    format!("${}/M", v as u64)
+                } else {
+                    format!("${:.2}/M", v)
+                };
+                (formatted, cost_color)
+            }
+        }
+    };
+    let (input_str, input_color) = fmt_cost(model.cost.as_ref().and_then(|c| c.input));
+    let (output_str, output_color) = fmt_cost(model.cost.as_ref().and_then(|c| c.output));
+    let (cache_read_str, cache_read_color) =
+        fmt_cost(model.cost.as_ref().and_then(|c| c.cache_read));
+    let (cache_write_str, cache_write_color) =
+        fmt_cost(model.cost.as_ref().and_then(|c| c.cache_write));
+
+    let pricing_table = Table::new(
+        vec![
+            Row::new(vec![
+                Cell::from(Span::styled("Input:", Style::default().fg(label_color))),
+                Cell::from(Span::styled(input_str, Style::default().fg(input_color))),
+                Cell::from(Span::styled("Output:", Style::default().fg(label_color))),
+                Cell::from(Span::styled(output_str, Style::default().fg(output_color))),
+            ]),
+            Row::new(vec![
+                Cell::from(Span::styled(
+                    "Cache Read:",
+                    Style::default().fg(label_color),
+                )),
+                Cell::from(Span::styled(
+                    cache_read_str,
+                    Style::default().fg(cache_read_color),
+                )),
+                Cell::from(Span::styled(
+                    "Cache Write:",
+                    Style::default().fg(label_color),
+                )),
+                Cell::from(Span::styled(
+                    cache_write_str,
+                    Style::default().fg(cache_write_color),
+                )),
+            ]),
+        ],
+        [
+            Constraint::Length(pricing_lw),
+            Constraint::Fill(1),
+            Constraint::Length(pricing_lw),
+            Constraint::Fill(1),
+        ],
+    );
+    f.render_widget(pricing_table, chunks[6]);
+
+    // ── Limits ────────────────────────────────────────────────────────────
+    render_section_header(f, chunks[8], "Limits");
+
+    let ctx_str = model.context_str();
+    let inp_lim_str = model.input_limit_str();
+    let out_str = model.output_str();
+    let (ctx_val, ctx_color) = if ctx_str == "-" {
+        (em.to_string(), Color::DarkGray)
+    } else {
+        (ctx_str, text_color)
+    };
+    let (inp_lim_val, inp_lim_color) = if inp_lim_str == "-" {
+        (em.to_string(), Color::DarkGray)
+    } else {
+        (inp_lim_str, text_color)
+    };
+    let (out_val, out_color) = if out_str == "-" {
+        (em.to_string(), Color::DarkGray)
+    } else {
+        (out_str, text_color)
+    };
+    let limits_table = Table::new(
+        vec![Row::new(vec![
+            Cell::from(Span::styled("Context:", Style::default().fg(label_color))),
+            Cell::from(Span::styled(ctx_val, Style::default().fg(ctx_color))),
+            Cell::from(Span::styled("Input:", Style::default().fg(label_color))),
+            Cell::from(Span::styled(
+                inp_lim_val,
+                Style::default().fg(inp_lim_color),
+            )),
+            Cell::from(Span::styled("Output:", Style::default().fg(label_color))),
+            Cell::from(Span::styled(out_val, Style::default().fg(out_color))),
+        ])],
+        [
+            Constraint::Length(limits_lw),
+            Constraint::Min(6),
+            Constraint::Length(limits_lw),
+            Constraint::Min(6),
+            Constraint::Length(limits_lw),
+            Constraint::Min(6),
+        ],
+    );
+    f.render_widget(limits_table, chunks[9]);
+
+    // ── Modalities ────────────────────────────────────────────────────────
+    render_section_header(f, chunks[11], "Modalities");
+
+    let modalities_para = Paragraph::new(Line::from(Span::styled(
+        model.modalities_str(),
+        Style::default().fg(text_color),
+    )));
+    f.render_widget(modalities_para, chunks[12]);
+
+    // ── Dates ─────────────────────────────────────────────────────────────
+    render_section_header(f, chunks[14], "Dates");
+
+    let released = model.release_date.as_deref().unwrap_or(em);
+    let knowledge = model.knowledge.as_deref().unwrap_or(em);
+    let rel_color = if released == em {
+        Color::DarkGray
+    } else {
+        text_color
+    };
+    let know_color = if knowledge == em {
+        Color::DarkGray
+    } else {
+        text_color
+    };
+
+    let mut dates_rows_data: Vec<Row> = vec![Row::new(vec![
+        Cell::from(Span::styled("Released:", Style::default().fg(label_color))),
+        Cell::from(Span::styled(
+            released.to_string(),
+            Style::default().fg(rel_color),
+        )),
+        Cell::from(Span::styled("Knowledge:", Style::default().fg(label_color))),
+        Cell::from(Span::styled(
+            knowledge.to_string(),
+            Style::default().fg(know_color),
+        )),
+    ])];
+
+    if let Some(updated) = &model.last_updated {
+        let upd_color = if is_deprecated {
+            Color::DarkGray
+        } else {
+            text_color
+        };
+        dates_rows_data.push(Row::new(vec![
+            Cell::from(Span::styled("Updated:", Style::default().fg(label_color))),
+            Cell::from(Span::styled(
+                updated.clone(),
+                Style::default().fg(upd_color),
+            )),
+            Cell::from(""),
+            Cell::from(""),
+        ]));
+    }
+
+    let dates_table = Table::new(
+        dates_rows_data,
+        [
+            Constraint::Length(dates_lw),
+            Constraint::Fill(1),
+            Constraint::Length(dates_lw),
+            Constraint::Fill(1),
+        ],
+    );
+    f.render_widget(dates_table, chunks[15]);
 }
 
 fn draw_benchmarks_main(f: &mut Frame, area: Rect, app: &mut App) {
