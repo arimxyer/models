@@ -54,7 +54,7 @@ Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message`
 
 ### GitHub Actions
 - `ci.yml` — runs on PR/push: fmt check, clippy, test
-- `release.yml` — triggered by `v*` tags: builds 5 targets in parallel with Rust caching, packages .deb/.rpm via cargo-binstall (pinned versions), generates SHA256SUMS, publishes to crates.io, updates Homebrew tap, updates AUR package. Pre-release tags (containing `-`) skip publish/Homebrew/AUR and mark the GitHub release as prerelease. Scoop Extras handles Windows updates via its own autoupdate mechanism.
+- `release.yml` — triggered by `v*` tags: builds 5 targets in parallel with Rust caching, packages .deb/.rpm via cargo-binstall (pinned versions), generates SHA256SUMS, publishes to crates.io, updates Homebrew tap (legacy, core formula maintained by Homebrew), updates AUR package. Pre-release tags (containing `-`) skip publish/Homebrew/AUR and mark the GitHub release as prerelease. Scoop Extras handles Windows updates via its own autoupdate mechanism.
 - `update-benchmarks.yml` — runs every 30 minutes: fetches AA API, commits if data changed
 
 ## Conventions
@@ -82,7 +82,7 @@ Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message`
 2. `mise run fmt && mise run clippy && mise run test`
 3. Commit `Cargo.toml` and `Cargo.lock` together
 4. `git tag v<version> && git push && git push --tags`
-5. Release workflow runs automatically: builds binaries, packages .deb/.rpm, publishes to crates.io, updates Homebrew tap, updates AUR package
+5. Release workflow runs automatically: builds binaries, packages .deb/.rpm, publishes to crates.io, updates Homebrew tap (core formula auto-bumped by Homebrew maintainers), updates AUR package
 
 ## Secrets
 - `AA_API_KEY` — Artificial Analysis API key (GitHub repo secret, local `.env`)

@@ -67,8 +67,10 @@ cargo install modelsdev
 ### Homebrew (macOS/Linux)
 
 ```bash
-brew install arimxyer/tap/models
+brew install models
 ```
+
+> **Migrating from the tap?** Run `brew untap arimxyer/tap` — Homebrew core handles updates automatically.
 
 ### Scoop (Windows)
 
