@@ -373,13 +373,14 @@ fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
     let inner_area = outer_block.inner(area);
     f.render_widget(outer_block, area);
 
-    // Fixed column widths: caret(2) + Input(8) Output(8) Context(8) + gaps(3)
+    // Fixed column widths: caret(2) + caps(5) + Input(8) Output(8) Context(8) + gaps(3)
     let caret_w: u16 = 2;
+    let caps_w: u16 = 5; // "RTFO " — 4 indicator chars + 1 space
     let input_w: u16 = 8;
     let output_w: u16 = 8;
     let ctx_w: u16 = 8;
     let num_gaps: u16 = 3;
-    let fixed_w = caret_w + input_w + output_w + ctx_w + num_gaps;
+    let fixed_w = caret_w + caps_w + input_w + output_w + ctx_w + num_gaps;
     let name_width = (inner_area.width.saturating_sub(fixed_w) as usize).max(10);
 
     let header_style = Style::default()
@@ -408,6 +409,7 @@ fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
     // Build header spans (leading spaces to align with caret)
     let mut header_spans: Vec<Span> = vec![
         Span::raw("  "),
+        Span::styled("RTFO ", header_style),
         Span::styled(
             format!("{:<width$}", "Model ID", width = name_width),
             if sort_col == "name" {
@@ -449,8 +451,34 @@ fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
         let ctx = entry.model.context_str();
 
         let prefix = if is_selected { caret } else { "  " };
+        let m = &entry.model;
+        let (r_ch, r_color) = if m.reasoning {
+            ("R", Color::Cyan)
+        } else {
+            ("·", Color::DarkGray)
+        };
+        let (t_ch, t_color) = if m.tool_call {
+            ("T", Color::Yellow)
+        } else {
+            ("·", Color::DarkGray)
+        };
+        let (f_ch, f_color) = if m.attachment {
+            ("F", Color::Magenta)
+        } else {
+            ("·", Color::DarkGray)
+        };
+        let (o_ch, o_color) = if m.open_weights {
+            ("O", Color::Green)
+        } else {
+            ("C", Color::Red)
+        };
         let mut row_spans: Vec<Span> = vec![
             Span::styled(prefix, style),
+            Span::styled(r_ch, Style::default().fg(r_color)),
+            Span::styled(t_ch, Style::default().fg(t_color)),
+            Span::styled(f_ch, Style::default().fg(f_color)),
+            Span::styled(o_ch, Style::default().fg(o_color)),
+            Span::raw(" "),
             Span::styled(
                 format!(
                     "{:<width$}",
@@ -982,18 +1010,6 @@ fn draw_provider_detail(f: &mut Frame, area: Rect, lines: Vec<Line<'static>>) {
     f.render_widget(paragraph, area);
 }
 
-fn capability_badge(
-    label: &'static str,
-    active: bool,
-    active_color: Color,
-) -> Option<Span<'static>> {
-    if active {
-        Some(Span::styled(label, Style::default().fg(active_color)))
-    } else {
-        None
-    }
-}
-
 fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
     let block = Block::default().borders(Borders::ALL).title(" Details ");
     let inner = block.inner(area);
@@ -1058,7 +1074,7 @@ fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
             Constraint::Length(3),          // 0: identity
             Constraint::Length(1),          // 1: gap
             Constraint::Length(1),          // 2: capabilities header
-            Constraint::Length(1),          // 3: capabilities content
+            Constraint::Length(2),          // 3: capabilities table
             Constraint::Length(1),          // 4: gap
             Constraint::Length(1),          // 5: pricing header
             Constraint::Length(2),          // 6: pricing table
@@ -1111,27 +1127,45 @@ fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
     // ── Capabilities ──────────────────────────────────────────────────────
     render_section_header(f, chunks[2], "Capabilities");
 
-    let badges: &[Option<Span<'static>>] = &[
-        capability_badge("Reasoning", model.reasoning, Color::Yellow),
-        capability_badge("Tools", model.tool_call, Color::Cyan),
-        capability_badge("Files", model.attachment, Color::Blue),
-        capability_badge("Open Weights", model.open_weights, Color::Magenta),
-        capability_badge("Temperature", model.temperature, Color::White),
-    ];
-    let active_badges: Vec<&Span<'static>> = badges.iter().filter_map(|b| b.as_ref()).collect();
-    let row_badges = if active_badges.is_empty() {
-        Line::from(Span::styled("None", Style::default().fg(Color::DarkGray)))
-    } else {
-        let mut spans: Vec<Span<'static>> = Vec::new();
-        for (i, badge) in active_badges.iter().enumerate() {
-            if i > 0 {
-                spans.push(Span::raw(", "));
-            }
-            spans.push((*badge).clone());
+    let cap_val = |active: bool, color: Color| -> (String, Color) {
+        if active {
+            ("Yes".to_string(), color)
+        } else {
+            ("No".to_string(), Color::DarkGray)
         }
-        Line::from(spans)
     };
-    f.render_widget(Paragraph::new(row_badges), chunks[3]);
+    let (r_val, r_col) = cap_val(model.reasoning, Color::Cyan);
+    let (t_val, t_col) = cap_val(model.tool_call, Color::Yellow);
+    let (f_val, f_col) = cap_val(model.attachment, Color::Magenta);
+    let (ow_val, ow_col) = if model.open_weights {
+        ("Open".to_string(), Color::Green)
+    } else {
+        ("Closed".to_string(), Color::Red)
+    };
+    let cap_lw: u16 = 10;
+    let caps_table = Table::new(
+        vec![
+            Row::new(vec![
+                Cell::from(Span::styled("Reasoning:", Style::default().fg(label_color))),
+                Cell::from(Span::styled(r_val, Style::default().fg(r_col))),
+                Cell::from(Span::styled("Tools:", Style::default().fg(label_color))),
+                Cell::from(Span::styled(t_val, Style::default().fg(t_col))),
+            ]),
+            Row::new(vec![
+                Cell::from(Span::styled("Source:", Style::default().fg(label_color))),
+                Cell::from(Span::styled(ow_val, Style::default().fg(ow_col))),
+                Cell::from(Span::styled("Files:", Style::default().fg(label_color))),
+                Cell::from(Span::styled(f_val, Style::default().fg(f_col))),
+            ]),
+        ],
+        [
+            Constraint::Length(cap_lw),
+            Constraint::Fill(1),
+            Constraint::Length(cap_lw),
+            Constraint::Fill(1),
+        ],
+    );
+    f.render_widget(caps_table, chunks[3]);
 
     // ── Pricing ───────────────────────────────────────────────────────────
     render_section_header(f, chunks[5], "Pricing");
