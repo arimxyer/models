@@ -254,3 +254,60 @@ jobs:
           git add Formula/models.rb
           git commit -m "Update models to ${VERSION}"
           git push
+
+  update-aur:
+    name: Update AUR Package
+    needs: release
+    if: "!contains(github.ref_name, '-')"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Calculate SHA256 hashes
+        id: hashes
+        run: |
+          echo "x86_64=$(sha256sum artifacts/models-x86_64-unknown-linux-gnu/models-x86_64-unknown-linux-gnu.tar.gz | cut -d ' ' -f1)" >> $GITHUB_OUTPUT
+          echo "aarch64=$(sha256sum artifacts/models-aarch64-unknown-linux-gnu/models-aarch64-unknown-linux-gnu.tar.gz | cut -d ' ' -f1)" >> $GITHUB_OUTPUT
+
+      - name: Generate PKGBUILD
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          mkdir -p aur
+          cat > aur/PKGBUILD << EOF
+          # Maintainer: arimxyer
+          pkgname=modelsdev-bin
+          pkgver=${VERSION}
+          pkgrel=1
+          pkgdesc='Browse AI models, benchmarks, and coding agents from the terminal'
+          arch=('x86_64' 'aarch64')
+          url='https://github.com/arimxyer/models'
+          license=('MIT')
+          provides=('modelsdev' 'models')
+          conflicts=('modelsdev' 'modelsdev-git')
+          source=("LICENSE::https://raw.githubusercontent.com/arimxyer/models/v\${pkgver}/LICENSE")
+          source_x86_64=("\${url}/releases/download/v\${pkgver}/models-x86_64-unknown-linux-gnu.tar.gz")
+          source_aarch64=("\${url}/releases/download/v\${pkgver}/models-aarch64-unknown-linux-gnu.tar.gz")
+          sha256sums=('515175e700aadba7b5436688d6daa0e06ea17bfb657e377e14138f65866082a3')
+          sha256sums_x86_64=('${{ steps.hashes.outputs.x86_64 }}')
+          sha256sums_aarch64=('${{ steps.hashes.outputs.aarch64 }}')
+
+          package() {
+              install -Dm755 models "\${pkgdir}/usr/bin/models"
+              install -Dm644 "\${srcdir}/LICENSE" "\${pkgdir}/usr/share/licenses/\${pkgname}/LICENSE"
+          }
+          EOF
+          # Remove leading whitespace from heredoc
+          sed -i 's/^          //' aur/PKGBUILD
+
+      - name: Publish to AUR
+        uses: KSXGitHub/github-actions-deploy-aur@v3.0.1
+        with:
+          pkgname: modelsdev-bin
+          pkgbuild: aur/PKGBUILD
+          commit_username: arimxyer
+          commit_email: arimxyer@users.noreply.github.com
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: "Update to ${{ github.ref_name }}"
