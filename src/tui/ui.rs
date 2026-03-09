@@ -2,7 +2,9 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
+    widgets::{
+        Block, Borders, Cell, Clear, List, ListItem, ListState, Paragraph, Row, Table, Wrap,
+    },
     Frame,
 };
 
@@ -3871,63 +3873,57 @@ fn draw_scatter(f: &mut Frame, area: Rect, app: &App) {
 
     // Legend box below the chart
     if let Some(leg_area) = legend_area {
-        // Dynamic name width: total inner width minus fixed parts
-        // marker(2) + x_label + ": "(2) + x_val(8) + y_label + ": "(2) + y_val(8) + borders(2)
-        let fixed_w = 2 + x_label.len() + 2 + 8 + y_label.len() + 2 + 8 + 2;
-        let name_w = (leg_area.width as usize).saturating_sub(fixed_w).max(10);
+        let x_lbl_w = (x_label.len() + 2) as u16; // "Label: "
+        let y_lbl_w = (y_label.len() + 2) as u16;
 
-        let mut lines: Vec<Line> = Vec::new();
-        for (name, color, status, raw_x, raw_y) in &legend_entries {
-            let mut spans: Vec<Span> = Vec::new();
-            let marker = if *status > 0 {
-                "\u{25cf} "
-            } else {
-                "\u{25cb} "
-            };
-            let marker_color = if *status > 0 { *color } else { Color::DarkGray };
-            spans.push(Span::styled(marker, Style::default().fg(marker_color)));
-            let name_color = if *status > 0 { *color } else { Color::DarkGray };
-            let display_name = truncate(name, name_w);
-            spans.push(Span::styled(
-                format!("{:<w$}", display_name, w = name_w),
-                Style::default().fg(name_color),
-            ));
+        let rows: Vec<Row> = legend_entries
+            .iter()
+            .map(|(name, color, status, raw_x, raw_y)| {
+                let marker = if *status > 0 {
+                    "\u{25cf} "
+                } else {
+                    "\u{25cb} "
+                };
+                let fg = if *status > 0 { *color } else { Color::DarkGray };
+                let x_str = raw_x.map(&fmt_val).unwrap_or_else(|| "\u{2014}".into());
+                let y_str = raw_y.map(&fmt_val).unwrap_or_else(|| "\u{2014}".into());
+                let suffix = if *status == 2 { " (off-chart)" } else { "" };
+                let y_with_suffix = format!("{}{}", y_str, suffix);
 
-            let x_str = raw_x.map(&fmt_val).unwrap_or_else(|| "\u{2014}".into());
-            let y_str = raw_y.map(&fmt_val).unwrap_or_else(|| "\u{2014}".into());
-            spans.push(Span::styled(
-                format!("{}: ", x_label),
-                Style::default().fg(Color::DarkGray),
-            ));
-            spans.push(Span::styled(
-                format!("{:<8}", x_str),
-                Style::default().fg(Color::White),
-            ));
-            spans.push(Span::styled(
-                format!("{}: ", y_label),
-                Style::default().fg(Color::DarkGray),
-            ));
-            spans.push(Span::styled(
-                y_str.to_string(),
-                Style::default().fg(Color::White),
-            ));
-
-            if *status == 2 {
-                spans.push(Span::styled(
-                    " (off-chart)",
-                    Style::default().fg(Color::DarkGray),
-                ));
-            }
-
-            lines.push(Line::from(spans));
-        }
+                Row::new(vec![
+                    Cell::from(Span::styled(marker, Style::default().fg(fg))),
+                    Cell::from(Span::styled(name.clone(), Style::default().fg(fg))),
+                    Cell::from(Span::styled(
+                        format!("{}: ", x_label),
+                        Style::default().fg(Color::DarkGray),
+                    )),
+                    Cell::from(Span::styled(x_str, Style::default().fg(Color::White))),
+                    Cell::from(Span::styled(
+                        format!("{}: ", y_label),
+                        Style::default().fg(Color::DarkGray),
+                    )),
+                    Cell::from(Span::styled(
+                        y_with_suffix,
+                        Style::default().fg(Color::White),
+                    )),
+                ])
+            })
+            .collect();
 
         let legend_block = Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Color::DarkGray))
             .title(" Legend ");
-        let paragraph = Paragraph::new(lines).block(legend_block);
-        f.render_widget(paragraph, leg_area);
+        let widths = [
+            Constraint::Length(2),
+            Constraint::Fill(1),
+            Constraint::Length(x_lbl_w),
+            Constraint::Length(8),
+            Constraint::Length(y_lbl_w),
+            Constraint::Length(10),
+        ];
+        let table = Table::new(rows, widths).block(legend_block);
+        f.render_widget(table, leg_area);
     }
 }
 
