@@ -264,6 +264,18 @@ impl CreatorRegion {
         }
     }
 
+    pub fn short_label(self) -> &'static str {
+        match self {
+            Self::US => "US",
+            Self::China => "CN",
+            Self::Europe => "EU",
+            Self::MiddleEast => "ME",
+            Self::SouthKorea => "KR",
+            Self::Canada => "CA",
+            Self::Other => "??",
+        }
+    }
+
     pub fn color(self) -> Color {
         match self {
             Self::US => Color::Blue,
@@ -345,6 +357,14 @@ impl CreatorType {
             Self::Startup => "Startup",
             Self::Giant => "Big Tech",
             Self::Research => "Research",
+        }
+    }
+
+    pub fn short_label(self) -> &'static str {
+        match self {
+            Self::Startup => "SU",
+            Self::Giant => "BT",
+            Self::Research => "RS",
         }
     }
 
