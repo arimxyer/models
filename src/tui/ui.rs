@@ -3565,12 +3565,17 @@ fn draw_scatter(f: &mut Frame, area: Rect, app: &App) {
         return;
     }
 
-    // Split area: chart on top, legend row at bottom (if selections exist)
+    // Split area: chart on top, legend box at bottom (if selections exist)
     let has_selections = !app.selections.is_empty();
+    let legend_height = if has_selections {
+        (app.selections.len() as u16 + 2).min(area.height / 3) // +2 for borders
+    } else {
+        0
+    };
     let (chart_area, legend_area) = if has_selections {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Min(5), Constraint::Length(1)])
+            .constraints([Constraint::Min(5), Constraint::Length(legend_height)])
             .split(area);
         (chunks[0], Some(chunks[1]))
     } else {
@@ -3689,7 +3694,8 @@ fn draw_scatter(f: &mut Frame, area: Rect, app: &App) {
     let h_line = vec![(x_bounds[0], avg_y), (x_bounds[1], avg_y)];
 
     // Build selected model point sets + legend
-    let mut legend_entries: Vec<(String, Color, u8)> = Vec::new();
+    #[allow(clippy::type_complexity)]
+    let mut legend_entries: Vec<(String, Color, u8, Option<f64>, Option<f64>)> = Vec::new();
     #[allow(clippy::type_complexity)]
     let mut selected_data: Vec<(String, Vec<(f64, f64)>, Color)> = Vec::new();
 
@@ -3697,7 +3703,9 @@ fn draw_scatter(f: &mut Frame, area: Rect, app: &App) {
         let color = compare_colors(sel_idx);
         if let Some(entry) = entries.get(store_idx) {
             let name = truncate(&entry.display_name, 20);
-            if let (Some(x), Some(y)) = (x_extract(entry), y_extract(entry)) {
+            let raw_x = x_extract(entry);
+            let raw_y = y_extract(entry);
+            if let (Some(x), Some(y)) = (raw_x, raw_y) {
                 let tx = log_transform(x, x_log);
                 let ty = log_transform(y, y_log);
                 let in_range = tx >= x_bounds[0]
@@ -3705,9 +3713,9 @@ fn draw_scatter(f: &mut Frame, area: Rect, app: &App) {
                     && ty >= y_bounds[0]
                     && ty <= y_bounds[1];
                 selected_data.push((entry.display_name.clone(), vec![(tx, ty)], color));
-                legend_entries.push((name, color, if in_range { 1 } else { 2 }));
+                legend_entries.push((name, color, if in_range { 1 } else { 2 }, raw_x, raw_y));
             } else {
-                legend_entries.push((name, color, 0));
+                legend_entries.push((name, color, 0, raw_x, raw_y));
             }
         }
     }
@@ -3850,38 +3858,70 @@ fn draw_scatter(f: &mut Frame, area: Rect, app: &App) {
 
     f.render_widget(chart, chart_area);
 
-    // Custom legend row below the chart
-    if let Some(leg_area) = legend_area {
-        let mut spans: Vec<Span> = vec![Span::raw(" ")];
-        for (i, (name, color, status)) in legend_entries.iter().enumerate() {
-            if i > 0 {
-                spans.push(Span::raw("  "));
-            }
-            match status {
-                1 => {
-                    spans.push(Span::styled("\u{25cf} ", Style::default().fg(*color)));
-                    spans.push(Span::styled(name.as_str(), Style::default().fg(*color)));
-                }
-                2 => {
-                    spans.push(Span::styled("\u{25cf} ", Style::default().fg(*color)));
-                    spans.push(Span::styled(
-                        format!("{name} (off-chart)"),
-                        Style::default().fg(*color),
-                    ));
-                }
-                _ => {
-                    spans.push(Span::styled(
-                        "\u{25cb} ",
-                        Style::default().fg(Color::DarkGray),
-                    ));
-                    spans.push(Span::styled(
-                        format!("{name} (no data)"),
-                        Style::default().fg(Color::DarkGray),
-                    ));
-                }
-            }
+    // Format a raw value for legend display
+    let fmt_val = |v: f64| -> String {
+        if v >= 100.0 {
+            format!("{}", v.round() as i64)
+        } else if v >= 1.0 {
+            format!("{:.1}", v)
+        } else {
+            format!("{:.2}", v)
         }
-        f.render_widget(Paragraph::new(Line::from(spans)), leg_area);
+    };
+
+    // Legend box below the chart
+    if let Some(leg_area) = legend_area {
+        let mut lines: Vec<Line> = Vec::new();
+        for (name, color, status, raw_x, raw_y) in &legend_entries {
+            let mut spans: Vec<Span> = Vec::new();
+            let marker = if *status > 0 {
+                "\u{25cf} "
+            } else {
+                "\u{25cb} "
+            };
+            let marker_color = if *status > 0 { *color } else { Color::DarkGray };
+            spans.push(Span::styled(marker, Style::default().fg(marker_color)));
+            let name_color = if *status > 0 { *color } else { Color::DarkGray };
+            spans.push(Span::styled(
+                format!("{:<22}", name),
+                Style::default().fg(name_color),
+            ));
+
+            let x_str = raw_x.map(&fmt_val).unwrap_or_else(|| "\u{2014}".into());
+            let y_str = raw_y.map(&fmt_val).unwrap_or_else(|| "\u{2014}".into());
+            spans.push(Span::styled(
+                format!("{}: ", x_label),
+                Style::default().fg(Color::DarkGray),
+            ));
+            spans.push(Span::styled(
+                format!("{:<8}", x_str),
+                Style::default().fg(Color::White),
+            ));
+            spans.push(Span::styled(
+                format!("{}: ", y_label),
+                Style::default().fg(Color::DarkGray),
+            ));
+            spans.push(Span::styled(
+                y_str.to_string(),
+                Style::default().fg(Color::White),
+            ));
+
+            if *status == 2 {
+                spans.push(Span::styled(
+                    " (off-chart)",
+                    Style::default().fg(Color::DarkGray),
+                ));
+            }
+
+            lines.push(Line::from(spans));
+        }
+
+        let legend_block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::DarkGray))
+            .title(" Legend ");
+        let paragraph = Paragraph::new(lines).block(legend_block);
+        f.render_widget(paragraph, leg_area);
     }
 }
 
