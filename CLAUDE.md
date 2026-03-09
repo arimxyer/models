@@ -49,7 +49,7 @@ Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message`
 - `src/tui/markdown.rs` — custom markdown-to-ratatui converter (headers, bullets, bold, code, URLs, search highlighting)
 - `src/benchmarks.rs` — BenchmarkStore, BenchmarkEntry
 - `src/benchmark_fetch.rs` — jsDelivr CDN fetcher (no cache, no ETag)
-- `src/open_weights.rs` — runtime matching of AA entries to models.dev for open/closed status
+- `src/model_traits.rs` — runtime matching of AA entries to models.dev for open/closed status, reasoning, tool_call, and context limits
 
 ### GitHub Actions
 - `ci.yml` — runs on PR/push: fmt check, clippy, test

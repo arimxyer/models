@@ -5,7 +5,7 @@ mod benchmarks;
 mod cli;
 mod config;
 mod data;
-mod open_weights;
+mod model_traits;
 mod provider_category;
 mod tui;
 

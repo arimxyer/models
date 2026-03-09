@@ -228,44 +228,76 @@ fn handle_agents_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Opti
     }
 }
 
+fn handle_sort_picker_keys(code: KeyCode) -> Option<Message> {
+    match code {
+        KeyCode::Char('j') | KeyCode::Down => Some(Message::SortPickerNext),
+        KeyCode::Char('k') | KeyCode::Up => Some(Message::SortPickerPrev),
+        KeyCode::Enter => Some(Message::SortPickerConfirm),
+        KeyCode::Esc | KeyCode::Char('s') => Some(Message::CloseSortPicker),
+        _ => None,
+    }
+}
+
 fn handle_benchmarks_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Option<Message> {
     use super::benchmarks_app::BenchmarkFocus;
 
+    if app.benchmarks_app.show_sort_picker {
+        return handle_sort_picker_keys(code);
+    }
+
     let focus = app.benchmarks_app.focus;
+
+    let is_h2h_compare = focus == BenchmarkFocus::Compare
+        && app.benchmarks_app.bottom_view == super::benchmarks_app::BottomView::H2H;
 
     match code {
         // Navigation — dispatch based on focused panel
         KeyCode::Char('j') | KeyCode::Down => match focus {
             BenchmarkFocus::Creators => Some(Message::NextBenchmarkCreator),
             BenchmarkFocus::List => Some(Message::NextBenchmark),
+            BenchmarkFocus::Compare if is_h2h_compare => Some(Message::ScrollH2HDown),
+            BenchmarkFocus::Compare => None,
         },
         KeyCode::Char('k') | KeyCode::Up => match focus {
             BenchmarkFocus::Creators => Some(Message::PrevBenchmarkCreator),
             BenchmarkFocus::List => Some(Message::PrevBenchmark),
+            BenchmarkFocus::Compare if is_h2h_compare => Some(Message::ScrollH2HUp),
+            BenchmarkFocus::Compare => None,
         },
         KeyCode::Char('g') => match focus {
             BenchmarkFocus::Creators => Some(Message::SelectFirstBenchmarkCreator),
             BenchmarkFocus::List => Some(Message::SelectFirstBenchmark),
+            BenchmarkFocus::Compare if is_h2h_compare => Some(Message::ScrollH2HTop),
+            BenchmarkFocus::Compare => None,
         },
         KeyCode::Char('G') => match focus {
             BenchmarkFocus::Creators => Some(Message::SelectLastBenchmarkCreator),
             BenchmarkFocus::List => Some(Message::SelectLastBenchmark),
+            BenchmarkFocus::Compare => None,
         },
         KeyCode::Char('d') if modifiers.contains(KeyModifiers::CONTROL) => match focus {
             BenchmarkFocus::Creators => Some(Message::PageDownBenchmarkCreator),
             BenchmarkFocus::List => Some(Message::PageDownBenchmark),
+            BenchmarkFocus::Compare if is_h2h_compare => Some(Message::ScrollH2HPageDown),
+            BenchmarkFocus::Compare => None,
         },
         KeyCode::Char('u') if modifiers.contains(KeyModifiers::CONTROL) => match focus {
             BenchmarkFocus::Creators => Some(Message::PageUpBenchmarkCreator),
             BenchmarkFocus::List => Some(Message::PageUpBenchmark),
+            BenchmarkFocus::Compare if is_h2h_compare => Some(Message::ScrollH2HPageUp),
+            BenchmarkFocus::Compare => None,
         },
         KeyCode::PageDown => match focus {
             BenchmarkFocus::Creators => Some(Message::PageDownBenchmarkCreator),
             BenchmarkFocus::List => Some(Message::PageDownBenchmark),
+            BenchmarkFocus::Compare if is_h2h_compare => Some(Message::ScrollH2HPageDown),
+            BenchmarkFocus::Compare => None,
         },
         KeyCode::PageUp => match focus {
             BenchmarkFocus::Creators => Some(Message::PageUpBenchmarkCreator),
             BenchmarkFocus::List => Some(Message::PageUpBenchmark),
+            BenchmarkFocus::Compare if is_h2h_compare => Some(Message::ScrollH2HPageUp),
+            BenchmarkFocus::Compare => None,
         },
         KeyCode::Char('h') | KeyCode::Left => Some(Message::SwitchBenchmarkFocus),
         KeyCode::Char('l') | KeyCode::Right => Some(Message::SwitchBenchmarkFocus),
@@ -280,17 +312,38 @@ fn handle_benchmarks_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> 
         KeyCode::Char('4') => Some(Message::CycleBenchmarkSource),
         KeyCode::Char('5') => Some(Message::ToggleRegionGrouping),
         KeyCode::Char('6') => Some(Message::ToggleTypeGrouping),
+        KeyCode::Char('7') => Some(Message::CycleReasoningFilter),
 
         // Sort
-        KeyCode::Char('s') => Some(Message::CycleBenchmarkSort),
+        KeyCode::Char('s') => Some(Message::OpenSortPicker),
         KeyCode::Char('S') => Some(Message::ToggleBenchmarkSortDir),
 
         // Actions
-        KeyCode::Char('c') => Some(Message::CopyBenchmarkName),
+        KeyCode::Char('c') if !app.selections.is_empty() => Some(Message::ClearBenchmarkSelections),
         KeyCode::Char('o') => Some(Message::OpenBenchmarkUrl),
+        KeyCode::Char(' ') => Some(Message::ToggleBenchmarkSelection),
+        KeyCode::Char('v') if app.selections.len() >= 2 => Some(Message::CycleBenchmarkView),
+        KeyCode::Char('x')
+            if app.benchmarks_app.bottom_view == super::benchmarks_app::BottomView::Scatter =>
+        {
+            Some(Message::CycleScatterX)
+        }
+        KeyCode::Char('y')
+            if app.benchmarks_app.bottom_view == super::benchmarks_app::BottomView::Scatter =>
+        {
+            Some(Message::CycleScatterY)
+        }
+        KeyCode::Char('a')
+            if app.benchmarks_app.bottom_view == super::benchmarks_app::BottomView::Radar =>
+        {
+            Some(Message::CycleRadarPreset)
+        }
+        KeyCode::Char('d') if app.selections.len() >= 2 => Some(Message::ToggleDetailOverlay),
+        KeyCode::Char('t') if app.selections.len() >= 2 => Some(Message::ToggleComparePanel),
 
         // Search
         KeyCode::Char('/') => Some(Message::EnterSearch),
+        KeyCode::Esc if app.benchmarks_app.show_detail_overlay => Some(Message::CloseDetailOverlay),
         KeyCode::Esc => Some(Message::ClearSearch),
 
         _ => None,

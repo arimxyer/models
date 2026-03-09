@@ -2,7 +2,9 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
+    widgets::{
+        Block, Borders, Cell, Clear, List, ListItem, ListState, Paragraph, Row, Table, Wrap,
+    },
     Frame,
 };
 
@@ -1096,22 +1098,94 @@ fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
 }
 
 fn draw_benchmarks_main(f: &mut Frame, area: Rect, app: &mut App) {
-    // Horizontal split: creator sidebar (25%) | main content (75%)
-    let h_chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(25), Constraint::Percentage(75)])
-        .split(area);
+    let in_compare = app.selections.len() >= 2;
 
-    draw_benchmark_creators(f, h_chunks[0], app);
+    if in_compare {
+        // Compare mode: compact list (30%, min 35 chars) | comparison (remainder), full height
+        let list_w = (area.width * 30 / 100).max(35);
+        let h_chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Length(list_w), Constraint::Min(0)])
+            .split(area);
 
-    // Vertical split of right side: table (55%) | detail (45%)
-    let v_chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Percentage(55), Constraint::Percentage(45)])
-        .split(h_chunks[1]);
+        if app.benchmarks_app.show_creators_in_compare {
+            draw_benchmark_creators(f, h_chunks[0], app);
+        } else {
+            draw_benchmark_list_compact(f, h_chunks[0], app);
+        }
 
-    draw_benchmark_list(f, v_chunks[0], app);
-    draw_benchmark_detail(f, v_chunks[1], app);
+        // Comparison panel: sub-tab bar + view
+        let v_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(1), Constraint::Min(0)])
+            .split(h_chunks[1]);
+
+        draw_benchmark_subtab_bar(f, v_chunks[0], &app.benchmarks_app);
+
+        match app.benchmarks_app.bottom_view {
+            super::benchmarks_app::BottomView::H2H => {
+                draw_h2h_table_generic(f, v_chunks[1], app);
+            }
+            super::benchmarks_app::BottomView::Scatter => {
+                draw_scatter(f, v_chunks[1], app);
+            }
+            super::benchmarks_app::BottomView::Radar => {
+                super::radar::draw_radar(f, v_chunks[1], app);
+            }
+            super::benchmarks_app::BottomView::Detail => {
+                draw_benchmark_detail(f, v_chunks[1], app);
+            }
+        }
+    } else {
+        // Browse mode: creators (20%) | list (40%) | detail (40%)
+        let h_chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage(20),
+                Constraint::Percentage(40),
+                Constraint::Percentage(40),
+            ])
+            .split(area);
+
+        draw_benchmark_creators(f, h_chunks[0], app);
+        draw_benchmark_list(f, h_chunks[1], app);
+        draw_benchmark_detail(f, h_chunks[2], app);
+    }
+
+    // Detail overlay (drawn last, on top of everything)
+    if app.benchmarks_app.show_detail_overlay && app.selections.len() >= 2 {
+        draw_detail_overlay(f, area, app);
+    }
+
+    // Sort picker popup
+    if app.benchmarks_app.show_sort_picker {
+        draw_sort_picker(f, area, &app.benchmarks_app);
+    }
+}
+
+fn draw_benchmark_subtab_bar(
+    f: &mut Frame,
+    area: Rect,
+    bench_app: &super::benchmarks_app::BenchmarksApp,
+) {
+    use super::benchmarks_app::BottomView;
+    let views = [
+        ("H2H", BottomView::H2H),
+        ("Scatter", BottomView::Scatter),
+        ("Radar", BottomView::Radar),
+    ];
+    let mut spans = Vec::new();
+    for (label, view) in &views {
+        let style = if bench_app.bottom_view == *view {
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::DarkGray)
+        };
+        spans.push(Span::styled(format!(" [{}] ", label), style));
+    }
+    f.render_widget(Paragraph::new(Line::from(spans)), area);
 }
 
 fn draw_benchmark_creators(f: &mut Frame, area: Rect, app: &mut App) {
@@ -1129,10 +1203,24 @@ fn draw_benchmark_creators(f: &mut Frame, area: Rect, app: &mut App) {
         Style::default().fg(Color::DarkGray)
     };
 
+    let source_indicator = match bench_app.source_filter {
+        super::benchmarks_app::SourceFilter::All => String::new(),
+        filter => format!(" [{}]", filter.label()),
+    };
+    let reasoning_indicator = {
+        let label = bench_app.reasoning_filter.label();
+        if label.is_empty() {
+            String::new()
+        } else {
+            format!(" [{}]", label)
+        }
+    };
+    let creators_title = format!(" Creators{}{} ", source_indicator, reasoning_indicator);
+
     let outer_block = Block::default()
         .borders(Borders::ALL)
         .border_style(border_style)
-        .title(" Creators ");
+        .title(creators_title);
     let inner_area = outer_block.inner(area);
     f.render_widget(outer_block, area);
 
@@ -1248,6 +1336,176 @@ fn draw_benchmark_creators(f: &mut Frame, area: Rect, app: &mut App) {
     f.render_stateful_widget(list, chunks[1], &mut state);
 }
 
+/// Color palette for selected models in comparison mode.
+pub(super) fn compare_colors(index: usize) -> Color {
+    const PALETTE: [Color; 8] = [
+        Color::Red,
+        Color::Green,
+        Color::Blue,
+        Color::Yellow,
+        Color::Magenta,
+        Color::Cyan,
+        Color::LightRed,
+        Color::LightGreen,
+    ];
+    PALETTE[index % PALETTE.len()]
+}
+
+/// Compact list for compare mode: selection marker + name only, full height.
+fn draw_benchmark_list_compact(f: &mut Frame, area: Rect, app: &mut App) {
+    use super::benchmarks_app::BenchmarkFocus;
+
+    let bench_app = &mut app.benchmarks_app;
+    let store = &app.benchmark_store;
+
+    let is_focused = bench_app.focus == BenchmarkFocus::List;
+    let border_style = if is_focused {
+        Style::default().fg(Color::Cyan)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+
+    let sort_dir = if bench_app.sort_descending {
+        "\u{2193}"
+    } else {
+        "\u{2191}"
+    };
+    let sort_indicator = format!(" {}{}", sort_dir, bench_app.sort_column.label());
+
+    let source_indicator = match bench_app.source_filter {
+        super::benchmarks_app::SourceFilter::All => String::new(),
+        filter => format!(" [{}]", filter.label()),
+    };
+
+    let reasoning_indicator = {
+        let label = bench_app.reasoning_filter.label();
+        if label.is_empty() {
+            String::new()
+        } else {
+            format!(" [{}]", label)
+        }
+    };
+
+    let title = if bench_app.search_query.is_empty() {
+        format!(
+            " Models ({}){}{}{} ",
+            bench_app.filtered_indices.len(),
+            source_indicator,
+            reasoning_indicator,
+            sort_indicator
+        )
+    } else {
+        format!(
+            " Models ({}) [/{}]{}{}{} ",
+            bench_app.filtered_indices.len(),
+            bench_app.search_query,
+            source_indicator,
+            reasoning_indicator,
+            sort_indicator
+        )
+    };
+
+    let outer_block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(border_style)
+        .title(title);
+    let inner_area = outer_block.inner(area);
+    f.render_widget(outer_block, area);
+
+    let caret = if is_focused { "> " } else { "  " };
+    let entries = store.entries();
+
+    // Extra columns: marker(2) + caret(2) + reasoning(3) + source(2) + optional region/type
+    let show_region =
+        bench_app.creator_grouping == super::benchmarks_app::CreatorGrouping::ByRegion;
+    let show_type = bench_app.creator_grouping == super::benchmarks_app::CreatorGrouping::ByType;
+    let extra_w: u16 = 2 + 2 + 3 + 2 + if show_region || show_type { 4 } else { 0 };
+    let name_width = inner_area.width.saturating_sub(extra_w) as usize;
+
+    let items: Vec<ListItem> = bench_app
+        .filtered_indices
+        .iter()
+        .enumerate()
+        .map(|(display_idx, &entry_idx)| {
+            let entry = &entries[entry_idx];
+            let is_selected = display_idx == bench_app.selected;
+
+            let style = if is_selected {
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default()
+            };
+
+            let prefix = if is_selected { caret } else { "  " };
+            let mut row_spans: Vec<Span> = Vec::new();
+
+            // Selection marker
+            if let Some(sel_pos) = app.selections.iter().position(|&i| i == entry_idx) {
+                row_spans.push(Span::styled(
+                    "\u{25CF} ",
+                    Style::default().fg(compare_colors(sel_pos)),
+                ));
+            } else {
+                row_spans.push(Span::raw("  "));
+            }
+
+            row_spans.push(Span::styled(prefix, style));
+
+            // Reasoning status indicator
+            let (rs_label, rs_color) = match entry.reasoning_status {
+                crate::benchmarks::ReasoningStatus::Reasoning => ("R  ", Color::Cyan),
+                crate::benchmarks::ReasoningStatus::NonReasoning => ("NR ", Color::DarkGray),
+                crate::benchmarks::ReasoningStatus::Adaptive => ("AR ", Color::Yellow),
+                crate::benchmarks::ReasoningStatus::None => ("   ", Color::Reset),
+            };
+            row_spans.push(Span::styled(rs_label, Style::default().fg(rs_color)));
+
+            // Source indicator (Open/Closed)
+            let (src_label, src_color) = match app.open_weights_map.get(&entry.slug) {
+                Some(true) => ("O ", Color::Green),
+                Some(false) => ("C ", Color::Red),
+                None => ("  ", Color::Reset),
+            };
+            row_spans.push(Span::styled(src_label, Style::default().fg(src_color)));
+
+            // Region/Type indicator when grouping is active
+            if show_region {
+                let region = super::benchmarks_app::CreatorRegion::from_creator(&entry.creator);
+                row_spans.push(Span::styled(
+                    format!("{:<4}", region.short_label()),
+                    Style::default().fg(region.color()),
+                ));
+            } else if show_type {
+                let ct = super::benchmarks_app::CreatorType::from_creator(&entry.creator);
+                row_spans.push(Span::styled(
+                    format!("{:<4}", ct.short_label()),
+                    Style::default().fg(ct.color()),
+                ));
+            }
+
+            row_spans.push(Span::styled(
+                truncate(&entry.display_name, name_width),
+                style,
+            ));
+            ListItem::new(Line::from(row_spans))
+        })
+        .collect();
+
+    let list = List::new(items)
+        .highlight_style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol("");
+
+    let mut state = bench_app.list_state.clone();
+    state.select(Some(bench_app.selected));
+    f.render_stateful_widget(list, inner_area, &mut state);
+}
+
 fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
     use super::benchmarks_app::BenchmarkFocus;
 
@@ -1273,23 +1531,34 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
         filter => format!(" [{}]", filter.label()),
     };
 
+    let reasoning_indicator = {
+        let label = bench_app.reasoning_filter.label();
+        if label.is_empty() {
+            String::new()
+        } else {
+            format!(" [{}]", label)
+        }
+    };
+
     let creator_label = bench_app.selected_creator_name().unwrap_or("Benchmarks");
 
     let title = if bench_app.search_query.is_empty() {
         format!(
-            " {} ({}){}{} ",
+            " {} ({}){}{}{} ",
             creator_label,
             bench_app.filtered_indices.len(),
             source_indicator,
+            reasoning_indicator,
             sort_indicator
         )
     } else {
         format!(
-            " {} ({}) [/{}]{}{} ",
+            " {} ({}) [/{}]{}{}{} ",
             creator_label,
             bench_app.filtered_indices.len(),
             bench_app.search_query,
             source_indicator,
+            reasoning_indicator,
             sort_indicator
         )
     };
@@ -1304,13 +1573,23 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
     // Dynamic columns based on active sort
     let visible_cols = bench_app.sort_column.visible_columns();
 
-    // Compute dynamic name column width from available space (minus 2 for caret)
+    // Compute dynamic name column width from available space
     let caret_w: u16 = 2;
+    let reasoning_col_w: u16 = 3;
+    let source_col_w: u16 = 2;
+    let show_region =
+        bench_app.creator_grouping == super::benchmarks_app::CreatorGrouping::ByRegion;
+    let show_type = bench_app.creator_grouping == super::benchmarks_app::CreatorGrouping::ByType;
+    let grouping_col_w: u16 = if show_region || show_type { 4 } else { 0 };
     let fixed_width: u16 = visible_cols
         .iter()
         .map(|col| benchmark_col_width(*col))
         .sum();
-    let name_width = (inner_area.width.saturating_sub(fixed_width + caret_w) as usize).max(10);
+    let selection_w: u16 = if !app.selections.is_empty() { 2 } else { 0 };
+    let name_width = (inner_area.width.saturating_sub(
+        fixed_width + caret_w + selection_w + reasoning_col_w + source_col_w + grouping_col_w,
+    ) as usize)
+        .max(10);
 
     // Caret prefix for focused panel
     let caret = if is_focused { "> " } else { "  " };
@@ -1322,7 +1601,19 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
         .fg(Color::Cyan)
         .add_modifier(Modifier::BOLD);
 
-    let mut header_spans: Vec<Span> = vec![Span::raw("  ")];
+    let has_selections = !app.selections.is_empty();
+    let mut header_spans: Vec<Span> = Vec::new();
+    if has_selections {
+        header_spans.push(Span::raw("  ")); // align with selection marker column
+    }
+    header_spans.push(Span::raw("  "));
+    header_spans.push(Span::styled("   ", header_style)); // reasoning indicator
+    header_spans.push(Span::styled("  ", header_style)); // source indicator
+    if show_region {
+        header_spans.push(Span::styled("Rgn ", header_style));
+    } else if show_type {
+        header_spans.push(Span::styled("Typ ", header_style));
+    }
     header_spans.extend(visible_cols.iter().map(|col| {
         let style = if *col == bench_app.sort_column {
             active_header_style
@@ -1349,7 +1640,52 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
         };
 
         let prefix = if is_selected { caret } else { "  " };
-        let mut row_spans: Vec<Span> = vec![Span::styled(prefix, style)];
+        let mut row_spans: Vec<Span> = Vec::new();
+
+        // Selection marker
+        if let Some(sel_pos) = app.selections.iter().position(|&i| i == entry_idx) {
+            row_spans.push(Span::styled(
+                "\u{25CF} ",
+                Style::default().fg(compare_colors(sel_pos)),
+            ));
+        } else if has_selections {
+            row_spans.push(Span::raw("  "));
+        }
+
+        row_spans.push(Span::styled(prefix, style));
+
+        // Reasoning status indicator
+        let (rs_label, rs_color) = match entry.reasoning_status {
+            crate::benchmarks::ReasoningStatus::Reasoning => ("R  ", Color::Cyan),
+            crate::benchmarks::ReasoningStatus::NonReasoning => ("NR ", Color::DarkGray),
+            crate::benchmarks::ReasoningStatus::Adaptive => ("AR ", Color::Yellow),
+            crate::benchmarks::ReasoningStatus::None => ("   ", Color::Reset),
+        };
+        row_spans.push(Span::styled(rs_label, Style::default().fg(rs_color)));
+
+        // Source indicator (Open/Closed)
+        let (src_label, src_color) = match app.open_weights_map.get(&entry.slug) {
+            Some(true) => ("O ", Color::Green),
+            Some(false) => ("C ", Color::Red),
+            None => ("  ", Color::Reset),
+        };
+        row_spans.push(Span::styled(src_label, Style::default().fg(src_color)));
+
+        // Region/Type indicator when grouping is active
+        if show_region {
+            let region = super::benchmarks_app::CreatorRegion::from_creator(&entry.creator);
+            row_spans.push(Span::styled(
+                format!("{:<4}", region.short_label()),
+                Style::default().fg(region.color()),
+            ));
+        } else if show_type {
+            let ct = super::benchmarks_app::CreatorType::from_creator(&entry.creator);
+            row_spans.push(Span::styled(
+                format!("{:<4}", ct.short_label()),
+                Style::default().fg(ct.color()),
+            ));
+        }
+
         row_spans.extend(
             visible_cols
                 .iter()
@@ -1385,7 +1721,21 @@ fn draw_benchmark_detail(f: &mut Frame, area: Rect, app: &App) {
         }
     };
 
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+    draw_benchmark_detail_content(f, inner, entry, app);
+}
+
+fn draw_benchmark_detail_content(
+    f: &mut Frame,
+    area: Rect,
+    entry: &crate::benchmarks::BenchmarkEntry,
+    app: &App,
+) {
     let mut lines: Vec<Line> = Vec::new();
+
+    // Dynamic column widths via ratatui's constraint solver
+    let cw = ColumnWidths::from_width(area.width);
 
     // Name + creator + metadata on first lines
     let creator_display = if !entry.creator_name.is_empty() {
@@ -1398,90 +1748,129 @@ fn draw_benchmark_detail(f: &mut Frame, area: Rect, app: &App) {
 
     // Line 1: Name
     lines.push(Line::from(Span::styled(
-        &entry.name,
+        &entry.display_name,
         Style::default()
             .fg(Color::Cyan)
             .add_modifier(Modifier::BOLD),
     )));
-    // Line 2: Creator + Source (per-model only, no fallback)
+    // Metadata rows (2-wide, dynamic)
     let em = "\u{2014}";
     let (source_label, source_color) = match app.open_weights_map.get(&entry.slug) {
         Some(true) => ("Open", Color::Green),
         Some(false) => ("Closed", Color::Red),
         None => (em, Color::DarkGray),
     };
-    lines.push(Line::from(vec![
-        Span::styled("Creator  ", Style::default().fg(Color::DarkGray)),
-        Span::raw(format!("{:<16}", creator_display)),
-        Span::styled("Source  ", Style::default().fg(Color::DarkGray)),
-        Span::styled(source_label, Style::default().fg(source_color)),
-    ]));
-    // Line 3: Region + Type
-    lines.push(Line::from(vec![
-        Span::styled("Region   ", Style::default().fg(Color::DarkGray)),
-        Span::raw(format!("{:<16}", region.label())),
-        Span::styled("Type    ", Style::default().fg(Color::DarkGray)),
-        Span::raw(creator_type.label()),
-    ]));
-    // Line 4: Release date
+    push_meta_row(
+        &mut lines,
+        &cw,
+        ("Creator", creator_display, Color::Reset),
+        ("Source", source_label, source_color),
+    );
+    push_meta_row(
+        &mut lines,
+        &cw,
+        ("Region", region.label(), Color::Reset),
+        ("Type", creator_type.label(), Color::Reset),
+    );
     let date_str = entry.release_date.as_deref().unwrap_or(em);
-    lines.push(Line::from(vec![
-        Span::styled("Released ", Style::default().fg(Color::DarkGray)),
-        Span::raw(date_str),
-    ]));
+    let (reasoning_label, reasoning_color) = {
+        use crate::benchmarks::ReasoningStatus;
+        match entry.reasoning_status {
+            ReasoningStatus::Reasoning => ("Reasoning", Color::Cyan),
+            ReasoningStatus::NonReasoning => ("Non-reasoning", Color::DarkGray),
+            ReasoningStatus::Adaptive => ("Adaptive", Color::Yellow),
+            ReasoningStatus::None => (em, Color::DarkGray),
+        }
+    };
+    push_meta_row(
+        &mut lines,
+        &cw,
+        ("Released", date_str, Color::Reset),
+        ("Reason", reasoning_label, reasoning_color),
+    );
+    // Effort + Variant (only if present)
+    let has_effort = entry.effort_level.is_some();
+    let has_variant = entry.variant_tag.is_some();
+    if has_effort || has_variant {
+        let effort_str = entry.effort_level.as_deref().unwrap_or(em);
+        let variant_str = entry.variant_tag.as_deref().unwrap_or(em);
+        push_meta_row(
+            &mut lines,
+            &cw,
+            ("Effort", effort_str, Color::Reset),
+            ("Variant", variant_str, Color::Reset),
+        );
+    }
+    // Tools + Context
+    let tools_str = match entry.tool_call {
+        Some(true) => "Yes",
+        Some(false) => "No",
+        None => em,
+    };
+    let tools_color = match entry.tool_call {
+        Some(true) => Color::Green,
+        Some(false) => Color::DarkGray,
+        None => Color::DarkGray,
+    };
+    let ctx_str = entry
+        .context_window
+        .map(fmt_tokens)
+        .unwrap_or_else(|| em.to_string());
+    push_meta_row(
+        &mut lines,
+        &cw,
+        ("Tools", tools_str, tools_color),
+        ("Context", &ctx_str, Color::Reset),
+    );
+    // Max output
+    let out_str = entry
+        .max_output
+        .map(fmt_tokens)
+        .unwrap_or_else(|| em.to_string());
+    push_meta_row(
+        &mut lines,
+        &cw,
+        ("Output", &out_str, Color::Reset),
+        ("", "", Color::Reset),
+    );
 
     // Composite Indexes (0-100 scale, higher is better)
     lines.push(Line::from(""));
     push_section_header(&mut lines, "Indexes (0\u{2013}100, \u{2191} better)");
-    push_three_col(
+    let int_idx = fmt_idx(entry.intelligence_index);
+    let cod_idx = fmt_idx(entry.coding_index);
+    push_detail_row(
         &mut lines,
+        &cw,
         "Intelligence",
-        fmt_idx(entry.intelligence_index),
+        &int_idx,
         "Coding",
-        fmt_idx(entry.coding_index),
-        "Math",
-        fmt_idx(entry.math_index),
+        &cod_idx,
     );
+    let math_idx = fmt_idx(entry.math_index);
+    push_detail_row(&mut lines, &cw, "Math", &math_idx, "", "");
 
     // Benchmark Scores (percentage, higher is better)
     lines.push(Line::from(""));
     push_section_header(&mut lines, "Benchmarks (%, \u{2191} better)");
-    push_three_col(
-        &mut lines,
-        "GPQA",
-        fmt_pct(entry.gpqa),
-        "MMLU-Pro",
-        fmt_pct(entry.mmlu_pro),
-        "HLE",
-        fmt_pct(entry.hle),
-    );
-    push_three_col(
-        &mut lines,
-        "LiveCode",
-        fmt_pct(entry.livecodebench),
-        "SciCode",
-        fmt_pct(entry.scicode),
-        "IFBench",
-        fmt_pct(entry.ifbench),
-    );
-    push_three_col(
-        &mut lines,
-        "Terminal",
-        fmt_pct(entry.terminalbench_hard),
-        "Tau2",
-        fmt_pct(entry.tau2),
-        "LCR",
-        fmt_pct(entry.lcr),
-    );
-    push_three_col(
-        &mut lines,
-        "MATH-500",
-        fmt_pct(entry.math_500),
-        "AIME",
-        fmt_pct(entry.aime),
-        "AIME'25",
-        fmt_pct(entry.aime_25),
-    );
+    let gpqa = fmt_pct(entry.gpqa);
+    let mmlu = fmt_pct(entry.mmlu_pro);
+    push_detail_row(&mut lines, &cw, "GPQA", &gpqa, "MMLU-Pro", &mmlu);
+    let hle = fmt_pct(entry.hle);
+    let livecode = fmt_pct(entry.livecodebench);
+    push_detail_row(&mut lines, &cw, "HLE", &hle, "LiveCode", &livecode);
+    let scicode = fmt_pct(entry.scicode);
+    let ifbench = fmt_pct(entry.ifbench);
+    push_detail_row(&mut lines, &cw, "SciCode", &scicode, "IFBench", &ifbench);
+    let terminal = fmt_pct(entry.terminalbench_hard);
+    let tau2 = fmt_pct(entry.tau2);
+    push_detail_row(&mut lines, &cw, "Terminal", &terminal, "Tau2", &tau2);
+    let lcr = fmt_pct(entry.lcr);
+    let math500 = fmt_pct(entry.math_500);
+    push_detail_row(&mut lines, &cw, "LCR", &lcr, "MATH-500", &math500);
+    let aime = fmt_pct(entry.aime);
+    let aime25 = fmt_pct(entry.aime_25);
+    push_detail_row(&mut lines, &cw, "AIME", &aime, "AIME'25", &aime25);
 
     // Performance (speed: higher better, TTFT/TTFAT: lower better)
     lines.push(Line::from(""));
@@ -1501,26 +1890,27 @@ fn draw_benchmark_detail(f: &mut Frame, area: Rect, app: &App) {
         .ttfat
         .map(|v| format!("{:.2}s", v))
         .unwrap_or_else(|| em.to_string());
-    push_three_col(
-        &mut lines, "Speed", tps_str, "TTFT", ttft_str, "TTFAT", ttfat_str,
-    );
+    push_detail_row(&mut lines, &cw, "Speed", &tps_str, "TTFT", &ttft_str);
+    push_detail_row(&mut lines, &cw, "TTFAT", &ttfat_str, "", "");
 
     // Pricing ($/M tokens, lower is better)
     lines.push(Line::from(""));
     push_section_header(&mut lines, "Pricing ($/M tokens, \u{2193} better)");
+    let input_price = fmt_price(entry.price_input);
+    let output_price = fmt_price(entry.price_output);
+    push_detail_row(
+        &mut lines,
+        &cw,
+        "Input",
+        &input_price,
+        "Output",
+        &output_price,
+    );
     let blended_str = entry
         .price_blended
         .map(|v| format!("${:.2}", v))
         .unwrap_or_else(|| em.to_string());
-    push_three_col(
-        &mut lines,
-        "Input",
-        fmt_price(entry.price_input),
-        "Output",
-        fmt_price(entry.price_output),
-        "Blended",
-        blended_str,
-    );
+    push_detail_row(&mut lines, &cw, "Blended", &blended_str, "", "");
 
     // Keybinding hints
     lines.push(Line::from(""));
@@ -1531,10 +1921,37 @@ fn draw_benchmark_detail(f: &mut Frame, area: Rect, app: &App) {
         Span::styled("open AA", Style::default().fg(Color::DarkGray)),
     ]));
 
-    let paragraph = Paragraph::new(lines)
-        .block(block)
-        .wrap(Wrap { trim: false });
+    let paragraph = Paragraph::new(lines).wrap(Wrap { trim: false });
     f.render_widget(paragraph, area);
+}
+
+fn draw_detail_overlay(f: &mut Frame, area: Rect, app: &App) {
+    // Centered rect: 60% width, 75% height
+    let overlay_area = centered_rect(60, 75, area);
+
+    // Clear background
+    f.render_widget(Clear, overlay_area);
+
+    let bench_app = &app.benchmarks_app;
+    let store = &app.benchmark_store;
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan))
+        .title(" Model Detail (Esc to close) ");
+
+    let entry = match bench_app.current_entry(store) {
+        Some(e) => e,
+        None => {
+            let msg = Paragraph::new("No benchmark selected").block(block);
+            f.render_widget(msg, overlay_area);
+            return;
+        }
+    };
+
+    let inner = block.inner(overlay_area);
+    f.render_widget(block, overlay_area);
+    draw_benchmark_detail_content(f, inner, entry, app);
 }
 
 /// Push a section header line like "─── Title ───"
@@ -1548,17 +1965,87 @@ fn push_section_header(lines: &mut Vec<Line>, title: &str) {
     )));
 }
 
-fn push_three_col(
+struct ColumnWidths {
+    indent: u16,
+    label: u16,
+    value: u16,
+    label2: u16,
+}
+
+impl ColumnWidths {
+    fn from_width(width: u16) -> Self {
+        let indent: u16 = 2;
+        let usable = width.saturating_sub(indent);
+        let chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage(28),
+                Constraint::Percentage(22),
+                Constraint::Percentage(28),
+                Constraint::Percentage(22),
+            ])
+            .split(Rect::new(0, 0, usable, 1));
+        Self {
+            indent,
+            label: chunks[0].width.max(8),
+            value: chunks[1].width.max(6),
+            label2: chunks[2].width.max(8),
+        }
+    }
+}
+
+fn push_meta_row(
     lines: &mut Vec<Line>,
+    cw: &ColumnWidths,
+    left: (&str, &str, Color),
+    right: (&str, &str, Color),
+) {
+    let style_for = |c: Color| {
+        if c == Color::Reset {
+            Style::default()
+        } else {
+            Style::default().fg(c)
+        }
+    };
+
+    let mut spans = vec![
+        Span::styled(
+            format!(
+                "{:indent$}{:<w$}",
+                "",
+                left.0,
+                indent = cw.indent as usize,
+                w = cw.label as usize
+            ),
+            Style::default().fg(Color::DarkGray),
+        ),
+        Span::styled(
+            format!("{:<w$}", left.1, w = cw.value as usize),
+            style_for(left.2),
+        ),
+    ];
+
+    if !right.0.is_empty() {
+        spans.push(Span::styled(
+            format!("{:<w$}", right.0, w = cw.label2 as usize),
+            Style::default().fg(Color::DarkGray),
+        ));
+        spans.push(Span::styled(right.1.to_string(), style_for(right.2)));
+    }
+
+    lines.push(Line::from(spans));
+}
+
+fn push_detail_row(
+    lines: &mut Vec<Line>,
+    cw: &ColumnWidths,
     l1: &str,
-    v1: String,
+    v1: &str,
     l2: &str,
-    v2: String,
-    l3: &str,
-    v3: String,
+    v2: &str,
 ) {
     let em = "\u{2014}";
-    let color = |s: &str| {
+    let val_color = |s: &str| {
         if s == em {
             Color::DarkGray
         } else {
@@ -1567,33 +2054,48 @@ fn push_three_col(
     };
 
     let mut spans = vec![
-        Span::styled(format!("  {:<13}", l1), Style::default().fg(Color::Gray)),
-        Span::styled(format!("{:<10}", v1), Style::default().fg(color(&v1))),
+        Span::styled(
+            format!(
+                "{:indent$}{:<w$}",
+                "",
+                l1,
+                indent = cw.indent as usize,
+                w = cw.label as usize
+            ),
+            Style::default().fg(Color::Gray),
+        ),
+        Span::styled(
+            format!("{:<w$}", v1, w = cw.value as usize),
+            Style::default().fg(val_color(v1)),
+        ),
     ];
 
     if !l2.is_empty() {
         spans.push(Span::styled(
-            format!("{:<13}", l2),
+            format!("{:<w$}", l2, w = cw.label2 as usize),
             Style::default().fg(Color::Gray),
         ));
         spans.push(Span::styled(
-            format!("{:<10}", v2),
-            Style::default().fg(color(&v2)),
+            v2.to_string(),
+            Style::default().fg(val_color(v2)),
         ));
-    }
-
-    if !l3.is_empty() {
-        spans.push(Span::styled(
-            format!("{:<13}", l3),
-            Style::default().fg(Color::Gray),
-        ));
-        spans.push(Span::styled(v3.clone(), Style::default().fg(color(&v3))));
     }
 
     lines.push(Line::from(spans));
 }
 
 /// Format a 0-100 index value
+/// Format a token count as "128k" or "1M" / "2M" for million-scale values.
+fn fmt_tokens(value: u64) -> String {
+    if value >= 1_000_000 && value.is_multiple_of(1_000_000) {
+        format!("{}M", value / 1_000_000)
+    } else if value >= 1_000_000 {
+        format!("{:.1}M", value as f64 / 1_000_000.0)
+    } else {
+        format!("{}k", value / 1_000)
+    }
+}
+
 fn fmt_idx(value: Option<f64>) -> String {
     match value {
         Some(v) => format!("{:.1}", v),
@@ -1620,7 +2122,8 @@ fn fmt_col_price(value: Option<f64>) -> String {
 /// Format a price value
 fn fmt_price(value: Option<f64>) -> String {
     match value {
-        Some(v) => format!("${:.3}", v),
+        Some(v) if v.fract() == 0.0 => format!("${:.0}", v),
+        Some(v) => format!("${:.2}", v),
         None => "\u{2014}".to_string(),
     }
 }
@@ -1717,7 +2220,7 @@ fn benchmark_col_value<'a>(
         Name => Span::styled(
             format!(
                 "{:<width$}",
-                truncate(&entry.name, name_width.saturating_sub(1)),
+                truncate(&entry.display_name, name_width.saturating_sub(1)),
                 width = name_width
             ),
             style,
@@ -1795,22 +2298,84 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
                     Span::styled(" r ", Style::default().fg(Color::Yellow)),
                     Span::raw("repo"),
                 ]),
-                Tab::Benchmarks => Line::from(vec![
-                    Span::styled(" 1 ", Style::default().fg(Color::Yellow)),
-                    Span::raw("intel  "),
-                    Span::styled(" 2 ", Style::default().fg(Color::Yellow)),
-                    Span::raw("date  "),
-                    Span::styled(" 3 ", Style::default().fg(Color::Yellow)),
-                    Span::raw("speed  "),
-                    Span::styled(" 4 ", Style::default().fg(Color::Yellow)),
-                    Span::raw("source  "),
-                    Span::styled(" 5-6 ", Style::default().fg(Color::Yellow)),
-                    Span::raw("group  "),
-                    Span::styled(" s ", Style::default().fg(Color::Yellow)),
-                    Span::raw("sort  "),
-                    Span::styled(" / ", Style::default().fg(Color::Yellow)),
-                    Span::raw("search"),
-                ]),
+                Tab::Benchmarks => {
+                    if app.selections.len() >= 2 {
+                        use super::benchmarks_app::{BenchmarkFocus, BottomView};
+                        let mut spans = vec![
+                            Span::styled(" h/l ", Style::default().fg(Color::Yellow)),
+                            Span::raw("focus  "),
+                            Span::styled(" t ", Style::default().fg(Color::Yellow)),
+                            Span::raw(if app.benchmarks_app.show_creators_in_compare {
+                                "models  "
+                            } else {
+                                "creators  "
+                            }),
+                            Span::styled(" Space ", Style::default().fg(Color::Yellow)),
+                            Span::raw("select  "),
+                            Span::styled(" v ", Style::default().fg(Color::Yellow)),
+                            Span::raw("view  "),
+                        ];
+                        match app.benchmarks_app.bottom_view {
+                            BottomView::H2H => {
+                                spans.extend([
+                                    Span::styled(" d ", Style::default().fg(Color::Yellow)),
+                                    Span::raw("detail  "),
+                                ]);
+                                if app.benchmarks_app.focus == BenchmarkFocus::Compare {
+                                    spans.extend([
+                                        Span::styled(" j/k ", Style::default().fg(Color::Yellow)),
+                                        Span::raw("scroll  "),
+                                    ]);
+                                }
+                            }
+                            BottomView::Scatter => {
+                                spans.extend([
+                                    Span::styled(" x ", Style::default().fg(Color::Yellow)),
+                                    Span::raw("X-axis  "),
+                                    Span::styled(" y ", Style::default().fg(Color::Yellow)),
+                                    Span::raw("Y-axis  "),
+                                ]);
+                            }
+                            BottomView::Radar => {
+                                spans.extend([
+                                    Span::styled(" a ", Style::default().fg(Color::Yellow)),
+                                    Span::raw("preset  "),
+                                ]);
+                            }
+                            BottomView::Detail => {}
+                        }
+                        spans.extend([
+                            Span::styled(" c ", Style::default().fg(Color::Yellow)),
+                            Span::raw("clear  "),
+                            Span::styled(" s ", Style::default().fg(Color::Yellow)),
+                            Span::raw("sort  "),
+                            Span::styled(" / ", Style::default().fg(Color::Yellow)),
+                            Span::raw("search"),
+                        ]);
+                        Line::from(spans)
+                    } else {
+                        Line::from(vec![
+                            Span::styled(" 1 ", Style::default().fg(Color::Yellow)),
+                            Span::raw("intel  "),
+                            Span::styled(" 2 ", Style::default().fg(Color::Yellow)),
+                            Span::raw("date  "),
+                            Span::styled(" 3 ", Style::default().fg(Color::Yellow)),
+                            Span::raw("speed  "),
+                            Span::styled(" 4 ", Style::default().fg(Color::Yellow)),
+                            Span::raw("source  "),
+                            Span::styled(" 5-6 ", Style::default().fg(Color::Yellow)),
+                            Span::raw("group  "),
+                            Span::styled(" 7 ", Style::default().fg(Color::Yellow)),
+                            Span::raw("reasoning  "),
+                            Span::styled(" s ", Style::default().fg(Color::Yellow)),
+                            Span::raw("sort  "),
+                            Span::styled(" / ", Style::default().fg(Color::Yellow)),
+                            Span::raw("search  "),
+                            Span::styled(" Space ", Style::default().fg(Color::Yellow)),
+                            Span::raw("select"),
+                        ])
+                    }
+                }
             };
 
             let right_content = Line::from(vec![
@@ -1973,7 +2538,7 @@ fn draw_help_popup(f: &mut Frame, scroll: u16, current_tab: Tab) {
                 ]),
                 Line::from(vec![
                     Span::styled("  1             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Toggle reasoning filter"),
+                    Span::raw("Toggle reasoning models filter"),
                 ]),
                 Line::from(vec![
                     Span::styled("  2             ", Style::default().fg(Color::Yellow)),
@@ -2141,6 +2706,10 @@ fn draw_help_popup(f: &mut Frame, scroll: u16, current_tab: Tab) {
                     Span::styled("  6             ", Style::default().fg(Color::Yellow)),
                     Span::raw("Cycle type filter (Startup/Big Tech/Research)"),
                 ]),
+                Line::from(vec![
+                    Span::styled("  7             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Cycle reasoning filter (All/Reasoning/Non-reasoning)"),
+                ]),
                 Line::from(""),
                 Line::from(Span::styled(
                     "Sort (full cycle)",
@@ -2164,12 +2733,55 @@ fn draw_help_popup(f: &mut Frame, scroll: u16, current_tab: Tab) {
                         .add_modifier(Modifier::BOLD),
                 )),
                 Line::from(vec![
-                    Span::styled("  c             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Copy benchmark name"),
-                ]),
-                Line::from(vec![
                     Span::styled("  o             ", Style::default().fg(Color::Yellow)),
                     Span::raw("Open Artificial Analysis page"),
+                ]),
+                Line::from(""),
+                Line::from(Span::styled(
+                    "Compare",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                )),
+                Line::from(vec![
+                    Span::styled("  Space         ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Toggle model for comparison (max 8)"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  c             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Clear all selections"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  v             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Cycle view: H2H → Scatter → Radar"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  d             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Show detail overlay (H2H view)"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  x             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Cycle scatter X-axis"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  y             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Cycle scatter Y-axis"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  a             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Cycle radar preset"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  j/k           ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Scroll H2H table (when Compare focused)"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  h/l           ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Switch focus: List ↔ Compare"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  t             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Toggle left panel: Models ↔ Creators"),
                 ]),
                 Line::from(""),
             ]);
@@ -2331,6 +2943,1037 @@ fn draw_picker_modal(f: &mut Frame, app: &App) {
     list_state.select(Some(agents_app.picker_selected));
 
     f.render_stateful_widget(list, area, &mut list_state);
+}
+
+// ── H2H comparison table ────────────────────────────────────────────────────
+
+struct MetricDef {
+    label: &'static str,
+    extract: fn(&crate::benchmarks::BenchmarkEntry) -> Option<f64>,
+    format: fn(f64) -> String,
+    higher_is_better: bool,
+}
+
+fn fmt_h2h_index(v: f64) -> String {
+    format!("{:.1}", v)
+}
+
+fn fmt_h2h_pct(v: f64) -> String {
+    format!("{:.1}%", v * 100.0)
+}
+
+fn fmt_h2h_speed(v: f64) -> String {
+    format!("{:.0}", v)
+}
+
+fn fmt_h2h_latency(v: f64) -> String {
+    format!("{:.0}ms", v)
+}
+
+fn fmt_h2h_price(v: f64) -> String {
+    format!("${:.2}", v)
+}
+
+/// A section header or a metric row in the H2H table.
+enum H2HRow {
+    Section(&'static str),
+    Metric(MetricDef),
+}
+
+fn h2h_rows() -> Vec<H2HRow> {
+    vec![
+        // Indexes (0-100, higher better)
+        H2HRow::Section("Indexes (0\u{2013}100)"),
+        H2HRow::Metric(MetricDef {
+            label: "Intelligence",
+            extract: |e| e.intelligence_index,
+            format: fmt_h2h_index,
+            higher_is_better: true,
+        }),
+        H2HRow::Metric(MetricDef {
+            label: "Coding",
+            extract: |e| e.coding_index,
+            format: fmt_h2h_index,
+            higher_is_better: true,
+        }),
+        H2HRow::Metric(MetricDef {
+            label: "Math",
+            extract: |e| e.math_index,
+            format: fmt_h2h_index,
+            higher_is_better: true,
+        }),
+        // Benchmarks (%, higher better)
+        H2HRow::Section("Benchmarks (%)"),
+        H2HRow::Metric(MetricDef {
+            label: "GPQA",
+            extract: |e| e.gpqa,
+            format: fmt_h2h_pct,
+            higher_is_better: true,
+        }),
+        H2HRow::Metric(MetricDef {
+            label: "MMLU-Pro",
+            extract: |e| e.mmlu_pro,
+            format: fmt_h2h_pct,
+            higher_is_better: true,
+        }),
+        H2HRow::Metric(MetricDef {
+            label: "HLE",
+            extract: |e| e.hle,
+            format: fmt_h2h_pct,
+            higher_is_better: true,
+        }),
+        H2HRow::Metric(MetricDef {
+            label: "MATH-500",
+            extract: |e| e.math_500,
+            format: fmt_h2h_pct,
+            higher_is_better: true,
+        }),
+        H2HRow::Metric(MetricDef {
+            label: "AIME",
+            extract: |e| e.aime,
+            format: fmt_h2h_pct,
+            higher_is_better: true,
+        }),
+        H2HRow::Metric(MetricDef {
+            label: "AIME'25",
+            extract: |e| e.aime_25,
+            format: fmt_h2h_pct,
+            higher_is_better: true,
+        }),
+        H2HRow::Metric(MetricDef {
+            label: "LiveCodeBench",
+            extract: |e| e.livecodebench,
+            format: fmt_h2h_pct,
+            higher_is_better: true,
+        }),
+        H2HRow::Metric(MetricDef {
+            label: "SciCode",
+            extract: |e| e.scicode,
+            format: fmt_h2h_pct,
+            higher_is_better: true,
+        }),
+        H2HRow::Metric(MetricDef {
+            label: "IFBench",
+            extract: |e| e.ifbench,
+            format: fmt_h2h_pct,
+            higher_is_better: true,
+        }),
+        H2HRow::Metric(MetricDef {
+            label: "Terminal",
+            extract: |e| e.terminalbench_hard,
+            format: fmt_h2h_pct,
+            higher_is_better: true,
+        }),
+        H2HRow::Metric(MetricDef {
+            label: "Tau2",
+            extract: |e| e.tau2,
+            format: fmt_h2h_pct,
+            higher_is_better: true,
+        }),
+        H2HRow::Metric(MetricDef {
+            label: "LCR",
+            extract: |e| e.lcr,
+            format: fmt_h2h_pct,
+            higher_is_better: true,
+        }),
+        // Performance (speed ↑, latency ↓)
+        H2HRow::Section("Performance"),
+        H2HRow::Metric(MetricDef {
+            label: "Speed (tok/s)",
+            extract: |e| e.output_tps,
+            format: fmt_h2h_speed,
+            higher_is_better: true,
+        }),
+        H2HRow::Metric(MetricDef {
+            label: "TTFT (ms)",
+            extract: |e| e.ttft,
+            format: fmt_h2h_latency,
+            higher_is_better: false,
+        }),
+        H2HRow::Metric(MetricDef {
+            label: "TTFAT (ms)",
+            extract: |e| e.ttfat,
+            format: fmt_h2h_latency,
+            higher_is_better: false,
+        }),
+        // Pricing ($/M tokens, lower better)
+        H2HRow::Section("Pricing ($/M)"),
+        H2HRow::Metric(MetricDef {
+            label: "Input",
+            extract: |e| e.price_input,
+            format: fmt_h2h_price,
+            higher_is_better: false,
+        }),
+        H2HRow::Metric(MetricDef {
+            label: "Output",
+            extract: |e| e.price_output,
+            format: fmt_h2h_price,
+            higher_is_better: false,
+        }),
+        H2HRow::Metric(MetricDef {
+            label: "Blended",
+            extract: |e| e.price_blended,
+            format: fmt_h2h_price,
+            higher_is_better: false,
+        }),
+    ]
+}
+
+/// Rank extracted values: 1 = best, None for missing data.
+fn rank_values(values: &[Option<f64>], higher_is_better: bool) -> Vec<Option<u32>> {
+    let mut indexed: Vec<(usize, f64)> = values
+        .iter()
+        .enumerate()
+        .filter_map(|(i, v)| v.map(|val| (i, val)))
+        .collect();
+
+    if higher_is_better {
+        indexed.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    } else {
+        indexed.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+    }
+
+    let mut ranks = vec![None; values.len()];
+    for (rank, (idx, _)) in indexed.iter().enumerate() {
+        ranks[*idx] = Some(rank as u32 + 1);
+    }
+    ranks
+}
+
+fn draw_h2h_table_generic(f: &mut Frame, area: Rect, app: &App) {
+    let entries = app.benchmark_store.entries();
+    let selections = &app.selections;
+
+    if selections.len() < 2 {
+        return;
+    }
+
+    let is_focused = app.benchmarks_app.focus == super::benchmarks_app::BenchmarkFocus::Compare;
+    let border_color = if is_focused {
+        Color::Cyan
+    } else {
+        Color::DarkGray
+    };
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(border_color))
+        .title(" Head-to-Head ");
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+
+    if inner.width < 20 || inner.height < 3 {
+        return;
+    }
+
+    let rows = h2h_rows();
+    let label_w = 14_u16;
+    let num_models = selections.len();
+    let available = inner.width.saturating_sub(label_w);
+    let col_w = (available as usize / num_models).max(10);
+    let total_w = inner.width as usize;
+
+    // Header row: model names
+    let mut header_spans: Vec<Span> = vec![Span::styled(
+        format!("{:<width$}", "", width = label_w as usize),
+        Style::default(),
+    )];
+    for (i, &store_idx) in selections.iter().enumerate() {
+        let name = entries
+            .get(store_idx)
+            .map(|e| e.display_name.as_str())
+            .unwrap_or("?");
+        let color = compare_colors(i);
+        let truncated = if name.len() > col_w - 1 {
+            format!("{:.width$}", name, width = col_w - 2)
+        } else {
+            name.to_string()
+        };
+        header_spans.push(Span::styled(
+            format!("{:>width$}", truncated, width = col_w),
+            Style::default().fg(color).add_modifier(Modifier::BOLD),
+        ));
+    }
+
+    let mut lines: Vec<Line> = vec![Line::from(header_spans)];
+
+    // Separator
+    let sep = "\u{2500}".repeat(total_w);
+    lines.push(Line::from(Span::styled(
+        sep,
+        Style::default().fg(Color::DarkGray),
+    )));
+
+    // ── Pre-compute win counts (need them near the top) ──
+    let mut win_counts = vec![0u32; num_models];
+    for row in &rows {
+        if let H2HRow::Metric(metric) = row {
+            let values: Vec<Option<f64>> = selections
+                .iter()
+                .map(|&idx| entries.get(idx).and_then(|e| (metric.extract)(e)))
+                .collect();
+            let ranks = rank_values(&values, metric.higher_is_better);
+            for (i, rank) in ranks.iter().enumerate() {
+                if *rank == Some(1) {
+                    win_counts[i] += 1;
+                }
+            }
+        }
+    }
+
+    // ── Win count (right under model names) ──
+    let mut wins_spans: Vec<Span> = vec![Span::styled(
+        format!("{:<width$}", "\u{2605} Wins", width = label_w as usize),
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD),
+    )];
+    let max_wins = win_counts.iter().copied().max().unwrap_or(0);
+    for (i, &count) in win_counts.iter().enumerate() {
+        let color = compare_colors(i);
+        let label = if count == max_wins && max_wins > 0 {
+            format!("{} \u{2605}", count)
+        } else {
+            format!("{}", count)
+        };
+        let style = if count == max_wins && max_wins > 0 {
+            Style::default().fg(color).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(color)
+        };
+        wins_spans.push(Span::styled(
+            format!("{:>width$}", label, width = col_w),
+            style,
+        ));
+    }
+    lines.push(Line::from(wins_spans));
+
+    // ── Model Info section ──
+    let info_header = "\u{2500}\u{2500}\u{2500} Model Info \u{2500}".to_string();
+    lines.push(Line::from(Span::styled(
+        format!("{:<width$}", info_header, width = total_w),
+        Style::default().fg(Color::DarkGray),
+    )));
+
+    // Helper to render an info row with per-value colors
+    let render_info_row = |lines: &mut Vec<Line>, label: &str, values: Vec<(String, Color)>| {
+        let mut spans: Vec<Span> = vec![Span::styled(
+            format!("{:<width$}", label, width = label_w as usize),
+            Style::default().fg(Color::DarkGray),
+        )];
+        for (val, color) in values.iter() {
+            let truncated = if val.len() > col_w - 1 {
+                format!("{:.width$}", val, width = col_w - 2)
+            } else {
+                val.clone()
+            };
+            spans.push(Span::styled(
+                format!("{:>width$}", truncated, width = col_w),
+                Style::default().fg(*color),
+            ));
+        }
+        lines.push(Line::from(spans));
+    };
+
+    // Creator
+    let creators: Vec<(String, Color)> = selections
+        .iter()
+        .map(|&idx| {
+            let name = entries
+                .get(idx)
+                .map(|e| {
+                    if !e.creator_name.is_empty() {
+                        e.creator_name.clone()
+                    } else {
+                        e.creator.clone()
+                    }
+                })
+                .unwrap_or_default();
+            (name, Color::White)
+        })
+        .collect();
+    render_info_row(&mut lines, "Creator", creators);
+
+    // Source (Open/Closed) with color
+    let sources: Vec<(String, Color)> = selections
+        .iter()
+        .map(|&idx| {
+            entries
+                .get(idx)
+                .and_then(|e| app.open_weights_map.get(&e.slug))
+                .map(|&open| {
+                    if open {
+                        ("Open".to_string(), Color::Green)
+                    } else {
+                        ("Closed".to_string(), Color::Red)
+                    }
+                })
+                .unwrap_or_else(|| ("\u{2014}".to_string(), Color::DarkGray))
+        })
+        .collect();
+    render_info_row(&mut lines, "Source", sources);
+
+    // Region with creator region colors
+    let regions: Vec<(String, Color)> = selections
+        .iter()
+        .map(|&idx| {
+            entries
+                .get(idx)
+                .map(|e| {
+                    let region = super::benchmarks_app::CreatorRegion::from_creator(&e.creator);
+                    (region.label().to_string(), region.color())
+                })
+                .unwrap_or_default()
+        })
+        .collect();
+    render_info_row(&mut lines, "Region", regions);
+
+    // Type with creator type colors
+    let types: Vec<(String, Color)> = selections
+        .iter()
+        .map(|&idx| {
+            entries
+                .get(idx)
+                .map(|e| {
+                    let ct = super::benchmarks_app::CreatorType::from_creator(&e.creator);
+                    (ct.label().to_string(), ct.color())
+                })
+                .unwrap_or_default()
+        })
+        .collect();
+    render_info_row(&mut lines, "Type", types);
+
+    // Release date
+    let dates: Vec<(String, Color)> = selections
+        .iter()
+        .map(|&idx| {
+            let d = entries
+                .get(idx)
+                .and_then(|e| e.release_date.clone())
+                .unwrap_or_else(|| "\u{2014}".to_string());
+            (d, Color::White)
+        })
+        .collect();
+    render_info_row(&mut lines, "Released", dates);
+
+    // Reasoning status with color
+    let reasoning_vals: Vec<(String, Color)> = selections
+        .iter()
+        .map(|&idx| {
+            entries
+                .get(idx)
+                .map(|e| {
+                    use crate::benchmarks::ReasoningStatus;
+                    match e.reasoning_status {
+                        ReasoningStatus::Reasoning => ("Reasoning".to_string(), Color::Cyan),
+                        ReasoningStatus::NonReasoning => {
+                            ("Non-reasoning".to_string(), Color::DarkGray)
+                        }
+                        ReasoningStatus::Adaptive => ("Adaptive".to_string(), Color::Yellow),
+                        ReasoningStatus::None => ("\u{2014}".to_string(), Color::DarkGray),
+                    }
+                })
+                .unwrap_or_else(|| ("\u{2014}".to_string(), Color::DarkGray))
+        })
+        .collect();
+    render_info_row(&mut lines, "Reasoning", reasoning_vals);
+
+    // Effort level (if any model has one)
+    let effort_vals: Vec<(String, Color)> = selections
+        .iter()
+        .map(|&idx| {
+            entries
+                .get(idx)
+                .and_then(|e| e.effort_level.as_ref())
+                .map(|lvl| (lvl.clone(), Color::White))
+                .unwrap_or_else(|| ("\u{2014}".to_string(), Color::DarkGray))
+        })
+        .collect();
+    if effort_vals.iter().any(|(v, _)| v != "\u{2014}") {
+        render_info_row(&mut lines, "Effort", effort_vals);
+    }
+
+    // Variant tag (if any model has one)
+    let variant_vals: Vec<(String, Color)> = selections
+        .iter()
+        .map(|&idx| {
+            entries
+                .get(idx)
+                .and_then(|e| e.variant_tag.as_ref())
+                .map(|tag| (tag.clone(), Color::White))
+                .unwrap_or_else(|| ("\u{2014}".to_string(), Color::DarkGray))
+        })
+        .collect();
+    if variant_vals.iter().any(|(v, _)| v != "\u{2014}") {
+        render_info_row(&mut lines, "Variant", variant_vals);
+    }
+
+    // Tool call support with color
+    let tool_vals: Vec<(String, Color)> = selections
+        .iter()
+        .map(|&idx| {
+            entries
+                .get(idx)
+                .and_then(|e| e.tool_call)
+                .map(|tc| {
+                    if tc {
+                        ("Yes".to_string(), Color::Green)
+                    } else {
+                        ("No".to_string(), Color::DarkGray)
+                    }
+                })
+                .unwrap_or_else(|| ("\u{2014}".to_string(), Color::DarkGray))
+        })
+        .collect();
+    render_info_row(&mut lines, "Tools", tool_vals);
+
+    // Context window
+    let ctx_vals: Vec<(String, Color)> = selections
+        .iter()
+        .map(|&idx| {
+            entries
+                .get(idx)
+                .and_then(|e| e.context_window)
+                .map(|v| (fmt_tokens(v), Color::White))
+                .unwrap_or_else(|| ("\u{2014}".to_string(), Color::DarkGray))
+        })
+        .collect();
+    render_info_row(&mut lines, "Context", ctx_vals);
+
+    // Max output
+    let out_vals: Vec<(String, Color)> = selections
+        .iter()
+        .map(|&idx| {
+            entries
+                .get(idx)
+                .and_then(|e| e.max_output)
+                .map(|v| (fmt_tokens(v), Color::White))
+                .unwrap_or_else(|| ("\u{2014}".to_string(), Color::DarkGray))
+        })
+        .collect();
+    render_info_row(&mut lines, "Max Output", out_vals);
+
+    // ── Metric rows with section headers and ranks ──
+    for row in &rows {
+        match row {
+            H2HRow::Section(title) => {
+                let header = format!("\u{2500}\u{2500}\u{2500} {} \u{2500}", title);
+                lines.push(Line::from(Span::styled(
+                    format!("{:<width$}", header, width = total_w),
+                    Style::default().fg(Color::DarkGray),
+                )));
+            }
+            H2HRow::Metric(metric) => {
+                let values: Vec<Option<f64>> = selections
+                    .iter()
+                    .map(|&idx| entries.get(idx).and_then(|e| (metric.extract)(e)))
+                    .collect();
+                let ranks = rank_values(&values, metric.higher_is_better);
+
+                let mut row_spans: Vec<Span> = vec![Span::styled(
+                    format!("{:<width$}", metric.label, width = label_w as usize),
+                    Style::default().fg(Color::DarkGray),
+                )];
+
+                for (i, (val, rank)) in values.iter().zip(ranks.iter()).enumerate() {
+                    let color = compare_colors(i);
+                    match val {
+                        Some(v) => {
+                            let formatted = (metric.format)(*v);
+                            if *rank == Some(1) {
+                                // Best: value ★
+                                let value_and_star = format!("{} \u{2605}", formatted);
+                                let padded = format!("{:>width$}", value_and_star, width = col_w);
+                                let star_pos = padded.rfind('\u{2605}').unwrap_or(padded.len());
+                                row_spans.push(Span::styled(
+                                    padded[..star_pos].to_string(),
+                                    Style::default().fg(color).add_modifier(Modifier::BOLD),
+                                ));
+                                row_spans.push(Span::styled(
+                                    "\u{2605}",
+                                    Style::default()
+                                        .fg(Color::Yellow)
+                                        .add_modifier(Modifier::BOLD),
+                                ));
+                            } else {
+                                // Non-best: value in model color, rank in medal colors
+                                let rank_num = rank.unwrap_or(0);
+                                let suffix = format!(" #{}", rank_num);
+                                let rank_color = match rank_num {
+                                    2 => Color::Indexed(250), // silver
+                                    3 => Color::Indexed(172), // bronze
+                                    _ => Color::DarkGray,
+                                };
+
+                                let combined = format!("{}{}", formatted, suffix);
+                                let padded = format!("{:>width$}", combined, width = col_w);
+                                let suffix_start = padded.len().saturating_sub(suffix.len());
+                                row_spans.push(Span::styled(
+                                    padded[..suffix_start].to_string(),
+                                    Style::default().fg(color),
+                                ));
+                                row_spans.push(Span::styled(
+                                    padded[suffix_start..].to_string(),
+                                    Style::default().fg(rank_color),
+                                ));
+                            }
+                        }
+                        None => {
+                            row_spans.push(Span::styled(
+                                format!("{:>width$}", "\u{2014}", width = col_w),
+                                Style::default().fg(Color::DarkGray),
+                            ));
+                        }
+                    }
+                }
+
+                lines.push(Line::from(row_spans));
+            }
+        }
+    }
+
+    let max_scroll = lines.len().saturating_sub(inner.height as usize);
+    let scroll_y = app.benchmarks_app.h2h_scroll.min(max_scroll);
+    let paragraph = Paragraph::new(lines).scroll((scroll_y as u16, 0));
+    f.render_widget(paragraph, inner);
+}
+
+fn draw_scatter(f: &mut Frame, area: Rect, app: &App) {
+    use ratatui::symbols::Marker;
+    use ratatui::widgets::{Axis, Chart, Dataset, GraphType};
+
+    let entries = app.benchmark_store.entries();
+    if entries.is_empty() {
+        let block = Block::default().borders(Borders::ALL).title(" Scatter ");
+        f.render_widget(block, area);
+        return;
+    }
+
+    let x_extract = app.benchmarks_app.scatter_x.extract();
+    let y_extract = app.benchmarks_app.scatter_y.extract();
+
+    // Collect all points with both x and y values present
+    let mut all_points: Vec<(f64, f64)> = Vec::new();
+    for entry in entries.iter() {
+        if let (Some(x), Some(y)) = (x_extract(entry), y_extract(entry)) {
+            all_points.push((x, y));
+        }
+    }
+
+    if all_points.is_empty() {
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title(" Scatter (no data) ");
+        f.render_widget(block, area);
+        return;
+    }
+
+    // Split area: chart on top, legend box at bottom (if selections exist)
+    let has_selections = !app.selections.is_empty();
+    let legend_height = if has_selections {
+        (app.selections.len() as u16 + 2).min(area.height / 3) // +2 for borders
+    } else {
+        0
+    };
+    let (chart_area, legend_area) = if has_selections {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(5), Constraint::Length(legend_height)])
+            .split(area);
+        (chunks[0], Some(chunks[1]))
+    } else {
+        (area, None)
+    };
+
+    // Auto log scale for skewed axes
+    let f64_cmp = |a: &f64, b: &f64| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal);
+    let mut x_vals: Vec<f64> = all_points.iter().map(|p| p.0).collect();
+    let mut y_vals: Vec<f64> = all_points.iter().map(|p| p.1).collect();
+    x_vals.sort_by(f64_cmp);
+    y_vals.sort_by(f64_cmp);
+
+    fn is_skewed(sorted: &[f64]) -> bool {
+        if sorted.len() < 5 {
+            return false;
+        }
+        let mid = sorted[sorted.len() / 2];
+        let max = sorted[sorted.len() - 1];
+        mid > 0.0 && max / mid > 5.0
+    }
+
+    let x_log = is_skewed(&x_vals);
+    let y_log = is_skewed(&y_vals);
+
+    let log_transform = |v: f64, use_log: bool| -> f64 {
+        if use_log {
+            (v.max(0.001)).ln()
+        } else {
+            v
+        }
+    };
+
+    let display_points: Vec<(f64, f64)> = all_points
+        .iter()
+        .map(|&(x, y)| (log_transform(x, x_log), log_transform(y, y_log)))
+        .collect();
+
+    let x_min = display_points
+        .iter()
+        .map(|p| p.0)
+        .fold(f64::INFINITY, f64::min);
+    let x_max = display_points
+        .iter()
+        .map(|p| p.0)
+        .fold(f64::NEG_INFINITY, f64::max);
+    let y_min = display_points
+        .iter()
+        .map(|p| p.1)
+        .fold(f64::INFINITY, f64::min);
+    let y_max = display_points
+        .iter()
+        .map(|p| p.1)
+        .fold(f64::NEG_INFINITY, f64::max);
+
+    // Snap non-log bounds to nice round numbers so ticks land on whole values.
+    let nice_bounds = |lo: f64, hi: f64, num_ticks: usize| -> [f64; 2] {
+        let range = hi - lo;
+        let raw_step = range / (num_ticks - 1) as f64;
+        let mag = 10_f64.powf(raw_step.log10().floor());
+        let nice_step = if raw_step / mag < 1.5 {
+            mag
+        } else if raw_step / mag < 3.5 {
+            mag * 2.0
+        } else if raw_step / mag < 7.5 {
+            mag * 5.0
+        } else {
+            mag * 10.0
+        };
+        let nice_lo = (lo / nice_step).floor() * nice_step;
+        let nice_hi = (hi / nice_step).ceil() * nice_step;
+        [nice_lo.max(0.0), nice_hi]
+    };
+
+    let x_pad = (x_max - x_min).max(0.1) * 0.05;
+    let y_pad = (y_max - y_min).max(0.1) * 0.05;
+    let num_ticks = 7_usize;
+    let x_bounds = if x_log {
+        [x_min - x_pad, x_max + x_pad]
+    } else {
+        nice_bounds(x_min - x_pad, x_max + x_pad, num_ticks)
+    };
+    let y_bounds = if y_log {
+        [y_min - y_pad, y_max + y_pad]
+    } else {
+        nice_bounds(y_min - y_pad, y_max + y_pad, num_ticks)
+    };
+
+    // Compute independent averages (each axis uses all entries with data for that metric)
+    let (x_sum, x_count) = entries.iter().fold((0.0_f64, 0_u32), |(s, c), e| {
+        if let Some(v) = x_extract(e) {
+            (s + log_transform(v, x_log), c + 1)
+        } else {
+            (s, c)
+        }
+    });
+    let (y_sum, y_count) = entries.iter().fold((0.0_f64, 0_u32), |(s, c), e| {
+        if let Some(v) = y_extract(e) {
+            (s + log_transform(v, y_log), c + 1)
+        } else {
+            (s, c)
+        }
+    });
+    let avg_x = if x_count > 0 {
+        x_sum / x_count as f64
+    } else {
+        (x_bounds[0] + x_bounds[1]) / 2.0
+    };
+    let avg_y = if y_count > 0 {
+        y_sum / y_count as f64
+    } else {
+        (y_bounds[0] + y_bounds[1]) / 2.0
+    };
+
+    let v_line = vec![(avg_x, y_bounds[0]), (avg_x, y_bounds[1])];
+    let h_line = vec![(x_bounds[0], avg_y), (x_bounds[1], avg_y)];
+
+    // Build selected model point sets + legend
+    #[allow(clippy::type_complexity)]
+    let mut legend_entries: Vec<(String, Color, u8, Option<f64>, Option<f64>)> = Vec::new();
+    #[allow(clippy::type_complexity)]
+    let mut selected_data: Vec<(String, Vec<(f64, f64)>, Color)> = Vec::new();
+
+    for (sel_idx, &store_idx) in app.selections.iter().enumerate() {
+        let color = compare_colors(sel_idx);
+        if let Some(entry) = entries.get(store_idx) {
+            let name = entry.display_name.clone();
+            let raw_x = x_extract(entry);
+            let raw_y = y_extract(entry);
+            if let (Some(x), Some(y)) = (raw_x, raw_y) {
+                let tx = log_transform(x, x_log);
+                let ty = log_transform(y, y_log);
+                let in_range = tx >= x_bounds[0]
+                    && tx <= x_bounds[1]
+                    && ty >= y_bounds[0]
+                    && ty <= y_bounds[1];
+                selected_data.push((entry.display_name.clone(), vec![(tx, ty)], color));
+                legend_entries.push((name, color, if in_range { 1 } else { 2 }, raw_x, raw_y));
+            } else {
+                legend_entries.push((name, color, 0, raw_x, raw_y));
+            }
+        }
+    }
+
+    // Build datasets — crosshairs, background, then selected
+    let mut datasets = vec![
+        Dataset::default()
+            .marker(Marker::Braille)
+            .graph_type(GraphType::Line)
+            .style(Style::default().fg(Color::Indexed(242)))
+            .data(&v_line),
+        Dataset::default()
+            .marker(Marker::Braille)
+            .graph_type(GraphType::Line)
+            .style(Style::default().fg(Color::Indexed(242)))
+            .data(&h_line),
+        Dataset::default()
+            .marker(Marker::Dot)
+            .graph_type(GraphType::Scatter)
+            .style(Style::default().fg(Color::DarkGray))
+            .data(&display_points),
+    ];
+
+    for (_, points, color) in &selected_data {
+        datasets.push(
+            Dataset::default()
+                .marker(Marker::HalfBlock)
+                .graph_type(GraphType::Scatter)
+                .style(Style::default().fg(*color))
+                .data(points),
+        );
+    }
+
+    let x_label = app.benchmarks_app.scatter_x.label();
+    let y_label = app.benchmarks_app.scatter_y.label();
+
+    // Generate evenly-spaced tick labels for an axis.
+    // ratatui distributes labels uniformly across the axis, so values must be evenly spaced.
+    let make_ticks = |lo: f64, hi: f64, use_log: bool, n: usize| -> Vec<String> {
+        let n = n.max(2);
+        let step = (hi - lo) / (n - 1) as f64;
+        let raw: Vec<f64> = (0..n).map(|i| lo + step * i as f64).collect();
+
+        if use_log {
+            // Format log-scale ticks: convert back to real values, ensure no duplicates
+            let reals: Vec<f64> = raw.iter().map(|v| v.exp()).collect();
+            // Pick precision that avoids duplicate labels
+            for decimals in 0..=3 {
+                let labels: Vec<String> = reals
+                    .iter()
+                    .map(|v| {
+                        if decimals == 0 && *v >= 1.0 {
+                            format!("{}", v.round() as i64)
+                        } else {
+                            format!("{:.prec$}", v, prec = decimals)
+                        }
+                    })
+                    .collect();
+                let unique: std::collections::HashSet<&String> = labels.iter().collect();
+                if unique.len() == labels.len() {
+                    return labels;
+                }
+            }
+            // Fallback: 3 decimal places
+            reals.iter().map(|v| format!("{:.3}", v)).collect()
+        } else {
+            raw.iter()
+                .map(|v| {
+                    if v.fract().abs() < 0.01 {
+                        format!("{}", v.round() as i64)
+                    } else {
+                        format!("{:.1}", v)
+                    }
+                })
+                .collect()
+        }
+    };
+
+    let x_ticks = make_ticks(x_bounds[0], x_bounds[1], x_log, num_ticks);
+    let y_ticks = make_ticks(y_bounds[0], y_bounds[1], y_log, num_ticks);
+
+    let x_suffix = if x_log { " [log]" } else { "" };
+    let y_suffix = if y_log { " [log]" } else { "" };
+
+    // Format average for display (use original scale for log axes)
+    let fmt_avg = |avg: f64, use_log: bool| -> String {
+        let v = if use_log { avg.exp() } else { avg };
+        if v >= 100.0 {
+            format!("{}", v.round() as i64)
+        } else {
+            format!("{:.1}", v)
+        }
+    };
+    let avg_style = Style::default().fg(Color::Indexed(242));
+
+    let x_title = Line::from(vec![
+        Span::styled(
+            format!("{x_label}{x_suffix}"),
+            Style::default().fg(Color::Gray),
+        ),
+        Span::styled(format!("  avg:{}", fmt_avg(avg_x, x_log)), avg_style),
+    ]);
+    let y_title = Line::from(vec![
+        Span::styled(
+            format!("{y_label}{y_suffix}"),
+            Style::default().fg(Color::Gray),
+        ),
+        Span::styled(format!("  avg:{}", fmt_avg(avg_y, y_log)), avg_style),
+    ]);
+
+    let compare_focused =
+        app.benchmarks_app.focus == super::benchmarks_app::BenchmarkFocus::Compare;
+    let scatter_border = if compare_focused {
+        Color::Cyan
+    } else {
+        Color::DarkGray
+    };
+    let chart = Chart::new(datasets)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(scatter_border))
+                .title(format!(" {y_label} vs {x_label} ")),
+        )
+        .x_axis(
+            Axis::default()
+                .title(x_title)
+                .style(Style::default().fg(Color::Gray))
+                .bounds(x_bounds)
+                .labels(x_ticks),
+        )
+        .y_axis(
+            Axis::default()
+                .title(y_title)
+                .style(Style::default().fg(Color::Gray))
+                .bounds(y_bounds)
+                .labels(y_ticks),
+        )
+        .legend_position(None);
+
+    f.render_widget(chart, chart_area);
+
+    // Format a raw value for legend display
+    let fmt_val = |v: f64| -> String {
+        if v >= 100.0 {
+            format!("{}", v.round() as i64)
+        } else if v >= 1.0 {
+            format!("{:.1}", v)
+        } else {
+            format!("{:.2}", v)
+        }
+    };
+
+    // Legend box below the chart
+    if let Some(leg_area) = legend_area {
+        let x_lbl_w = (x_label.len() + 2) as u16; // "Label: "
+        let y_lbl_w = (y_label.len() + 2) as u16;
+
+        let rows: Vec<Row> = legend_entries
+            .iter()
+            .map(|(name, color, status, raw_x, raw_y)| {
+                let marker = if *status > 0 {
+                    "\u{25cf} "
+                } else {
+                    "\u{25cb} "
+                };
+                let fg = if *status > 0 { *color } else { Color::DarkGray };
+                let x_str = raw_x.map(&fmt_val).unwrap_or_else(|| "\u{2014}".into());
+                let y_str = raw_y.map(&fmt_val).unwrap_or_else(|| "\u{2014}".into());
+                let suffix = if *status == 2 { " (off-chart)" } else { "" };
+                let y_with_suffix = format!("{}{}", y_str, suffix);
+
+                Row::new(vec![
+                    Cell::from(Span::styled(marker, Style::default().fg(fg))),
+                    Cell::from(Span::styled(name.clone(), Style::default().fg(fg))),
+                    Cell::from(Span::styled(
+                        format!("{}: ", x_label),
+                        Style::default().fg(Color::DarkGray),
+                    )),
+                    Cell::from(Span::styled(x_str, Style::default().fg(Color::White))),
+                    Cell::from(Span::styled(
+                        format!("{}: ", y_label),
+                        Style::default().fg(Color::DarkGray),
+                    )),
+                    Cell::from(Span::styled(
+                        y_with_suffix,
+                        Style::default().fg(Color::White),
+                    )),
+                ])
+            })
+            .collect();
+
+        let legend_block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::DarkGray))
+            .title(" Legend ");
+        let widths = [
+            Constraint::Length(2),
+            Constraint::Fill(1),
+            Constraint::Length(x_lbl_w),
+            Constraint::Length(8),
+            Constraint::Length(y_lbl_w),
+            Constraint::Length(10),
+        ];
+        let table = Table::new(rows, widths).block(legend_block);
+        f.render_widget(table, leg_area);
+    }
+}
+
+fn draw_sort_picker(f: &mut Frame, area: Rect, bench_app: &super::benchmarks_app::BenchmarksApp) {
+    use super::benchmarks_app::BenchmarkSortColumn;
+
+    let columns = BenchmarkSortColumn::ALL;
+    let selected = bench_app.sort_picker_selected;
+
+    // Fixed-size popup: 30 wide, enough for all items + border
+    let height = (columns.len() as u16 + 2).min(area.height);
+    let width = 30u16.min(area.width);
+    let popup_area = centered_rect_fixed(width, height, area);
+
+    f.render_widget(Clear, popup_area);
+
+    let items: Vec<ListItem> = columns
+        .iter()
+        .map(|col| {
+            let marker = if *col == bench_app.sort_column {
+                let arrow = if bench_app.sort_descending {
+                    "\u{25bc}"
+                } else {
+                    "\u{25b2}"
+                };
+                format!(" {arrow}")
+            } else {
+                String::new()
+            };
+            ListItem::new(Line::from(format!(" {}{}", col.picker_label(), marker)))
+        })
+        .collect();
+
+    let mut list_state = ListState::default();
+    list_state.select(Some(selected));
+
+    let list = List::new(items)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Cyan))
+                .title(" Sort By "),
+        )
+        .highlight_style(
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        );
+
+    f.render_stateful_widget(list, popup_area, &mut list_state);
 }
 
 /// Create a centered rect using fixed width and height
