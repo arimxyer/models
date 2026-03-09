@@ -1280,11 +1280,36 @@ fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
     // ── Modalities ────────────────────────────────────────────────────────
     render_section_header(f, chunks[11], "Modalities");
 
-    let modalities_para = Paragraph::new(Line::from(Span::styled(
-        model.modalities_str(),
-        Style::default().fg(text_color),
-    )));
-    f.render_widget(modalities_para, chunks[12]);
+    let (mod_in, mod_out) = match &model.modalities {
+        Some(m) => (
+            if m.input.is_empty() {
+                "text".to_string()
+            } else {
+                m.input.join(", ")
+            },
+            if m.output.is_empty() {
+                "text".to_string()
+            } else {
+                m.output.join(", ")
+            },
+        ),
+        None => ("text".to_string(), "text".to_string()),
+    };
+    let modalities_table = Table::new(
+        vec![Row::new(vec![
+            Cell::from(Span::styled("Input:", Style::default().fg(label_color))),
+            Cell::from(Span::styled(mod_in, Style::default().fg(text_color))),
+            Cell::from(Span::styled("Output:", Style::default().fg(label_color))),
+            Cell::from(Span::styled(mod_out, Style::default().fg(text_color))),
+        ])],
+        [
+            Constraint::Length(7),
+            Constraint::Fill(1),
+            Constraint::Length(8),
+            Constraint::Fill(1),
+        ],
+    );
+    f.render_widget(modalities_table, chunks[12]);
 
     // ── Dates ─────────────────────────────────────────────────────────────
     render_section_header(f, chunks[14], "Dates");
