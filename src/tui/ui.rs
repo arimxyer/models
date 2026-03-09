@@ -77,44 +77,15 @@ fn draw_header(f: &mut Frame, area: Rect, app: &App) {
 }
 
 fn draw_main(f: &mut Frame, area: Rect, app: &mut App) {
-    // Compute provider column width from content before any mutable borrows.
-    // Only consider Provider(idx) variants — skip All and CategoryHeader since
-    // those have synthetic display text that doesn't reflect provider name lengths.
-    let provider_width = {
-        let max_name_len = app
-            .provider_list_items
-            .iter()
-            .filter_map(|item| {
-                if let ProviderListItem::Provider(idx) = item {
-                    app.providers.get(*idx).map(|(id, p)| {
-                        // Display format: "{id} ({count}) {short_label}"
-                        // short_label is at most 4 chars, count at most 4 digits,
-                        // parens+spaces = 4, plus 2 borders + 2 highlight = 8 overhead
-                        id.len() + p.models.len().to_string().len() + 2 + 1 + 4
-                    })
-                } else {
-                    None
-                }
-            })
-            .max()
-            .unwrap_or(16);
-        // 2 borders + 2 highlight symbol width
-        ((max_name_len + 4) as u16).clamp(16, 24)
-    };
-
-    // Left side (providers + models) gets 60%, right panel gets 40%
-    let right_w = area.width * 40 / 100;
-    let left_w = area.width - right_w;
-
-    // Split left side into providers (adaptive) + models (remainder)
-    let left_chunks = Layout::default()
+    // 3-column layout: providers 20% | models 45% | right panel 35%
+    let chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Length(provider_width), Constraint::Min(0)])
-        .split(Rect::new(area.x, area.y, left_w, area.height));
-
-    let right_area = Rect::new(area.x + left_w, area.y, right_w, area.height);
-
-    let chunks = [left_chunks[0], left_chunks[1], right_area];
+        .constraints([
+            Constraint::Percentage(20),
+            Constraint::Percentage(45),
+            Constraint::Percentage(35),
+        ])
+        .split(area);
 
     draw_providers(f, chunks[0], app);
     draw_models(f, chunks[1], app);
@@ -1084,7 +1055,7 @@ fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(2),          // 0: identity
+            Constraint::Length(3),          // 0: identity
             Constraint::Length(1),          // 1: gap
             Constraint::Length(1),          // 2: capabilities header
             Constraint::Length(1),          // 3: capabilities content
@@ -1105,31 +1076,28 @@ fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
         .split(inner);
 
     // ── Identity ──────────────────────────────────────────────────────────
-    let mut header_spans: Vec<Span> = vec![
-        Span::styled(
-            model.name.clone(),
-            Style::default().fg(text_color).add_modifier(Modifier::BOLD),
-        ),
-        Span::raw("  "),
-        Span::styled(
-            format!("({})", entry.id),
-            Style::default().fg(Color::DarkGray),
-        ),
-    ];
+    let mut name_spans: Vec<Span> = vec![Span::styled(
+        model.name.clone(),
+        Style::default().fg(text_color).add_modifier(Modifier::BOLD),
+    )];
     if let Some(status) = model.status.as_deref() {
         if status != "active" {
-            header_spans.push(Span::raw("  "));
+            name_spans.push(Span::raw("  "));
             let badge_color = if status == "deprecated" {
                 Color::Red
             } else {
                 Color::DarkGray
             };
-            header_spans.push(Span::styled(
+            name_spans.push(Span::styled(
                 format!("[{}]", status),
                 Style::default().fg(badge_color),
             ));
         }
     }
+    let row_id = Line::from(Span::styled(
+        entry.id.clone(),
+        Style::default().fg(Color::DarkGray),
+    ));
     let row_provider = Line::from(vec![
         Span::styled("Provider: ", Style::default().fg(label_color)),
         Span::styled(provider_id.clone(), Style::default().fg(Color::Cyan)),
@@ -1137,7 +1105,7 @@ fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
         Span::styled("Family: ", Style::default().fg(label_color)),
         Span::raw(model.family.clone().unwrap_or_else(|| em.to_string())),
     ]);
-    let identity_para = Paragraph::new(vec![Line::from(header_spans), row_provider]);
+    let identity_para = Paragraph::new(vec![Line::from(name_spans), row_id, row_provider]);
     f.render_widget(identity_para, chunks[0]);
 
     // ── Capabilities ──────────────────────────────────────────────────────
