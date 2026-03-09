@@ -54,7 +54,7 @@ Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message`
 
 ### GitHub Actions
 - `ci.yml` — runs on PR/push: fmt check, clippy, test
-- `release.yml` — triggered by `v*` tags: builds 5 targets in parallel with Rust caching, packages .deb/.rpm via cargo-binstall (pinned versions), generates SHA256SUMS, publishes to crates.io, updates Homebrew tap. Pre-release tags (containing `-`) skip publish/Homebrew and mark the GitHub release as prerelease. Scoop Extras handles Windows updates via its own autoupdate mechanism.
+- `release.yml` — triggered by `v*` tags: builds 5 targets in parallel with Rust caching, packages .deb/.rpm via cargo-binstall (pinned versions), generates SHA256SUMS, publishes to crates.io, updates Homebrew tap, updates AUR package. Pre-release tags (containing `-`) skip publish/Homebrew/AUR and mark the GitHub release as prerelease. Scoop Extras handles Windows updates via its own autoupdate mechanism.
 - `update-benchmarks.yml` — runs every 30 minutes: fetches AA API, commits if data changed
 
 ## Conventions
@@ -82,10 +82,10 @@ Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message`
 2. `mise run fmt && mise run clippy && mise run test`
 3. Commit `Cargo.toml` and `Cargo.lock` together
 4. `git tag v<version> && git push && git push --tags`
-5. Release workflow runs automatically: builds binaries, packages .deb/.rpm, publishes to crates.io, updates Homebrew/Scoop
-6. Update AUR: bump `pkgver` and `sha256sums` in `packaging/aur/modelsdev-bin/PKGBUILD`, regenerate `.SRCINFO`, push to `ssh://aur@aur.archlinux.org/modelsdev-bin.git`
+5. Release workflow runs automatically: builds binaries, packages .deb/.rpm, publishes to crates.io, updates Homebrew tap, updates AUR package
 
 ## Secrets
 - `AA_API_KEY` — Artificial Analysis API key (GitHub repo secret, local `.env`)
+- `AUR_SSH_PRIVATE_KEY` — SSH key for pushing to AUR (`~/.ssh/aur`)
 - `CARGO_REGISTRY_TOKEN` — crates.io publish token (GitHub repo secret)
 - `TAP_GITHUB_TOKEN` — for updating Homebrew tap and Scoop bucket repos
