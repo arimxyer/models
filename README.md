@@ -13,6 +13,7 @@ TUI and CLI for browsing AI models, benchmarks, and coding agents.
 - **Agents Tab**: Track AI coding assistants (Claude Code, Aider, Cursor, etc.) with version detection, changelogs, and GitHub integration
 
 <video src="https://github.com/user-attachments/assets/07c750f4-ca47-4f89-8a32-99e0be5004d8" controls width="100%"></video>
+| **Video is an older demo, I've been moving fast on making changes and so I'll have to record a new one!**
 
 ## What's New
 
