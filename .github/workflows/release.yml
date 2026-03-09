@@ -200,7 +200,7 @@ jobs:
           # frozen_string_literal: true
 
           class Models < Formula
-            desc "Fast CLI and TUI for browsing AI model information from models.dev"
+            desc "A fast TUI and CLI for browsing AI models, benchmarks, and coding agents"
             homepage "https://github.com/arimxyer/models"
             version "VERSION_PLACEHOLDER"
             license "MIT"
@@ -266,9 +266,13 @@ jobs:
         with:
           path: artifacts
 
+      - uses: actions/checkout@v4
+
       - name: Calculate SHA256 hashes
         id: hashes
         run: |
+          echo "readme=$(sha256sum README.md | cut -d ' ' -f1)" >> $GITHUB_OUTPUT
+          echo "license=$(sha256sum LICENSE | cut -d ' ' -f1)" >> $GITHUB_OUTPUT
           echo "x86_64=$(sha256sum artifacts/models-x86_64-unknown-linux-gnu/models-x86_64-unknown-linux-gnu.tar.gz | cut -d ' ' -f1)" >> $GITHUB_OUTPUT
           echo "aarch64=$(sha256sum artifacts/models-aarch64-unknown-linux-gnu/models-aarch64-unknown-linux-gnu.tar.gz | cut -d ' ' -f1)" >> $GITHUB_OUTPUT
 
@@ -276,36 +280,62 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           mkdir -p aur
-          cat > aur/PKGBUILD << EOF
-          # Maintainer: arimxyer
-          pkgname=modelsdev-bin
-          pkgver=${VERSION}
+          cat > aur/PKGBUILD << 'PKGEOF'
+          # Maintainer: Rafael Dominiquini <rafaeldominiquini at gmail dot com>
+
+          _pkgauthor=arimxyer
+          _pkgname=models
+          _appname=${_pkgname}
+          pkgname=${_pkgname}-bin
+          pkgdesc="A fast TUI and CLI for browsing AI models, benchmarks, and coding agents"
+
+          pkgver=VERSION_PLACEHOLDER
           pkgrel=1
-          pkgdesc='Browse AI models, benchmarks, and coding agents from the terminal'
+          _pkgvername=v${pkgver}
+
           arch=('x86_64' 'aarch64')
-          url='https://github.com/arimxyer/models'
+          _barch=('x86_64-unknown-linux-gnu' 'aarch64-unknown-linux-gnu')
+
+          url="https://github.com/${_pkgauthor}/${_pkgname}"
+          _urlraw="https://raw.githubusercontent.com/${_pkgauthor}/${_pkgname}/${_pkgvername}"
+
           license=('MIT')
-          provides=('modelsdev' 'models')
-          conflicts=('modelsdev' 'modelsdev-git')
-          source=("LICENSE::https://raw.githubusercontent.com/arimxyer/models/v\${pkgver}/LICENSE")
-          source_x86_64=("\${url}/releases/download/v\${pkgver}/models-x86_64-unknown-linux-gnu.tar.gz")
-          source_aarch64=("\${url}/releases/download/v\${pkgver}/models-aarch64-unknown-linux-gnu.tar.gz")
-          sha256sums=('515175e700aadba7b5436688d6daa0e06ea17bfb657e377e14138f65866082a3')
-          sha256sums_x86_64=('${{ steps.hashes.outputs.x86_64 }}')
-          sha256sums_aarch64=('${{ steps.hashes.outputs.aarch64 }}')
+
+          provides=("${_pkgname}")
+          conflicts=("${_pkgname}")
+          depends=('libgcc' 'glibc')
+
+          source=("README-${pkgver}.md::${_urlraw}/README.md"
+                  "LICENSE-${pkgver}::${_urlraw}/LICENSE")
+          source_x86_64=("${_pkgname}-${arch[0]}-${pkgver}.tgz::${url}/releases/download/${_pkgvername}/${_appname}-${_barch[0]}.tar.gz")
+          source_aarch64=("${_pkgname}-${arch[1]}-${pkgver}.tgz::${url}/releases/download/${_pkgvername}/${_appname}-${_barch[1]}.tar.gz")
+          sha256sums=('HASH_README'
+                      'HASH_LICENSE')
+          sha256sums_x86_64=('HASH_X86_64')
+          sha256sums_aarch64=('HASH_AARCH64')
+
 
           package() {
-              install -Dm755 models "\${pkgdir}/usr/bin/models"
-              install -Dm644 "\${srcdir}/LICENSE" "\${pkgdir}/usr/share/licenses/\${pkgname}/LICENSE"
+          	cd "${srcdir}/" || exit
+
+          	install -Dm755 "${_pkgname}" "${pkgdir}/usr/bin/${_pkgname}"
+
+          	install -Dm644 "README-${pkgver}.md" "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+
+          	install -Dm644 "LICENSE-${pkgver}" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
           }
-          EOF
-          # Remove leading whitespace from heredoc
+          PKGEOF
           sed -i 's/^          //' aur/PKGBUILD
+          sed -i "s/VERSION_PLACEHOLDER/${VERSION}/g" aur/PKGBUILD
+          sed -i "s/HASH_README/${{ steps.hashes.outputs.readme }}/g" aur/PKGBUILD
+          sed -i "s/HASH_LICENSE/${{ steps.hashes.outputs.license }}/g" aur/PKGBUILD
+          sed -i "s/HASH_X86_64/${{ steps.hashes.outputs.x86_64 }}/g" aur/PKGBUILD
+          sed -i "s/HASH_AARCH64/${{ steps.hashes.outputs.aarch64 }}/g" aur/PKGBUILD
 
       - name: Publish to AUR
         uses: KSXGitHub/github-actions-deploy-aur@v3.0.1
         with:
-          pkgname: modelsdev-bin
+          pkgname: models-bin
           pkgbuild: aur/PKGBUILD
           commit_username: arimxyer
           commit_email: arimxyer@users.noreply.github.com
