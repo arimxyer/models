@@ -6,6 +6,7 @@ pub struct Provider {
     pub id: String,
     pub name: String,
     #[serde(default)]
+    #[allow(dead_code)]
     pub npm: Option<String>,
     #[serde(default)]
     pub env: Vec<String>,
