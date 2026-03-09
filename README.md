@@ -70,7 +70,7 @@ cargo install modelsdev
 brew install models
 ```
 
-> **Migrating from the tap?** Run `brew untap arimxyer/tap` — Homebrew core handles updates automatically.
+> **Migrating from the tap?** Run `brew untap arimxyer/tap` — updates now land through `homebrew-core` bump PRs and may take a bit to merge.
 
 ### Scoop (Windows)
 
