@@ -20,8 +20,8 @@ mise run fmt && mise run clippy && mise run test
 ## Architecture
 
 ### Tabs
-- **Models Tab** (`src/tui/app.rs`, `src/tui/ui.rs`) — browse models from models.dev API
-- **Benchmarks Tab** (`src/tui/benchmarks_app.rs`) — compare model benchmarks from Artificial Analysis
+- **Models Tab** (`src/tui/app.rs`, `src/tui/ui.rs`) — browse models from models.dev API with 3-column layout (20% providers | 45% model list | 35% detail panel), RTFO capability indicators, adaptive provider panel
+- **Benchmarks Tab** (`src/tui/benchmarks_app.rs`) — compare model benchmarks from Artificial Analysis with browse/compare modes, H2H table, scatter plot, radar chart views
 - **Agents Tab** (`src/tui/agents_app.rs`) — track AI coding assistants with GitHub integration
 
 ### Data Flow
@@ -50,6 +50,7 @@ Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message`
 - `src/benchmarks.rs` — BenchmarkStore, BenchmarkEntry
 - `src/benchmark_fetch.rs` — jsDelivr CDN fetcher (no cache, no ETag)
 - `src/model_traits.rs` — runtime matching of AA entries to models.dev for open/closed status, reasoning, tool_call, and context limits
+- `src/tui/benchmarks_app.rs` — BenchmarksApp state, compare mode, H2H/scatter/radar views
 
 ### GitHub Actions
 - `ci.yml` — runs on PR/push: fmt check, clippy, test
@@ -73,6 +74,7 @@ Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message`
 - jq transforms use null-safe access (`?.` / `// null`) for nested objects — `mise.toml` and `update-benchmarks.yml` must stay in sync
 - Never use `eprintln!` in TUI mode — stderr output corrupts ratatui's alternate screen buffer, causing rendering glitches. Use `Message` variants or status bar updates instead. (`eprintln!` is fine in CLI-only code paths like `src/cli/agents.rs`)
 - `Paragraph::scroll((y, 0))` with `.wrap(Wrap { trim: false })` counts **visual (wrapped) lines**, not logical lines — scroll positions must account for line wrapping when jumping to specific content
+- Use `line.width()` (unicode-aware) not `.len()` (byte count) when computing wrapped line heights — ratatui wraps on display width, not byte length. Word-wrapping needs +1 buffer per wrapped line since `div_ceil` underestimates
 - TLS uses `rustls-tls-native-roots` (not `rustls-tls`) — loads certificates from the OS trust store to support corporate TLS-inspecting proxies
 
 ## Releasing
