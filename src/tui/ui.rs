@@ -3702,7 +3702,7 @@ fn draw_scatter(f: &mut Frame, area: Rect, app: &App) {
     for (sel_idx, &store_idx) in app.selections.iter().enumerate() {
         let color = compare_colors(sel_idx);
         if let Some(entry) = entries.get(store_idx) {
-            let name = truncate(&entry.display_name, 20);
+            let name = entry.display_name.clone();
             let raw_x = x_extract(entry);
             let raw_y = y_extract(entry);
             if let (Some(x), Some(y)) = (raw_x, raw_y) {
@@ -3871,6 +3871,11 @@ fn draw_scatter(f: &mut Frame, area: Rect, app: &App) {
 
     // Legend box below the chart
     if let Some(leg_area) = legend_area {
+        // Dynamic name width: total inner width minus fixed parts
+        // marker(2) + x_label + ": "(2) + x_val(8) + y_label + ": "(2) + y_val(8) + borders(2)
+        let fixed_w = 2 + x_label.len() + 2 + 8 + y_label.len() + 2 + 8 + 2;
+        let name_w = (leg_area.width as usize).saturating_sub(fixed_w).max(10);
+
         let mut lines: Vec<Line> = Vec::new();
         for (name, color, status, raw_x, raw_y) in &legend_entries {
             let mut spans: Vec<Span> = Vec::new();
@@ -3882,8 +3887,9 @@ fn draw_scatter(f: &mut Frame, area: Rect, app: &App) {
             let marker_color = if *status > 0 { *color } else { Color::DarkGray };
             spans.push(Span::styled(marker, Style::default().fg(marker_color)));
             let name_color = if *status > 0 { *color } else { Color::DarkGray };
+            let display_name = truncate(name, name_w);
             spans.push(Span::styled(
-                format!("{:<22}", name),
+                format!("{:<w$}", display_name, w = name_w),
                 Style::default().fg(name_color),
             ));
 
