@@ -1201,10 +1201,24 @@ fn draw_benchmark_creators(f: &mut Frame, area: Rect, app: &mut App) {
         Style::default().fg(Color::DarkGray)
     };
 
+    let source_indicator = match bench_app.source_filter {
+        super::benchmarks_app::SourceFilter::All => String::new(),
+        filter => format!(" [{}]", filter.label()),
+    };
+    let reasoning_indicator = {
+        let label = bench_app.reasoning_filter.label();
+        if label.is_empty() {
+            String::new()
+        } else {
+            format!(" [{}]", label)
+        }
+    };
+    let creators_title = format!(" Creators{}{} ", source_indicator, reasoning_indicator);
+
     let outer_block = Block::default()
         .borders(Borders::ALL)
         .border_style(border_style)
-        .title(" Creators ");
+        .title(creators_title);
     let inner_area = outer_block.inner(area);
     f.render_widget(outer_block, area);
 
@@ -1361,19 +1375,30 @@ fn draw_benchmark_list_compact(f: &mut Frame, area: Rect, app: &mut App) {
         filter => format!(" [{}]", filter.label()),
     };
 
+    let reasoning_indicator = {
+        let label = bench_app.reasoning_filter.label();
+        if label.is_empty() {
+            String::new()
+        } else {
+            format!(" [{}]", label)
+        }
+    };
+
     let title = if bench_app.search_query.is_empty() {
         format!(
-            " Models ({}){}{} ",
+            " Models ({}){}{}{} ",
             bench_app.filtered_indices.len(),
             source_indicator,
+            reasoning_indicator,
             sort_indicator
         )
     } else {
         format!(
-            " Models ({}) [/{}]{}{} ",
+            " Models ({}) [/{}]{}{}{} ",
             bench_app.filtered_indices.len(),
             bench_app.search_query,
             source_indicator,
+            reasoning_indicator,
             sort_indicator
         )
     };
@@ -1387,7 +1412,13 @@ fn draw_benchmark_list_compact(f: &mut Frame, area: Rect, app: &mut App) {
 
     let caret = if is_focused { "> " } else { "  " };
     let entries = store.entries();
-    let name_width = inner_area.width.saturating_sub(4) as usize; // 2 caret + 2 marker
+
+    // Extra columns: marker(2) + caret(2) + reasoning(3) + source(2) + optional region/type
+    let show_region =
+        bench_app.creator_grouping == super::benchmarks_app::CreatorGrouping::ByRegion;
+    let show_type = bench_app.creator_grouping == super::benchmarks_app::CreatorGrouping::ByType;
+    let extra_w: u16 = 2 + 2 + 3 + 2 + if show_region || show_type { 4 } else { 0 };
+    let name_width = inner_area.width.saturating_sub(extra_w) as usize;
 
     let items: Vec<ListItem> = bench_app
         .filtered_indices
@@ -1419,6 +1450,39 @@ fn draw_benchmark_list_compact(f: &mut Frame, area: Rect, app: &mut App) {
             }
 
             row_spans.push(Span::styled(prefix, style));
+
+            // Reasoning status indicator
+            let (rs_label, rs_color) = match entry.reasoning_status {
+                crate::benchmarks::ReasoningStatus::Reasoning => ("R  ", Color::Cyan),
+                crate::benchmarks::ReasoningStatus::NonReasoning => ("NR ", Color::DarkGray),
+                crate::benchmarks::ReasoningStatus::Adaptive => ("AR ", Color::Yellow),
+                crate::benchmarks::ReasoningStatus::None => ("   ", Color::Reset),
+            };
+            row_spans.push(Span::styled(rs_label, Style::default().fg(rs_color)));
+
+            // Source indicator (Open/Closed)
+            let (src_label, src_color) = match app.open_weights_map.get(&entry.slug) {
+                Some(true) => ("O ", Color::Green),
+                Some(false) => ("C ", Color::Red),
+                None => ("  ", Color::Reset),
+            };
+            row_spans.push(Span::styled(src_label, Style::default().fg(src_color)));
+
+            // Region/Type indicator when grouping is active
+            if show_region {
+                let region = super::benchmarks_app::CreatorRegion::from_creator(&entry.creator);
+                row_spans.push(Span::styled(
+                    format!("{:<4}", region.short_label()),
+                    Style::default().fg(region.color()),
+                ));
+            } else if show_type {
+                let ct = super::benchmarks_app::CreatorType::from_creator(&entry.creator);
+                row_spans.push(Span::styled(
+                    format!("{:<4}", ct.short_label()),
+                    Style::default().fg(ct.color()),
+                ));
+            }
+
             row_spans.push(Span::styled(
                 truncate(&entry.display_name, name_width),
                 style,
@@ -1507,18 +1571,22 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
     // Dynamic columns based on active sort
     let visible_cols = bench_app.sort_column.visible_columns();
 
-    // Compute dynamic name column width from available space (minus 2 for caret, 3 for reasoning indicator)
+    // Compute dynamic name column width from available space
     let caret_w: u16 = 2;
     let reasoning_col_w: u16 = 3;
+    let source_col_w: u16 = 2;
+    let show_region =
+        bench_app.creator_grouping == super::benchmarks_app::CreatorGrouping::ByRegion;
+    let show_type = bench_app.creator_grouping == super::benchmarks_app::CreatorGrouping::ByType;
+    let grouping_col_w: u16 = if show_region || show_type { 4 } else { 0 };
     let fixed_width: u16 = visible_cols
         .iter()
         .map(|col| benchmark_col_width(*col))
         .sum();
     let selection_w: u16 = if !app.selections.is_empty() { 2 } else { 0 };
-    let name_width = (inner_area
-        .width
-        .saturating_sub(fixed_width + caret_w + selection_w + reasoning_col_w)
-        as usize)
+    let name_width = (inner_area.width.saturating_sub(
+        fixed_width + caret_w + selection_w + reasoning_col_w + source_col_w + grouping_col_w,
+    ) as usize)
         .max(10);
 
     // Caret prefix for focused panel
@@ -1537,7 +1605,13 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
         header_spans.push(Span::raw("  ")); // align with selection marker column
     }
     header_spans.push(Span::raw("  "));
-    header_spans.push(Span::styled("   ", header_style)); // reasoning indicator header
+    header_spans.push(Span::styled("   ", header_style)); // reasoning indicator
+    header_spans.push(Span::styled("  ", header_style)); // source indicator
+    if show_region {
+        header_spans.push(Span::styled("Rgn ", header_style));
+    } else if show_type {
+        header_spans.push(Span::styled("Typ ", header_style));
+    }
     header_spans.extend(visible_cols.iter().map(|col| {
         let style = if *col == bench_app.sort_column {
             active_header_style
@@ -1586,6 +1660,29 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
             crate::benchmarks::ReasoningStatus::None => ("   ", Color::Reset),
         };
         row_spans.push(Span::styled(rs_label, Style::default().fg(rs_color)));
+
+        // Source indicator (Open/Closed)
+        let (src_label, src_color) = match app.open_weights_map.get(&entry.slug) {
+            Some(true) => ("O ", Color::Green),
+            Some(false) => ("C ", Color::Red),
+            None => ("  ", Color::Reset),
+        };
+        row_spans.push(Span::styled(src_label, Style::default().fg(src_color)));
+
+        // Region/Type indicator when grouping is active
+        if show_region {
+            let region = super::benchmarks_app::CreatorRegion::from_creator(&entry.creator);
+            row_spans.push(Span::styled(
+                format!("{:<4}", region.short_label()),
+                Style::default().fg(region.color()),
+            ));
+        } else if show_type {
+            let ct = super::benchmarks_app::CreatorType::from_creator(&entry.creator);
+            row_spans.push(Span::styled(
+                format!("{:<4}", ct.short_label()),
+                Style::default().fg(ct.color()),
+            ));
+        }
 
         row_spans.extend(
             visible_cols
