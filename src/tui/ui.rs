@@ -1074,7 +1074,7 @@ fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
             Constraint::Length(3),          // 0: identity
             Constraint::Length(1),          // 1: gap
             Constraint::Length(1),          // 2: capabilities header
-            Constraint::Length(2),          // 3: capabilities table
+            Constraint::Length(3),          // 3: capabilities table
             Constraint::Length(1),          // 4: gap
             Constraint::Length(1),          // 5: pricing header
             Constraint::Length(2),          // 6: pricing table
@@ -1092,35 +1092,37 @@ fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
         .split(inner);
 
     // ── Identity ──────────────────────────────────────────────────────────
-    let mut name_spans: Vec<Span> = vec![Span::styled(
+    let name_spans: Vec<Span> = vec![Span::styled(
         model.name.clone(),
         Style::default().fg(text_color).add_modifier(Modifier::BOLD),
     )];
-    if let Some(status) = model.status.as_deref() {
-        if status != "active" {
-            name_spans.push(Span::raw("  "));
-            let badge_color = if status == "deprecated" {
-                Color::Red
-            } else {
-                Color::DarkGray
-            };
-            name_spans.push(Span::styled(
-                format!("[{}]", status),
-                Style::default().fg(badge_color),
-            ));
-        }
-    }
     let row_id = Line::from(Span::styled(
         entry.id.clone(),
         Style::default().fg(Color::DarkGray),
     ));
-    let row_provider = Line::from(vec![
+    let mut provider_spans = vec![
         Span::styled("Provider: ", Style::default().fg(label_color)),
         Span::styled(provider_id.clone(), Style::default().fg(Color::Cyan)),
         Span::raw("     "),
         Span::styled("Family: ", Style::default().fg(label_color)),
         Span::raw(model.family.clone().unwrap_or_else(|| em.to_string())),
-    ]);
+    ];
+    if let Some(status) = model.status.as_deref() {
+        if status != "active" {
+            let status_color = if status == "deprecated" {
+                Color::Red
+            } else {
+                Color::DarkGray
+            };
+            provider_spans.push(Span::raw("     "));
+            provider_spans.push(Span::styled("Status: ", Style::default().fg(label_color)));
+            provider_spans.push(Span::styled(
+                status.to_string(),
+                Style::default().fg(status_color),
+            ));
+        }
+    }
+    let row_provider = Line::from(provider_spans);
     let identity_para = Paragraph::new(vec![Line::from(name_spans), row_id, row_provider]);
     f.render_widget(identity_para, chunks[0]);
 
@@ -1142,6 +1144,7 @@ fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
     } else {
         ("Closed".to_string(), Color::Red)
     };
+    let (tmp_val, tmp_col) = cap_val(model.temperature, Color::White);
     let cap_lw: u16 = 10;
     let caps_table = Table::new(
         vec![
@@ -1156,6 +1159,12 @@ fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
                 Cell::from(Span::styled(ow_val, Style::default().fg(ow_col))),
                 Cell::from(Span::styled("Files:", Style::default().fg(label_color))),
                 Cell::from(Span::styled(f_val, Style::default().fg(f_col))),
+            ]),
+            Row::new(vec![
+                Cell::from(Span::styled("Temp:", Style::default().fg(label_color))),
+                Cell::from(Span::styled(tmp_val, Style::default().fg(tmp_col))),
+                Cell::from(Span::raw("")),
+                Cell::from(Span::raw("")),
             ]),
         ],
         [
