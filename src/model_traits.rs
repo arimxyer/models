@@ -54,7 +54,29 @@ fn known_creator_openness(creator: &str) -> Option<bool> {
     }
 }
 
-/// Build a map from AA benchmark entry slug → open_weights bool.
+/// Model traits extracted from models.dev matching.
+struct ModelTraits {
+    open_weights: bool,
+    reasoning: bool,
+    tool_call: bool,
+    context_window: Option<u64>,
+    max_output: Option<u64>,
+}
+
+impl ModelTraits {
+    fn from_model(model: &crate::data::Model) -> Self {
+        Self {
+            open_weights: model.open_weights,
+            reasoning: model.reasoning,
+            tool_call: model.tool_call,
+            context_window: model.limit.as_ref().and_then(|l| l.context),
+            max_output: model.limit.as_ref().and_then(|l| l.output),
+        }
+    }
+}
+
+/// Build a map from AA benchmark entry slug → open_weights bool,
+/// and optionally augment entries with reasoning status from models.dev.
 ///
 /// Matching strategy:
 /// 1. **Creator-scoped**: Map AA creator to models.dev provider(s), then
@@ -68,31 +90,66 @@ pub fn build_open_weights_map(
     providers: &[(String, Provider)],
     entries: &[BenchmarkEntry],
 ) -> HashMap<String, bool> {
-    // Build per-provider lookup: normalized provider ID → [(normalized model ID, open_weights)]
+    let matched = match_entries(providers, entries);
+    matched
+        .into_iter()
+        .map(|(slug, traits)| (slug, traits.open_weights))
+        .collect()
+}
+
+/// Augment benchmark entries with traits from models.dev:
+/// reasoning status (when not already set), tool_call, context_window, max_output.
+pub fn apply_model_traits(providers: &[(String, Provider)], entries: &mut [BenchmarkEntry]) {
+    let matched = match_entries(providers, entries);
+    for entry in entries {
+        if let Some(traits) = matched.get(&entry.slug) {
+            if entry.reasoning_status == crate::benchmarks::ReasoningStatus::None
+                && traits.reasoning
+            {
+                entry.reasoning_status = crate::benchmarks::ReasoningStatus::Reasoning;
+            }
+            if entry.tool_call.is_none() {
+                entry.tool_call = Some(traits.tool_call);
+            }
+            if entry.context_window.is_none() {
+                entry.context_window = traits.context_window;
+            }
+            if entry.max_output.is_none() {
+                entry.max_output = traits.max_output;
+            }
+        }
+    }
+}
+
+fn match_entries(
+    providers: &[(String, Provider)],
+    entries: &[BenchmarkEntry],
+) -> HashMap<String, ModelTraits> {
+    // Build per-provider lookup: normalized provider ID → [(normalized model ID, traits)]
     let provider_set: HashMap<String, ()> = providers
         .iter()
         .map(|(id, _)| (normalize(id), ()))
         .collect();
 
-    let mut model_lookup: HashMap<String, Vec<(String, bool)>> = HashMap::new();
+    let mut model_lookup: HashMap<String, Vec<(String, ModelTraits)>> = HashMap::new();
     for (id, provider) in providers {
         let norm_provider = normalize(id);
-        let models: Vec<(String, bool)> = provider
+        let models: Vec<(String, ModelTraits)> = provider
             .models
             .iter()
-            .map(|(model_id, model)| (normalize(model_id), model.open_weights))
+            .map(|(model_id, model)| (normalize(model_id), ModelTraits::from_model(model)))
             .collect();
         model_lookup.insert(norm_provider, models);
     }
 
     // Build global flat list of all models for fallback matching
-    let all_models: Vec<(String, bool)> = providers
+    let all_models: Vec<(String, ModelTraits)> = providers
         .iter()
         .flat_map(|(_, provider)| {
             provider
                 .models
                 .iter()
-                .map(|(model_id, model)| (normalize(model_id), model.open_weights))
+                .map(|(model_id, model)| (normalize(model_id), ModelTraits::from_model(model)))
         })
         .collect();
 
@@ -115,7 +172,7 @@ pub fn build_open_weights_map(
         };
 
         let mut best_score: f64 = 0.0;
-        let mut best_ow = None;
+        let mut best_traits: Option<&ModelTraits> = None;
 
         for norm_provider_id in &provider_ids {
             if !provider_set.contains_key(norm_provider_id.as_str()) {
@@ -123,11 +180,11 @@ pub fn build_open_weights_map(
             }
 
             if let Some(models) = model_lookup.get(norm_provider_id.as_str()) {
-                for (norm_model_id, ow) in models {
+                for (norm_model_id, traits) in models {
                     let score = strsim::jaro_winkler(&norm_slug, norm_model_id);
                     if score > best_score {
                         best_score = score;
-                        best_ow = Some(*ow);
+                        best_traits = Some(traits);
                         if (score - 1.0).abs() < f64::EPSILON {
                             break;
                         }
@@ -142,11 +199,11 @@ pub fn build_open_weights_map(
 
         // Stage 2: Global fallback — search all models if creator-scoped didn't match
         if best_score < MIN_SIMILARITY {
-            for (norm_model_id, ow) in &all_models {
+            for (norm_model_id, traits) in &all_models {
                 let score = strsim::jaro_winkler(&norm_slug, norm_model_id);
                 if score > best_score {
                     best_score = score;
-                    best_ow = Some(*ow);
+                    best_traits = Some(traits);
                     if (score - 1.0).abs() < f64::EPSILON {
                         break;
                     }
@@ -155,15 +212,33 @@ pub fn build_open_weights_map(
         }
 
         if best_score >= MIN_SIMILARITY {
-            if let Some(ow) = best_ow {
-                result.insert(entry.slug.clone(), ow);
+            if let Some(traits) = best_traits {
+                result.insert(
+                    entry.slug.clone(),
+                    ModelTraits {
+                        open_weights: traits.open_weights,
+                        reasoning: traits.reasoning,
+                        tool_call: traits.tool_call,
+                        context_window: traits.context_window,
+                        max_output: traits.max_output,
+                    },
+                );
                 continue;
             }
         }
 
         // Stage 3: Known creator overrides for providers absent from models.dev
         if let Some(ow) = known_creator_openness(&entry.creator) {
-            result.insert(entry.slug.clone(), ow);
+            result.insert(
+                entry.slug.clone(),
+                ModelTraits {
+                    open_weights: ow,
+                    reasoning: false,
+                    tool_call: false,
+                    context_window: None,
+                    max_output: None,
+                },
+            );
         }
     }
 
@@ -253,6 +328,13 @@ mod tests {
             price_input: None,
             price_output: None,
             price_blended: None,
+            reasoning_status: Default::default(),
+            effort_level: None,
+            variant_tag: None,
+            display_name: String::new(),
+            tool_call: None,
+            context_window: None,
+            max_output: None,
         }
     }
 

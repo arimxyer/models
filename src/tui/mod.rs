@@ -13,6 +13,7 @@ pub mod app;
 pub mod benchmarks_app;
 pub mod event;
 pub mod markdown;
+pub mod radar;
 pub mod ui;
 
 use crate::agents::{
@@ -345,6 +346,78 @@ fn run_app(
                 }
                 app::Message::PickerSave => {
                     // Picker save sets its own status message via app.update
+                    last_status_time = Some(std::time::Instant::now());
+                }
+                app::Message::ToggleBenchmarkSelection => {
+                    // Look up the model name for the status message
+                    if let Some(&store_idx) = app
+                        .benchmarks_app
+                        .filtered_indices
+                        .get(app.benchmarks_app.selected)
+                    {
+                        let name = app
+                            .benchmark_store
+                            .entries()
+                            .get(store_idx)
+                            .map(|e| e.name.as_str())
+                            .unwrap_or("?");
+                        let is_already_selected = app.selections.contains(&store_idx);
+                        if is_already_selected {
+                            let count = app.selections.len() - 1;
+                            app.set_status(format!(
+                                "Removed {} ({}/{})",
+                                name,
+                                count,
+                                app::MAX_SELECTIONS
+                            ));
+                        } else if app.selections.len() < app::MAX_SELECTIONS {
+                            let count = app.selections.len() + 1;
+                            app.set_status(format!(
+                                "Added {} ({}/{})",
+                                name,
+                                count,
+                                app::MAX_SELECTIONS
+                            ));
+                        }
+                        last_status_time = Some(std::time::Instant::now());
+                    }
+                }
+                app::Message::ClearBenchmarkSelections => {
+                    let count = app.selections.len();
+                    if count > 0 {
+                        app.set_status(format!(
+                            "Cleared {} selection{}",
+                            count,
+                            if count == 1 { "" } else { "s" }
+                        ));
+                        last_status_time = Some(std::time::Instant::now());
+                    }
+                }
+                app::Message::CycleBenchmarkView => {
+                    // Show status after the update processes the cycle
+                    // We need to peek at what the NEXT view will be
+                    let next_view = match app.benchmarks_app.bottom_view {
+                        crate::tui::benchmarks_app::BottomView::H2H => "Scatter",
+                        crate::tui::benchmarks_app::BottomView::Scatter => "Radar",
+                        crate::tui::benchmarks_app::BottomView::Radar => "H2H",
+                        crate::tui::benchmarks_app::BottomView::Detail => "H2H",
+                    };
+                    app.set_status(format!("View: {}", next_view));
+                    last_status_time = Some(std::time::Instant::now());
+                }
+                app::Message::CycleScatterX => {
+                    let next_axis = app.benchmarks_app.scatter_x.next();
+                    app.set_status(format!("X-axis: {}", next_axis.label()));
+                    last_status_time = Some(std::time::Instant::now());
+                }
+                app::Message::CycleScatterY => {
+                    let next_axis = app.benchmarks_app.scatter_y.next();
+                    app.set_status(format!("Y-axis: {}", next_axis.label()));
+                    last_status_time = Some(std::time::Instant::now());
+                }
+                app::Message::CycleRadarPreset => {
+                    let next_preset = app.benchmarks_app.radar_preset.next();
+                    app.set_status(format!("Radar: {}", next_preset.label()));
                     last_status_time = Some(std::time::Instant::now());
                 }
                 _ => {}

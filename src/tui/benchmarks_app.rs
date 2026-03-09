@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use ratatui::style::Color;
 use ratatui::widgets::ListState;
 
-use crate::benchmarks::{BenchmarkEntry, BenchmarkStore};
+use crate::benchmarks::{BenchmarkEntry, BenchmarkStore, ReasoningFilter};
 
 /// Page size for page up/down navigation
 const PAGE_SIZE: usize = 10;
@@ -34,28 +34,51 @@ pub enum BenchmarkSortColumn {
 }
 
 impl BenchmarkSortColumn {
-    pub fn next(self) -> Self {
+    pub const ALL: &[Self] = &[
+        Self::Intelligence,
+        Self::Coding,
+        Self::Math,
+        Self::Gpqa,
+        Self::MMLUPro,
+        Self::Hle,
+        Self::LiveCode,
+        Self::SciCode,
+        Self::IFBench,
+        Self::Lcr,
+        Self::Terminal,
+        Self::Tau2,
+        Self::Speed,
+        Self::Ttft,
+        Self::Ttfat,
+        Self::PriceInput,
+        Self::PriceOutput,
+        Self::PriceBlended,
+        Self::Name,
+        Self::ReleaseDate,
+    ];
+
+    pub fn picker_label(&self) -> &'static str {
         match self {
-            Self::Intelligence => Self::Coding,
-            Self::Coding => Self::Math,
-            Self::Math => Self::Gpqa,
-            Self::Gpqa => Self::MMLUPro,
-            Self::MMLUPro => Self::Hle,
-            Self::Hle => Self::LiveCode,
-            Self::LiveCode => Self::SciCode,
-            Self::SciCode => Self::IFBench,
-            Self::IFBench => Self::Lcr,
-            Self::Lcr => Self::Terminal,
-            Self::Terminal => Self::Tau2,
-            Self::Tau2 => Self::Speed,
-            Self::Speed => Self::Ttft,
-            Self::Ttft => Self::Ttfat,
-            Self::Ttfat => Self::PriceInput,
-            Self::PriceInput => Self::PriceOutput,
-            Self::PriceOutput => Self::PriceBlended,
-            Self::PriceBlended => Self::Name,
-            Self::Name => Self::ReleaseDate,
-            Self::ReleaseDate => Self::Intelligence,
+            Self::Intelligence => "Intelligence Index",
+            Self::Coding => "Coding Index",
+            Self::Math => "Math Index",
+            Self::Gpqa => "GPQA Diamond",
+            Self::MMLUPro => "MMLU-Pro",
+            Self::Hle => "HLE",
+            Self::LiveCode => "LiveCodeBench",
+            Self::SciCode => "SciCode",
+            Self::IFBench => "IFBench",
+            Self::Lcr => "LCR",
+            Self::Terminal => "TerminalBench",
+            Self::Tau2 => "Tau2",
+            Self::Speed => "Output Speed (tok/s)",
+            Self::Ttft => "Time to First Token",
+            Self::Ttfat => "Time to First Action Token",
+            Self::PriceInput => "Price: Input $/M",
+            Self::PriceOutput => "Price: Output $/M",
+            Self::PriceBlended => "Price: Blended $/M",
+            Self::Name => "Name",
+            Self::ReleaseDate => "Release Date",
         }
     }
 
@@ -163,6 +186,7 @@ pub enum BenchmarkFocus {
     Creators,
     #[default]
     List,
+    Compare,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -237,6 +261,18 @@ impl CreatorRegion {
             Self::SouthKorea => "S. Korea",
             Self::Canada => "Canada",
             Self::Other => "Other",
+        }
+    }
+
+    pub fn short_label(self) -> &'static str {
+        match self {
+            Self::US => "US",
+            Self::China => "CN",
+            Self::Europe => "EU",
+            Self::MiddleEast => "ME",
+            Self::SouthKorea => "KR",
+            Self::Canada => "CA",
+            Self::Other => "??",
         }
     }
 
@@ -324,6 +360,14 @@ impl CreatorType {
         }
     }
 
+    pub fn short_label(self) -> &'static str {
+        match self {
+            Self::Startup => "SU",
+            Self::Giant => "BT",
+            Self::Research => "RS",
+        }
+    }
+
     pub fn from_label(label: &str) -> Option<Self> {
         match label {
             "Startup" => Some(Self::Startup),
@@ -353,6 +397,83 @@ struct CreatorInfo {
     count: usize,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ScatterAxis {
+    #[default]
+    Intelligence,
+    Coding,
+    Math,
+    Speed,
+    Price,
+}
+
+impl ScatterAxis {
+    pub fn next(self) -> Self {
+        match self {
+            Self::Intelligence => Self::Coding,
+            Self::Coding => Self::Math,
+            Self::Math => Self::Speed,
+            Self::Speed => Self::Price,
+            Self::Price => Self::Intelligence,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Intelligence => "Intelligence",
+            Self::Coding => "Coding",
+            Self::Math => "Math",
+            Self::Speed => "Speed (tok/s)",
+            Self::Price => "Price ($/M)",
+        }
+    }
+
+    pub fn extract(self) -> fn(&crate::benchmarks::BenchmarkEntry) -> Option<f64> {
+        match self {
+            Self::Intelligence => |e| e.intelligence_index,
+            Self::Coding => |e| e.coding_index,
+            Self::Math => |e| e.math_index,
+            Self::Speed => |e| e.output_tps,
+            Self::Price => |e| e.price_blended,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum RadarPreset {
+    #[default]
+    Agentic,
+    Academic,
+    Indexes,
+}
+
+impl RadarPreset {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Agentic => "Agentic",
+            Self::Academic => "Academic",
+            Self::Indexes => "Indexes",
+        }
+    }
+
+    pub fn next(self) -> Self {
+        match self {
+            Self::Agentic => Self::Academic,
+            Self::Academic => Self::Indexes,
+            Self::Indexes => Self::Agentic,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum BottomView {
+    #[default]
+    Detail,
+    H2H,
+    Scatter,
+    Radar,
+}
+
 pub struct BenchmarksApp {
     pub filtered_indices: Vec<usize>,
     pub selected: usize,
@@ -366,8 +487,18 @@ pub struct BenchmarksApp {
     pub selected_creator: usize,
     pub creator_list_state: ListState,
     pub source_filter: SourceFilter,
+    pub reasoning_filter: ReasoningFilter,
     pub creator_grouping: CreatorGrouping,
     creator_info: HashMap<String, CreatorInfo>,
+    pub bottom_view: BottomView,
+    pub h2h_scroll: usize,
+    pub show_detail_overlay: bool,
+    pub show_creators_in_compare: bool,
+    pub scatter_x: ScatterAxis,
+    pub scatter_y: ScatterAxis,
+    pub radar_preset: RadarPreset,
+    pub show_sort_picker: bool,
+    pub sort_picker_selected: usize,
 }
 
 impl BenchmarksApp {
@@ -390,8 +521,18 @@ impl BenchmarksApp {
             selected_creator: 0,
             creator_list_state,
             source_filter: SourceFilter::default(),
+            reasoning_filter: ReasoningFilter::default(),
             creator_grouping: CreatorGrouping::default(),
             creator_info: HashMap::new(),
+            bottom_view: BottomView::default(),
+            h2h_scroll: 0,
+            show_detail_overlay: false,
+            show_creators_in_compare: false,
+            scatter_x: ScatterAxis::default(),
+            scatter_y: ScatterAxis::Coding,
+            radar_preset: RadarPreset::default(),
+            show_sort_picker: false,
+            sort_picker_selected: 0,
         };
 
         app.build_creator_list(store);
@@ -527,6 +668,7 @@ impl BenchmarksApp {
         let query_lower = self.search_query.to_lowercase();
         let creator_slug = self.selected_creator_slug().map(|s| s.to_owned());
         let source_filter = self.source_filter;
+        let reasoning_filter = self.reasoning_filter.clone();
 
         self.filtered_indices = store
             .entries()
@@ -535,6 +677,10 @@ impl BenchmarksApp {
             .filter(|(_, entry)| {
                 // Per-model source filter (open/closed)
                 if !source_filter.matches(entry, open_weights_map) {
+                    return false;
+                }
+                // Reasoning filter
+                if !reasoning_filter.matches(entry) {
                     return false;
                 }
                 // Creator filter
@@ -623,12 +769,6 @@ impl BenchmarksApp {
         });
     }
 
-    pub fn cycle_sort(&mut self, store: &BenchmarkStore, open_weights_map: &HashMap<String, bool>) {
-        self.sort_column = self.sort_column.next();
-        self.sort_descending = self.sort_column.default_descending();
-        self.update_filtered(store, open_weights_map);
-    }
-
     pub fn toggle_sort_direction(&mut self, store: &BenchmarkStore) {
         self.sort_descending = !self.sort_descending;
         self.apply_sort(store);
@@ -708,6 +848,15 @@ impl BenchmarksApp {
         open_weights_map: &HashMap<String, bool>,
     ) {
         self.source_filter = self.source_filter.next();
+        self.update_filtered(store, open_weights_map);
+    }
+
+    pub fn cycle_reasoning_filter(
+        &mut self,
+        store: &BenchmarkStore,
+        open_weights_map: &HashMap<String, bool>,
+    ) {
+        self.reasoning_filter = self.reasoning_filter.next();
         self.update_filtered(store, open_weights_map);
     }
 
@@ -796,13 +945,80 @@ impl BenchmarksApp {
         self.skip_to_selectable(target, true);
     }
 
+    pub fn cycle_bottom_view(&mut self) {
+        self.bottom_view = match self.bottom_view {
+            BottomView::H2H => BottomView::Scatter,
+            BottomView::Scatter => BottomView::Radar,
+            BottomView::Radar => BottomView::H2H,
+            BottomView::Detail => BottomView::H2H,
+        };
+    }
+
+    pub fn cycle_scatter_x(&mut self) {
+        self.scatter_x = self.scatter_x.next();
+    }
+
+    pub fn cycle_scatter_y(&mut self) {
+        self.scatter_y = self.scatter_y.next();
+    }
+
+    pub fn cycle_radar_preset(&mut self) {
+        self.radar_preset = self.radar_preset.next();
+    }
+
+    /// Auto-transition bottom view based on selection count.
+    pub fn update_bottom_view(&mut self, selection_count: usize) {
+        if selection_count >= 2 && self.bottom_view == BottomView::Detail {
+            self.bottom_view = BottomView::H2H;
+            self.h2h_scroll = 0;
+        } else if selection_count < 2 && self.bottom_view != BottomView::Detail {
+            self.bottom_view = BottomView::Detail;
+            self.show_detail_overlay = false;
+            self.h2h_scroll = 0;
+        }
+    }
+
     // --- Focus ---
 
-    pub fn switch_focus(&mut self) {
-        self.focus = match self.focus {
-            BenchmarkFocus::Creators => BenchmarkFocus::List,
-            BenchmarkFocus::List => BenchmarkFocus::Creators,
+    pub fn switch_focus(&mut self, has_compare: bool) {
+        self.focus = if has_compare {
+            let left = if self.show_creators_in_compare {
+                BenchmarkFocus::Creators
+            } else {
+                BenchmarkFocus::List
+            };
+            match self.focus {
+                BenchmarkFocus::Compare => left,
+                _ => BenchmarkFocus::Compare,
+            }
+        } else {
+            match self.focus {
+                BenchmarkFocus::Creators => BenchmarkFocus::List,
+                _ => BenchmarkFocus::Creators,
+            }
         };
+    }
+
+    // --- H2H Scroll ---
+
+    pub fn scroll_h2h_down(&mut self) {
+        self.h2h_scroll = self.h2h_scroll.saturating_add(1);
+    }
+
+    pub fn scroll_h2h_up(&mut self) {
+        self.h2h_scroll = self.h2h_scroll.saturating_sub(1);
+    }
+
+    pub fn scroll_h2h_top(&mut self) {
+        self.h2h_scroll = 0;
+    }
+
+    pub fn scroll_h2h_page_down(&mut self, page: usize) {
+        self.h2h_scroll = self.h2h_scroll.saturating_add(page);
+    }
+
+    pub fn scroll_h2h_page_up(&mut self, page: usize) {
+        self.h2h_scroll = self.h2h_scroll.saturating_sub(page);
     }
 }
 

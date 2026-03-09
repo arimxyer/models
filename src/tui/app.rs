@@ -5,6 +5,8 @@ use super::benchmarks_app::BenchmarksApp;
 
 /// Page size for page up/down navigation
 const PAGE_SIZE: usize = 10;
+
+pub const MAX_SELECTIONS: usize = 8;
 use crate::agents::{AgentsFile, FetchStatus, GitHubData};
 use std::collections::HashMap;
 
@@ -172,15 +174,35 @@ pub enum Message {
     PageUpBenchmarkCreator,
     SwitchBenchmarkFocus,
     CycleBenchmarkSource,
+    CycleReasoningFilter,
     ToggleRegionGrouping,
     ToggleTypeGrouping,
-    CycleBenchmarkSort,
     ToggleBenchmarkSortDir,
+    OpenSortPicker,
+    SortPickerNext,
+    SortPickerPrev,
+    SortPickerConfirm,
+    CloseSortPicker,
     QuickSortIntelligence,
     QuickSortDate,
     QuickSortSpeed,
+    #[allow(dead_code)]
     CopyBenchmarkName,
     OpenBenchmarkUrl,
+    ToggleBenchmarkSelection,
+    ClearBenchmarkSelections,
+    ToggleDetailOverlay,
+    ToggleComparePanel,
+    CloseDetailOverlay,
+    CycleBenchmarkView,
+    CycleScatterX,
+    CycleScatterY,
+    CycleRadarPreset,
+    ScrollH2HDown,
+    ScrollH2HUp,
+    ScrollH2HTop,
+    ScrollH2HPageDown,
+    ScrollH2HPageUp,
     // Async data messages
     GitHubDataReceived(String, GitHubData),
     GitHubFetchFailed(String, String), // (agent_id, error_message)
@@ -226,6 +248,8 @@ pub struct App {
     pub open_weights_map: HashMap<String, bool>,
     /// Cached detail panel height for search match scrolling
     pub last_detail_height: u16,
+    /// Store indices of selected models for comparison (shared between tabs)
+    pub selections: Vec<usize>,
 }
 
 impl App {
@@ -233,7 +257,7 @@ impl App {
         providers_map: ProvidersMap,
         agents_file: Option<&AgentsFile>,
         config: Option<Config>,
-        benchmark_store: BenchmarkStore,
+        mut benchmark_store: BenchmarkStore,
     ) -> Self {
         let mut providers: Vec<(String, Provider)> = providers_map.into_iter().collect();
         providers.sort_by(|a, b| a.0.cmp(&b.0));
@@ -246,7 +270,8 @@ impl App {
         let config = config.unwrap_or_default();
         let agents_app = agents_file.map(|af| AgentsApp::new(af, &config));
         let open_weights_map =
-            crate::open_weights::build_open_weights_map(&providers, benchmark_store.entries());
+            crate::model_traits::build_open_weights_map(&providers, benchmark_store.entries());
+        crate::model_traits::apply_model_traits(&providers, benchmark_store.entries_mut());
         let benchmarks_app = BenchmarksApp::new(&benchmark_store, &open_weights_map);
 
         let mut app = Self {
@@ -276,11 +301,24 @@ impl App {
             benchmarks_app,
             open_weights_map,
             last_detail_height: 0,
+            selections: Vec::new(),
         };
 
         app.update_provider_list();
         app.update_filtered_models();
         app
+    }
+
+    pub fn toggle_selection(&mut self, store_index: usize) {
+        if let Some(pos) = self.selections.iter().position(|&i| i == store_index) {
+            self.selections.remove(pos);
+        } else if self.selections.len() < MAX_SELECTIONS {
+            self.selections.push(store_index);
+        }
+    }
+
+    pub fn clear_selections(&mut self) {
+        self.selections.clear();
     }
 
     pub fn is_all_selected(&self) -> bool {
@@ -847,11 +885,16 @@ impl App {
                     .update_filtered(&self.benchmark_store, &self.open_weights_map);
             }
             Message::SwitchBenchmarkFocus => {
-                self.benchmarks_app.switch_focus();
+                let has_compare = self.selections.len() >= 2;
+                self.benchmarks_app.switch_focus(has_compare);
             }
             Message::CycleBenchmarkSource => {
                 self.benchmarks_app
                     .cycle_source_filter(&self.benchmark_store, &self.open_weights_map);
+            }
+            Message::CycleReasoningFilter => {
+                self.benchmarks_app
+                    .cycle_reasoning_filter(&self.benchmark_store, &self.open_weights_map);
             }
             Message::ToggleRegionGrouping => {
                 self.benchmarks_app
@@ -861,13 +904,37 @@ impl App {
                 self.benchmarks_app
                     .toggle_type_grouping(&self.benchmark_store);
             }
-            Message::CycleBenchmarkSort => {
-                self.benchmarks_app
-                    .cycle_sort(&self.benchmark_store, &self.open_weights_map);
-            }
             Message::ToggleBenchmarkSortDir => {
                 self.benchmarks_app
                     .toggle_sort_direction(&self.benchmark_store);
+            }
+            Message::OpenSortPicker => {
+                let current = self.benchmarks_app.sort_column;
+                self.benchmarks_app.sort_picker_selected =
+                    super::benchmarks_app::BenchmarkSortColumn::ALL
+                        .iter()
+                        .position(|&c| c == current)
+                        .unwrap_or(0);
+                self.benchmarks_app.show_sort_picker = true;
+            }
+            Message::SortPickerNext => {
+                let len = super::benchmarks_app::BenchmarkSortColumn::ALL.len();
+                self.benchmarks_app.sort_picker_selected =
+                    (self.benchmarks_app.sort_picker_selected + 1).min(len - 1);
+            }
+            Message::SortPickerPrev => {
+                self.benchmarks_app.sort_picker_selected =
+                    self.benchmarks_app.sort_picker_selected.saturating_sub(1);
+            }
+            Message::SortPickerConfirm => {
+                let col = super::benchmarks_app::BenchmarkSortColumn::ALL
+                    [self.benchmarks_app.sort_picker_selected];
+                self.benchmarks_app.show_sort_picker = false;
+                self.benchmarks_app
+                    .quick_sort(col, &self.benchmark_store, &self.open_weights_map);
+            }
+            Message::CloseSortPicker => {
+                self.benchmarks_app.show_sort_picker = false;
             }
             Message::QuickSortIntelligence => {
                 self.benchmarks_app.quick_sort(
@@ -889,6 +956,82 @@ impl App {
                     &self.benchmark_store,
                     &self.open_weights_map,
                 );
+            }
+            Message::ToggleBenchmarkSelection => {
+                if let Some(&store_idx) = self
+                    .benchmarks_app
+                    .filtered_indices
+                    .get(self.benchmarks_app.selected)
+                {
+                    self.toggle_selection(store_idx);
+                    self.benchmarks_app
+                        .update_bottom_view(self.selections.len());
+                    // Focus reset AFTER update_bottom_view
+                    if self.selections.len() < 2
+                        && self.benchmarks_app.focus
+                            == super::benchmarks_app::BenchmarkFocus::Compare
+                    {
+                        self.benchmarks_app.focus = super::benchmarks_app::BenchmarkFocus::List;
+                    }
+                }
+            }
+            Message::ClearBenchmarkSelections => {
+                self.clear_selections();
+                self.benchmarks_app.update_bottom_view(0);
+                // Focus reset AFTER update_bottom_view
+                if self.benchmarks_app.focus == super::benchmarks_app::BenchmarkFocus::Compare {
+                    self.benchmarks_app.focus = super::benchmarks_app::BenchmarkFocus::List;
+                }
+            }
+            Message::ScrollH2HDown => {
+                self.benchmarks_app.scroll_h2h_down();
+            }
+            Message::ScrollH2HUp => {
+                self.benchmarks_app.scroll_h2h_up();
+            }
+            Message::ScrollH2HTop => {
+                self.benchmarks_app.scroll_h2h_top();
+            }
+            Message::ScrollH2HPageDown => {
+                self.benchmarks_app.scroll_h2h_page_down(10);
+            }
+            Message::ScrollH2HPageUp => {
+                self.benchmarks_app.scroll_h2h_page_up(10);
+            }
+            Message::ToggleDetailOverlay => {
+                if self.selections.len() >= 2 {
+                    self.benchmarks_app.show_detail_overlay =
+                        !self.benchmarks_app.show_detail_overlay;
+                }
+            }
+            Message::CloseDetailOverlay => {
+                self.benchmarks_app.show_detail_overlay = false;
+            }
+            Message::ToggleComparePanel => {
+                self.benchmarks_app.show_creators_in_compare =
+                    !self.benchmarks_app.show_creators_in_compare;
+                // Update focus to match the new left panel
+                if self.benchmarks_app.focus != super::benchmarks_app::BenchmarkFocus::Compare {
+                    self.benchmarks_app.focus = if self.benchmarks_app.show_creators_in_compare {
+                        super::benchmarks_app::BenchmarkFocus::Creators
+                    } else {
+                        super::benchmarks_app::BenchmarkFocus::List
+                    };
+                }
+            }
+            Message::CycleBenchmarkView => {
+                if self.selections.len() >= 2 {
+                    self.benchmarks_app.cycle_bottom_view();
+                }
+            }
+            Message::CycleScatterX => {
+                self.benchmarks_app.cycle_scatter_x();
+            }
+            Message::CycleScatterY => {
+                self.benchmarks_app.cycle_scatter_y();
+            }
+            Message::CycleRadarPreset => {
+                self.benchmarks_app.cycle_radar_preset();
             }
             Message::CopyBenchmarkName | Message::OpenBenchmarkUrl => {
                 // Handled in main loop
@@ -924,10 +1067,15 @@ impl App {
                 }
             }
             Message::BenchmarkDataReceived(entries) => {
+                self.selections.clear();
                 self.benchmark_store = BenchmarkStore::from_entries(entries);
-                self.open_weights_map = crate::open_weights::build_open_weights_map(
+                self.open_weights_map = crate::model_traits::build_open_weights_map(
                     &self.providers,
                     self.benchmark_store.entries(),
+                );
+                crate::model_traits::apply_model_traits(
+                    &self.providers,
+                    self.benchmark_store.entries_mut(),
                 );
                 self.benchmarks_app
                     .rebuild(&self.benchmark_store, &self.open_weights_map);
@@ -1288,5 +1436,222 @@ mod tests {
         let agents_app = app.agents_app.as_ref().expect("agents app should exist");
         assert_eq!(agents_app.pending_github_fetches, 0);
         assert!(!agents_app.loading_github);
+    }
+
+    fn make_test_app() -> App {
+        let providers = std::collections::HashMap::new();
+        App::new(providers, None, None, BenchmarkStore::empty())
+    }
+
+    #[test]
+    fn test_toggle_selection_add() {
+        let mut app = make_test_app();
+        app.toggle_selection(5);
+        assert_eq!(app.selections, vec![5]);
+    }
+
+    #[test]
+    fn test_toggle_selection_remove() {
+        let mut app = make_test_app();
+        app.toggle_selection(5);
+        app.toggle_selection(10);
+        app.toggle_selection(5);
+        assert_eq!(app.selections, vec![10]);
+    }
+
+    #[test]
+    fn test_toggle_selection_max_capacity() {
+        let mut app = make_test_app();
+        for i in 0..MAX_SELECTIONS {
+            app.toggle_selection(i);
+        }
+        assert_eq!(app.selections.len(), MAX_SELECTIONS);
+        // Adding one more should be a no-op
+        app.toggle_selection(100);
+        assert_eq!(app.selections.len(), MAX_SELECTIONS);
+        assert!(!app.selections.contains(&100));
+    }
+
+    #[test]
+    fn test_clear_selections() {
+        let mut app = make_test_app();
+        app.toggle_selection(1);
+        app.toggle_selection(2);
+        app.toggle_selection(3);
+        app.clear_selections();
+        assert!(app.selections.is_empty());
+    }
+
+    #[test]
+    fn test_update_bottom_view_transitions_to_h2h() {
+        use super::super::benchmarks_app::BottomView;
+        let mut app = make_test_app();
+        assert_eq!(app.benchmarks_app.bottom_view, BottomView::Detail);
+        app.benchmarks_app.update_bottom_view(2);
+        assert_eq!(app.benchmarks_app.bottom_view, BottomView::H2H);
+    }
+
+    #[test]
+    fn test_update_bottom_view_reverts_to_detail() {
+        use super::super::benchmarks_app::BottomView;
+        let mut app = make_test_app();
+        app.benchmarks_app.update_bottom_view(2);
+        assert_eq!(app.benchmarks_app.bottom_view, BottomView::H2H);
+        app.benchmarks_app.update_bottom_view(1);
+        assert_eq!(app.benchmarks_app.bottom_view, BottomView::Detail);
+    }
+
+    #[test]
+    fn test_update_bottom_view_closes_overlay_on_revert() {
+        use super::super::benchmarks_app::BottomView;
+        let mut app = make_test_app();
+        app.benchmarks_app.update_bottom_view(2);
+        app.benchmarks_app.show_detail_overlay = true;
+        app.benchmarks_app.update_bottom_view(1);
+        assert_eq!(app.benchmarks_app.bottom_view, BottomView::Detail);
+        assert!(!app.benchmarks_app.show_detail_overlay);
+    }
+
+    #[test]
+    fn test_cycle_bottom_view_order() {
+        use super::super::benchmarks_app::BottomView;
+        let mut app = make_test_app();
+        // Start at H2H
+        app.benchmarks_app.bottom_view = BottomView::H2H;
+        app.benchmarks_app.cycle_bottom_view();
+        assert_eq!(app.benchmarks_app.bottom_view, BottomView::Scatter);
+        app.benchmarks_app.cycle_bottom_view();
+        assert_eq!(app.benchmarks_app.bottom_view, BottomView::Radar);
+        app.benchmarks_app.cycle_bottom_view();
+        assert_eq!(app.benchmarks_app.bottom_view, BottomView::H2H);
+    }
+
+    #[test]
+    fn test_cycle_bottom_view_from_detail() {
+        use super::super::benchmarks_app::BottomView;
+        let mut app = make_test_app();
+        app.benchmarks_app.bottom_view = BottomView::Detail;
+        app.benchmarks_app.cycle_bottom_view();
+        assert_eq!(app.benchmarks_app.bottom_view, BottomView::H2H);
+    }
+
+    #[test]
+    fn test_scatter_axis_next_cycles() {
+        use super::super::benchmarks_app::ScatterAxis;
+        let mut axis = ScatterAxis::Intelligence;
+        axis = axis.next();
+        assert_eq!(axis, ScatterAxis::Coding);
+        axis = axis.next();
+        assert_eq!(axis, ScatterAxis::Math);
+        axis = axis.next();
+        assert_eq!(axis, ScatterAxis::Speed);
+        axis = axis.next();
+        assert_eq!(axis, ScatterAxis::Price);
+        axis = axis.next();
+        assert_eq!(axis, ScatterAxis::Intelligence);
+    }
+
+    #[test]
+    fn test_radar_preset_next_cycles() {
+        use super::super::benchmarks_app::RadarPreset;
+        let mut preset = RadarPreset::Agentic;
+        preset = preset.next();
+        assert_eq!(preset, RadarPreset::Academic);
+        preset = preset.next();
+        assert_eq!(preset, RadarPreset::Indexes);
+        preset = preset.next();
+        assert_eq!(preset, RadarPreset::Agentic);
+    }
+
+    #[test]
+    fn test_update_bottom_view_reverts_scatter_to_detail() {
+        use super::super::benchmarks_app::BottomView;
+        let mut app = make_test_app();
+        app.benchmarks_app.bottom_view = BottomView::Scatter;
+        app.benchmarks_app.update_bottom_view(1);
+        assert_eq!(app.benchmarks_app.bottom_view, BottomView::Detail);
+    }
+
+    #[test]
+    fn test_update_bottom_view_reverts_radar_to_detail() {
+        use super::super::benchmarks_app::BottomView;
+        let mut app = make_test_app();
+        app.benchmarks_app.bottom_view = BottomView::Radar;
+        app.benchmarks_app.update_bottom_view(1);
+        assert_eq!(app.benchmarks_app.bottom_view, BottomView::Detail);
+    }
+
+    #[test]
+    fn test_switch_focus_browse_mode() {
+        use super::super::benchmarks_app::BenchmarkFocus;
+        let mut app = make_test_app();
+        app.benchmarks_app.focus = BenchmarkFocus::Creators;
+        app.benchmarks_app.switch_focus(false);
+        assert_eq!(app.benchmarks_app.focus, BenchmarkFocus::List);
+        app.benchmarks_app.switch_focus(false);
+        assert_eq!(app.benchmarks_app.focus, BenchmarkFocus::Creators);
+    }
+
+    #[test]
+    fn test_switch_focus_compare_mode() {
+        use super::super::benchmarks_app::BenchmarkFocus;
+        let mut app = make_test_app();
+        app.benchmarks_app.focus = BenchmarkFocus::List;
+        app.benchmarks_app.switch_focus(true);
+        assert_eq!(app.benchmarks_app.focus, BenchmarkFocus::Compare);
+        app.benchmarks_app.switch_focus(true);
+        assert_eq!(app.benchmarks_app.focus, BenchmarkFocus::List);
+    }
+
+    #[test]
+    fn test_focus_resets_when_selections_drop_below_2() {
+        use super::super::benchmarks_app::BenchmarkFocus;
+        let mut app = make_test_app();
+        app.benchmarks_app.focus = BenchmarkFocus::Compare;
+        // Simulate clearing selections
+        app.benchmarks_app.update_bottom_view(0);
+        if app.benchmarks_app.focus == BenchmarkFocus::Compare {
+            app.benchmarks_app.focus = BenchmarkFocus::List;
+        }
+        assert_eq!(app.benchmarks_app.focus, BenchmarkFocus::List);
+    }
+
+    #[test]
+    fn test_h2h_scroll_methods() {
+        let mut app = make_test_app();
+        assert_eq!(app.benchmarks_app.h2h_scroll, 0);
+
+        app.benchmarks_app.scroll_h2h_down();
+        assert_eq!(app.benchmarks_app.h2h_scroll, 1);
+
+        app.benchmarks_app.scroll_h2h_down();
+        app.benchmarks_app.scroll_h2h_down();
+        assert_eq!(app.benchmarks_app.h2h_scroll, 3);
+
+        app.benchmarks_app.scroll_h2h_up();
+        assert_eq!(app.benchmarks_app.h2h_scroll, 2);
+
+        app.benchmarks_app.scroll_h2h_top();
+        assert_eq!(app.benchmarks_app.h2h_scroll, 0);
+
+        app.benchmarks_app.scroll_h2h_page_down(10);
+        assert_eq!(app.benchmarks_app.h2h_scroll, 10);
+
+        app.benchmarks_app.scroll_h2h_page_up(5);
+        assert_eq!(app.benchmarks_app.h2h_scroll, 5);
+
+        // Saturating sub: can't go below 0
+        app.benchmarks_app.scroll_h2h_page_up(100);
+        assert_eq!(app.benchmarks_app.h2h_scroll, 0);
+    }
+
+    #[test]
+    fn test_h2h_scroll_resets_on_view_change() {
+        use super::super::benchmarks_app::BottomView;
+        let mut app = make_test_app();
+        app.benchmarks_app.h2h_scroll = 15;
+        app.benchmarks_app.update_bottom_view(3);
+        assert_eq!(app.benchmarks_app.bottom_view, BottomView::H2H);
+        assert_eq!(app.benchmarks_app.h2h_scroll, 0);
     }
 }
