@@ -10,7 +10,8 @@ mod provider_category;
 mod tui;
 
 use anyhow::Result;
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
+use clap_complete::Shell;
 
 #[derive(Parser)]
 #[command(name = "models")]
@@ -43,6 +44,11 @@ enum Commands {
         /// Output as JSON
         #[arg(long)]
         json: bool,
+    },
+    /// Generate shell completions
+    Completions {
+        /// Shell to generate completions for
+        shell: Shell,
     },
     /// Track AI coding agent releases and changelogs
     #[command(after_help = "\
@@ -105,6 +111,9 @@ fn main() -> Result<()> {
         },
         Some(Commands::Show { model_id, json }) => cli::show::model(&model_id, json)?,
         Some(Commands::Search { query, json }) => cli::search::search(&query, json)?,
+        Some(Commands::Completions { shell }) => {
+            clap_complete::generate(shell, &mut Cli::command(), "models", &mut std::io::stdout());
+        }
         Some(Commands::Agents { command }) => cli::agents::run_with_command(command)?,
         None => {
             // Fetch providers before entering async runtime to avoid blocking in async context
