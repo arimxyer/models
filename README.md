@@ -6,41 +6,27 @@
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
 </p>
 
-A fast CLI and TUI for browsing AI models, benchmarks, and coding agents.
+A fast TUI and CLI for browsing AI models, benchmarks, and coding agents.
 
-- **Models Tab**: Browse 2000+ models across 85+ providers from [models.dev](https://models.dev), categorized by type (Origin, Cloud, Inference, Gateway, Dev Tool)
-- **Agents Tab**: Track AI coding assistants (Claude Code, Aider, Cursor, etc.) with version detection and GitHub integration
-- **Agents CLI**: View changelogs, check release status, and compare versions for AI coding tools — `agents status`, `agents claude`, and more
+- **Models Tab**: Browse 2000+ models across 85+ providers from [models.dev](https://models.dev) with capability indicators, adaptive layouts, and provider categorization
 - **Benchmarks Tab**: Compare model performance across 15+ benchmarks from [Artificial Analysis](https://artificialanalysis.ai), with head-to-head tables, scatter plots, radar charts, and creator filtering
+- **Agents Tab**: Track AI coding assistants (Claude Code, Aider, Cursor, etc.) with version detection, changelogs, and GitHub integration
 
 <video src="https://github.com/user-attachments/assets/07c750f4-ca47-4f89-8a32-99e0be5004d8" controls width="100%"></video>
 
 ## What's New
 
-### Agents CLI
-- **`agents` command** — view changelogs, check status, browse versions for AI coding tools directly from the terminal
-- **Status table** — see installed vs latest version, 24h release indicator, and release frequency at a glance
-- **Interactive picker** — fuzzy-select any version with `--pick`, view its changelog
-- **Dual entry point** — use as `models agents` or create an `agents` symlink for standalone usage
-
-### Recent Highlights
-- **Models tab redesign** — 3-column layout with RTFO capability indicators, adaptive provider panel, capabilities table, and smart pricing
-- **Benchmark compare mode** — select models to compare with head-to-head tables, scatter plots, and radar charts
-- **Benchmark sort picker** — quick-sort popup with reasoning, source, and region/type indicators on list entries
-- **Chart legends** — scatter plots and radar charts display legend boxes with coordinates and dynamic name widths
-- **Linux packages** — .deb and .rpm packages attached to GitHub releases for x86_64 and aarch64
-- **Free models filter** — press `4` on the Models tab to show only free models
-- **Changelog search** — `/` searches across agent changelogs with highlighted matches and `n`/`N` navigation
-- **Corporate proxy support** — TLS now uses OS trust store, fixing `UnknownIssuer` errors behind corporate proxies
-- **~400 benchmark entries** from Artificial Analysis with creator filtering by region and type
+- **Models tab redesign** — capability indicators, adaptive provider panel, and detailed model info at a glance
+- **Benchmark compare mode** — head-to-head tables, scatter plots, and radar charts for selected models
+- **Linux packages** — native .deb and .rpm packages for x86_64 and aarch64
+- **Agents CLI** — track agent releases, view changelogs, and compare versions from the terminal
 
 ## Features
 
 ### Models Tab
-- **3-column layout** — providers (20%), model list (45%), and detail panel (35%) with adaptive sizing
-- **RTFO indicators** — Reasoning, Tools, Files, Open/Closed capability badges in the model list
-- **Capabilities table** — Source (Open/Closed), Temperature, and more in the detail panel
+- **Capability indicators** — see Reasoning, Tools, Files, and Open/Closed status at a glance in the model list
 - **Provider categories** — filter and group providers by type (Origin, Cloud, Inference, Gateway, Dev Tool)
+- **Detail panel** — capabilities, pricing, modalities, and metadata for the selected model
 - **Cross-provider search** to compare the same model across different providers
 - **Copy to clipboard** with a single keypress
 - **CLI commands** and **JSON output** for scripting and automation
@@ -56,13 +42,18 @@ A fast CLI and TUI for browsing AI models, benchmarks, and coding agents.
 
 ### Benchmarks Tab
 - **~400 benchmark entries** from Artificial Analysis with quality, speed, and pricing scores
-- **Compare mode** — select models for head-to-head tables, scatter plots, and radar charts with legend boxes
-- **Auto-updating** — data fetched fresh from CDN on every launch; GitHub Action refreshes source data every 30 minutes
-- **Creator sidebar** with 40+ creators — group by region or type with colored section headers
-- **Per-model open weights detection** — runtime matching against models.dev, with source filter toggle
-- **Sort picker** — quick-sort popup; list entries show reasoning, source, and region/type indicators
-- **Dynamic columns** — list columns adapt to show the most relevant benchmarks for the active sort
+- **Compare mode** — select models for head-to-head tables, scatter plots, and radar charts
+- **Auto-updating** — benchmark data refreshed automatically every 30 minutes
+- **Creator sidebar** with 40+ creators — filter by region, type, or open/closed source
+- **Sort & filter** — sort by any metric, filter by reasoning capability, source type, and more
 - **Detail panel** — full benchmark breakdown with indexes, scores, performance, and pricing
+
+### Agents CLI
+- **Status table** — see installed vs latest version, 24h release indicator, and release frequency at a glance
+- **Changelogs** — view release notes for any agent by name or version
+- **Interactive picker** — fuzzy-select any version with `--pick`, view its changelog
+- **Dual entry point** — use as `models agents` or create an `agents` symlink for standalone usage
+- **Fast** — concurrent GitHub fetching and version detection
 
 ## Installation
 
@@ -247,13 +238,13 @@ See [Custom Agents](docs/custom-agents.md) for the full reference.
 | `2` | Sort by Release date |
 | `3` | Sort by Speed (tok/s) |
 
-**Filters & Grouping**
+**Filters**
 | Key | Action |
 |-----|--------|
 | `4` | Cycle source filter (All / Open / Closed) |
-| `5` | Toggle region grouping |
-| `6` | Toggle type grouping |
-| `7` | Cycle reasoning filter |
+| `5` | Cycle region filter (US / China / Europe / ...) |
+| `6` | Cycle type filter (Startup / Big Tech / Research) |
+| `7` | Cycle reasoning filter (All / Reasoning / Non-reasoning) |
 
 **Sort**
 | Key | Action |
@@ -264,11 +255,13 @@ See [Custom Agents](docs/custom-agents.md) for the full reference.
 **Compare Mode**
 | Key | Action |
 |-----|--------|
-| `Space` | Toggle model selection |
+| `Space` | Toggle model selection (max 8) |
 | `v` | Cycle view (H2H table → Scatter → Radar) |
-| `t` | Toggle compare panel |
-| `d` | Toggle detail overlay |
-| `c` | Clear selections |
+| `t` | Toggle left panel (Models / Creators) |
+| `d` | Show detail overlay (H2H view) |
+| `c` | Clear all selections |
+| `h` / `l` | Switch focus (List / Compare) |
+| `j` / `k` | Scroll H2H table (when Compare focused) |
 | `x` / `y` | Cycle scatter plot axes |
 | `a` | Cycle radar chart preset |
 

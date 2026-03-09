@@ -3002,7 +3002,7 @@ fn draw_help_popup(f: &mut Frame, scroll: u16, current_tab: Tab) {
                 )),
                 Line::from(vec![
                     Span::styled("  s             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Cycle through all sort columns"),
+                    Span::raw("Open sort picker"),
                 ]),
                 Line::from(vec![
                     Span::styled("  S             ", Style::default().fg(Color::Yellow)),
