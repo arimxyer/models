@@ -19,6 +19,7 @@ TUI and CLI for browsing AI models, benchmarks, and coding agents.
 
 - **Models tab redesign** — capability indicators, adaptive provider panel, and detailed model info at a glance
 - **Benchmark compare mode** — head-to-head tables, scatter plots, and radar charts for selected models
+- **Benchmarks CLI** — list and inspect benchmark data directly from the terminal
 - **Linux packages** — native .deb and .rpm packages for x86_64 and aarch64
 - **Agents CLI** — track agent releases, view changelogs, and compare versions from the terminal
 
@@ -55,6 +56,13 @@ TUI and CLI for browsing AI models, benchmarks, and coding agents.
 - **Interactive picker** — fuzzy-select any version with `--pick`, view its changelog
 - **Dual entry point** — use as `models agents` or create an `agents` symlink for standalone usage
 - **Fast** — concurrent GitHub fetching and version detection
+
+### Benchmarks CLI
+- **Live benchmark queries** — fetch the current benchmark dataset without launching the TUI
+- **List and detail views** — use `models benchmarks list` for filtered tables and `models benchmarks show` for full breakdowns
+- **Filtering** — narrow by search text, creator, open/closed source, and reasoning status
+- **Sorting** — sort by any supported metric, including intelligence, coding, math, GPQA, speed, pricing, and release date
+- **JSON output** — pipe structured benchmark data into shell scripts and other tools
 
 ## Installation
 
@@ -277,6 +285,33 @@ See [Custom Agents](docs/custom-agents.md) for the full reference.
 
 ## CLI Usage
 
+### Benchmarks CLI
+
+Query benchmark data from the command line using the same live benchmark feed as the Benchmarks tab.
+
+#### List benchmark entries
+
+```bash
+models benchmarks list
+models benchmarks list --sort speed --limit 10
+models benchmarks list --creator openai --reasoning
+models benchmarks list --open --sort price-input --asc
+```
+
+#### Show benchmark details
+
+```bash
+models benchmarks show gpt-4o
+models benchmarks show "Claude Sonnet 4"
+```
+
+#### JSON output
+
+```bash
+models benchmarks list --creator anthropic --json
+models benchmarks show gpt-4o --json
+```
+
 ### Agents CLI
 
 Track AI coding agent releases from the command line. Install the `agents` alias during setup, or use `models agents` as a fallback.
@@ -396,9 +431,11 @@ models search "claude opus"
 
 #### JSON output
 
-All model commands support `--json` for scripting:
+All models and benchmarks commands support `--json` for scripting:
 
 ```bash
+models benchmarks list --json
+models benchmarks show gpt-4o --json
 models list providers --json
 models show claude-opus-4-5 --json
 models search "llama" --json
