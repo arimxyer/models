@@ -5,3 +5,5 @@ docs/plans/
 .omc/
 .env
 data/fuzzy_*.json
+.omx/
+*/__pycache__/
