@@ -24,10 +24,28 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// List providers or models
+    /// List models, optionally filtered by provider
+    #[command(after_help = "\
+\x1b[1;4mExamples:\x1b[0m
+  models list                         Open the interactive model picker
+  models list openai                  Picker prefiltered to a provider
+  models list --json                  Dump model rows as JSON")]
     List {
-        #[command(subcommand)]
-        what: ListCommands,
+        /// Filter by provider ID or exact provider name
+        provider: Option<String>,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// List providers
+    #[command(after_help = "\
+\x1b[1;4mExamples:\x1b[0m
+  models providers
+  models providers --json")]
+    Providers {
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
     },
     /// Show detailed information about a model
     Show {
@@ -38,6 +56,13 @@ enum Commands {
         json: bool,
     },
     /// Search models by name or provider
+    #[command(after_help = "\
+\x1b[1;4mExamples:\x1b[0m
+  models search claude
+  models search gpt-4o --json
+
+\x1b[1;4mNote:\x1b[0m
+  Search now uses the same matcher and interactive picker flow as `models list`.")]
     Search {
         /// Search query
         query: String,
@@ -82,24 +107,6 @@ enum Commands {
     },
 }
 
-#[derive(Subcommand)]
-enum ListCommands {
-    /// List all providers
-    Providers {
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-    },
-    /// List models, optionally filtered by provider
-    Models {
-        /// Filter by provider ID
-        provider: Option<String>,
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-    },
-}
-
 fn main() -> Result<()> {
     // Check if invoked as "agents" (symlink entry point)
     let binary_name = std::env::args()
@@ -118,10 +125,8 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Some(Commands::List { what }) => match what {
-            ListCommands::Providers { json } => cli::list::providers(json)?,
-            ListCommands::Models { provider, json } => cli::list::models(provider, json)?,
-        },
+        Some(Commands::List { provider, json }) => cli::list::models(provider, json)?,
+        Some(Commands::Providers { json }) => cli::list::providers(json)?,
         Some(Commands::Show { model_id, json }) => cli::show::model(&model_id, json)?,
         Some(Commands::Search { query, json }) => cli::search::search(&query, json)?,
         Some(Commands::Completions { shell }) => {
