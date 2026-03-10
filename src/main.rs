@@ -15,7 +15,7 @@ use clap_complete::Shell;
 
 #[derive(Parser)]
 #[command(name = "models")]
-#[command(about = "CLI/TUI tool for querying AI model information from models.dev")]
+#[command(about = "CLI/TUI for browsing AI models, benchmarks, and coding agents")]
 #[command(version)]
 struct Cli {
     #[command(subcommand)]
@@ -67,6 +67,18 @@ enum Commands {
         #[command(subcommand)]
         command: Option<cli::agents::AgentsCommand>,
     },
+    /// Query benchmark data from the command line
+    #[command(after_help = "\
+\x1b[1;4mExamples:\x1b[0m
+  models benchmarks list
+  models benchmarks list --sort speed --limit 10
+  models benchmarks list --creator openai --reasoning
+  models benchmarks show gpt-4o
+  models benchmarks show \"Claude Sonnet 4\" --json")]
+    Benchmarks {
+        #[command(subcommand)]
+        command: Option<cli::benchmarks::BenchmarksCommand>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -115,6 +127,7 @@ fn main() -> Result<()> {
             clap_complete::generate(shell, &mut Cli::command(), "models", &mut std::io::stdout());
         }
         Some(Commands::Agents { command }) => cli::agents::run_with_command(command)?,
+        Some(Commands::Benchmarks { command }) => cli::benchmarks::run_with_command(command)?,
         None => {
             // Fetch providers before entering async runtime to avoid blocking in async context
             let providers = api::fetch_providers()?;
