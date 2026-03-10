@@ -805,6 +805,28 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &mut App) {
             status,
         ]));
 
+        let latest_release_date = entry
+            .github
+            .latest_release_date()
+            .map(|date| date.format("%Y-%m-%d").to_string())
+            .unwrap_or_else(|| "\u{2014}".to_string());
+        let updated_str = entry
+            .latest_release_relative_time()
+            .unwrap_or_else(|| "\u{2014}".to_string());
+        detail_lines.push(Line::from(vec![
+            Span::styled("Latest release: ", Style::default().fg(Color::DarkGray)),
+            Span::raw(latest_release_date),
+            Span::styled(
+                format!(" ({})", updated_str),
+                Style::default().fg(Color::DarkGray),
+            ),
+        ]));
+
+        detail_lines.push(Line::from(vec![
+            Span::styled("Release cadence: ", Style::default().fg(Color::DarkGray)),
+            Span::raw(entry.release_frequency()),
+        ]));
+
         // Show status indicator based on fetch_status
         match &entry.fetch_status {
             FetchStatus::Loading => {
