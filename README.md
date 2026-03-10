@@ -376,20 +376,26 @@ agents claude --web        # Open GitHub releases in browser
 
 ### Models CLI
 
-#### List providers
+#### Interactive model picker
 
 ```bash
-models list providers
+models list
+models list anthropic
 ```
 
-#### List models
+`models list` opens the inline picker in an interactive terminal. Use a provider argument to prefilter the picker before it opens.
+
+Once the picker is open:
+- `/` starts a live filter over model id, name, and provider
+- `s` cycles sort modes
+- `S` reverses the current sort
+- `Enter` prints the selected model's normal `show` output
+
+#### Providers
 
 ```bash
-# All models
-models list models
-
-# Models from a specific provider
-models list models anthropic
+models providers
+models providers --json
 ```
 
 #### Show model details
@@ -433,12 +439,16 @@ Knowledge:   2025-03-31
 Open Weights: No
 ```
 
+If `show` matches multiple providers or model variants in an interactive terminal, the CLI reopens the picker with the matching candidates so you can choose the exact row.
+
 #### Search models
 
 ```bash
 models search "gpt-4"
 models search "claude opus"
 ```
+
+`models search` currently reuses the same matcher and interactive picker flow as `models list`, so it remains available as a compatibility command.
 
 #### JSON output
 
@@ -447,7 +457,8 @@ All models and benchmarks commands support `--json` for scripting:
 ```bash
 models benchmarks list --json
 models benchmarks show gpt-4o --json
-models list providers --json
+models list --json
+models providers --json
 models show claude-opus-4-5 --json
 models search "llama" --json
 ```
