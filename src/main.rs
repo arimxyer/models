@@ -70,11 +70,12 @@ enum Commands {
     /// Query benchmark data from the command line
     #[command(after_help = "\
 \x1b[1;4mExamples:\x1b[0m
-  models benchmarks list
+  models benchmarks list                     Open the interactive benchmark picker
   models benchmarks list --sort speed --limit 10
   models benchmarks list --creator openai --reasoning
+  models benchmarks list --json
   models benchmarks show gpt-4o
-  models benchmarks show \"Claude Sonnet 4\" --json")]
+  models benchmarks show \"Claude Sonnet 4\"")]
     Benchmarks {
         #[command(subcommand)]
         command: Option<cli::benchmarks::BenchmarksCommand>,

@@ -59,7 +59,8 @@ TUI and CLI for browsing AI models, benchmarks, and coding agents.
 
 ### Benchmarks CLI
 - **Live benchmark queries** — fetch the current benchmark dataset without launching the TUI
-- **List and detail views** — use `models benchmarks list` for filtered tables and `models benchmarks show` for full breakdowns
+- **Interactive list picker** — use `models benchmarks list` to open a filtered benchmark selector, then inspect the selected model immediately
+- **Detail views** — use `models benchmarks show` for a direct model breakdown, with interactive disambiguation when a query matches multiple variants
 - **Filtering** — narrow by search text, creator, open/closed source, and reasoning status
 - **Sorting** — sort by any supported metric, including intelligence, coding, math, GPQA, speed, pricing, and release date
 - **JSON output** — pipe structured benchmark data into shell scripts and other tools
@@ -289,7 +290,7 @@ See [Custom Agents](docs/custom-agents.md) for the full reference.
 
 Query benchmark data from the command line using the same live benchmark feed as the Benchmarks tab.
 
-#### List benchmark entries
+#### Interactive benchmark picker
 
 ```bash
 models benchmarks list
@@ -298,12 +299,22 @@ models benchmarks list --creator openai --reasoning
 models benchmarks list --open --sort price-input --asc
 ```
 
+`models benchmarks list` opens the inline picker in an interactive terminal and uses the same filters/sorting to narrow the candidate set before you pick a model.
+
+Once the picker is open:
+- `/` starts a live text filter over name, slug, and creator
+- `s` cycles sort metrics
+- `S` reverses the current sort
+- `Enter` prints the selected model's normal `show` output
+
 #### Show benchmark details
 
 ```bash
 models benchmarks show gpt-4o
 models benchmarks show "Claude Sonnet 4"
 ```
+
+If `show` matches multiple benchmark variants in an interactive terminal, the CLI reopens the picker with just the matching candidates so you can choose the exact row you want.
 
 #### JSON output
 

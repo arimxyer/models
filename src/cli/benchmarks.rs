@@ -1,8 +1,20 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, io, time::Duration};
 
 use anyhow::{bail, Result};
 use clap::{CommandFactory, Parser, ValueEnum};
-use comfy_table::{presets::UTF8_FULL_CONDENSED, Table};
+use comfy_table::{presets::UTF8_FULL_CONDENSED, Table as ComfyTable};
+use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use ratatui::{
+    backend::CrosstermBackend,
+    layout::{Constraint, Direction, Layout},
+    style::{Color, Modifier, Style},
+    text::Line,
+    widgets::{
+        Block, Borders, Cell as TuiCell, HighlightSpacing, Paragraph, Row as TuiRow,
+        Table as TuiTable, TableState,
+    },
+    Frame, Terminal, TerminalOptions, Viewport,
+};
 use serde::Serialize;
 
 use crate::benchmark_fetch::{BenchmarkFetchResult, BenchmarkFetcher};
@@ -234,6 +246,335 @@ struct BenchmarkDetail<'a> {
     price_blended: Option<f64>,
 }
 
+enum ResolveEntry<'a> {
+    Single(&'a BenchmarkEntry),
+    Ambiguous(Vec<&'a BenchmarkEntry>),
+}
+
+const PICKER_VIEWPORT_HEIGHT: u16 = 14;
+const PICKER_SORTS: [BenchmarkSort; 9] = [
+    BenchmarkSort::Intelligence,
+    BenchmarkSort::Coding,
+    BenchmarkSort::Math,
+    BenchmarkSort::Gpqa,
+    BenchmarkSort::Speed,
+    BenchmarkSort::Ttft,
+    BenchmarkSort::PriceBlended,
+    BenchmarkSort::ReleaseDate,
+    BenchmarkSort::Name,
+];
+
+struct BenchmarkPicker<'a> {
+    entries: Vec<&'a BenchmarkEntry>,
+    visible_entries: Vec<&'a BenchmarkEntry>,
+    open_weights_map: &'a HashMap<String, bool>,
+    sort: BenchmarkSort,
+    descending: bool,
+    title: String,
+    query: String,
+    filter_mode: bool,
+    state: TableState,
+}
+
+impl<'a> BenchmarkPicker<'a> {
+    fn new(
+        entries: Vec<&'a BenchmarkEntry>,
+        open_weights_map: &'a HashMap<String, bool>,
+        sort: BenchmarkSort,
+        descending: bool,
+        title: String,
+    ) -> Self {
+        let mut picker = Self {
+            entries,
+            visible_entries: Vec::new(),
+            open_weights_map,
+            sort,
+            descending,
+            title,
+            query: String::new(),
+            filter_mode: false,
+            state: TableState::default(),
+        };
+        picker.rebuild_visible_entries(None);
+        picker
+    }
+
+    fn selected(&self) -> Option<&'a BenchmarkEntry> {
+        self.state.selected().map(|idx| self.visible_entries[idx])
+    }
+
+    fn next(&mut self) {
+        let Some(current) = self.state.selected() else {
+            return;
+        };
+        let last = self.visible_entries.len().saturating_sub(1);
+        self.state.select(Some((current + 1).min(last)));
+    }
+
+    fn previous(&mut self) {
+        let Some(current) = self.state.selected() else {
+            return;
+        };
+        self.state.select(Some(current.saturating_sub(1)));
+    }
+
+    fn first(&mut self) {
+        if !self.visible_entries.is_empty() {
+            self.state.select(Some(0));
+        }
+    }
+
+    fn last(&mut self) {
+        if !self.visible_entries.is_empty() {
+            self.state.select(Some(self.visible_entries.len() - 1));
+        }
+    }
+
+    fn page_down(&mut self) {
+        let Some(current) = self.state.selected() else {
+            return;
+        };
+        let last = self.visible_entries.len().saturating_sub(1);
+        self.state.select(Some((current + 10).min(last)));
+    }
+
+    fn page_up(&mut self) {
+        let Some(current) = self.state.selected() else {
+            return;
+        };
+        self.state.select(Some(current.saturating_sub(10)));
+    }
+
+    fn cycle_sort(&mut self) {
+        let current_idx = PICKER_SORTS
+            .iter()
+            .position(|&sort| sort == self.sort)
+            .unwrap_or(0);
+        self.sort = PICKER_SORTS[(current_idx + 1) % PICKER_SORTS.len()];
+        self.descending = self.sort.default_descending();
+        self.rebuild_visible_entries(self.selected().map(|entry| entry.slug.as_str()));
+    }
+
+    fn toggle_descending(&mut self) {
+        self.descending = !self.descending;
+        self.rebuild_visible_entries(self.selected().map(|entry| entry.slug.as_str()));
+    }
+
+    fn start_filter(&mut self) {
+        self.filter_mode = true;
+    }
+
+    fn finish_filter(&mut self) {
+        self.filter_mode = false;
+    }
+
+    fn clear_filter(&mut self) {
+        self.query.clear();
+        self.filter_mode = false;
+        self.rebuild_visible_entries(None);
+    }
+
+    fn push_filter_char(&mut self, ch: char) {
+        self.query.push(ch);
+        self.rebuild_visible_entries(self.selected().map(|entry| entry.slug.as_str()));
+    }
+
+    fn pop_filter_char(&mut self) {
+        self.query.pop();
+        self.rebuild_visible_entries(self.selected().map(|entry| entry.slug.as_str()));
+    }
+
+    fn rebuild_visible_entries(&mut self, preserve_slug: Option<&str>) {
+        self.visible_entries =
+            filter_picker_entries(&self.entries, &self.query, self.sort, self.descending);
+        let next_selected = preserve_slug
+            .and_then(|slug| {
+                self.visible_entries
+                    .iter()
+                    .position(|entry| entry.slug == slug)
+            })
+            .or_else(|| (!self.visible_entries.is_empty()).then_some(0));
+        self.state.select(next_selected);
+    }
+
+    fn draw(&mut self, frame: &mut Frame<'_>) {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Min(7),
+                Constraint::Length(4),
+                Constraint::Length(1),
+            ])
+            .split(frame.area());
+        let header_style = Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD);
+        let rows = self.visible_entries.iter().map(|entry| {
+            TuiRow::new(vec![
+                TuiCell::from(truncate_picker_text(&entry.display_name, 32)),
+                TuiCell::from(truncate_picker_text(creator_label(entry), 16)),
+                TuiCell::from(truncate_picker_text(
+                    &format_picker_sort_value(self.sort, entry),
+                    12,
+                )),
+                TuiCell::from(truncate_picker_text(reasoning_label(entry), 13)),
+                TuiCell::from(format_open_weights(
+                    self.open_weights_map.get(&entry.slug).copied(),
+                )),
+                TuiCell::from(
+                    entry
+                        .release_date
+                        .clone()
+                        .unwrap_or_else(|| "\u{2014}".to_string()),
+                ),
+            ])
+        });
+
+        let table = TuiTable::new(
+            rows,
+            [
+                Constraint::Percentage(34),
+                Constraint::Percentage(17),
+                Constraint::Percentage(13),
+                Constraint::Percentage(14),
+                Constraint::Percentage(9),
+                Constraint::Percentage(13),
+            ],
+        )
+        .header(
+            TuiRow::new(vec![
+                "Name",
+                "Creator",
+                picker_sort_label(self.sort),
+                "Reasoning",
+                "Source",
+                "Release",
+            ])
+            .style(header_style)
+            .bottom_margin(1),
+        )
+        .column_spacing(1)
+        .highlight_symbol(">> ")
+        .highlight_spacing(HighlightSpacing::Always)
+        .row_highlight_style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Cyan))
+                .title(self.title_text()),
+        );
+
+        frame.render_stateful_widget(table, chunks[0], &mut self.state);
+
+        let preview = Paragraph::new(self.preview_lines()).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::DarkGray))
+                .title(" Preview "),
+        );
+        frame.render_widget(preview, chunks[1]);
+
+        let controls = Paragraph::new(self.status_line());
+        frame.render_widget(controls, chunks[2]);
+    }
+
+    fn title_text(&self) -> String {
+        let results = if self.query.is_empty() {
+            format!("{} results", self.visible_entries.len())
+        } else {
+            format!(
+                "{} / {} results",
+                self.visible_entries.len(),
+                self.entries.len()
+            )
+        };
+        if self.query.is_empty() {
+            format!(
+                "{} ({}) | {} {}",
+                self.title,
+                results,
+                picker_sort_label(self.sort),
+                if self.descending { "desc" } else { "asc" }
+            )
+        } else {
+            format!(
+                "{} ({}) | {} {} | / {}",
+                self.title,
+                results,
+                picker_sort_label(self.sort),
+                if self.descending { "desc" } else { "asc" },
+                self.query
+            )
+        }
+    }
+
+    fn preview_lines(&self) -> Vec<Line<'static>> {
+        let Some(entry) = self.selected() else {
+            return vec![
+                Line::from("No matches"),
+                Line::from(""),
+                Line::from("Adjust the filter or clear it with Esc while filtering."),
+            ];
+        };
+        vec![
+            Line::from(format!("slug: {}", truncate_picker_text(&entry.slug, 72))),
+            Line::from(format!(
+                "coding: {}   math: {}   gpqa: {}",
+                format_metric(entry.coding_index),
+                format_metric(entry.math_index),
+                format_metric(entry.gpqa),
+            )),
+            Line::from(format!(
+                "ttft: {}   tok/s: {}   blended $/M: {}",
+                format_metric(entry.ttft),
+                format_metric(entry.output_tps),
+                format_metric(entry.price_blended),
+            )),
+        ]
+    }
+
+    fn status_line(&self) -> Line<'static> {
+        if self.filter_mode {
+            Line::from(format!(
+                "Filter: {}_  Enter apply  Esc clear  Backspace delete",
+                self.query
+            ))
+        } else {
+            Line::from("Enter inspect   / filter   s sort   S reverse   q quit   ↑↓/j/k move")
+        }
+    }
+}
+
+struct PickerTerminal {
+    terminal: Terminal<CrosstermBackend<io::Stdout>>,
+}
+
+impl PickerTerminal {
+    fn new() -> Result<Self> {
+        crossterm::terminal::enable_raw_mode()?;
+        let backend = CrosstermBackend::new(io::stdout());
+        let terminal = Terminal::with_options(
+            backend,
+            TerminalOptions {
+                viewport: Viewport::Inline(PICKER_VIEWPORT_HEIGHT),
+            },
+        )?;
+        Ok(Self { terminal })
+    }
+}
+
+impl Drop for PickerTerminal {
+    fn drop(&mut self) {
+        let _ = self.terminal.clear();
+        let _ = crossterm::terminal::disable_raw_mode();
+        let _ = self.terminal.show_cursor();
+    }
+}
+
 pub fn run_with_command(command: Option<BenchmarksCommand>) -> Result<()> {
     match command {
         Some(BenchmarksCommand::List {
@@ -316,13 +657,36 @@ fn run_list(options: ListOptions, json: bool) -> Result<()> {
         return Ok(());
     }
 
-    let mut table = Table::new();
+    if super::styles::is_tty() {
+        let title = " Benchmark Picker ".to_string();
+        if let Some(entry) = pick_benchmark(
+            entries,
+            &loaded.open_weights_map,
+            options.sort,
+            options.descending,
+            title.as_str(),
+        )? {
+            print_entry_detail(entry, &loaded.open_weights_map, false)?;
+        }
+        return Ok(());
+    }
+
+    print_list_table(&entries, &loaded.open_weights_map, options.sort);
+    Ok(())
+}
+
+fn print_list_table(
+    entries: &[&BenchmarkEntry],
+    open_weights_map: &HashMap<String, bool>,
+    sort: BenchmarkSort,
+) {
+    let mut table = ComfyTable::new();
     table.load_preset(UTF8_FULL_CONDENSED);
     table.set_header(vec![
         "Slug",
         "Name",
         "Creator",
-        options.sort.label(),
+        sort.label(),
         "Source",
         "Reasoning",
         "Release",
@@ -333,8 +697,8 @@ fn run_list(options: ListOptions, json: bool) -> Result<()> {
             entry.slug.clone(),
             entry.display_name.clone(),
             creator_label(entry).to_string(),
-            format_sort_value(options.sort, entry),
-            format_open_weights(loaded.open_weights_map.get(&entry.slug).copied()),
+            format_sort_value(sort, entry),
+            format_open_weights(open_weights_map.get(&entry.slug).copied()),
             reasoning_label(entry).to_string(),
             entry
                 .release_date
@@ -344,56 +708,29 @@ fn run_list(options: ListOptions, json: bool) -> Result<()> {
     }
 
     println!("{table}");
-    Ok(())
 }
 
 fn run_show(model: &str, json: bool) -> Result<()> {
     let loaded = load_benchmarks()?;
-    let entry = resolve_entry(loaded.entries(), model)?;
-    let detail = BenchmarkDetail {
-        slug: entry.slug.as_str(),
-        name: entry.name.as_str(),
-        display_name: entry.display_name.as_str(),
-        creator: entry.creator.as_str(),
-        creator_name: creator_label(entry),
-        creator_id: entry.creator_id.as_str(),
-        release_date: entry.release_date.as_deref(),
-        open_weights: loaded.open_weights_map.get(&entry.slug).copied(),
-        reasoning: reasoning_label(entry),
-        effort_level: entry.effort_level.as_deref(),
-        variant_tag: entry.variant_tag.as_deref(),
-        tool_call: entry.tool_call,
-        context_window: entry.context_window,
-        max_output: entry.max_output,
-        intelligence_index: entry.intelligence_index,
-        coding_index: entry.coding_index,
-        math_index: entry.math_index,
-        mmlu_pro: entry.mmlu_pro,
-        gpqa: entry.gpqa,
-        hle: entry.hle,
-        livecodebench: entry.livecodebench,
-        scicode: entry.scicode,
-        ifbench: entry.ifbench,
-        lcr: entry.lcr,
-        terminalbench_hard: entry.terminalbench_hard,
-        tau2: entry.tau2,
-        math_500: entry.math_500,
-        aime: entry.aime,
-        aime_25: entry.aime_25,
-        output_tps: entry.output_tps,
-        ttft: entry.ttft,
-        ttfat: entry.ttfat,
-        price_input: entry.price_input,
-        price_output: entry.price_output,
-        price_blended: entry.price_blended,
-    };
+    match resolve_entry(loaded.entries(), model)? {
+        ResolveEntry::Single(entry) => print_entry_detail(entry, &loaded.open_weights_map, json)?,
+        ResolveEntry::Ambiguous(entries) => {
+            if json || !super::styles::is_tty() {
+                bail!("{}", ambiguous_matches_message(model, &entries));
+            }
 
-    if json {
-        println!("{}", serde_json::to_string_pretty(&detail)?);
-    } else {
-        print_detail(&detail);
+            let title = format!(" Select Benchmark Match for \"{model}\" ");
+            if let Some(entry) = pick_benchmark(
+                entries,
+                &loaded.open_weights_map,
+                BenchmarkSort::Name,
+                false,
+                &title,
+            )? {
+                print_entry_detail(entry, &loaded.open_weights_map, false)?;
+            }
+        }
     }
-
     Ok(())
 }
 
@@ -515,44 +852,99 @@ fn matches_source_filter(
     }
 }
 
-fn resolve_entry<'a>(entries: &'a [BenchmarkEntry], query: &str) -> Result<&'a BenchmarkEntry> {
+fn resolve_entry<'a>(entries: &'a [BenchmarkEntry], query: &str) -> Result<ResolveEntry<'a>> {
     let query_lower = query.to_lowercase();
 
     if let Some(entry) = entries
         .iter()
         .find(|entry| entry.slug.eq_ignore_ascii_case(query))
     {
-        return Ok(entry);
+        return Ok(ResolveEntry::Single(entry));
     }
 
-    if let Some(entry) = entries.iter().find(|entry| {
+    let exact_matches = matching_entries(entries, |entry| {
         entry.name.eq_ignore_ascii_case(query) || entry.display_name.eq_ignore_ascii_case(query)
-    }) {
-        return Ok(entry);
+    });
+    match exact_matches.as_slice() {
+        [entry] => return Ok(ResolveEntry::Single(entry)),
+        [] => {}
+        many => return Ok(ResolveEntry::Ambiguous(many.to_vec())),
     }
 
-    let matches: Vec<_> = entries
-        .iter()
-        .filter(|entry| {
-            entry.slug.to_lowercase().contains(&query_lower)
-                || entry.name.to_lowercase().contains(&query_lower)
-                || entry.display_name.to_lowercase().contains(&query_lower)
-        })
-        .collect();
+    let matches = matching_entries(entries, |entry| {
+        entry.slug.to_lowercase().contains(&query_lower)
+            || entry.name.to_lowercase().contains(&query_lower)
+            || entry.display_name.to_lowercase().contains(&query_lower)
+    });
 
     match matches.as_slice() {
         [] => bail!("No benchmark entry matched '{query}'"),
-        [entry] => Ok(*entry),
-        many => {
-            let suggestions = many
-                .iter()
-                .take(5)
-                .map(|entry| entry.slug.as_str())
-                .collect::<Vec<_>>()
-                .join(", ");
-            bail!("Benchmark query '{query}' was ambiguous; try a slug. Matches: {suggestions}")
-        }
+        [entry] => Ok(ResolveEntry::Single(entry)),
+        many => Ok(ResolveEntry::Ambiguous(many.to_vec())),
     }
+}
+
+fn matching_entries<F>(entries: &[BenchmarkEntry], predicate: F) -> Vec<&BenchmarkEntry>
+where
+    F: Fn(&BenchmarkEntry) -> bool,
+{
+    let mut matches: Vec<_> = entries.iter().filter(|entry| predicate(entry)).collect();
+    matches.sort_by(|a, b| {
+        a.display_name
+            .cmp(&b.display_name)
+            .then_with(|| a.slug.cmp(&b.slug))
+    });
+    matches
+}
+
+fn filter_picker_entries<'a>(
+    entries: &[&'a BenchmarkEntry],
+    query: &str,
+    sort: BenchmarkSort,
+    descending: bool,
+) -> Vec<&'a BenchmarkEntry> {
+    let query = query.trim().to_lowercase();
+    let mut visible: Vec<_> = entries
+        .iter()
+        .copied()
+        .filter(|entry| {
+            query.is_empty()
+                || entry.slug.to_lowercase().contains(&query)
+                || entry.name.to_lowercase().contains(&query)
+                || entry.display_name.to_lowercase().contains(&query)
+                || entry.creator.to_lowercase().contains(&query)
+                || creator_label(entry).to_lowercase().contains(&query)
+        })
+        .collect();
+
+    if !matches!(sort, BenchmarkSort::Name) {
+        visible.retain(|entry| sort.extract(entry).is_some());
+    }
+
+    visible.sort_by(|a, b| {
+        let order = match sort {
+            BenchmarkSort::Name => a.display_name.cmp(&b.display_name),
+            _ => cmp_opt_f64(sort.extract(a), sort.extract(b))
+                .then_with(|| a.display_name.cmp(&b.display_name)),
+        };
+        if descending {
+            order.reverse()
+        } else {
+            order
+        }
+    });
+
+    visible
+}
+
+fn ambiguous_matches_message(query: &str, entries: &[&BenchmarkEntry]) -> String {
+    let suggestions = entries
+        .iter()
+        .take(5)
+        .map(|entry| entry.slug.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("Benchmark query '{query}' was ambiguous; try a slug. Matches: {suggestions}")
 }
 
 fn creator_label(entry: &BenchmarkEntry) -> &str {
@@ -580,6 +972,20 @@ fn format_sort_value(sort: BenchmarkSort, entry: &BenchmarkEntry) -> String {
             .clone()
             .unwrap_or_else(|| "\u{2014}".to_string()),
         _ => format_metric(sort.extract(entry)),
+    }
+}
+
+fn format_picker_sort_value(sort: BenchmarkSort, entry: &BenchmarkEntry) -> String {
+    match sort {
+        BenchmarkSort::Name => entry.slug.clone(),
+        _ => format_sort_value(sort, entry),
+    }
+}
+
+fn picker_sort_label(sort: BenchmarkSort) -> &'static str {
+    match sort {
+        BenchmarkSort::Name => "Slug",
+        _ => sort.label(),
     }
 }
 
@@ -679,6 +1085,132 @@ fn print_detail(detail: &BenchmarkDetail<'_>) {
     println!("Input $/M:    {}", format_metric(detail.price_input));
     println!("Output $/M:   {}", format_metric(detail.price_output));
     println!("Blended $/M:  {}", format_metric(detail.price_blended));
+}
+
+fn build_detail<'a>(
+    entry: &'a BenchmarkEntry,
+    open_weights_map: &HashMap<String, bool>,
+) -> BenchmarkDetail<'a> {
+    BenchmarkDetail {
+        slug: entry.slug.as_str(),
+        name: entry.name.as_str(),
+        display_name: entry.display_name.as_str(),
+        creator: entry.creator.as_str(),
+        creator_name: creator_label(entry),
+        creator_id: entry.creator_id.as_str(),
+        release_date: entry.release_date.as_deref(),
+        open_weights: open_weights_map.get(&entry.slug).copied(),
+        reasoning: reasoning_label(entry),
+        effort_level: entry.effort_level.as_deref(),
+        variant_tag: entry.variant_tag.as_deref(),
+        tool_call: entry.tool_call,
+        context_window: entry.context_window,
+        max_output: entry.max_output,
+        intelligence_index: entry.intelligence_index,
+        coding_index: entry.coding_index,
+        math_index: entry.math_index,
+        mmlu_pro: entry.mmlu_pro,
+        gpqa: entry.gpqa,
+        hle: entry.hle,
+        livecodebench: entry.livecodebench,
+        scicode: entry.scicode,
+        ifbench: entry.ifbench,
+        lcr: entry.lcr,
+        terminalbench_hard: entry.terminalbench_hard,
+        tau2: entry.tau2,
+        math_500: entry.math_500,
+        aime: entry.aime,
+        aime_25: entry.aime_25,
+        output_tps: entry.output_tps,
+        ttft: entry.ttft,
+        ttfat: entry.ttfat,
+        price_input: entry.price_input,
+        price_output: entry.price_output,
+        price_blended: entry.price_blended,
+    }
+}
+
+fn print_entry_detail(
+    entry: &BenchmarkEntry,
+    open_weights_map: &HashMap<String, bool>,
+    json: bool,
+) -> Result<()> {
+    let detail = build_detail(entry, open_weights_map);
+    if json {
+        println!("{}", serde_json::to_string_pretty(&detail)?);
+    } else {
+        print_detail(&detail);
+    }
+    Ok(())
+}
+
+fn pick_benchmark<'a>(
+    entries: Vec<&'a BenchmarkEntry>,
+    open_weights_map: &'a HashMap<String, bool>,
+    sort: BenchmarkSort,
+    descending: bool,
+    title: &str,
+) -> Result<Option<&'a BenchmarkEntry>> {
+    let mut picker = BenchmarkPicker::new(
+        entries,
+        open_weights_map,
+        sort,
+        descending,
+        title.to_string(),
+    );
+    let mut terminal = PickerTerminal::new()?;
+
+    loop {
+        terminal.terminal.draw(|frame| picker.draw(frame))?;
+
+        if !event::poll(Duration::from_millis(250))? {
+            continue;
+        }
+
+        match event::read()? {
+            Event::Resize(_, _) => terminal.terminal.autoresize()?,
+            Event::Key(key) if key.kind == KeyEventKind::Press => {
+                if picker.filter_mode {
+                    match key.code {
+                        KeyCode::Enter => picker.finish_filter(),
+                        KeyCode::Esc => picker.clear_filter(),
+                        KeyCode::Backspace => picker.pop_filter_char(),
+                        KeyCode::Char(ch) => picker.push_filter_char(ch),
+                        _ => {}
+                    }
+                    continue;
+                }
+
+                match key.code {
+                    KeyCode::Up | KeyCode::Char('k') => picker.previous(),
+                    KeyCode::Down | KeyCode::Char('j') => picker.next(),
+                    KeyCode::PageUp => picker.page_up(),
+                    KeyCode::PageDown => picker.page_down(),
+                    KeyCode::Home | KeyCode::Char('g') => picker.first(),
+                    KeyCode::End | KeyCode::Char('G') => picker.last(),
+                    KeyCode::Char('/') => picker.start_filter(),
+                    KeyCode::Char('s') => picker.cycle_sort(),
+                    KeyCode::Char('S') => picker.toggle_descending(),
+                    KeyCode::Enter => return Ok(picker.selected()),
+                    KeyCode::Esc | KeyCode::Char('q') => return Ok(None),
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn truncate_picker_text(value: &str, max_chars: usize) -> String {
+    let char_count = value.chars().count();
+    if char_count <= max_chars {
+        return value.to_string();
+    }
+    if max_chars <= 3 {
+        return value.chars().take(max_chars).collect();
+    }
+    let visible: String = value.chars().take(max_chars - 3).collect();
+    format!("{visible}...")
 }
 
 fn parse_date_to_numeric(date: &str) -> Option<f64> {
@@ -824,18 +1356,20 @@ mod tests {
             ),
         ];
 
-        assert_eq!(
-            resolve_entry(&entries, "gpt-4o").unwrap().display_name,
-            "GPT-4o"
-        );
-        assert_eq!(
-            resolve_entry(&entries, "Sonnet").unwrap().display_name,
-            "Claude Sonnet 4"
-        );
+        match resolve_entry(&entries, "gpt-4o").unwrap() {
+            ResolveEntry::Single(entry) => assert_eq!(entry.display_name, "GPT-4o"),
+            ResolveEntry::Ambiguous(_) => panic!("expected exact slug to resolve to a single row"),
+        }
+        match resolve_entry(&entries, "Sonnet").unwrap() {
+            ResolveEntry::Single(entry) => assert_eq!(entry.display_name, "Claude Sonnet 4"),
+            ResolveEntry::Ambiguous(_) => {
+                panic!("expected unique partial match to resolve to a single row")
+            }
+        }
     }
 
     #[test]
-    fn resolve_entry_rejects_ambiguous_matches() {
+    fn resolve_entry_returns_ambiguous_partial_matches() {
         let entries = vec![
             make_entry(
                 "claude-sonnet-4",
@@ -853,8 +1387,95 @@ mod tests {
             ),
         ];
 
-        let err = resolve_entry(&entries, "Claude").unwrap_err().to_string();
-        assert!(err.contains("ambiguous"));
+        match resolve_entry(&entries, "Claude").unwrap() {
+            ResolveEntry::Single(_) => panic!("expected ambiguous partial query"),
+            ResolveEntry::Ambiguous(matches) => {
+                assert_eq!(matches.len(), 2);
+                assert_eq!(matches[0].slug, "claude-opus-4");
+                assert_eq!(matches[1].slug, "claude-sonnet-4");
+            }
+        }
+    }
+
+    #[test]
+    fn resolve_entry_returns_ambiguous_exact_display_matches() {
+        let entries = vec![
+            make_entry(
+                "claude-sonnet-4-6-adaptive",
+                "Claude Sonnet 4.6",
+                "anthropic",
+                "Anthropic",
+                Some(88.0),
+            ),
+            make_entry(
+                "claude-sonnet-4-6-non-reasoning",
+                "Claude Sonnet 4.6",
+                "anthropic",
+                "Anthropic",
+                Some(82.0),
+            ),
+        ];
+
+        match resolve_entry(&entries, "Claude Sonnet 4.6").unwrap() {
+            ResolveEntry::Single(_) => panic!("expected ambiguous exact display-name query"),
+            ResolveEntry::Ambiguous(matches) => {
+                assert_eq!(matches.len(), 2);
+                assert_eq!(matches[0].slug, "claude-sonnet-4-6-adaptive");
+                assert_eq!(matches[1].slug, "claude-sonnet-4-6-non-reasoning");
+            }
+        }
+    }
+
+    #[test]
+    fn ambiguous_matches_message_lists_candidate_slugs() {
+        let entries = vec![
+            make_entry("alpha", "Alpha", "openai", "OpenAI", Some(90.0)),
+            make_entry("beta", "Beta", "openai", "OpenAI", Some(80.0)),
+        ];
+        let matches = vec![&entries[0], &entries[1]];
+
+        let message = ambiguous_matches_message("a", &matches);
+        assert!(message.contains("ambiguous"));
+        assert!(message.contains("alpha"));
+        assert!(message.contains("beta"));
+    }
+
+    #[test]
+    fn filter_picker_entries_applies_live_query() {
+        let entries = vec![
+            make_entry(
+                "claude-opus",
+                "Claude Opus",
+                "anthropic",
+                "Anthropic",
+                Some(90.0),
+            ),
+            make_entry(
+                "gpt-5-3-codex",
+                "GPT-5.3 Codex",
+                "openai",
+                "OpenAI",
+                Some(88.0),
+            ),
+        ];
+        let selected = entries.iter().collect::<Vec<_>>();
+
+        let filtered = filter_picker_entries(&selected, "claude", BenchmarkSort::Name, false);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].slug, "claude-opus");
+    }
+
+    #[test]
+    fn filter_picker_entries_resorts_by_requested_metric() {
+        let entries = vec![
+            make_entry("alpha", "Alpha", "openai", "OpenAI", Some(80.0)),
+            make_entry("beta", "Beta", "openai", "OpenAI", Some(90.0)),
+        ];
+        let selected = entries.iter().collect::<Vec<_>>();
+
+        let filtered = filter_picker_entries(&selected, "", BenchmarkSort::Intelligence, true);
+        assert_eq!(filtered[0].slug, "beta");
+        assert_eq!(filtered[1].slug, "alpha");
     }
 
     #[test]
