@@ -6,10 +6,10 @@ use ratatui::{
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
-    text::Line,
+    text::{Line, Span},
     widgets::{
         Block, Borders, Cell as TuiCell, HighlightSpacing, Paragraph, Row as TuiRow,
-        Table as TuiTable, TableState,
+        Table as TuiTable, TableState, Wrap,
     },
     Frame, Terminal, TerminalOptions, Viewport,
 };
@@ -120,14 +120,14 @@ impl ReleaseBrowser {
     }
 
     fn draw(&mut self, frame: &mut Frame<'_>) {
-        let chunks = Layout::default()
+        let outer = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Min(7),
-                Constraint::Length(5),
-                Constraint::Length(1),
-            ])
+            .constraints([Constraint::Min(10), Constraint::Length(1)])
             .split(frame.area());
+        let main = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(38), Constraint::Percentage(62)])
+            .split(outer[0]);
 
         let widths = if self.show_agent {
             vec![
@@ -169,13 +169,11 @@ impl ReleaseBrowser {
 
         let table = TuiTable::new(rows, widths)
             .header(
-                TuiRow::new(headers)
-                    .style(
-                        Style::default()
-                            .fg(Color::Cyan)
-                            .add_modifier(Modifier::BOLD),
-                    )
-                    .bottom_margin(1),
+                TuiRow::new(headers).style(
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
             )
             .column_spacing(1)
             .highlight_symbol(">> ")
@@ -192,19 +190,21 @@ impl ReleaseBrowser {
                     .title(format!("{} ({} releases)", self.title, self.items.len())),
             );
 
-        frame.render_stateful_widget(table, chunks[0], &mut self.state);
+        frame.render_stateful_widget(table, main[0], &mut self.state);
         frame.render_widget(
-            Paragraph::new(self.preview_lines()).block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::DarkGray))
-                    .title(" Changelog Preview "),
-            ),
-            chunks[1],
+            Paragraph::new(self.preview_lines())
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .border_style(Style::default().fg(Color::DarkGray))
+                        .title(" Changelog Preview "),
+                )
+                .wrap(Wrap { trim: false }),
+            main[1],
         );
         frame.render_widget(
             Paragraph::new("Enter print   q quit   ↑↓/j/k move   PgUp/PgDn jump"),
-            chunks[2],
+            outer[1],
         );
     }
 
@@ -212,15 +212,21 @@ impl ReleaseBrowser {
         let Some(item) = self.selected() else {
             return vec![Line::from("No releases")];
         };
-        let mut lines = vec![Line::from(format!(
-            "{} {} ({})",
-            item.agent_name, item.version, item.released
-        ))];
+        let mut lines = vec![Line::from(vec![
+            Span::styled(
+                item.agent_name.clone(),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(" "),
+            Span::styled(
+                item.version.clone(),
+                Style::default().add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(format!(" ({})", item.released)),
+        ])];
         lines.extend(changelog_preview_lines(item.body.as_deref()));
-        lines.truncate(4);
-        while lines.len() < 4 {
-            lines.push(Line::from(""));
-        }
         lines
     }
 }
@@ -453,32 +459,41 @@ fn changelog_preview_lines(body: Option<&str>) -> Vec<Line<'static>> {
         return vec![Line::from("(no changelog)")];
     };
     let (sections, ungrouped) = crate::agents::changelog_parser::parse_release_body(body);
-    let mut lines: Vec<String> = Vec::new();
+    let mut lines: Vec<Line<'static>> = Vec::new();
+    let preview_budget = 6;
 
-    for change in ungrouped.into_iter().take(2) {
-        lines.push(format!("- {}", truncate_text(&change, 76)));
-    }
-    for section in sections.into_iter().take(2) {
-        if lines.len() >= 3 {
+    for change in ungrouped {
+        if lines.len() >= preview_budget {
             break;
         }
-        lines.push(format!("[{}]", truncate_text(&section.name, 32)));
-        if let Some(change) = section.changes.first() {
-            if lines.len() >= 3 {
+        lines.push(Line::from(format!("- {}", change)));
+    }
+    for section in sections {
+        if lines.len() >= preview_budget {
+            break;
+        }
+        lines.push(Line::from(Span::styled(
+            format!("[{}]", section.name),
+            Style::default()
+                .fg(Color::Magenta)
+                .add_modifier(Modifier::BOLD),
+        )));
+        for change in section.changes {
+            if lines.len() >= preview_budget {
                 break;
             }
-            lines.push(format!("- {}", truncate_text(change, 72)));
+            lines.push(Line::from(format!("- {}", change)));
         }
     }
 
     if lines.is_empty() {
         body.lines()
             .filter(|line| !line.trim().is_empty())
-            .take(3)
-            .for_each(|line| lines.push(truncate_text(line, 76)));
+            .take(preview_budget)
+            .for_each(|line| lines.push(Line::from(line.to_string())));
     }
 
-    lines.into_iter().map(Line::from).collect()
+    lines
 }
 
 fn truncate_text(value: &str, max_chars: usize) -> String {

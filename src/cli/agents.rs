@@ -796,7 +796,11 @@ fn has_changelog_body(body: Option<&str>) -> bool {
 }
 
 fn sort_recent_release_items(items: &mut [crate::cli::agents_ui::ReleaseBrowserItem]) {
-    items.sort_by(|a, b| b.sort_key.cmp(&a.sort_key).then_with(|| b.version.cmp(&a.version)));
+    items.sort_by(|a, b| {
+        b.sort_key
+            .cmp(&a.sort_key)
+            .then_with(|| b.version.cmp(&a.version))
+    });
 }
 
 fn print_changelog_body(body: &str) {
