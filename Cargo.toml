@@ -65,6 +65,9 @@ termimad = "0.30"
 # Interactive prompts (fuzzy version picker)
 dialoguer = { version = "0.11", features = ["fuzzy-select"] }
 
+# Markdown parsing (changelog normalization)
+comrak = { version = "0.36", default-features = false }
+
 # Date/time handling
 chrono = { version = "0.4", features = ["serde"] }
 

@@ -455,42 +455,43 @@ pub fn manage_agent_sources(
 }
 
 fn changelog_preview_lines(body: Option<&str>) -> Vec<Line<'static>> {
+    use crate::agents::changelog_parser::{parse_changelog, ChangelogBlock};
+
     let Some(body) = body.filter(|body| !body.trim().is_empty()) else {
         return vec![Line::from("(no changelog)")];
     };
-    let (sections, ungrouped) = crate::agents::changelog_parser::parse_release_body(body);
+
+    let changelog = parse_changelog(body);
+    if changelog.blocks.is_empty() {
+        return vec![Line::from("(no changelog)")];
+    }
+
     let mut lines: Vec<Line<'static>> = Vec::new();
-    let preview_budget = 6;
+    let preview_budget = 8;
 
-    for change in ungrouped {
+    for block in &changelog.blocks {
         if lines.len() >= preview_budget {
             break;
         }
-        lines.push(Line::from(format!("- {}", change)));
-    }
-    for section in sections {
-        if lines.len() >= preview_budget {
-            break;
-        }
-        lines.push(Line::from(Span::styled(
-            format!("[{}]", section.name),
-            Style::default()
-                .fg(Color::Magenta)
-                .add_modifier(Modifier::BOLD),
-        )));
-        for change in section.changes {
-            if lines.len() >= preview_budget {
-                break;
+        match block {
+            ChangelogBlock::Heading(text) => {
+                lines.push(Line::from(Span::styled(
+                    format!("[{}]", text),
+                    Style::default()
+                        .fg(Color::Magenta)
+                        .add_modifier(Modifier::BOLD),
+                )));
             }
-            lines.push(Line::from(format!("- {}", change)));
+            ChangelogBlock::Bullet(text) => {
+                lines.push(Line::from(format!("  - {}", text)));
+            }
+            ChangelogBlock::Paragraph(text) => {
+                lines.push(Line::from(Span::styled(
+                    text.clone(),
+                    Style::default().fg(Color::DarkGray),
+                )));
+            }
         }
-    }
-
-    if lines.is_empty() {
-        body.lines()
-            .filter(|line| !line.trim().is_empty())
-            .take(preview_budget)
-            .for_each(|line| lines.push(Line::from(line.to_string())));
     }
 
     lines

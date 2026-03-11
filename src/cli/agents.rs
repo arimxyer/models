@@ -811,14 +811,13 @@ fn print_changelog_body(body: &str) {
         print!("{}", styled);
     } else {
         // Plain text when piped
-        let (sections, ungrouped) = crate::agents::changelog_parser::parse_release_body(body);
-        for change in &ungrouped {
-            println!("  - {}", change);
-        }
-        for section in &sections {
-            println!("\n[{}]", section.name);
-            for change in &section.changes {
-                println!("  - {}", change);
+        use crate::agents::changelog_parser::{parse_changelog, ChangelogBlock};
+        let changelog = parse_changelog(body);
+        for block in &changelog.blocks {
+            match block {
+                ChangelogBlock::Heading(text) => println!("\n[{}]", text),
+                ChangelogBlock::Bullet(text) => println!("  - {}", text),
+                ChangelogBlock::Paragraph(text) => println!("{}", text),
             }
         }
     }
