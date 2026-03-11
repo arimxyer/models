@@ -1,78 +1,209 @@
 // src/agents/changelog_parser.rs
 
-#[derive(Debug, Clone)]
-pub struct Section {
-    pub name: String,
-    pub changes: Vec<String>,
+use comrak::nodes::NodeValue;
+use comrak::{parse_document, Arena, Options};
+
+/// A normalized block in a parsed changelog.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ChangelogBlock {
+    /// A section heading (from ## or ### headers).
+    Heading(String),
+    /// A bullet item (from list items). May contain nested bullets.
+    Bullet(String),
+    /// A prose paragraph.
+    Paragraph(String),
 }
 
-/// Parse a GitHub release body (markdown) into sections and ungrouped changes.
-pub fn parse_release_body(body: &str) -> (Vec<Section>, Vec<String>) {
-    let skip_headers = ["What's Changed", "Changelog", "Full Changelog"];
+/// Structured changelog: a flat list of blocks representing the release body.
+#[derive(Debug, Clone)]
+pub struct Changelog {
+    pub blocks: Vec<ChangelogBlock>,
+}
 
-    let mut sections: Vec<Section> = Vec::new();
-    let mut ungrouped: Vec<String> = Vec::new();
-    let mut current_section: Option<Section> = None;
+/// Headers that wrap the actual content without adding structure.
+const SKIP_HEADERS: &[&str] = &["What's Changed", "Changelog", "Full Changelog"];
 
-    for line in body.lines() {
-        let trimmed = line.trim();
+fn is_skip_header(name: &str) -> bool {
+    SKIP_HEADERS.iter().any(|h| name.starts_with(h))
+}
 
-        // Check for markdown headers (##, ###)
-        if let Some(header_name) = extract_header(trimmed) {
-            // Flush previous section
-            if let Some(sec) = current_section.take() {
-                if !sec.changes.is_empty() {
-                    sections.push(sec);
+/// Extract plain text content from an AST node and its inline children.
+fn collect_text<'a>(node: &'a comrak::nodes::AstNode<'a>) -> String {
+    let mut text = String::new();
+    for child in node.children() {
+        match &child.data.borrow().value {
+            NodeValue::Text(t) => text.push_str(t),
+            NodeValue::Code(c) => {
+                text.push('`');
+                text.push_str(&c.literal);
+                text.push('`');
+            }
+            NodeValue::SoftBreak | NodeValue::LineBreak => text.push(' '),
+            NodeValue::Emph => {
+                let inner = collect_text(child);
+                text.push_str(&inner);
+            }
+            NodeValue::Strong => {
+                let inner = collect_text(child);
+                text.push_str(&inner);
+            }
+            NodeValue::Link(link) => {
+                let label = collect_text(child);
+                if label.is_empty() {
+                    text.push_str(&link.url);
+                } else {
+                    text.push_str(&label);
                 }
             }
-
-            // Skip wrapper headers
-            if skip_headers.iter().any(|h| header_name.starts_with(h)) {
-                continue;
+            NodeValue::Strikethrough => {
+                let inner = collect_text(child);
+                text.push_str(&inner);
             }
-
-            current_section = Some(Section {
-                name: header_name.to_string(),
-                changes: Vec::new(),
-            });
-        } else if let Some(change) = extract_change(trimmed) {
-            if let Some(ref mut sec) = current_section {
-                sec.changes.push(change);
-            } else {
-                ungrouped.push(change);
+            _ => {
+                // Recurse into other inline nodes
+                let inner = collect_text(child);
+                text.push_str(&inner);
             }
         }
     }
+    text
+}
 
-    // Flush last section
-    if let Some(sec) = current_section {
-        if !sec.changes.is_empty() {
-            sections.push(sec);
+/// Collect bullet items from a list node, flattening nested lists.
+fn collect_list_items<'a>(node: &'a comrak::nodes::AstNode<'a>, items: &mut Vec<String>) {
+    for child in node.children() {
+        if let NodeValue::Item(_) = &child.data.borrow().value {
+            let mut item_text = String::new();
+            let mut has_nested = false;
+            for item_child in child.children() {
+                match &item_child.data.borrow().value {
+                    NodeValue::Paragraph => {
+                        let para = collect_text(item_child);
+                        if !para.is_empty() {
+                            if !item_text.is_empty() {
+                                item_text.push(' ');
+                            }
+                            item_text.push_str(&para);
+                        }
+                    }
+                    NodeValue::List(_) => {
+                        // Push the parent item first, then recurse
+                        has_nested = true;
+                        if !item_text.is_empty() {
+                            items.push(item_text.clone());
+                            item_text.clear();
+                        }
+                        collect_list_items(item_child, items);
+                    }
+                    _ => {
+                        let text = collect_text(item_child);
+                        if !text.is_empty() {
+                            if !item_text.is_empty() {
+                                item_text.push(' ');
+                            }
+                            item_text.push_str(&text);
+                        }
+                    }
+                }
+            }
+            if !item_text.is_empty() || !has_nested {
+                items.push(item_text);
+            }
+        }
+    }
+}
+
+/// Parse a GitHub release body into a normalized changelog IR using comrak.
+pub fn parse_changelog(body: &str) -> Changelog {
+    let arena = Arena::new();
+    let opts = Options::default();
+    let root = parse_document(&arena, body, &opts);
+
+    let mut blocks = Vec::new();
+
+    for node in root.children() {
+        match &node.data.borrow().value {
+            NodeValue::Heading(heading) => {
+                // Only process ## and ### (level 2+), skip # (title)
+                if heading.level >= 2 {
+                    let text = collect_text(node);
+                    let trimmed = text.trim().to_string();
+                    if !is_skip_header(&trimmed) && !trimmed.is_empty() {
+                        blocks.push(ChangelogBlock::Heading(trimmed));
+                    }
+                }
+            }
+            NodeValue::List(_) => {
+                let mut items = Vec::new();
+                collect_list_items(node, &mut items);
+                for item in items {
+                    blocks.push(ChangelogBlock::Bullet(item));
+                }
+            }
+            NodeValue::Paragraph => {
+                let text = collect_text(node);
+                let trimmed = text.trim().to_string();
+                if !trimmed.is_empty() {
+                    blocks.push(ChangelogBlock::Paragraph(trimmed));
+                }
+            }
+            _ => {}
         }
     }
 
-    (sections, ungrouped)
-}
-
-fn extract_header(line: &str) -> Option<&str> {
-    // Match ## or ### headers (not #, which is usually the title)
-    let stripped = line
-        .strip_prefix("### ")
-        .or_else(|| line.strip_prefix("## "));
-    stripped.map(|s| s.trim())
-}
-
-fn extract_change(line: &str) -> Option<String> {
-    let stripped = line
-        .strip_prefix("- ")
-        .or_else(|| line.strip_prefix("* "))
-        .or_else(|| line.strip_prefix("+ "));
-    stripped.map(|s| s.trim().to_string())
+    Changelog { blocks }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[derive(Debug)]
+    struct Section {
+        name: String,
+        changes: Vec<String>,
+    }
+
+    /// Convert IR back to legacy format for backward-compatibility tests.
+    fn parse_release_body(body: &str) -> (Vec<Section>, Vec<String>) {
+        let changelog = parse_changelog(body);
+        let mut sections: Vec<Section> = Vec::new();
+        let mut ungrouped: Vec<String> = Vec::new();
+        let mut current_section: Option<Section> = None;
+
+        for block in changelog.blocks {
+            match block {
+                ChangelogBlock::Heading(name) => {
+                    if let Some(sec) = current_section.take() {
+                        if !sec.changes.is_empty() {
+                            sections.push(sec);
+                        }
+                    }
+                    current_section = Some(Section {
+                        name,
+                        changes: Vec::new(),
+                    });
+                }
+                ChangelogBlock::Bullet(text) | ChangelogBlock::Paragraph(text) => {
+                    if let Some(ref mut sec) = current_section {
+                        sec.changes.push(text);
+                    } else {
+                        ungrouped.push(text);
+                    }
+                }
+            }
+        }
+
+        if let Some(sec) = current_section {
+            if !sec.changes.is_empty() {
+                sections.push(sec);
+            }
+        }
+
+        (sections, ungrouped)
+    }
+
+    // --- Legacy API tests (must not regress) ---
 
     #[test]
     fn sectioned_changelog() {
@@ -170,5 +301,164 @@ mod tests {
         assert_eq!(sections[0].changes[0], "Fixed crash on startup");
         assert_eq!(sections[1].name, "Features");
         assert_eq!(sections[1].changes[0], "Added dark mode");
+    }
+
+    // --- New IR tests ---
+
+    #[test]
+    fn ir_preserves_paragraphs() {
+        let body = "\
+Some introductory text about this release.
+
+## Changes
+- Fixed a bug";
+
+        let changelog = parse_changelog(body);
+        assert_eq!(changelog.blocks.len(), 3);
+        assert_eq!(
+            changelog.blocks[0],
+            ChangelogBlock::Paragraph("Some introductory text about this release.".to_string())
+        );
+        assert_eq!(
+            changelog.blocks[1],
+            ChangelogBlock::Heading("Changes".to_string())
+        );
+        assert_eq!(
+            changelog.blocks[2],
+            ChangelogBlock::Bullet("Fixed a bug".to_string())
+        );
+    }
+
+    #[test]
+    fn ir_handles_inline_formatting() {
+        let body = "- Fixed **crash** in `main()` function";
+
+        let changelog = parse_changelog(body);
+        assert_eq!(changelog.blocks.len(), 1);
+        assert_eq!(
+            changelog.blocks[0],
+            ChangelogBlock::Bullet("Fixed crash in `main()` function".to_string())
+        );
+    }
+
+    #[test]
+    fn ir_handles_links() {
+        let body = "- See [the docs](https://example.com) for details";
+
+        let changelog = parse_changelog(body);
+        assert_eq!(changelog.blocks.len(), 1);
+        assert_eq!(
+            changelog.blocks[0],
+            ChangelogBlock::Bullet("See the docs for details".to_string())
+        );
+    }
+
+    #[test]
+    fn ir_flattens_nested_lists() {
+        let body = "\
+- Parent item
+  - Child item 1
+  - Child item 2";
+
+        let changelog = parse_changelog(body);
+        assert_eq!(changelog.blocks.len(), 3);
+        assert_eq!(
+            changelog.blocks[0],
+            ChangelogBlock::Bullet("Parent item".to_string())
+        );
+        assert_eq!(
+            changelog.blocks[1],
+            ChangelogBlock::Bullet("Child item 1".to_string())
+        );
+        assert_eq!(
+            changelog.blocks[2],
+            ChangelogBlock::Bullet("Child item 2".to_string())
+        );
+    }
+
+    #[test]
+    fn ir_skips_wrapper_headers() {
+        let body = "\
+## What's Changed
+- Item 1
+
+## Full Changelog
+https://github.com/example/compare/v1...v2";
+
+        let changelog = parse_changelog(body);
+        // "What's Changed" and "Full Changelog" headers should be skipped
+        assert!(changelog
+            .blocks
+            .iter()
+            .all(|b| !matches!(b, ChangelogBlock::Heading(_))));
+        assert_eq!(
+            changelog.blocks[0],
+            ChangelogBlock::Bullet("Item 1".to_string())
+        );
+    }
+
+    #[test]
+    fn ir_whitespace_only_body() {
+        let changelog = parse_changelog("   \n\n  ");
+        assert!(changelog.blocks.is_empty());
+    }
+
+    #[test]
+    fn ir_mixed_prose_and_sections() {
+        let body = "\
+This release includes important updates.
+
+## Breaking Changes
+- Removed deprecated API
+- Changed default timeout
+
+Some additional notes about migration.
+
+## Bug Fixes
+- Fixed memory leak";
+
+        let changelog = parse_changelog(body);
+        let headings: Vec<_> = changelog
+            .blocks
+            .iter()
+            .filter_map(|b| match b {
+                ChangelogBlock::Heading(h) => Some(h.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(headings, vec!["Breaking Changes", "Bug Fixes"]);
+
+        let bullets: Vec<_> = changelog
+            .blocks
+            .iter()
+            .filter_map(|b| match b {
+                ChangelogBlock::Bullet(t) => Some(t.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            bullets,
+            vec![
+                "Removed deprecated API",
+                "Changed default timeout",
+                "Fixed memory leak"
+            ]
+        );
+
+        let paragraphs: Vec<_> = changelog
+            .blocks
+            .iter()
+            .filter_map(|b| match b {
+                ChangelogBlock::Paragraph(t) => Some(t.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            paragraphs,
+            vec![
+                "This release includes important updates.",
+                "Some additional notes about migration."
+            ]
+        );
     }
 }
