@@ -2,6 +2,7 @@ use ratatui::widgets::ListState;
 
 use super::agents_app::AgentsApp;
 use super::benchmarks_app::BenchmarksApp;
+use super::status_app::StatusApp;
 
 /// Page size for page up/down navigation
 const PAGE_SIZE: usize = 10;
@@ -53,6 +54,7 @@ pub enum Tab {
     Models,
     Agents,
     Benchmarks,
+    Status,
 }
 
 impl Tab {
@@ -60,15 +62,17 @@ impl Tab {
         match self {
             Tab::Models => Tab::Agents,
             Tab::Agents => Tab::Benchmarks,
-            Tab::Benchmarks => Tab::Models,
+            Tab::Benchmarks => Tab::Status,
+            Tab::Status => Tab::Models,
         }
     }
 
     pub fn prev(self) -> Self {
         match self {
-            Tab::Models => Tab::Benchmarks,
+            Tab::Models => Tab::Status,
             Tab::Agents => Tab::Models,
             Tab::Benchmarks => Tab::Agents,
+            Tab::Status => Tab::Benchmarks,
         }
     }
 }
@@ -203,12 +207,25 @@ pub enum Message {
     ScrollH2HTop,
     ScrollH2HPageDown,
     ScrollH2HPageUp,
+    // Status tab messages
+    NextStatusProvider,
+    PrevStatusProvider,
+    SelectFirstStatusProvider,
+    SelectLastStatusProvider,
+    PageDownStatusProvider,
+    PageUpStatusProvider,
+    SwitchStatusFocus,
+    RefreshStatus,
+    OpenStatusPage,
     // Async data messages
     GitHubDataReceived(String, GitHubData),
     GitHubFetchFailed(String, String), // (agent_id, error_message)
     // Benchmark data messages
     BenchmarkDataReceived(Vec<BenchmarkEntry>),
     BenchmarkFetchFailed,
+    // Provider status data messages
+    StatusDataReceived(Vec<crate::status::ProviderStatus>),
+    StatusFetchFailed(String),
 }
 
 #[derive(Debug, Clone)]
@@ -245,11 +262,13 @@ pub struct App {
     pub provider_list_items: Vec<ProviderListItem>,
     pub benchmark_store: BenchmarkStore,
     pub benchmarks_app: BenchmarksApp,
+    pub status_app: Option<StatusApp>,
     pub open_weights_map: HashMap<String, bool>,
     /// Cached detail panel height for search match scrolling
     pub last_detail_height: u16,
     /// Store indices of selected models for comparison (shared between tabs)
     pub selections: Vec<usize>,
+    pub pending_status_refresh: bool,
 }
 
 impl App {
@@ -269,6 +288,7 @@ impl App {
 
         let config = config.unwrap_or_default();
         let agents_app = agents_file.map(|af| AgentsApp::new(af, &config));
+        let status_app = agents_file.map(StatusApp::new);
         let open_weights_map =
             crate::model_traits::build_open_weights_map(&providers, benchmark_store.entries());
         crate::model_traits::apply_model_traits(&providers, benchmark_store.entries_mut());
@@ -299,9 +319,11 @@ impl App {
             provider_list_items: Vec::new(),
             benchmark_store,
             benchmarks_app,
+            status_app,
             open_weights_map,
             last_detail_height: 0,
             selections: Vec::new(),
+            pending_status_refresh: false,
         };
 
         app.update_provider_list();
@@ -552,6 +574,13 @@ impl App {
                         self.benchmarks_app
                             .update_filtered(&self.benchmark_store, &self.open_weights_map);
                     }
+                    Tab::Status => {
+                        if let Some(ref mut status_app) = self.status_app {
+                            status_app.search_query.push(c);
+                            status_app.selected = 0;
+                            status_app.update_filtered();
+                        }
+                    }
                 }
             }
             Message::SearchBackspace => {
@@ -576,6 +605,13 @@ impl App {
                         self.benchmarks_app
                             .update_filtered(&self.benchmark_store, &self.open_weights_map);
                     }
+                    Tab::Status => {
+                        if let Some(ref mut status_app) = self.status_app {
+                            status_app.search_query.pop();
+                            status_app.selected = 0;
+                            status_app.update_filtered();
+                        }
+                    }
                 }
             }
             Message::ClearSearch => {
@@ -599,6 +635,13 @@ impl App {
                         self.benchmarks_app.selected = 0;
                         self.benchmarks_app
                             .update_filtered(&self.benchmark_store, &self.open_weights_map);
+                    }
+                    Tab::Status => {
+                        if let Some(ref mut status_app) = self.status_app {
+                            status_app.search_query.clear();
+                            status_app.selected = 0;
+                            status_app.update_filtered();
+                        }
                     }
                 }
             }
@@ -700,6 +743,51 @@ impl App {
                 if let Some(ref mut agents_app) = self.agents_app {
                     agents_app.page_up(PAGE_SIZE);
                 }
+            }
+            Message::NextStatusProvider => {
+                if let Some(ref mut status_app) = self.status_app {
+                    status_app.next();
+                }
+            }
+            Message::PrevStatusProvider => {
+                if let Some(ref mut status_app) = self.status_app {
+                    status_app.prev();
+                }
+            }
+            Message::SelectFirstStatusProvider => {
+                if let Some(ref mut status_app) = self.status_app {
+                    status_app.select_first();
+                }
+            }
+            Message::SelectLastStatusProvider => {
+                if let Some(ref mut status_app) = self.status_app {
+                    status_app.select_last();
+                }
+            }
+            Message::PageDownStatusProvider => {
+                if let Some(ref mut status_app) = self.status_app {
+                    status_app.page_down();
+                }
+            }
+            Message::PageUpStatusProvider => {
+                if let Some(ref mut status_app) = self.status_app {
+                    status_app.page_up();
+                }
+            }
+            Message::SwitchStatusFocus => {
+                if let Some(ref mut status_app) = self.status_app {
+                    status_app.switch_focus();
+                }
+            }
+            Message::RefreshStatus => {
+                if let Some(ref mut status_app) = self.status_app {
+                    status_app.loading = true;
+                    status_app.last_error = None;
+                    self.pending_status_refresh = true;
+                }
+            }
+            Message::OpenStatusPage => {
+                // Handled in main loop
             }
             Message::SwitchAgentFocus => {
                 if let Some(ref mut agents_app) = self.agents_app {
@@ -1082,6 +1170,16 @@ impl App {
             }
             Message::BenchmarkFetchFailed => {
                 // Silently keep existing data
+            }
+            Message::StatusDataReceived(entries) => {
+                if let Some(ref mut status_app) = self.status_app {
+                    status_app.apply_fetch(entries);
+                }
+            }
+            Message::StatusFetchFailed(error) => {
+                if let Some(ref mut status_app) = self.status_app {
+                    status_app.apply_error(error);
+                }
             }
         }
         true

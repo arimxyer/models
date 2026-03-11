@@ -62,6 +62,7 @@ fn handle_normal_mode(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Opti
         super::app::Tab::Models => handle_models_keys(app, code, modifiers),
         super::app::Tab::Agents => handle_agents_keys(app, code, modifiers),
         super::app::Tab::Benchmarks => handle_benchmarks_keys(app, code, modifiers),
+        super::app::Tab::Status => handle_status_keys(app, code, modifiers),
     }
 }
 
@@ -357,6 +358,57 @@ fn handle_picker_keys(code: KeyCode) -> Option<Message> {
         KeyCode::Char(' ') => Some(Message::PickerToggle),
         KeyCode::Enter => Some(Message::PickerSave),
         KeyCode::Esc => Some(Message::ClosePicker),
+        _ => None,
+    }
+}
+
+fn handle_status_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Option<Message> {
+    use super::status_app::StatusFocus;
+
+    let focus = app
+        .status_app
+        .as_ref()
+        .map(|a| a.focus)
+        .unwrap_or(StatusFocus::List);
+
+    match code {
+        KeyCode::Char('j') | KeyCode::Down => {
+            if focus == StatusFocus::List {
+                Some(Message::NextStatusProvider)
+            } else {
+                None
+            }
+        }
+        KeyCode::Char('k') | KeyCode::Up => {
+            if focus == StatusFocus::List {
+                Some(Message::PrevStatusProvider)
+            } else {
+                None
+            }
+        }
+        KeyCode::Char('g') if focus == StatusFocus::List => {
+            Some(Message::SelectFirstStatusProvider)
+        }
+        KeyCode::Char('G') if focus == StatusFocus::List => Some(Message::SelectLastStatusProvider),
+        KeyCode::Char('d')
+            if modifiers.contains(KeyModifiers::CONTROL) && focus == StatusFocus::List =>
+        {
+            Some(Message::PageDownStatusProvider)
+        }
+        KeyCode::Char('u')
+            if modifiers.contains(KeyModifiers::CONTROL) && focus == StatusFocus::List =>
+        {
+            Some(Message::PageUpStatusProvider)
+        }
+        KeyCode::PageDown if focus == StatusFocus::List => Some(Message::PageDownStatusProvider),
+        KeyCode::PageUp if focus == StatusFocus::List => Some(Message::PageUpStatusProvider),
+        KeyCode::Char('h') | KeyCode::Left => Some(Message::SwitchStatusFocus),
+        KeyCode::Char('l') | KeyCode::Right => Some(Message::SwitchStatusFocus),
+        KeyCode::Tab | KeyCode::BackTab => Some(Message::SwitchStatusFocus),
+        KeyCode::Char('/') => Some(Message::EnterSearch),
+        KeyCode::Esc => Some(Message::ClearSearch),
+        KeyCode::Char('o') => Some(Message::OpenStatusPage),
+        KeyCode::Char('r') => Some(Message::RefreshStatus),
         _ => None,
     }
 }

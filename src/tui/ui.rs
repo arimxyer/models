@@ -11,6 +11,7 @@ use ratatui::{
 use super::app::{App, Filters, Focus, Mode, ProviderListItem, SortOrder, Tab};
 use crate::agents::{format_stars, FetchStatus};
 use crate::provider_category::{provider_category, ProviderCategory};
+use crate::status::ProviderHealth;
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
@@ -33,6 +34,9 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         }
         Tab::Benchmarks => {
             draw_benchmarks_main(f, chunks[1], app);
+        }
+        Tab::Status => {
+            draw_status_main(f, chunks[1], app);
         }
     }
 
@@ -71,6 +75,8 @@ fn draw_header(f: &mut Frame, area: Rect, app: &App) {
         Span::styled("Agents", tab_style(Tab::Agents)),
         Span::raw(" | "),
         Span::styled("Benchmarks", tab_style(Tab::Benchmarks)),
+        Span::raw(" | "),
+        Span::styled("Status", tab_style(Tab::Status)),
         Span::styled("  [/] switch tabs", Style::default().fg(Color::DarkGray)),
     ]));
     f.render_widget(header, area);
@@ -90,6 +96,213 @@ fn draw_main(f: &mut Frame, area: Rect, app: &mut App) {
     draw_providers(f, chunks[0], app);
     draw_models(f, chunks[1], app);
     draw_right_panel(f, chunks[2], app);
+}
+
+fn status_health_style(health: ProviderHealth) -> Style {
+    match health {
+        ProviderHealth::Operational => Style::default().fg(Color::Green),
+        ProviderHealth::Degraded => Style::default().fg(Color::Yellow),
+        ProviderHealth::Outage => Style::default().fg(Color::Red),
+        ProviderHealth::Maintenance => Style::default().fg(Color::Blue),
+        ProviderHealth::Unknown => Style::default().fg(Color::DarkGray),
+    }
+}
+
+fn status_health_icon(health: ProviderHealth) -> &'static str {
+    match health {
+        ProviderHealth::Operational => "●",
+        ProviderHealth::Degraded => "◐",
+        ProviderHealth::Outage => "✗",
+        ProviderHealth::Maintenance => "◆",
+        ProviderHealth::Unknown => "?",
+    }
+}
+
+fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
+    use super::status_app::StatusFocus;
+
+    let Some(status_app) = app.status_app.as_mut() else {
+        let msg = Paragraph::new("Failed to load status data")
+            .block(Block::default().borders(Borders::ALL).title(" Status "));
+        f.render_widget(msg, area);
+        return;
+    };
+
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Length(28), Constraint::Min(0)])
+        .split(area);
+
+    let list_border = if status_app.focus == StatusFocus::List {
+        Style::default().fg(Color::Cyan)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+    let detail_border = if status_app.focus == StatusFocus::Details {
+        Style::default().fg(Color::Cyan)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+
+    let title = if status_app.search_query.is_empty() {
+        format!(" Status ({}) ", status_app.filtered_entries.len())
+    } else {
+        format!(
+            " Status ({}) [/{query}] ",
+            status_app.filtered_entries.len(),
+            query = status_app.search_query
+        )
+    };
+
+    let mut items = Vec::new();
+    for (row_idx, &idx) in status_app.filtered_entries.iter().enumerate() {
+        if let Some(entry) = status_app.entries.get(idx) {
+            let is_selected = status_app.list_state.selected() == Some(row_idx);
+            let prefix = if is_selected && status_app.focus == StatusFocus::List {
+                "> "
+            } else {
+                "  "
+            };
+            let mut spans = vec![
+                Span::styled(prefix, Style::default().fg(Color::Yellow)),
+                Span::styled(
+                    status_health_icon(entry.health),
+                    status_health_style(entry.health),
+                ),
+                Span::raw(" "),
+                Span::styled(
+                    truncate(&entry.display_name, 22),
+                    if is_selected {
+                        Style::default().add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default()
+                    },
+                ),
+            ];
+            if entry.health == ProviderHealth::Unknown {
+                spans.push(Span::styled(" ?", Style::default().fg(Color::DarkGray)));
+            }
+            items.push(ListItem::new(Line::from(spans)));
+        }
+    }
+
+    let list = List::new(items).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(list_border)
+            .title(title),
+    );
+    f.render_stateful_widget(list, chunks[0], &mut status_app.list_state);
+
+    let detail_lines = if let Some(entry) = status_app.current_entry() {
+        let mut lines = vec![
+            Line::from(vec![
+                Span::styled(
+                    entry.display_name.clone(),
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw("  "),
+                Span::styled(entry.health.label(), status_health_style(entry.health)),
+            ]),
+            Line::from(Span::styled(
+                format!("Slug: {}", entry.slug),
+                Style::default().fg(Color::DarkGray),
+            )),
+            Line::from(""),
+        ];
+
+        lines.push(Line::from(vec![
+            Span::styled("Source: ", Style::default().fg(Color::DarkGray)),
+            Span::raw(
+                entry
+                    .source_name
+                    .clone()
+                    .unwrap_or_else(|| "Unavailable".to_string()),
+            ),
+        ]));
+        lines.push(Line::from(vec![
+            Span::styled("Last checked: ", Style::default().fg(Color::DarkGray)),
+            Span::raw(
+                entry
+                    .last_checked
+                    .as_deref()
+                    .and_then(crate::agents::helpers::parse_date)
+                    .map(|dt| dt.format("%Y-%m-%d %H:%M UTC").to_string())
+                    .unwrap_or_else(|| "Unknown".to_string()),
+            ),
+        ]));
+        lines.push(Line::from(vec![
+            Span::styled("Category: ", Style::default().fg(Color::DarkGray)),
+            Span::raw(
+                entry
+                    .category
+                    .clone()
+                    .unwrap_or_else(|| "Unknown".to_string()),
+            ),
+        ]));
+        if let Some(description) = &entry.description {
+            lines.push(Line::from(""));
+            lines.push(Line::from(description.clone()));
+        }
+
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            "Related agents:",
+            Style::default().add_modifier(Modifier::BOLD),
+        )));
+        let related_agents = status_app.related_agents_for(&entry.slug);
+        if related_agents.is_empty() {
+            lines.push(Line::from(Span::styled(
+                "None in curated catalog",
+                Style::default().fg(Color::DarkGray),
+            )));
+        } else {
+            for name in related_agents {
+                lines.push(Line::from(format!("• {}", name)));
+            }
+        }
+
+        lines.push(Line::from(""));
+        if let Some(error) = &status_app.last_error {
+            lines.push(Line::from(vec![
+                Span::styled("Fetch note: ", Style::default().fg(Color::DarkGray)),
+                Span::styled(error.clone(), Style::default().fg(Color::Yellow)),
+            ]));
+        } else if status_app.loading {
+            lines.push(Line::from(Span::styled(
+                "Loading provider status…",
+                Style::default().fg(Color::Yellow),
+            )));
+        }
+
+        lines.push(Line::from(""));
+        lines.push(Line::from(vec![
+            Span::styled(" o ", Style::default().fg(Color::Yellow)),
+            Span::raw("open status page  "),
+            Span::styled(" r ", Style::default().fg(Color::Yellow)),
+            Span::raw("refresh"),
+        ]));
+
+        lines
+    } else {
+        vec![Line::from(Span::styled(
+            "Select a provider to view details",
+            Style::default().fg(Color::DarkGray),
+        ))]
+    };
+
+    let paragraph = Paragraph::new(detail_lines)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(detail_border)
+                .title(" Details "),
+        )
+        .wrap(Wrap { trim: false })
+        .scroll((status_app.detail_scroll, 0));
+    f.render_widget(paragraph, chunks[1]);
 }
 
 fn provider_detail_lines(app: &App) -> Vec<Line<'static>> {
@@ -2680,6 +2893,18 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
                         ])
                     }
                 }
+                Tab::Status => Line::from(vec![
+                    Span::styled(" q ", Style::default().fg(Color::Yellow)),
+                    Span::raw("quit  "),
+                    Span::styled(" / ", Style::default().fg(Color::Yellow)),
+                    Span::raw("search  "),
+                    Span::styled(" Tab ", Style::default().fg(Color::Yellow)),
+                    Span::raw("focus  "),
+                    Span::styled(" o ", Style::default().fg(Color::Yellow)),
+                    Span::raw("status page  "),
+                    Span::styled(" r ", Style::default().fg(Color::Yellow)),
+                    Span::raw("refresh"),
+                ]),
             };
 
             let right_content = Line::from(vec![
@@ -2703,6 +2928,11 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
                     .map(|a| &a.search_query)
                     .unwrap_or(&app.search_query),
                 Tab::Benchmarks => &app.benchmarks_app.search_query,
+                Tab::Status => app
+                    .status_app
+                    .as_ref()
+                    .map(|a| &a.search_query)
+                    .unwrap_or(&app.search_query),
             };
             let content = Line::from(vec![
                 Span::styled(" Search: ", Style::default().fg(Color::Cyan)),
@@ -3090,6 +3320,40 @@ fn draw_help_popup(f: &mut Frame, scroll: u16, current_tab: Tab) {
                 Line::from(""),
             ]);
         }
+        Tab::Status => {
+            help_text.extend(vec![
+                Line::from(Span::styled(
+                    "Actions",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                )),
+                Line::from(vec![
+                    Span::styled("  o             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Open provider status page"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  r             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Refresh provider status"),
+                ]),
+                Line::from(""),
+                Line::from(Span::styled(
+                    "Status view",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                )),
+                Line::from(vec![
+                    Span::styled("  Tab/h/l       ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Switch list/details focus"),
+                ]),
+                Line::from(vec![
+                    Span::styled("  /             ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Search providers"),
+                ]),
+                Line::from(""),
+            ]);
+        }
     }
 
     // Common: Tabs and Other
@@ -3129,6 +3393,7 @@ fn draw_help_popup(f: &mut Frame, scroll: u16, current_tab: Tab) {
         Tab::Models => " Models Help - ? or Esc to close (j/k to scroll) ",
         Tab::Agents => " Agents Help - ? or Esc to close (j/k to scroll) ",
         Tab::Benchmarks => " Benchmarks Help - ? or Esc to close (j/k to scroll) ",
+        Tab::Status => " Status Help - ? or Esc to close (j/k to scroll) ",
     };
 
     let block = Block::default()

@@ -14,6 +14,7 @@ pub mod benchmarks_app;
 pub mod event;
 pub mod markdown;
 pub mod radar;
+pub mod status_app;
 pub mod ui;
 
 use crate::agents::{
@@ -23,6 +24,7 @@ use crate::benchmark_fetch::{BenchmarkFetchResult, BenchmarkFetcher};
 use crate::benchmarks::BenchmarkStore;
 use crate::config::Config;
 use crate::data::ProvidersMap;
+use crate::status_fetch::{StatusFetchResult, StatusFetcher};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -46,6 +48,20 @@ pub enum FetchResult {
     Success(String, GitHubData),
     /// Failed fetch: (agent_id, error_message)
     Failure(String, String),
+}
+
+struct StatusRuntime {
+    rx: mpsc::Receiver<StatusFetchResult>,
+    tx: mpsc::Sender<StatusFetchResult>,
+}
+
+struct RuntimeHandles {
+    github_rx: mpsc::Receiver<FetchResult>,
+    github_tx: mpsc::Sender<FetchResult>,
+    client: AsyncGitHubClient,
+    disk_cache: Arc<RwLock<GitHubCache>>,
+    bench_rx: mpsc::Receiver<BenchmarkFetchResult>,
+    status: StatusRuntime,
 }
 pub async fn run(providers: ProvidersMap) -> Result<()> {
     use crate::agents::FetchStatus;
@@ -145,16 +161,31 @@ pub async fn run(providers: ProvidersMap) -> Result<()> {
         let _ = bench_tx.send(result).await;
     });
 
+    let (status_tx, status_rx) = mpsc::channel(4);
+    if let Some(ref status_app) = app.status_app {
+        let seeds = status_app.fetch_seeds();
+        let tx = status_tx.clone();
+        tokio::spawn(async move {
+            let fetcher = StatusFetcher::new();
+            let result = fetcher.fetch(&seeds).await;
+            let _ = tx.send(result).await;
+        });
+    }
+
     // Main loop - pass client and sender for dynamic fetches
-    let result = run_app(
-        &mut terminal,
-        &mut app,
-        rx,
-        tx,
+    let status_runtime = StatusRuntime {
+        rx: status_rx,
+        tx: status_tx,
+    };
+    let runtime_handles = RuntimeHandles {
+        github_rx: rx,
+        github_tx: tx,
         client,
-        disk_cache.clone(),
+        disk_cache: disk_cache.clone(),
         bench_rx,
-    );
+        status: status_runtime,
+    };
+    let result = run_app(&mut terminal, &mut app, runtime_handles);
 
     // Abort any remaining fetch tasks to allow clean shutdown
     for handle in fetch_handles {
@@ -183,11 +214,7 @@ pub async fn run(providers: ProvidersMap) -> Result<()> {
 fn run_app(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     app: &mut app::App,
-    mut github_rx: mpsc::Receiver<FetchResult>,
-    github_tx: mpsc::Sender<FetchResult>,
-    client: AsyncGitHubClient,
-    disk_cache: Arc<RwLock<GitHubCache>>,
-    mut bench_rx: mpsc::Receiver<BenchmarkFetchResult>,
+    mut runtime: RuntimeHandles,
 ) -> Result<()> {
     let mut last_status_time: Option<std::time::Instant> = None;
 
@@ -206,9 +233,9 @@ fn run_app(
         if !app.pending_fetches.is_empty() {
             let fetches = std::mem::take(&mut app.pending_fetches);
             for (agent_id, repo) in fetches {
-                let tx = github_tx.clone();
-                let client = client.clone();
-                let cache = disk_cache.clone();
+                let tx = runtime.github_tx.clone();
+                let client = runtime.client.clone();
+                let cache = runtime.disk_cache.clone();
 
                 tokio::spawn(async move {
                     let result = match client.fetch_conditional(&repo).await {
@@ -234,7 +261,7 @@ fn run_app(
         }
 
         // Check for GitHub updates (non-blocking)
-        while let Ok(result) = github_rx.try_recv() {
+        while let Ok(result) = runtime.github_rx.try_recv() {
             match result {
                 FetchResult::Success(id, data) => {
                     app.update(app::Message::GitHubDataReceived(id, data));
@@ -246,13 +273,37 @@ fn run_app(
         }
 
         // Check for benchmark data updates (non-blocking)
-        if let Ok(result) = bench_rx.try_recv() {
+        if let Ok(result) = runtime.bench_rx.try_recv() {
             match result {
                 BenchmarkFetchResult::Fresh(entries) => {
                     app.update(app::Message::BenchmarkDataReceived(entries));
                 }
                 BenchmarkFetchResult::Error => {
                     app.update(app::Message::BenchmarkFetchFailed);
+                }
+            }
+        }
+
+        if app.pending_status_refresh {
+            app.pending_status_refresh = false;
+            if let Some(ref status_app) = app.status_app {
+                let seeds = status_app.fetch_seeds();
+                let tx = runtime.status.tx.clone();
+                tokio::spawn(async move {
+                    let fetcher = StatusFetcher::new();
+                    let result = fetcher.fetch(&seeds).await;
+                    let _ = tx.send(result).await;
+                });
+            }
+        }
+
+        if let Ok(result) = runtime.status.rx.try_recv() {
+            match result {
+                StatusFetchResult::Fresh(entries) => {
+                    app.update(app::Message::StatusDataReceived(entries));
+                }
+                StatusFetchResult::Error(error) => {
+                    app.update(app::Message::StatusFetchFailed(error));
                 }
             }
         }
@@ -343,6 +394,23 @@ fn run_app(
                         app.set_status(format!("Opened: {}", url));
                         last_status_time = Some(std::time::Instant::now());
                     }
+                }
+                app::Message::OpenStatusPage => {
+                    if let Some(entry) = app.status_app.as_ref().and_then(|a| a.current_entry()) {
+                        if let Some(url) = entry
+                            .status_page_url
+                            .as_ref()
+                            .or(entry.source_page_url.as_ref())
+                        {
+                            let _ = open::that_in_background(url);
+                            app.set_status(format!("Opened: {}", url));
+                            last_status_time = Some(std::time::Instant::now());
+                        }
+                    }
+                }
+                app::Message::RefreshStatus => {
+                    app.set_status("Refreshing provider status…".to_string());
+                    last_status_time = Some(std::time::Instant::now());
                 }
                 app::Message::PickerSave => {
                     // Picker save sets its own status message via app.update
