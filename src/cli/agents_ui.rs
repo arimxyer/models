@@ -34,6 +34,11 @@ pub struct AgentSourceItem {
     pub categories: String,
     pub tracked: bool,
     pub open_source: bool,
+    pub supported_providers: String,
+    pub platform_support: String,
+    pub pricing: String,
+    pub homepage: String,
+    pub docs: String,
 }
 
 const VIEWPORT_HEIGHT: u16 = 14;
@@ -286,14 +291,14 @@ impl SourcePicker {
     }
 
     fn draw(&mut self, frame: &mut Frame<'_>) {
-        let chunks = Layout::default()
+        let outer = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Min(7),
-                Constraint::Length(4),
-                Constraint::Length(1),
-            ])
+            .constraints([Constraint::Min(10), Constraint::Length(1)])
             .split(frame.area());
+        let main = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .split(outer[0]);
 
         let rows = self.items.iter().map(|item| {
             TuiRow::new(vec![
@@ -336,39 +341,88 @@ impl SourcePicker {
                 .title(format!("{} ({} agents)", self.title, self.items.len())),
         );
 
-        frame.render_stateful_widget(table, chunks[0], &mut self.state);
+        frame.render_stateful_widget(table, main[0], &mut self.state);
         frame.render_widget(
-            Paragraph::new(self.preview_lines()).block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::DarkGray))
-                    .title(" Agent "),
-            ),
-            chunks[1],
+            Paragraph::new(self.preview_lines())
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .border_style(Style::default().fg(Color::DarkGray))
+                        .title(" Agent "),
+                )
+                .wrap(Wrap { trim: false }),
+            main[1],
         );
         let status = match self.mode {
             SourcePickerMode::Select => "Enter choose   q quit   ↑↓/j/k move",
             SourcePickerMode::Manage => "Space toggle   Enter save   q cancel   ↑↓/j/k move",
         };
-        frame.render_widget(Paragraph::new(status), chunks[2]);
+        frame.render_widget(Paragraph::new(status), outer[1]);
     }
 
     fn preview_lines(&self) -> Vec<Line<'static>> {
         let Some(item) = self.selected() else {
             return vec![Line::from("No agents")];
         };
-        vec![
-            Line::from(format!("repo: {}", truncate_text(&item.repo, 72))),
-            Line::from(format!(
-                "tracked: {}   open source: {}",
-                if item.tracked { "yes" } else { "no" },
-                if item.open_source { "yes" } else { "no" }
-            )),
-            Line::from(format!(
-                "categories: {}",
-                truncate_text(&item.categories, 60)
-            )),
-        ]
+        let label = |s: &str| -> Span<'static> {
+            Span::styled(
+                format!("{s}: "),
+                Style::default()
+                    .fg(Color::DarkGray)
+                    .add_modifier(Modifier::BOLD),
+            )
+        };
+        let val = |s: &str| -> Span<'static> { Span::raw(s.to_string()) };
+
+        let source_tag = if item.open_source {
+            Span::styled(
+                " open source ",
+                Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+            )
+        } else {
+            Span::styled(
+                " closed source ",
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+            )
+        };
+
+        let mut lines = vec![
+            Line::from(vec![
+                Span::styled(
+                    item.name.clone(),
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw("  "),
+                source_tag,
+            ]),
+            Line::from(""),
+            Line::from(vec![label("repo"), val(&truncate_text(&item.repo, 55))]),
+            Line::from(vec![label("categories"), val(&truncate_text(&item.categories, 50))]),
+            Line::from(vec![label("providers"), val(&truncate_text(&item.supported_providers, 50))]),
+            Line::from(vec![label("platforms"), val(&truncate_text(&item.platform_support, 50))]),
+            Line::from(vec![label("pricing"), val(&truncate_text(&item.pricing, 50))]),
+        ];
+        if item.homepage != "\u{2014}" {
+            lines.push(Line::from(vec![
+                label("homepage"),
+                Span::styled(
+                    truncate_text(&item.homepage, 50),
+                    Style::default().fg(Color::Blue),
+                ),
+            ]));
+        }
+        if item.docs != "\u{2014}" {
+            lines.push(Line::from(vec![
+                label("docs"),
+                Span::styled(
+                    truncate_text(&item.docs, 50),
+                    Style::default().fg(Color::Blue),
+                ),
+            ]));
+        }
+        lines
     }
 }
 
