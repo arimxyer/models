@@ -145,13 +145,10 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
     };
 
     let title = if status_app.search_query.is_empty() {
-        format!(
-            " Status ({}) [API Status Check] ",
-            status_app.filtered_entries.len()
-        )
+        format!(" Status ({}) ", status_app.filtered_entries.len())
     } else {
         format!(
-            " Status ({}) [/{query}] [API Status Check] ",
+            " Status ({}) [/{query}] ",
             status_app.filtered_entries.len(),
             query = status_app.search_query
         )
@@ -182,9 +179,15 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     },
                 ),
             ];
-            if entry.health == ProviderHealth::Unknown {
-                spans.push(Span::styled(" ?", Style::default().fg(Color::DarkGray)));
-            }
+            let provenance_suffix = match entry.provenance {
+                crate::status::StatusProvenance::Official => "  off",
+                crate::status::StatusProvenance::Fallback => "  fb",
+                crate::status::StatusProvenance::Unavailable => "  —",
+            };
+            spans.push(Span::styled(
+                provenance_suffix,
+                Style::default().fg(Color::DarkGray),
+            ));
             items.push(ListItem::new(Line::from(spans)));
         }
     }
@@ -214,21 +217,27 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                 Style::default().fg(Color::DarkGray),
             )),
             Line::from(vec![
-                Span::styled("Reported by: ", Style::default().fg(Color::DarkGray)),
-                Span::raw("API Status Check"),
+                Span::styled("Trust level: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(entry.provenance.label()),
             ]),
             Line::from(""),
         ];
 
         lines.push(Line::from(vec![
-            Span::styled("Source entry: ", Style::default().fg(Color::DarkGray)),
+            Span::styled("Chosen source: ", Style::default().fg(Color::DarkGray)),
             Span::raw(
                 entry
-                    .source_name
+                    .source_label
                     .clone()
                     .unwrap_or_else(|| "Unavailable".to_string()),
             ),
         ]));
+        if let Some(method) = entry.source_method {
+            lines.push(Line::from(vec![
+                Span::styled("Source method: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(method.label()),
+            ]));
+        }
         if entry.source_slug != entry.slug {
             lines.push(Line::from(vec![
                 Span::styled("Mapped slug: ", Style::default().fg(Color::DarkGray)),
@@ -247,57 +256,30 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
             ),
         ]));
         lines.push(Line::from(vec![
-            Span::styled("Source status: ", Style::default().fg(Color::DarkGray)),
+            Span::styled("Displayed status: ", Style::default().fg(Color::DarkGray)),
             Span::styled(entry.health.label(), status_health_style(entry.health)),
         ]));
         lines.push(Line::from(vec![
-            Span::styled("Category: ", Style::default().fg(Color::DarkGray)),
+            Span::styled("Official URL: ", Style::default().fg(Color::DarkGray)),
             Span::raw(
                 entry
-                    .category
-                    .clone()
-                    .unwrap_or_else(|| "Unknown".to_string()),
-            ),
-        ]));
-        lines.push(Line::from(vec![
-            Span::styled("Official status: ", Style::default().fg(Color::DarkGray)),
-            Span::raw(
-                entry
-                    .status_page_url
+                    .official_url
                     .clone()
                     .unwrap_or_else(|| "Unavailable".to_string()),
             ),
         ]));
         lines.push(Line::from(vec![
-            Span::styled("Provider docs: ", Style::default().fg(Color::DarkGray)),
+            Span::styled("Fallback URL: ", Style::default().fg(Color::DarkGray)),
             Span::raw(
                 entry
-                    .docs_url
+                    .fallback_url
                     .clone()
                     .unwrap_or_else(|| "Unavailable".to_string()),
             ),
         ]));
-        lines.push(Line::from(vec![
-            Span::styled("Source page: ", Style::default().fg(Color::DarkGray)),
-            Span::raw(
-                entry
-                    .source_page_url
-                    .clone()
-                    .unwrap_or_else(|| "Unavailable".to_string()),
-            ),
-        ]));
-        lines.push(Line::from(vec![
-            Span::styled("History page: ", Style::default().fg(Color::DarkGray)),
-            Span::raw(
-                entry
-                    .history_url
-                    .clone()
-                    .unwrap_or_else(|| "Unavailable".to_string()),
-            ),
-        ]));
-        if let Some(description) = &entry.description {
+        if let Some(summary) = &entry.summary {
             lines.push(Line::from(""));
-            lines.push(Line::from(description.clone()));
+            lines.push(Line::from(summary.clone()));
         }
 
         lines.push(Line::from(""));
@@ -318,14 +300,19 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
         }
 
         lines.push(Line::from(""));
-        if entry.health == ProviderHealth::Unknown {
+        if entry.provenance == crate::status::StatusProvenance::Unavailable {
             lines.push(Line::from(Span::styled(
-                "No matching live provider entry found in API Status Check for this source yet.",
+                "No verified machine-readable source is available for this provider in this pass.",
                 Style::default().fg(Color::Yellow),
+            )));
+        } else if entry.provenance == crate::status::StatusProvenance::Fallback {
+            lines.push(Line::from(Span::styled(
+                "This provider is currently shown using fallback data rather than an official machine-readable source.",
+                Style::default().fg(Color::DarkGray),
             )));
         } else {
             lines.push(Line::from(Span::styled(
-                "Current provider status shown above comes from API Status Check, not direct verification by this app.",
+                "This provider is currently backed by an official machine-readable source.",
                 Style::default().fg(Color::DarkGray),
             )));
         }

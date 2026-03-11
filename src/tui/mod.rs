@@ -397,11 +397,7 @@ fn run_app(
                 }
                 app::Message::OpenStatusPage => {
                     if let Some(entry) = app.status_app.as_ref().and_then(|a| a.current_entry()) {
-                        if let Some(url) = entry
-                            .status_page_url
-                            .as_ref()
-                            .or(entry.source_page_url.as_ref())
-                        {
+                        if let Some(url) = entry.best_open_url() {
                             let _ = open::that_in_background(url);
                             app.set_status(format!("Opened: {}", url));
                             last_status_time = Some(std::time::Instant::now());

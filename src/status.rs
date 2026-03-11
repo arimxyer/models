@@ -14,16 +14,22 @@ impl ProviderHealth {
         if normalized.is_empty() {
             return Self::Unknown;
         }
-        if normalized.contains("operational") || normalized.contains("ok") {
+        if normalized.contains("operational") || normalized.contains("all systems operational") {
             return Self::Operational;
         }
         if normalized.contains("maint") {
             return Self::Maintenance;
         }
-        if normalized.contains("degrad") || normalized.contains("partial") {
+        if normalized.contains("degrad")
+            || normalized.contains("partial")
+            || normalized.contains("minor")
+        {
             return Self::Degraded;
         }
-        if normalized.contains("outage") || normalized.contains("down") {
+        if normalized.contains("outage")
+            || normalized.contains("major")
+            || normalized.contains("down")
+        {
             return Self::Outage;
         }
         Self::Unknown
@@ -50,11 +56,79 @@ impl ProviderHealth {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum StatusProvenance {
+    Official,
+    Fallback,
+    #[default]
+    Unavailable,
+}
+
+impl StatusProvenance {
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Official => "Official",
+            Self::Fallback => "Fallback",
+            Self::Unavailable => "Unavailable",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StatusSourceMethod {
+    StatuspageV2,
+    ApiStatusCheck,
+}
+
+impl StatusSourceMethod {
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::StatuspageV2 => "Statuspage API",
+            Self::ApiStatusCheck => "API Status Check",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StatusStrategy {
+    OfficialFirst {
+        official: OfficialStatusSource,
+        fallback_source_slug: &'static str,
+    },
+    FallbackOnly {
+        fallback_source_slug: &'static str,
+    },
+    Unsupported,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OfficialStatusSource {
+    OpenAi,
+    Anthropic,
+}
+
+impl OfficialStatusSource {
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::OpenAi => "OpenAI Status",
+            Self::Anthropic => "Claude Status",
+        }
+    }
+
+    pub fn summary_url(&self) -> &'static str {
+        match self {
+            Self::OpenAi => "https://status.openai.com/api/v2/summary.json",
+            Self::Anthropic => "https://status.anthropic.com/api/v2/summary.json",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StatusProviderSeed {
     pub slug: String,
     pub display_name: String,
     pub source_slug: String,
+    pub strategy: StatusStrategy,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -62,15 +136,14 @@ pub struct ProviderStatus {
     pub slug: String,
     pub display_name: String,
     pub source_slug: String,
-    pub source_name: Option<String>,
-    pub category: Option<String>,
-    pub description: Option<String>,
     pub health: ProviderHealth,
+    pub provenance: StatusProvenance,
+    pub source_label: Option<String>,
+    pub source_method: Option<StatusSourceMethod>,
+    pub official_url: Option<String>,
+    pub fallback_url: Option<String>,
     pub last_checked: Option<String>,
-    pub status_page_url: Option<String>,
-    pub docs_url: Option<String>,
-    pub source_page_url: Option<String>,
-    pub history_url: Option<String>,
+    pub summary: Option<String>,
 }
 
 impl ProviderStatus {
@@ -79,22 +152,26 @@ impl ProviderStatus {
             slug: seed.slug.clone(),
             display_name: seed.display_name.clone(),
             source_slug: seed.source_slug.clone(),
-            source_name: None,
-            category: None,
-            description: None,
             health: ProviderHealth::Unknown,
+            provenance: StatusProvenance::Unavailable,
+            source_label: None,
+            source_method: None,
+            official_url: None,
+            fallback_url: None,
             last_checked: None,
-            status_page_url: None,
-            docs_url: None,
-            source_page_url: None,
-            history_url: None,
+            summary: None,
         }
+    }
+
+    pub fn best_open_url(&self) -> Option<&str> {
+        self.official_url
+            .as_deref()
+            .or(self.fallback_url.as_deref())
     }
 }
 
 pub fn source_slug_for_provider(slug: &str) -> &str {
     match slug {
-        // In the agent catalog, "google" means Gemini/Google AI usage rather than generic Google services.
         "google" => "gemini",
         other => other,
     }
@@ -119,6 +196,27 @@ pub fn display_name_for_provider(slug: &str) -> String {
     }
 }
 
+pub fn strategy_for_provider(slug: &str) -> StatusStrategy {
+    match slug {
+        "openai" => StatusStrategy::OfficialFirst {
+            official: OfficialStatusSource::OpenAi,
+            fallback_source_slug: "openai",
+        },
+        "anthropic" => StatusStrategy::OfficialFirst {
+            official: OfficialStatusSource::Anthropic,
+            fallback_source_slug: "anthropic",
+        },
+        "openrouter" => StatusStrategy::FallbackOnly {
+            fallback_source_slug: "openrouter",
+        },
+        "google" => StatusStrategy::FallbackOnly {
+            fallback_source_slug: "gemini",
+        },
+        "moonshot" | "ollama" | "qwen" => StatusStrategy::Unsupported,
+        _ => StatusStrategy::Unsupported,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -130,11 +228,7 @@ mod tests {
             ProviderHealth::Operational
         );
         assert_eq!(
-            ProviderHealth::from_api_status("degraded performance"),
-            ProviderHealth::Degraded
-        );
-        assert_eq!(
-            ProviderHealth::from_api_status("partial outage"),
+            ProviderHealth::from_api_status("Partial System Degradation"),
             ProviderHealth::Degraded
         );
         assert_eq!(
@@ -151,5 +245,50 @@ mod tests {
     fn google_maps_to_gemini_source_slug() {
         assert_eq!(source_slug_for_provider("google"), "gemini");
         assert_eq!(source_slug_for_provider("openai"), "openai");
+    }
+
+    #[test]
+    fn provider_strategy_table_matches_current_scope() {
+        assert!(matches!(
+            strategy_for_provider("openai"),
+            StatusStrategy::OfficialFirst { .. }
+        ));
+        assert!(matches!(
+            strategy_for_provider("anthropic"),
+            StatusStrategy::OfficialFirst { .. }
+        ));
+        assert!(matches!(
+            strategy_for_provider("openrouter"),
+            StatusStrategy::FallbackOnly { .. }
+        ));
+        assert!(matches!(
+            strategy_for_provider("google"),
+            StatusStrategy::FallbackOnly { .. }
+        ));
+        assert_eq!(
+            strategy_for_provider("moonshot"),
+            StatusStrategy::Unsupported
+        );
+        assert_eq!(strategy_for_provider("ollama"), StatusStrategy::Unsupported);
+        assert_eq!(strategy_for_provider("qwen"), StatusStrategy::Unsupported);
+    }
+
+    #[test]
+    fn best_open_url_prefers_official() {
+        let status = ProviderStatus {
+            slug: "openai".to_string(),
+            display_name: "OpenAI".to_string(),
+            source_slug: "openai".to_string(),
+            health: ProviderHealth::Operational,
+            provenance: StatusProvenance::Official,
+            source_label: Some("OpenAI Status".to_string()),
+            source_method: Some(StatusSourceMethod::StatuspageV2),
+            official_url: Some("https://status.openai.com".to_string()),
+            fallback_url: Some("https://apistatuscheck.com/api/openai".to_string()),
+            last_checked: None,
+            summary: None,
+        };
+
+        assert_eq!(status.best_open_url(), Some("https://status.openai.com"));
     }
 }

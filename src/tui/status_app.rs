@@ -5,7 +5,8 @@ use ratatui::widgets::ListState;
 
 use crate::agents::AgentsFile;
 use crate::status::{
-    display_name_for_provider, source_slug_for_provider, ProviderStatus, StatusProviderSeed,
+    display_name_for_provider, source_slug_for_provider, strategy_for_provider, ProviderStatus,
+    StatusProviderSeed,
 };
 
 const PAGE_SIZE: usize = 10;
@@ -43,6 +44,7 @@ impl StatusApp {
                         slug: slug.clone(),
                         display_name: display_name_for_provider(slug),
                         source_slug: source_slug_for_provider(slug).to_string(),
+                        strategy: strategy_for_provider(slug),
                     });
                 related_agents
                     .entry(slug.clone())
@@ -79,6 +81,7 @@ impl StatusApp {
                 slug: entry.slug.clone(),
                 display_name: entry.display_name.clone(),
                 source_slug: entry.source_slug.clone(),
+                strategy: strategy_for_provider(&entry.slug),
             })
             .collect()
     }
@@ -112,9 +115,13 @@ impl StatusApp {
                     || entry.display_name.to_lowercase().contains(&query)
                     || entry.slug.to_lowercase().contains(&query)
                     || entry
-                        .source_name
+                        .source_label
                         .as_ref()
                         .is_some_and(|name| name.to_lowercase().contains(&query))
+                    || entry
+                        .summary
+                        .as_ref()
+                        .is_some_and(|summary| summary.to_lowercase().contains(&query))
             })
             .map(|(idx, _)| idx)
             .collect();
@@ -261,6 +268,13 @@ mod tests {
                 .iter()
                 .find(|entry| entry.slug == "google")
                 .map(|entry| entry.source_slug.as_str()),
+            Some("gemini")
+        );
+        assert_eq!(
+            app.fetch_seeds()
+                .iter()
+                .find(|seed| seed.slug == "google")
+                .map(|seed| seed.source_slug.as_str()),
             Some("gemini")
         );
     }
