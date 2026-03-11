@@ -39,6 +39,10 @@ pub struct AgentSourceItem {
     pub pricing: String,
     pub homepage: String,
     pub docs: String,
+    pub stars: Option<u64>,
+    pub latest_version: String,
+    pub latest_release_date: String,
+    pub release_frequency: String,
 }
 
 const VIEWPORT_HEIGHT: u16 = 14;
@@ -364,64 +368,104 @@ impl SourcePicker {
         let Some(item) = self.selected() else {
             return vec![Line::from("No agents")];
         };
+        let dim = Style::default().fg(Color::DarkGray);
         let label = |s: &str| -> Span<'static> {
-            Span::styled(
-                format!("{s}: "),
-                Style::default()
-                    .fg(Color::DarkGray)
-                    .add_modifier(Modifier::BOLD),
-            )
+            Span::styled(format!("{s}: "), dim)
         };
-        let val = |s: &str| -> Span<'static> { Span::raw(s.to_string()) };
+        let has = |s: &str| -> bool { s != "\u{2014}" };
 
+        // Row 1: Name + source tag + stars
         let source_tag = if item.open_source {
-            Span::styled(
-                " open source ",
-                Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
-            )
+            Span::styled("open source", Style::default().fg(Color::Green))
         } else {
-            Span::styled(
-                " closed source ",
-                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-            )
+            Span::styled("closed source", Style::default().fg(Color::Red))
         };
+        let mut header = vec![
+            Span::styled(
+                item.name.clone(),
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw("  "),
+            source_tag,
+        ];
+        if let Some(stars) = item.stars {
+            let s = if stars >= 1000 {
+                format!("{:.1}k", stars as f64 / 1000.0)
+            } else {
+                stars.to_string()
+            };
+            header.push(Span::raw("  "));
+            header.push(Span::styled(
+                format!("\u{2605} {s}"),
+                Style::default().fg(Color::Yellow),
+            ));
+        }
+
+        // Row 2: Repo URL
+        let repo_url = format!("https://github.com/{}", item.repo);
 
         let mut lines = vec![
-            Line::from(vec![
-                Span::styled(
-                    item.name.clone(),
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::raw("  "),
-                source_tag,
-            ]),
-            Line::from(""),
-            Line::from(vec![label("repo"), val(&truncate_text(&item.repo, 55))]),
-            Line::from(vec![label("categories"), val(&truncate_text(&item.categories, 50))]),
-            Line::from(vec![label("providers"), val(&truncate_text(&item.supported_providers, 50))]),
-            Line::from(vec![label("platforms"), val(&truncate_text(&item.platform_support, 50))]),
-            Line::from(vec![label("pricing"), val(&truncate_text(&item.pricing, 50))]),
+            Line::from(header),
+            Line::from(Span::styled(repo_url, dim)),
         ];
-        if item.homepage != "\u{2014}" {
-            lines.push(Line::from(vec![
-                label("homepage"),
+
+        // Release info (compact: version + date + cadence on 1-2 lines)
+        if has(&item.latest_version) {
+            lines.push(Line::from(""));
+            let mut release_spans = vec![
                 Span::styled(
-                    truncate_text(&item.homepage, 50),
-                    Style::default().fg(Color::Blue),
+                    format!("v{}", item.latest_version),
+                    Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
                 ),
-            ]));
+            ];
+            if has(&item.latest_release_date) {
+                release_spans.push(Span::styled(
+                    format!("  {}", item.latest_release_date),
+                    dim,
+                ));
+            }
+            if has(&item.release_frequency) {
+                release_spans.push(Span::styled(
+                    format!("  \u{2022} {}", item.release_frequency),
+                    dim,
+                ));
+            }
+            lines.push(Line::from(release_spans));
         }
-        if item.docs != "\u{2014}" {
-            lines.push(Line::from(vec![
-                label("docs"),
-                Span::styled(
-                    truncate_text(&item.docs, 50),
-                    Style::default().fg(Color::Blue),
-                ),
-            ]));
+
+        // Agent metadata (combined where possible)
+        lines.push(Line::from(""));
+        lines.push(Line::from(vec![label("Categories"), Span::raw(item.categories.clone())]));
+        if has(&item.supported_providers) {
+            lines.push(Line::from(vec![label("Providers"), Span::raw(item.supported_providers.clone())]));
         }
+        if has(&item.platform_support) {
+            lines.push(Line::from(vec![label("Platforms"), Span::raw(item.platform_support.clone())]));
+        }
+        if has(&item.pricing) {
+            lines.push(Line::from(vec![label("Pricing"), Span::raw(item.pricing.clone())]));
+        }
+
+        // Links (inline if both fit)
+        let has_homepage = has(&item.homepage);
+        let has_docs = has(&item.docs);
+        if has_homepage || has_docs {
+            let link_style = Style::default().fg(Color::Cyan);
+            if has_homepage && has_docs {
+                lines.push(Line::from(vec![
+                    Span::styled(item.homepage.clone(), link_style),
+                    Span::styled("  \u{2022}  ", dim),
+                    Span::styled(item.docs.clone(), link_style),
+                ]));
+            } else if has_homepage {
+                lines.push(Line::from(Span::styled(item.homepage.clone(), link_style)));
+            } else {
+                lines.push(Line::from(Span::styled(item.docs.clone(), link_style)));
+            }
+        }
+
         lines
     }
 }
