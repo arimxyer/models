@@ -19,6 +19,7 @@ TUI and CLI for browsing AI models, benchmarks, and coding agents.
 
 - **Models tab redesign** — capability indicators, adaptive provider panel, and detailed model info at a glance
 - **Benchmark compare mode** — head-to-head tables, scatter plots, and radar charts for selected models
+- **Benchmarks CLI** — list and inspect benchmark data directly from the terminal
 - **Linux packages** — native .deb and .rpm packages for x86_64 and aarch64
 - **Agents CLI** — track agent releases, view changelogs, and compare versions from the terminal
 
@@ -51,10 +52,19 @@ TUI and CLI for browsing AI models, benchmarks, and coding agents.
 
 ### Agents CLI
 - **Status table** — see installed vs latest version, 24h release indicator, and release frequency at a glance
-- **Changelogs** — view release notes for any agent by name or version
-- **Interactive picker** — fuzzy-select any version with `--pick`, view its changelog
+- **Inline release browser** — `agents <tool>` opens an interactive version browser with changelog preview
+- **Changelogs** — view release notes for any agent by name, latest version, or explicit version
+- **Tracked-agent manager** — `agents list-sources` can now manage which curated agents are tracked from the CLI
 - **Dual entry point** — use as `models agents` or create an `agents` symlink for standalone usage
 - **Fast** — concurrent GitHub fetching and version detection
+
+### Benchmarks CLI
+- **Live benchmark queries** — fetch the current benchmark dataset without launching the TUI
+- **Interactive list picker** — use `models benchmarks list` to open a filtered benchmark selector, then inspect the selected model immediately
+- **Detail views** — use `models benchmarks show` for a direct model breakdown, with interactive disambiguation when a query matches multiple variants
+- **Filtering** — narrow by search text, creator, open/closed source, and reasoning status
+- **Sorting** — sort by any supported metric, including intelligence, coding, math, GPQA, speed, pricing, and release date
+- **JSON output** — pipe structured benchmark data into shell scripts and other tools
 
 ## Installation
 
@@ -277,6 +287,43 @@ See [Custom Agents](docs/custom-agents.md) for the full reference.
 
 ## CLI Usage
 
+### Benchmarks CLI
+
+Query benchmark data from the command line using the same live benchmark feed as the Benchmarks tab.
+
+#### Interactive benchmark picker
+
+```bash
+models benchmarks list
+models benchmarks list --sort speed --limit 10
+models benchmarks list --creator openai --reasoning
+models benchmarks list --open --sort price-input --asc
+```
+
+`models benchmarks list` opens the inline picker in an interactive terminal and uses the same filters/sorting to narrow the candidate set before you pick a model.
+
+Once the picker is open:
+- `/` starts a live text filter over name, slug, and creator
+- `s` cycles sort metrics
+- `S` reverses the current sort
+- `Enter` prints the selected model's normal `show` output
+
+#### Show benchmark details
+
+```bash
+models benchmarks show gpt-4o
+models benchmarks show "Claude Sonnet 4"
+```
+
+If `show` matches multiple benchmark variants in an interactive terminal, the CLI reopens the picker with just the matching candidates so you can choose the exact row you want.
+
+#### JSON output
+
+```bash
+models benchmarks list --creator anthropic --json
+models benchmarks show gpt-4o --json
+```
+
 ### Agents CLI
 
 Track AI coding agent releases from the command line. Install the `agents` alias during setup, or use `models agents` as a fallback.
@@ -308,8 +355,9 @@ agents status
 #### View changelogs
 
 ```bash
-agents claude              # Latest changelog (by CLI binary name)
+agents claude              # Interactive release browser (by CLI binary name)
 agents claude-code         # By agent ID
+agents claude --latest     # Latest release directly
 agents claude --version 1.0.170  # Specific version
 ```
 
@@ -317,33 +365,44 @@ agents claude --version 1.0.170  # Specific version
 
 ```bash
 agents claude --list       # List all versions
-agents claude --pick       # Interactive fuzzy picker
+agents claude --pick       # Alias for the interactive release browser
 ```
+
+In the release browser:
+- `↑`/`↓` or `j`/`k` moves between releases
+- the lower pane previews the selected release notes
+- `Enter` prints the full changelog for the selected release
 
 #### Other commands
 
 ```bash
-agents latest              # All releases from last 24 hours
-agents list-sources        # List all available agents
+agents latest              # Interactive picker for releases from the last 24 hours
+agents list-sources        # Interactive tracked-agent manager
 agents claude --web        # Open GitHub releases in browser
 ```
 
 ### Models CLI
 
-#### List providers
+#### Interactive model picker
 
 ```bash
-models list providers
+models list
+models list anthropic
 ```
 
-#### List models
+`models list` opens the inline picker in an interactive terminal. Use a provider argument to prefilter the picker before it opens.
+
+Once the picker is open:
+- `/` starts a live filter over model id, name, and provider
+- `s` cycles sort modes
+- `S` reverses the current sort
+- `Enter` prints the selected model's normal `show` output
+
+#### Providers
 
 ```bash
-# All models
-models list models
-
-# Models from a specific provider
-models list models anthropic
+models providers
+models providers --json
 ```
 
 #### Show model details
@@ -387,6 +446,8 @@ Knowledge:   2025-03-31
 Open Weights: No
 ```
 
+If `show` matches multiple providers or model variants in an interactive terminal, the CLI reopens the picker with the matching candidates so you can choose the exact row.
+
 #### Search models
 
 ```bash
@@ -394,12 +455,17 @@ models search "gpt-4"
 models search "claude opus"
 ```
 
+`models search` currently reuses the same matcher and interactive picker flow as `models list`, so it remains available as a compatibility command.
+
 #### JSON output
 
-All model commands support `--json` for scripting:
+All models and benchmarks commands support `--json` for scripting:
 
 ```bash
-models list providers --json
+models benchmarks list --json
+models benchmarks show gpt-4o --json
+models list --json
+models providers --json
 models show claude-opus-4-5 --json
 models search "llama" --json
 ```
