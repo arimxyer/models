@@ -181,6 +181,45 @@ fn source_items(catalog: &[CatalogAgent]) -> Vec<crate::cli::agents_ui::AgentSou
             },
             tracked: entry.tracked,
             open_source: entry.agent.open_source,
+            supported_providers: if entry.agent.supported_providers.is_empty() {
+                "\u{2014}".to_string()
+            } else {
+                entry.agent.supported_providers.join(", ")
+            },
+            platform_support: if entry.agent.platform_support.is_empty() {
+                "\u{2014}".to_string()
+            } else {
+                entry.agent.platform_support.join(", ")
+            },
+            pricing: entry
+                .agent
+                .pricing
+                .as_ref()
+                .map(|p| {
+                    let mut parts = vec![p.model.clone()];
+                    if let Some(price) = p.subscription_price {
+                        let period = p
+                            .subscription_period
+                            .as_deref()
+                            .unwrap_or("month");
+                        parts.push(format!("${price}/{period}"));
+                    }
+                    if p.free_tier {
+                        parts.push("free tier".to_string());
+                    }
+                    parts.join(", ")
+                })
+                .unwrap_or_else(|| "\u{2014}".to_string()),
+            homepage: entry
+                .agent
+                .homepage
+                .clone()
+                .unwrap_or_else(|| "\u{2014}".to_string()),
+            docs: entry
+                .agent
+                .docs
+                .clone()
+                .unwrap_or_else(|| "\u{2014}".to_string()),
         })
         .collect()
 }
