@@ -78,14 +78,16 @@ enum Commands {
     /// Track AI coding agent releases and changelogs
     #[command(after_help = "\
 \x1b[1;4mTool Commands:\x1b[0m
-  agents <tool>                 Show latest changelog for a tool
+  agents <tool>                 Browse releases for a tool
+  agents <tool> --latest        Show latest changelog directly
   agents <tool> --list, -l      List all versions
-  agents <tool> --pick, -p      Interactive version picker
+  agents <tool> --pick, -p      Alias for the interactive release browser
   agents <tool> --version <v>   Show changelog for a specific version
   agents <tool> --web, -w       Open releases page in browser
 
 \x1b[1;4mExamples:\x1b[0m
-  agents claude                 Latest Claude Code changelog
+  agents claude                 Browse Claude Code releases
+  agents claude --latest        Latest Claude Code changelog
   agents cursor --list          All Cursor versions
   agents aider --pick           Pick an Aider release interactively")]
     Agents {

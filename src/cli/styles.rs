@@ -71,20 +71,6 @@ pub fn agent_name(text: &str) -> String {
     }
 }
 
-pub fn code_badge(text: &str) -> String {
-    if is_tty() {
-        use crossterm::style::Stylize;
-        format!(" {} ", text)
-            .as_str()
-            .yellow()
-            .bold()
-            .on(CODE_BG)
-            .to_string()
-    } else {
-        format!("`{}`", text)
-    }
-}
-
 pub fn code_ref(text: &str) -> String {
     if is_tty() {
         use crossterm::style::Stylize;
@@ -202,17 +188,4 @@ pub fn style_urls(text: &str) -> String {
             StyledContent::new(style, url_text).to_string()
         })
         .into_owned()
-}
-
-// ── Dialoguer theme ──────────────────────────────────────────────────
-pub fn picker_theme() -> dialoguer::theme::ColorfulTheme {
-    dialoguer::theme::ColorfulTheme {
-        prompt_style: console::Style::new().cyan(),
-        active_item_style: console::Style::new().yellow().bold(),
-        active_item_prefix: console::style("❯ ".to_string()).magenta().bold(),
-        inactive_item_style: console::Style::new().dim(),
-        inactive_item_prefix: console::style("  ".to_string()),
-        values_style: console::Style::new().cyan(),
-        ..dialoguer::theme::ColorfulTheme::default()
-    }
 }

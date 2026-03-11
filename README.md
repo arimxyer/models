@@ -52,8 +52,9 @@ TUI and CLI for browsing AI models, benchmarks, and coding agents.
 
 ### Agents CLI
 - **Status table** — see installed vs latest version, 24h release indicator, and release frequency at a glance
-- **Changelogs** — view release notes for any agent by name or version
-- **Interactive picker** — fuzzy-select any version with `--pick`, view its changelog
+- **Inline release browser** — `agents <tool>` opens an interactive version browser with changelog preview
+- **Changelogs** — view release notes for any agent by name, latest version, or explicit version
+- **Tracked-agent manager** — `agents list-sources` can now manage which curated agents are tracked from the CLI
 - **Dual entry point** — use as `models agents` or create an `agents` symlink for standalone usage
 - **Fast** — concurrent GitHub fetching and version detection
 
@@ -354,8 +355,9 @@ agents status
 #### View changelogs
 
 ```bash
-agents claude              # Latest changelog (by CLI binary name)
+agents claude              # Interactive release browser (by CLI binary name)
 agents claude-code         # By agent ID
+agents claude --latest     # Latest release directly
 agents claude --version 1.0.170  # Specific version
 ```
 
@@ -363,14 +365,19 @@ agents claude --version 1.0.170  # Specific version
 
 ```bash
 agents claude --list       # List all versions
-agents claude --pick       # Interactive fuzzy picker
+agents claude --pick       # Alias for the interactive release browser
 ```
+
+In the release browser:
+- `↑`/`↓` or `j`/`k` moves between releases
+- the lower pane previews the selected release notes
+- `Enter` prints the full changelog for the selected release
 
 #### Other commands
 
 ```bash
-agents latest              # All releases from last 24 hours
-agents list-sources        # List all available agents
+agents latest              # Interactive picker for releases from the last 24 hours
+agents list-sources        # Interactive tracked-agent manager
 agents claude --web        # Open GitHub releases in browser
 ```
 

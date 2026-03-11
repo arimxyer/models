@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::{CommandFactory, Parser};
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 use tokio::sync::RwLock;
 
 #[derive(Parser, Debug)]
@@ -9,16 +9,18 @@ use tokio::sync::RwLock;
 #[command(version)]
 #[command(after_help = "\
 \x1b[1;4mTool Commands:\x1b[0m
-  agents <tool>                 Show latest changelog for a tool
+  agents <tool>                 Browse releases for a tool
+  agents <tool> --latest        Show latest changelog directly
   agents <tool> --list, -l      List all versions
-  agents <tool> --pick, -p      Interactive version picker
+  agents <tool> --pick, -p      Alias for the interactive release browser
   agents <tool> --version <v>   Show changelog for a specific version
   agents <tool> --web, -w       Open releases page in browser
 
 \x1b[1;4mExamples:\x1b[0m
-  agents claude                 Latest Claude Code changelog
+  agents claude                 Browse Claude Code releases
+  agents claude --latest        Latest Claude Code changelog
   agents cursor --list          All Cursor versions
-  agents aider --pick           Pick an Aider release interactively")]
+  agents aider --pick           Open the interactive release browser")]
 pub struct AgentsCli {
     #[command(subcommand)]
     pub command: Option<AgentsCommand>,
@@ -38,8 +40,10 @@ pub enum AgentsCommand {
 }
 
 /// Parse tool-specific flags from the external subcommand args
+#[derive(Debug)]
 pub struct ToolArgs {
     pub tool: String,
+    pub latest: bool,
     pub list: bool,
     pub pick: bool,
     pub version: Option<String>,
@@ -52,6 +56,7 @@ impl ToolArgs {
             anyhow::bail!("No tool specified");
         }
         let tool = args[0].clone();
+        let mut latest = false;
         let mut list = false;
         let mut pick = false;
         let mut version = None;
@@ -60,6 +65,7 @@ impl ToolArgs {
         let mut i = 1;
         while i < args.len() {
             match args[i].as_str() {
+                "--latest" => latest = true,
                 "--list" | "-l" => list = true,
                 "--pick" | "-p" => pick = true,
                 "--web" | "-w" => web = true,
@@ -77,22 +83,35 @@ impl ToolArgs {
         }
 
         // Mutual exclusivity
-        let mode_count = [list, pick, version.is_some()]
+        let mode_count = [latest, list, pick, version.is_some()]
             .iter()
             .filter(|&&v| v)
             .count();
         if mode_count > 1 {
-            anyhow::bail!("--list, --pick, and --version are mutually exclusive");
+            anyhow::bail!("--latest, --list, --pick, and --version are mutually exclusive");
         }
 
         Ok(Self {
             tool,
+            latest,
             list,
             pick,
             version,
             web,
         })
     }
+}
+
+#[derive(Clone)]
+struct CatalogAgent {
+    id: String,
+    agent: crate::agents::data::Agent,
+    tracked: bool,
+}
+
+enum ResolveTool {
+    Single(Box<CatalogAgent>),
+    Ambiguous(Vec<CatalogAgent>),
 }
 
 pub fn run() -> Result<()> {
@@ -126,6 +145,79 @@ fn cached_github_data_for_repo(
     repo: &str,
 ) -> Option<crate::agents::data::GitHubData> {
     disk_cache.get(repo).map(|c| c.data.to_github_data())
+}
+
+fn load_catalog(config: &crate::config::Config) -> Result<Vec<CatalogAgent>> {
+    let agents_file = crate::agents::loader::load_agents()?;
+    let mut entries: Vec<_> = agents_file
+        .agents
+        .iter()
+        .map(|(id, agent)| CatalogAgent {
+            id: id.clone(),
+            agent: agent.clone(),
+            tracked: config.is_tracked(id),
+        })
+        .collect();
+    entries.sort_by(|a, b| a.agent.name.cmp(&b.agent.name));
+    Ok(entries)
+}
+
+fn source_items(catalog: &[CatalogAgent]) -> Vec<crate::cli::agents_ui::AgentSourceItem> {
+    catalog
+        .iter()
+        .map(|entry| crate::cli::agents_ui::AgentSourceItem {
+            id: entry.id.clone(),
+            name: entry.agent.name.clone(),
+            repo: entry.agent.repo.clone(),
+            cli_binary: entry
+                .agent
+                .cli_binary
+                .clone()
+                .unwrap_or_else(|| "\u{2014}".to_string()),
+            categories: if entry.agent.categories.is_empty() {
+                "\u{2014}".to_string()
+            } else {
+                entry.agent.categories.join(", ")
+            },
+            tracked: entry.tracked,
+            open_source: entry.agent.open_source,
+        })
+        .collect()
+}
+
+fn browser_items_for_agent(
+    _id: &str,
+    agent: &crate::agents::data::Agent,
+    github: &crate::agents::data::GitHubData,
+) -> Vec<crate::cli::agents_ui::ReleaseBrowserItem> {
+    github
+        .releases
+        .iter()
+        .map(|release| {
+            let date = format_release_date_ymd(release.date.as_deref())
+                .unwrap_or_else(|| "\u{2014}".to_string());
+            let ago = release
+                .date
+                .as_deref()
+                .and_then(crate::agents::helpers::parse_date)
+                .map(|d| crate::agents::helpers::format_relative_time(&d))
+                .unwrap_or_else(|| "\u{2014}".to_string());
+            crate::cli::agents_ui::ReleaseBrowserItem {
+                agent_name: agent.name.clone(),
+                version: release.version.clone(),
+                released: date,
+                ago,
+                body: release.changelog.clone(),
+                sort_key: release
+                    .date
+                    .as_deref()
+                    .and_then(crate::agents::helpers::parse_date)
+                    .map(|dt| dt.timestamp())
+                    .unwrap_or(0),
+                release: release.clone(),
+            }
+        })
+        .collect()
 }
 
 fn apply_github_fetch_result(
@@ -263,21 +355,18 @@ fn get_github_data_batch(
 fn run_status() -> Result<()> {
     use super::styles;
 
-    let agents_file = crate::agents::loader::load_agents()?;
     let config = crate::config::Config::load()?;
     let mut disk_cache = crate::agents::cache::GitHubCache::load();
 
-    let mut entries: Vec<_> = agents_file
-        .agents
-        .iter()
-        .filter(|(id, _)| config.is_tracked(id))
+    let entries: Vec<_> = load_catalog(&config)?
+        .into_iter()
+        .filter(|entry| entry.tracked)
         .collect();
-    entries.sort_by(|(_, a), (_, b)| a.name.cmp(&b.name));
 
     // Fetch all agents and detect installed versions concurrently
     let batch_input: Vec<_> = entries
         .iter()
-        .map(|(id, agent)| ((*id).clone(), (*agent).clone()))
+        .map(|entry| (entry.id.clone(), entry.agent.clone()))
         .collect();
 
     let runtime = tokio::runtime::Runtime::new()?;
@@ -294,7 +383,7 @@ fn run_status() -> Result<()> {
         styles::header_cell("Freq."),
     ]);
 
-    for ((_, agent), (_, github, installed)) in entries.iter().zip(batch_results.iter()) {
+    for (entry, (_, github, installed)) in entries.iter().zip(batch_results.iter()) {
         let latest_version = github
             .as_ref()
             .and_then(|g| g.latest_version())
@@ -340,7 +429,7 @@ fn run_status() -> Result<()> {
         };
 
         table.add_row(vec![
-            styles::bold_cell(&agent.name),
+            styles::bold_cell(&entry.agent.name),
             if is_24h {
                 styles::green_cell("\u{2713}")
             } else {
@@ -361,27 +450,25 @@ fn run_status() -> Result<()> {
 fn run_latest() -> Result<()> {
     use super::styles;
 
-    let agents_file = crate::agents::loader::load_agents()?;
     let config = crate::config::Config::load()?;
     let mut disk_cache = crate::agents::cache::GitHubCache::load();
 
-    let tracked: Vec<_> = agents_file
-        .agents
-        .iter()
-        .filter(|(id, _)| config.is_tracked(id))
+    let tracked: Vec<_> = load_catalog(&config)?
+        .into_iter()
+        .filter(|entry| entry.tracked)
         .collect();
 
     let batch_input: Vec<_> = tracked
         .iter()
-        .map(|(id, agent)| ((*id).clone(), (*agent).clone()))
+        .map(|entry| (entry.id.clone(), entry.agent.clone()))
         .collect();
 
     let runtime = tokio::runtime::Runtime::new()?;
     let batch_results = get_github_data_batch(&batch_input, &mut disk_cache, &runtime);
 
-    let mut recent: Vec<(String, String, String, chrono::DateTime<chrono::Utc>)> = Vec::new();
+    let mut recent: Vec<crate::cli::agents_ui::ReleaseBrowserItem> = Vec::new();
 
-    for ((_, agent), (_, github, _installed)) in tracked.iter().zip(batch_results.iter()) {
+    for (entry, (_, github, _installed)) in tracked.iter().zip(batch_results.iter()) {
         if let Some(github) = github {
             for release in &github.releases {
                 if let Some(date) = release
@@ -390,12 +477,16 @@ fn run_latest() -> Result<()> {
                     .and_then(crate::agents::helpers::parse_date)
                 {
                     if crate::agents::helpers::is_within_24h(&date) {
-                        recent.push((
-                            agent.name.clone(),
-                            release.version.clone(),
-                            release.changelog.clone().unwrap_or_default(),
-                            date,
-                        ));
+                        recent.push(crate::cli::agents_ui::ReleaseBrowserItem {
+                            agent_name: entry.agent.name.clone(),
+                            version: release.version.clone(),
+                            released: format_release_date_ymd(release.date.as_deref())
+                                .unwrap_or_else(|| "\u{2014}".to_string()),
+                            ago: crate::agents::helpers::format_relative_time(&date),
+                            body: release.changelog.clone(),
+                            sort_key: date.timestamp(),
+                            release: release.clone(),
+                        });
                     }
                 }
             }
@@ -409,21 +500,31 @@ fn run_latest() -> Result<()> {
         return Ok(());
     }
 
-    recent.sort_by(|a, b| b.3.cmp(&a.3));
+    sort_recent_release_items(&mut recent);
 
-    for (name, version, body, date) in &recent {
-        let ago = crate::agents::helpers::format_relative_time(date);
+    if super::styles::is_tty() {
+        if let Some(selected) =
+            crate::cli::agents_ui::browse_releases(recent, " Recent Agent Releases ", true)?
+        {
+            println!();
+            print_release(&selected.agent_name, &selected.release);
+        }
+        return Ok(());
+    }
+
+    for item in &recent {
         println!(
             "\n{} {} ({})",
-            styles::agent_name(name),
-            styles::key_value(version),
-            styles::dim(&ago)
+            styles::agent_name(&item.agent_name),
+            styles::key_value(&item.version),
+            styles::dim(&item.ago)
         );
         println!("{}", styles::separator(40));
-        if body.is_empty() {
-            println!("(no changelog)");
-        } else {
+        if has_changelog_body(item.body.as_deref()) {
+            let body = item.body.as_deref().unwrap_or_default();
             print_changelog_body(body);
+        } else {
+            println!("(no changelog)");
         }
     }
 
@@ -433,8 +534,28 @@ fn run_latest() -> Result<()> {
 fn run_list_sources() -> Result<()> {
     use super::styles;
 
-    let agents_file = crate::agents::loader::load_agents()?;
-    let config = crate::config::Config::load()?;
+    let mut config = crate::config::Config::load()?;
+    let catalog = load_catalog(&config)?;
+
+    if super::styles::is_tty() {
+        let items = source_items(&catalog);
+        if let Some(updated) =
+            crate::cli::agents_ui::manage_agent_sources(items, " Agent Sources ")?
+        {
+            let tracked_ids: HashSet<_> = updated
+                .iter()
+                .filter(|item| item.tracked)
+                .map(|item| item.id.clone())
+                .collect();
+            let all_ids: Vec<_> = updated.iter().map(|item| item.id.clone()).collect();
+            for id in all_ids {
+                config.set_tracked(&id, tracked_ids.contains(&id));
+            }
+            config.save()?;
+            println!("Saved tracked agents.");
+        }
+        return Ok(());
+    }
 
     let mut table = comfy_table::Table::new();
     table.load_preset(comfy_table::presets::UTF8_FULL);
@@ -446,20 +567,17 @@ fn run_list_sources() -> Result<()> {
         styles::header_cell("Tracked"),
     ]);
 
-    let mut entries: Vec<_> = agents_file.agents.iter().collect();
-    entries.sort_by(|(a, _), (b, _)| a.cmp(b));
-
-    for (id, agent) in entries {
-        let tracked = if config.is_tracked(id) {
+    for entry in catalog {
+        let tracked = if entry.tracked {
             styles::green_cell("\u{2713}")
         } else {
             comfy_table::Cell::new("")
         };
-        let cli = agent.cli_binary.as_deref().unwrap_or("\u{2014}");
+        let cli = entry.agent.cli_binary.as_deref().unwrap_or("\u{2014}");
         table.add_row(vec![
-            comfy_table::Cell::new(id.as_str()),
-            styles::bold_cell(&agent.name),
-            styles::dim_cell(&agent.repo),
+            comfy_table::Cell::new(entry.id.as_str()),
+            styles::bold_cell(&entry.agent.name),
+            styles::dim_cell(&entry.agent.repo),
             comfy_table::Cell::new(cli),
             tracked,
         ]);
@@ -472,48 +590,86 @@ fn run_list_sources() -> Result<()> {
 fn run_tool(args: ToolArgs) -> Result<()> {
     use super::styles;
 
-    let agents_file = crate::agents::loader::load_agents()?;
+    let config = crate::config::Config::load()?;
+    let catalog = load_catalog(&config)?;
     let mut disk_cache = crate::agents::cache::GitHubCache::load();
 
-    let (_agent_id, agent) = resolve_tool(&args.tool, &agents_file)?;
+    let entry = match resolve_tool(&args.tool, &catalog)? {
+        ResolveTool::Single(entry) => *entry,
+        ResolveTool::Ambiguous(matches) => {
+            if super::styles::is_tty() {
+                let title = format!(" Select Agent for \"{}\" ", args.tool);
+                let items = source_items(&matches);
+                let Some(selected) = crate::cli::agents_ui::pick_agent(items, &title)? else {
+                    return Ok(());
+                };
+                matches
+                    .into_iter()
+                    .find(|entry| entry.id == selected.id)
+                    .ok_or_else(|| anyhow::anyhow!("Selected agent disappeared"))?
+            } else {
+                let names: Vec<_> = matches
+                    .iter()
+                    .map(|entry| styles::code_ref(&entry.id))
+                    .collect();
+                anyhow::bail!(
+                    "{} Ambiguous tool {}. Matches: {}",
+                    styles::error_prefix(),
+                    styles::input_badge(&args.tool),
+                    names.join(", ")
+                );
+            }
+        }
+    };
 
     if args.web {
-        let url = format!("https://github.com/{}/releases", agent.repo);
+        let url = format!("https://github.com/{}/releases", entry.agent.repo);
         open::that(&url)?;
         println!("Opened {}", styles::url(&url));
         return Ok(());
     }
 
     let runtime = tokio::runtime::Runtime::new()?;
-    let github =
-        get_github_data(&agent.name, &agent.repo, &mut disk_cache, &runtime).unwrap_or_default();
+    let github = get_github_data(
+        &entry.agent.name,
+        &entry.agent.repo,
+        &mut disk_cache,
+        &runtime,
+    )
+    .unwrap_or_default();
 
     disk_cache.save().ok();
 
     if args.list {
-        return run_version_list(agent, &github);
+        return run_version_list(&entry.agent, &github);
     }
 
     if args.pick {
-        return run_pick(agent, &github);
+        return run_release_browser(&entry, &github);
     }
 
-    // Default: show latest changelog (or specific version)
-    let release = if let Some(ref ver) = args.version {
-        github.releases.iter().find(|r| r.version == *ver)
-    } else {
-        github.latest_release()
-    };
+    if args.latest {
+        return print_specific_or_latest_release(&entry.agent.name, &github, None);
+    }
+
+    if let Some(ref ver) = args.version {
+        return print_specific_or_latest_release(&entry.agent.name, &github, Some(ver));
+    }
+
+    if super::styles::is_tty() {
+        return run_release_browser(&entry, &github);
+    }
+
+    let release = github.latest_release();
 
     match release {
-        Some(r) => print_release(&agent.name, r),
+        Some(r) => print_release(&entry.agent.name, r),
         None => {
-            let target = args.version.as_deref().unwrap_or("latest");
             println!(
                 "{} No release found for {} ({})",
                 styles::error_prefix(),
-                styles::agent_name(&agent.name),
-                styles::input_badge(target)
+                styles::agent_name(&entry.agent.name),
+                styles::input_badge("latest")
             );
         }
     }
@@ -521,47 +677,97 @@ fn run_tool(args: ToolArgs) -> Result<()> {
     Ok(())
 }
 
-fn resolve_tool<'a>(
-    tool: &str,
-    agents_file: &'a crate::agents::data::AgentsFile,
-) -> Result<(String, &'a crate::agents::data::Agent)> {
-    use super::styles;
-    // Exact ID match
-    if let Some(agent) = agents_file.agents.get(tool) {
-        return Ok((tool.to_string(), agent));
-    }
-    // Match by cli_binary
-    for (id, agent) in &agents_file.agents {
-        if agent.cli_binary.as_deref() == Some(tool) {
-            return Ok((id.clone(), agent));
-        }
-    }
-    // Fuzzy match on name
-    let lower = tool.to_lowercase();
-    let matches: Vec<_> = agents_file
-        .agents
+fn resolve_tool(tool: &str, catalog: &[CatalogAgent]) -> Result<ResolveTool> {
+    if let Some(entry) = catalog
         .iter()
-        .filter(|(_, a)| a.name.to_lowercase().contains(&lower))
+        .find(|entry| entry.id.eq_ignore_ascii_case(tool))
+        .cloned()
+    {
+        return Ok(ResolveTool::Single(Box::new(entry)));
+    }
+
+    let cli_matches: Vec<_> = catalog
+        .iter()
+        .filter(|entry| {
+            entry.agent.cli_binary.as_deref() == Some(tool)
+                || entry
+                    .agent
+                    .alt_binaries
+                    .iter()
+                    .any(|binary| binary.eq_ignore_ascii_case(tool))
+        })
+        .cloned()
+        .collect();
+    match cli_matches.as_slice() {
+        [entry] => return Ok(ResolveTool::Single(Box::new(entry.clone()))),
+        [] => {}
+        many => return Ok(ResolveTool::Ambiguous(many.to_vec())),
+    }
+
+    let lower = tool.to_lowercase();
+    let matches: Vec<_> = catalog
+        .iter()
+        .filter(|entry| {
+            entry.id.to_lowercase().contains(&lower)
+                || entry.agent.name.to_lowercase().contains(&lower)
+        })
+        .cloned()
         .collect();
     match matches.len() {
-        1 => return Ok((matches[0].0.clone(), matches[0].1)),
-        n if n > 1 => {
-            let names: Vec<_> = matches.iter().map(|(id, _)| styles::code_ref(id)).collect();
-            anyhow::bail!(
-                "{} Ambiguous tool {}. Matches: {}",
-                styles::error_prefix(),
-                styles::input_badge(tool),
-                names.join(", ")
+        1 => Ok(ResolveTool::Single(Box::new(matches[0].clone()))),
+        n if n > 1 => Ok(ResolveTool::Ambiguous(matches)),
+        _ => anyhow::bail!(
+            "Unknown agent '{}'. Run agents list-sources to see available agents.",
+            tool
+        ),
+    }
+}
+
+fn print_specific_or_latest_release(
+    name: &str,
+    github: &crate::agents::data::GitHubData,
+    version: Option<&str>,
+) -> Result<()> {
+    let release = if let Some(ver) = version {
+        github.releases.iter().find(|r| r.version == ver)
+    } else {
+        github.latest_release()
+    };
+
+    match release {
+        Some(r) => print_release(name, r),
+        None => {
+            println!(
+                "No release found for {} ({})",
+                name,
+                version.unwrap_or("latest")
             );
         }
-        _ => {}
     }
-    anyhow::bail!(
-        "{} Unknown agent {}. Run {} to see available agents.",
-        styles::error_prefix(),
-        styles::input_badge(tool),
-        styles::code_badge("agents list-sources")
-    )
+
+    Ok(())
+}
+
+fn run_release_browser(
+    entry: &CatalogAgent,
+    github: &crate::agents::data::GitHubData,
+) -> Result<()> {
+    if github.releases.is_empty() {
+        println!("No releases found for {}", entry.agent.name);
+        return Ok(());
+    }
+
+    let items = browser_items_for_agent(&entry.id, &entry.agent, github);
+    if let Some(selected) = crate::cli::agents_ui::browse_releases(
+        items,
+        &format!(" {} Releases ", entry.agent.name),
+        false,
+    )? {
+        println!();
+        print_release(&entry.agent.name, &selected.release);
+    }
+
+    Ok(())
 }
 
 fn print_release(name: &str, release: &crate::agents::data::Release) {
@@ -577,11 +783,20 @@ fn print_release(name: &str, release: &crate::agents::data::Release) {
         styles::dim(&date)
     );
     println!("{}", styles::separator(40));
-    if let Some(body) = &release.changelog {
+    if has_changelog_body(release.changelog.as_deref()) {
+        let body = release.changelog.as_deref().unwrap_or_default();
         print_changelog_body(body);
     } else {
         println!("(no changelog body)");
     }
+}
+
+fn has_changelog_body(body: Option<&str>) -> bool {
+    body.is_some_and(|body| !body.trim().is_empty())
+}
+
+fn sort_recent_release_items(items: &mut [crate::cli::agents_ui::ReleaseBrowserItem]) {
+    items.sort_by(|a, b| b.sort_key.cmp(&a.sort_key).then_with(|| b.version.cmp(&a.version)));
 }
 
 fn print_changelog_body(body: &str) {
@@ -647,48 +862,41 @@ fn run_version_list(
     Ok(())
 }
 
-fn run_pick(
-    agent: &crate::agents::data::Agent,
-    github: &crate::agents::data::GitHubData,
-) -> Result<()> {
-    if github.releases.is_empty() {
-        println!("No releases found for {}", agent.name);
-        return Ok(());
-    }
-
-    let items: Vec<String> = github
-        .releases
-        .iter()
-        .map(|r| {
-            let parsed = r
-                .date
-                .as_deref()
-                .and_then(crate::agents::helpers::parse_date);
-            let date =
-                format_release_date_ymd(r.date.as_deref()).unwrap_or_else(|| "unknown".to_string());
-            let ago = parsed
-                .map(|d| crate::agents::helpers::format_relative_time(&d))
-                .unwrap_or_default();
-            format!("{:<16} {:<12} {}", r.version, date, ago)
-        })
-        .collect();
-
-    let theme = super::styles::picker_theme();
-    let selection = dialoguer::FuzzySelect::with_theme(&theme)
-        .with_prompt(format!("Select a {} release", agent.name))
-        .items(&items)
-        .default(0)
-        .interact()?;
-
-    let release = &github.releases[selection];
-    println!();
-    print_release(&agent.name, release);
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn sample_agent(
+        name: &str,
+        repo: &str,
+        cli_binary: Option<&str>,
+    ) -> crate::agents::data::Agent {
+        crate::agents::data::Agent {
+            name: name.to_string(),
+            repo: repo.to_string(),
+            categories: vec!["cli".to_string()],
+            installation_method: None,
+            pricing: None,
+            supported_providers: vec![],
+            platform_support: vec![],
+            open_source: true,
+            cli_binary: cli_binary.map(str::to_string),
+            alt_binaries: vec![],
+            version_command: vec![],
+            version_regex: None,
+            config_files: vec![],
+            homepage: None,
+            docs: None,
+        }
+    }
+
+    fn catalog_entry(id: &str, name: &str, cli_binary: Option<&str>) -> CatalogAgent {
+        CatalogAgent {
+            id: id.to_string(),
+            agent: sample_agent(name, &format!("owner/{id}"), cli_binary),
+            tracked: true,
+        }
+    }
 
     fn sample_github_data(version: &str) -> crate::agents::data::GitHubData {
         crate::agents::data::GitHubData {
@@ -784,5 +992,90 @@ mod tests {
             format_release_date_ymd(Some("2024-06-15T23:30:00-02:00")),
             Some("2024-06-16".to_string())
         );
+    }
+
+    #[test]
+    fn tool_args_parses_latest_flag() {
+        let parsed =
+            ToolArgs::parse_from(vec!["claude".to_string(), "--latest".to_string()]).unwrap();
+        assert_eq!(parsed.tool, "claude");
+        assert!(parsed.latest);
+        assert!(!parsed.list);
+        assert!(!parsed.pick);
+        assert!(parsed.version.is_none());
+    }
+
+    #[test]
+    fn tool_args_rejects_conflicting_latest_and_pick() {
+        let err = ToolArgs::parse_from(vec![
+            "claude".to_string(),
+            "--latest".to_string(),
+            "--pick".to_string(),
+        ])
+        .unwrap_err()
+        .to_string();
+        assert!(err.contains("mutually exclusive"));
+    }
+
+    #[test]
+    fn resolve_tool_returns_ambiguous_matches_for_partial_name() {
+        let catalog = vec![
+            catalog_entry("claude-code", "Claude Code", Some("claude")),
+            catalog_entry("codex", "OpenAI Codex", Some("codex")),
+            catalog_entry("opencode", "OpenCode", Some("opencode")),
+        ];
+
+        match resolve_tool("code", &catalog).unwrap() {
+            ResolveTool::Single(_) => panic!("expected ambiguous result"),
+            ResolveTool::Ambiguous(matches) => {
+                let ids: Vec<_> = matches.iter().map(|entry| entry.id.as_str()).collect();
+                assert!(ids.contains(&"claude-code"));
+                assert!(ids.contains(&"opencode"));
+            }
+        }
+    }
+
+    #[test]
+    fn has_changelog_body_rejects_blank_strings() {
+        assert!(!has_changelog_body(None));
+        assert!(!has_changelog_body(Some("")));
+        assert!(!has_changelog_body(Some("   ")));
+        assert!(has_changelog_body(Some("fixed a bug")));
+    }
+
+    #[test]
+    fn sort_recent_release_items_uses_timestamp_not_rendered_date() {
+        let mut items = vec![
+            crate::cli::agents_ui::ReleaseBrowserItem {
+                agent_name: "Alpha".to_string(),
+                version: "1.0.0".to_string(),
+                released: "2026-03-11".to_string(),
+                ago: "1h ago".to_string(),
+                body: Some("a".to_string()),
+                sort_key: 100,
+                release: crate::agents::data::Release {
+                    version: "1.0.0".to_string(),
+                    date: Some("2026-03-11T10:00:00Z".to_string()),
+                    changelog: Some("a".to_string()),
+                },
+            },
+            crate::cli::agents_ui::ReleaseBrowserItem {
+                agent_name: "Beta".to_string(),
+                version: "2.0.0".to_string(),
+                released: "2026-03-11".to_string(),
+                ago: "10m ago".to_string(),
+                body: Some("b".to_string()),
+                sort_key: 200,
+                release: crate::agents::data::Release {
+                    version: "2.0.0".to_string(),
+                    date: Some("2026-03-11T11:00:00Z".to_string()),
+                    changelog: Some("b".to_string()),
+                },
+            },
+        ];
+
+        sort_recent_release_items(&mut items);
+        assert_eq!(items[0].agent_name, "Beta");
+        assert_eq!(items[1].agent_name, "Alpha");
     }
 }
