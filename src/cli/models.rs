@@ -312,7 +312,7 @@ impl ModelPicker {
                 Style::default()
                     .fg(Color::Cyan)
                     .add_modifier(Modifier::BOLD),
-            )
+            ),
         )
         .column_spacing(1)
         .highlight_symbol(">> ")
@@ -413,13 +413,18 @@ impl ModelPicker {
                 "Filter: {}_  Enter apply  Esc clear  Backspace delete",
                 self.query
             ))
-        } else if self.copied_at.is_some_and(|t| t.elapsed().as_millis() < 1500) {
+        } else if self
+            .copied_at
+            .is_some_and(|t| t.elapsed().as_millis() < 1500)
+        {
             Line::from(Span::styled(
                 "Copied to clipboard!",
                 Style::default().fg(Color::Green),
             ))
         } else {
-            Line::from("Enter inspect   / filter   s sort   S reverse   c copy   q quit   ↑↓/j/k move")
+            Line::from(
+                "Enter inspect   / filter   s sort   S reverse   c copy   q quit   ↑↓/j/k move",
+            )
         }
     }
 }
@@ -531,7 +536,9 @@ pub fn search(query: &str, json: bool) -> Result<()> {
 
     if super::styles::is_tty() {
         let title = " Model Search ".to_string();
-        if let Some(row) = pick_model_with_query(filtered, ModelSort::ReleaseDate, true, &title, query)? {
+        if let Some(row) =
+            pick_model_with_query(filtered, ModelSort::ReleaseDate, true, &title, query)?
+        {
             print_model_detail(&row, false)?;
         }
         return Ok(());

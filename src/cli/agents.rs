@@ -172,23 +172,24 @@ fn source_items(
             let github = cached_github_data_for_repo(disk_cache, &entry.agent.repo);
             let (stars, latest_version, latest_release_date, release_frequency) =
                 if let Some(ref gh) = github {
-                    let version = gh
-                        .latest_version()
-                        .unwrap_or("\u{2014}")
-                        .to_string();
+                    let version = gh.latest_version().unwrap_or("\u{2014}").to_string();
                     let date = gh
                         .latest_release_date()
                         .map(|dt| {
                             let formatted = dt.format("%Y-%m-%d").to_string();
-                            let relative =
-                                crate::agents::helpers::format_relative_time(&dt);
+                            let relative = crate::agents::helpers::format_relative_time(&dt);
                             format!("{formatted} ({relative})")
                         })
                         .unwrap_or_else(|| "\u{2014}".to_string());
                     let freq = gh.release_frequency();
                     (gh.stars, version, date, freq)
                 } else {
-                    (None, "\u{2014}".to_string(), "\u{2014}".to_string(), "\u{2014}".to_string())
+                    (
+                        None,
+                        "\u{2014}".to_string(),
+                        "\u{2014}".to_string(),
+                        "\u{2014}".to_string(),
+                    )
                 };
 
             crate::cli::agents_ui::AgentSourceItem {
@@ -224,10 +225,7 @@ fn source_items(
                     .map(|p| {
                         let mut parts = vec![p.model.clone()];
                         if let Some(price) = p.subscription_price {
-                            let period = p
-                                .subscription_period
-                                .as_deref()
-                                .unwrap_or("month");
+                            let period = p.subscription_period.as_deref().unwrap_or("month");
                             parts.push(format!("${price}/{period}"));
                         }
                         if p.free_tier {

@@ -323,12 +323,11 @@ impl SourcePicker {
             ],
         )
         .header(
-            TuiRow::new(vec!["Track", "ID", "Name", "CLI"])
-                .style(
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD),
-                )
+            TuiRow::new(vec!["Track", "ID", "Name", "CLI"]).style(
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
         )
         .column_spacing(1)
         .highlight_symbol(">> ")
@@ -369,9 +368,7 @@ impl SourcePicker {
             return vec![Line::from("No agents")];
         };
         let dim = Style::default().fg(Color::DarkGray);
-        let label = |s: &str| -> Span<'static> {
-            Span::styled(format!("{s}: "), dim)
-        };
+        let label = |s: &str| -> Span<'static> { Span::styled(format!("{s}: "), dim) };
         let has = |s: &str| -> bool { s != "\u{2014}" };
 
         // Row 1: Name + source tag + stars
@@ -406,25 +403,19 @@ impl SourcePicker {
         // Row 2: Repo URL
         let repo_url = format!("https://github.com/{}", item.repo);
 
-        let mut lines = vec![
-            Line::from(header),
-            Line::from(Span::styled(repo_url, dim)),
-        ];
+        let mut lines = vec![Line::from(header), Line::from(Span::styled(repo_url, dim))];
 
         // Release info (compact: version + date + cadence on 1-2 lines)
         if has(&item.latest_version) {
             lines.push(Line::from(""));
-            let mut release_spans = vec![
-                Span::styled(
-                    format!("v{}", item.latest_version),
-                    Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
-                ),
-            ];
+            let mut release_spans = vec![Span::styled(
+                format!("v{}", item.latest_version),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )];
             if has(&item.latest_release_date) {
-                release_spans.push(Span::styled(
-                    format!("  {}", item.latest_release_date),
-                    dim,
-                ));
+                release_spans.push(Span::styled(format!("  {}", item.latest_release_date), dim));
             }
             if has(&item.release_frequency) {
                 release_spans.push(Span::styled(
@@ -437,15 +428,27 @@ impl SourcePicker {
 
         // Agent metadata (combined where possible)
         lines.push(Line::from(""));
-        lines.push(Line::from(vec![label("Categories"), Span::raw(item.categories.clone())]));
+        lines.push(Line::from(vec![
+            label("Categories"),
+            Span::raw(item.categories.clone()),
+        ]));
         if has(&item.supported_providers) {
-            lines.push(Line::from(vec![label("Providers"), Span::raw(item.supported_providers.clone())]));
+            lines.push(Line::from(vec![
+                label("Providers"),
+                Span::raw(item.supported_providers.clone()),
+            ]));
         }
         if has(&item.platform_support) {
-            lines.push(Line::from(vec![label("Platforms"), Span::raw(item.platform_support.clone())]));
+            lines.push(Line::from(vec![
+                label("Platforms"),
+                Span::raw(item.platform_support.clone()),
+            ]));
         }
         if has(&item.pricing) {
-            lines.push(Line::from(vec![label("Pricing"), Span::raw(item.pricing.clone())]));
+            lines.push(Line::from(vec![
+                label("Pricing"),
+                Span::raw(item.pricing.clone()),
+            ]));
         }
 
         // Links (inline if both fit)

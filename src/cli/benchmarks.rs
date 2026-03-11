@@ -422,12 +422,8 @@ impl<'a> BenchmarkPicker<'a> {
                 _ => TuiCell::from(""),
             };
             let source_cell = match self.open_weights_map.get(&entry.slug).copied() {
-                Some(true) => {
-                    TuiCell::from(Span::styled("O", Style::default().fg(Color::Green)))
-                }
-                Some(false) => {
-                    TuiCell::from(Span::styled("C", Style::default().fg(Color::Red)))
-                }
+                Some(true) => TuiCell::from(Span::styled("O", Style::default().fg(Color::Green))),
+                Some(false) => TuiCell::from(Span::styled("C", Style::default().fg(Color::Red))),
                 None => TuiCell::from(""),
             };
             TuiRow::new(vec![
@@ -454,10 +450,7 @@ impl<'a> BenchmarkPicker<'a> {
                 Constraint::Length(3),
             ],
         )
-        .header(
-            TuiRow::new(vec!["Name", "Creator", "Release", "R", "S"])
-                .style(header_style)
-        )
+        .header(TuiRow::new(vec!["Name", "Creator", "Release", "R", "S"]).style(header_style))
         .column_spacing(1)
         .highlight_symbol(">> ")
         .highlight_spacing(HighlightSpacing::Always)
@@ -530,9 +523,7 @@ impl<'a> BenchmarkPicker<'a> {
             ];
         };
         let dim = Style::default().fg(Color::DarkGray);
-        let label = |s: &str| -> Span<'static> {
-            Span::styled(format!("{s}: "), dim)
-        };
+        let label = |s: &str| -> Span<'static> { Span::styled(format!("{s}: "), dim) };
         let metric = |v: Option<f64>| -> Span<'static> {
             match v {
                 Some(val) => Span::raw(format!("{val:.2}")),
@@ -541,18 +532,16 @@ impl<'a> BenchmarkPicker<'a> {
         };
 
         // Header
-        let mut lines = vec![
-            Line::from(vec![
-                Span::styled(
-                    entry.display_name.clone(),
-                    Style::default()
-                        .fg(Color::White)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::raw("  "),
-                Span::styled(entry.slug.clone(), dim),
-            ]),
-        ];
+        let mut lines = vec![Line::from(vec![
+            Span::styled(
+                entry.display_name.clone(),
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw("  "),
+            Span::styled(entry.slug.clone(), dim),
+        ])];
 
         // Categorical row: creator + reasoning + source
         let reasoning_text = match entry.reasoning_status {
