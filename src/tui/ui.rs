@@ -145,10 +145,13 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
     };
 
     let title = if status_app.search_query.is_empty() {
-        format!(" Status ({}) ", status_app.filtered_entries.len())
+        format!(
+            " Status ({}) [API Status Check] ",
+            status_app.filtered_entries.len()
+        )
     } else {
         format!(
-            " Status ({}) [/{query}] ",
+            " Status ({}) [/{query}] [API Status Check] ",
             status_app.filtered_entries.len(),
             query = status_app.search_query
         )
@@ -210,11 +213,15 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                 format!("Slug: {}", entry.slug),
                 Style::default().fg(Color::DarkGray),
             )),
+            Line::from(vec![
+                Span::styled("Reported by: ", Style::default().fg(Color::DarkGray)),
+                Span::raw("API Status Check"),
+            ]),
             Line::from(""),
         ];
 
         lines.push(Line::from(vec![
-            Span::styled("Source: ", Style::default().fg(Color::DarkGray)),
+            Span::styled("Source entry: ", Style::default().fg(Color::DarkGray)),
             Span::raw(
                 entry
                     .source_name
@@ -222,6 +229,12 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     .unwrap_or_else(|| "Unavailable".to_string()),
             ),
         ]));
+        if entry.source_slug != entry.slug {
+            lines.push(Line::from(vec![
+                Span::styled("Mapped slug: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(format!("{} → {}", entry.slug, entry.source_slug)),
+            ]));
+        }
         lines.push(Line::from(vec![
             Span::styled("Last checked: ", Style::default().fg(Color::DarkGray)),
             Span::raw(
@@ -234,12 +247,52 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
             ),
         ]));
         lines.push(Line::from(vec![
+            Span::styled("Source status: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(entry.health.label(), status_health_style(entry.health)),
+        ]));
+        lines.push(Line::from(vec![
             Span::styled("Category: ", Style::default().fg(Color::DarkGray)),
             Span::raw(
                 entry
                     .category
                     .clone()
                     .unwrap_or_else(|| "Unknown".to_string()),
+            ),
+        ]));
+        lines.push(Line::from(vec![
+            Span::styled("Official status: ", Style::default().fg(Color::DarkGray)),
+            Span::raw(
+                entry
+                    .status_page_url
+                    .clone()
+                    .unwrap_or_else(|| "Unavailable".to_string()),
+            ),
+        ]));
+        lines.push(Line::from(vec![
+            Span::styled("Provider docs: ", Style::default().fg(Color::DarkGray)),
+            Span::raw(
+                entry
+                    .docs_url
+                    .clone()
+                    .unwrap_or_else(|| "Unavailable".to_string()),
+            ),
+        ]));
+        lines.push(Line::from(vec![
+            Span::styled("Source page: ", Style::default().fg(Color::DarkGray)),
+            Span::raw(
+                entry
+                    .source_page_url
+                    .clone()
+                    .unwrap_or_else(|| "Unavailable".to_string()),
+            ),
+        ]));
+        lines.push(Line::from(vec![
+            Span::styled("History page: ", Style::default().fg(Color::DarkGray)),
+            Span::raw(
+                entry
+                    .history_url
+                    .clone()
+                    .unwrap_or_else(|| "Unavailable".to_string()),
             ),
         ]));
         if let Some(description) = &entry.description {
@@ -249,7 +302,7 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
 
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
-            "Related agents:",
+            "Related agents (from local catalog):",
             Style::default().add_modifier(Modifier::BOLD),
         )));
         let related_agents = status_app.related_agents_for(&entry.slug);
@@ -265,6 +318,18 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
         }
 
         lines.push(Line::from(""));
+        if entry.health == ProviderHealth::Unknown {
+            lines.push(Line::from(Span::styled(
+                "No matching live provider entry found in API Status Check for this source yet.",
+                Style::default().fg(Color::Yellow),
+            )));
+        } else {
+            lines.push(Line::from(Span::styled(
+                "Current provider status shown above comes from API Status Check, not direct verification by this app.",
+                Style::default().fg(Color::DarkGray),
+            )));
+        }
+
         if let Some(error) = &status_app.last_error {
             lines.push(Line::from(vec![
                 Span::styled("Fetch note: ", Style::default().fg(Color::DarkGray)),
