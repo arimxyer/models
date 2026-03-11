@@ -7,7 +7,7 @@ use ratatui::{
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
-    text::Line,
+    text::{Line, Span},
     widgets::{
         Block, Borders, Cell as TuiCell, HighlightSpacing, Paragraph, Row as TuiRow,
         Table as TuiTable, TableState,
@@ -137,6 +137,7 @@ struct ModelPicker {
     query: String,
     filter_mode: bool,
     state: TableState,
+    copied_at: Option<std::time::Instant>,
 }
 
 impl ModelPicker {
@@ -150,6 +151,7 @@ impl ModelPicker {
             query: String::new(),
             filter_mode: false,
             state: TableState::default(),
+            copied_at: None,
         };
         picker.rebuild_visible_entries(None);
         picker
@@ -411,8 +413,13 @@ impl ModelPicker {
                 "Filter: {}_  Enter apply  Esc clear  Backspace delete",
                 self.query
             ))
+        } else if self.copied_at.is_some_and(|t| t.elapsed().as_millis() < 1500) {
+            Line::from(Span::styled(
+                "Copied to clipboard!",
+                Style::default().fg(Color::Green),
+            ))
         } else {
-            Line::from("Enter inspect   / filter   s sort   S reverse   q quit   ↑↓/j/k move")
+            Line::from("Enter inspect   / filter   s sort   S reverse   c copy   q quit   ↑↓/j/k move")
         }
     }
 }
@@ -718,6 +725,18 @@ fn pick_model_with_query(
                     KeyCode::Home | KeyCode::Char('g') => picker.first(),
                     KeyCode::End | KeyCode::Char('G') => picker.last(),
                     KeyCode::Char('/') => picker.start_filter(),
+                    KeyCode::Char('c') => {
+                        if let Some(row) = picker.selected() {
+                            let text = row.id.clone();
+                            std::thread::spawn(move || {
+                                if let Ok(mut cb) = arboard::Clipboard::new() {
+                                    let _ = cb.set_text(&text);
+                                    std::thread::sleep(Duration::from_secs(2));
+                                }
+                            });
+                            picker.copied_at = Some(std::time::Instant::now());
+                        }
+                    }
                     KeyCode::Char('s') => picker.cycle_sort(),
                     KeyCode::Char('S') => picker.toggle_descending(),
                     KeyCode::Enter => return Ok(picker.selected().cloned()),
