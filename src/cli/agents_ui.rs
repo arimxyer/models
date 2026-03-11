@@ -320,7 +320,6 @@ impl SourcePicker {
                         .fg(Color::Cyan)
                         .add_modifier(Modifier::BOLD),
                 )
-                .bottom_margin(1),
         )
         .column_spacing(1)
         .highlight_symbol(">> ")
