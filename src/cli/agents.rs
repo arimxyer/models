@@ -162,64 +162,95 @@ fn load_catalog(config: &crate::config::Config) -> Result<Vec<CatalogAgent>> {
     Ok(entries)
 }
 
-fn source_items(catalog: &[CatalogAgent]) -> Vec<crate::cli::agents_ui::AgentSourceItem> {
+fn source_items(
+    catalog: &[CatalogAgent],
+    disk_cache: &crate::agents::cache::GitHubCache,
+) -> Vec<crate::cli::agents_ui::AgentSourceItem> {
     catalog
         .iter()
-        .map(|entry| crate::cli::agents_ui::AgentSourceItem {
-            id: entry.id.clone(),
-            name: entry.agent.name.clone(),
-            repo: entry.agent.repo.clone(),
-            cli_binary: entry
-                .agent
-                .cli_binary
-                .clone()
-                .unwrap_or_else(|| "\u{2014}".to_string()),
-            categories: if entry.agent.categories.is_empty() {
-                "\u{2014}".to_string()
-            } else {
-                entry.agent.categories.join(", ")
-            },
-            tracked: entry.tracked,
-            open_source: entry.agent.open_source,
-            supported_providers: if entry.agent.supported_providers.is_empty() {
-                "\u{2014}".to_string()
-            } else {
-                entry.agent.supported_providers.join(", ")
-            },
-            platform_support: if entry.agent.platform_support.is_empty() {
-                "\u{2014}".to_string()
-            } else {
-                entry.agent.platform_support.join(", ")
-            },
-            pricing: entry
-                .agent
-                .pricing
-                .as_ref()
-                .map(|p| {
-                    let mut parts = vec![p.model.clone()];
-                    if let Some(price) = p.subscription_price {
-                        let period = p
-                            .subscription_period
-                            .as_deref()
-                            .unwrap_or("month");
-                        parts.push(format!("${price}/{period}"));
-                    }
-                    if p.free_tier {
-                        parts.push("free tier".to_string());
-                    }
-                    parts.join(", ")
-                })
-                .unwrap_or_else(|| "\u{2014}".to_string()),
-            homepage: entry
-                .agent
-                .homepage
-                .clone()
-                .unwrap_or_else(|| "\u{2014}".to_string()),
-            docs: entry
-                .agent
-                .docs
-                .clone()
-                .unwrap_or_else(|| "\u{2014}".to_string()),
+        .map(|entry| {
+            let github = cached_github_data_for_repo(disk_cache, &entry.agent.repo);
+            let (stars, latest_version, latest_release_date, release_frequency) =
+                if let Some(ref gh) = github {
+                    let version = gh
+                        .latest_version()
+                        .unwrap_or("\u{2014}")
+                        .to_string();
+                    let date = gh
+                        .latest_release_date()
+                        .map(|dt| {
+                            let formatted = dt.format("%Y-%m-%d").to_string();
+                            let relative =
+                                crate::agents::helpers::format_relative_time(&dt);
+                            format!("{formatted} ({relative})")
+                        })
+                        .unwrap_or_else(|| "\u{2014}".to_string());
+                    let freq = gh.release_frequency();
+                    (gh.stars, version, date, freq)
+                } else {
+                    (None, "\u{2014}".to_string(), "\u{2014}".to_string(), "\u{2014}".to_string())
+                };
+
+            crate::cli::agents_ui::AgentSourceItem {
+                id: entry.id.clone(),
+                name: entry.agent.name.clone(),
+                repo: entry.agent.repo.clone(),
+                cli_binary: entry
+                    .agent
+                    .cli_binary
+                    .clone()
+                    .unwrap_or_else(|| "\u{2014}".to_string()),
+                categories: if entry.agent.categories.is_empty() {
+                    "\u{2014}".to_string()
+                } else {
+                    entry.agent.categories.join(", ")
+                },
+                tracked: entry.tracked,
+                open_source: entry.agent.open_source,
+                supported_providers: if entry.agent.supported_providers.is_empty() {
+                    "\u{2014}".to_string()
+                } else {
+                    entry.agent.supported_providers.join(", ")
+                },
+                platform_support: if entry.agent.platform_support.is_empty() {
+                    "\u{2014}".to_string()
+                } else {
+                    entry.agent.platform_support.join(", ")
+                },
+                pricing: entry
+                    .agent
+                    .pricing
+                    .as_ref()
+                    .map(|p| {
+                        let mut parts = vec![p.model.clone()];
+                        if let Some(price) = p.subscription_price {
+                            let period = p
+                                .subscription_period
+                                .as_deref()
+                                .unwrap_or("month");
+                            parts.push(format!("${price}/{period}"));
+                        }
+                        if p.free_tier {
+                            parts.push("free tier".to_string());
+                        }
+                        parts.join(", ")
+                    })
+                    .unwrap_or_else(|| "\u{2014}".to_string()),
+                homepage: entry
+                    .agent
+                    .homepage
+                    .clone()
+                    .unwrap_or_else(|| "\u{2014}".to_string()),
+                docs: entry
+                    .agent
+                    .docs
+                    .clone()
+                    .unwrap_or_else(|| "\u{2014}".to_string()),
+                stars,
+                latest_version,
+                latest_release_date,
+                release_frequency,
+            }
         })
         .collect()
 }
@@ -575,9 +606,10 @@ fn run_list_sources() -> Result<()> {
 
     let mut config = crate::config::Config::load()?;
     let catalog = load_catalog(&config)?;
+    let disk_cache = crate::agents::cache::GitHubCache::load();
 
     if super::styles::is_tty() {
-        let items = source_items(&catalog);
+        let items = source_items(&catalog, &disk_cache);
         if let Some(updated) =
             crate::cli::agents_ui::manage_agent_sources(items, " Agent Sources ")?
         {
@@ -638,7 +670,7 @@ fn run_tool(args: ToolArgs) -> Result<()> {
         ResolveTool::Ambiguous(matches) => {
             if super::styles::is_tty() {
                 let title = format!(" Select Agent for \"{}\" ", args.tool);
-                let items = source_items(&matches);
+                let items = source_items(&matches, &disk_cache);
                 let Some(selected) = crate::cli::agents_ui::pick_agent(items, &title)? else {
                     return Ok(());
                 };
