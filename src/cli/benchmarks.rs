@@ -39,7 +39,7 @@ pub enum BenchmarksCommand {
         #[arg(long)]
         creator: Option<String>,
         /// Sort column
-        #[arg(long, value_enum, default_value_t = BenchmarkSort::Intelligence)]
+        #[arg(long, value_enum, default_value_t = BenchmarkSort::ReleaseDate)]
         sort: BenchmarkSort,
         /// Force ascending sort
         #[arg(long, conflicts_with = "desc")]
@@ -451,7 +451,6 @@ impl<'a> BenchmarkPicker<'a> {
                 "Release",
             ])
             .style(header_style)
-            .bottom_margin(1),
         )
         .column_spacing(1)
         .highlight_symbol(">> ")
@@ -723,8 +722,8 @@ fn run_show(model: &str, json: bool) -> Result<()> {
             if let Some(entry) = pick_benchmark(
                 entries,
                 &loaded.open_weights_map,
-                BenchmarkSort::Name,
-                false,
+                BenchmarkSort::ReleaseDate,
+                true,
                 &title,
             )? {
                 print_entry_detail(entry, &loaded.open_weights_map, false)?;

@@ -311,7 +311,6 @@ impl ModelPicker {
                     .fg(Color::Cyan)
                     .add_modifier(Modifier::BOLD),
             )
-            .bottom_margin(1),
         )
         .column_spacing(1)
         .highlight_symbol(">> ")
@@ -484,13 +483,13 @@ pub fn list(provider: Option<&str>, json: bool) -> Result<()> {
 
     if super::styles::is_tty() {
         let title = " Model Picker ".to_string();
-        if let Some(row) = pick_model(rows, ModelSort::Name, false, &title)? {
+        if let Some(row) = pick_model(rows, ModelSort::ReleaseDate, true, &title)? {
             print_model_detail(&row, false)?;
         }
         return Ok(());
     }
 
-    print_model_table(&rows, ModelSort::Name);
+    print_model_table(&rows, ModelSort::ReleaseDate);
     Ok(())
 }
 
@@ -502,7 +501,7 @@ pub fn show(query: &str, json: bool) -> Result<()> {
                 bail!("{}", ambiguous_model_matches_message(query, &rows));
             }
             let title = format!(" Select Model Match for \"{query}\" ");
-            if let Some(row) = pick_model(rows, ModelSort::Name, false, &title)? {
+            if let Some(row) = pick_model(rows, ModelSort::ReleaseDate, true, &title)? {
                 print_model_detail(&row, false)?;
             }
             Ok(())
@@ -512,7 +511,7 @@ pub fn show(query: &str, json: bool) -> Result<()> {
 
 pub fn search(query: &str, json: bool) -> Result<()> {
     let rows = load_model_rows(None)?;
-    let filtered = filter_picker_entries(&rows, query, ModelSort::Name, false);
+    let filtered = filter_picker_entries(&rows, query, ModelSort::ReleaseDate, true);
     if filtered.is_empty() {
         println!("No models found matching '{}'", query);
         return Ok(());
@@ -525,13 +524,13 @@ pub fn search(query: &str, json: bool) -> Result<()> {
 
     if super::styles::is_tty() {
         let title = " Model Search ".to_string();
-        if let Some(row) = pick_model_with_query(filtered, ModelSort::Name, false, &title, query)? {
+        if let Some(row) = pick_model_with_query(filtered, ModelSort::ReleaseDate, true, &title, query)? {
             print_model_detail(&row, false)?;
         }
         return Ok(());
     }
 
-    print_model_table(&filtered, ModelSort::Name);
+    print_model_table(&filtered, ModelSort::ReleaseDate);
     Ok(())
 }
 
