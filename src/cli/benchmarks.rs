@@ -11,7 +11,7 @@ use ratatui::{
     text::Line,
     widgets::{
         Block, Borders, Cell as TuiCell, HighlightSpacing, Paragraph, Row as TuiRow,
-        Table as TuiTable, TableState,
+        Table as TuiTable, TableState, Wrap,
     },
     Frame, Terminal, TerminalOptions, Viewport,
 };
@@ -398,59 +398,65 @@ impl<'a> BenchmarkPicker<'a> {
     }
 
     fn draw(&mut self, frame: &mut Frame<'_>) {
-        let chunks = Layout::default()
+        let outer = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Min(7),
-                Constraint::Length(4),
-                Constraint::Length(1),
-            ])
+            .constraints([Constraint::Min(10), Constraint::Length(1)])
             .split(frame.area());
+        let main = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(55), Constraint::Percentage(45)])
+            .split(outer[0]);
         let header_style = Style::default()
             .fg(Color::Cyan)
             .add_modifier(Modifier::BOLD);
         let rows = self.visible_entries.iter().map(|entry| {
+            use ratatui::text::Span;
+
+            let reasoning_cell = match entry.reasoning_status {
+                crate::benchmarks::ReasoningStatus::Reasoning => {
+                    TuiCell::from(Span::styled("R", Style::default().fg(Color::Cyan)))
+                }
+                crate::benchmarks::ReasoningStatus::Adaptive => {
+                    TuiCell::from(Span::styled("A", Style::default().fg(Color::Cyan)))
+                }
+                _ => TuiCell::from(""),
+            };
+            let source_cell = match self.open_weights_map.get(&entry.slug).copied() {
+                Some(true) => {
+                    TuiCell::from(Span::styled("O", Style::default().fg(Color::Green)))
+                }
+                Some(false) => {
+                    TuiCell::from(Span::styled("C", Style::default().fg(Color::Red)))
+                }
+                None => TuiCell::from(""),
+            };
             TuiRow::new(vec![
-                TuiCell::from(truncate_picker_text(&entry.display_name, 32)),
-                TuiCell::from(truncate_picker_text(creator_label(entry), 16)),
-                TuiCell::from(truncate_picker_text(
-                    &format_picker_sort_value(self.sort, entry),
-                    12,
-                )),
-                TuiCell::from(truncate_picker_text(reasoning_label(entry), 13)),
-                TuiCell::from(format_open_weights(
-                    self.open_weights_map.get(&entry.slug).copied(),
-                )),
+                TuiCell::from(truncate_picker_text(&entry.display_name, 28)),
+                TuiCell::from(truncate_picker_text(creator_label(entry), 14)),
                 TuiCell::from(
                     entry
                         .release_date
                         .clone()
                         .unwrap_or_else(|| "\u{2014}".to_string()),
                 ),
+                reasoning_cell,
+                source_cell,
             ])
         });
 
         let table = TuiTable::new(
             rows,
             [
-                Constraint::Percentage(34),
-                Constraint::Percentage(17),
-                Constraint::Percentage(13),
-                Constraint::Percentage(14),
-                Constraint::Percentage(9),
-                Constraint::Percentage(13),
+                Constraint::Percentage(40),
+                Constraint::Percentage(22),
+                Constraint::Percentage(20),
+                Constraint::Length(3),
+                Constraint::Length(3),
             ],
         )
         .header(
-            TuiRow::new(vec![
-                "Name",
-                "Creator",
-                picker_sort_label(self.sort),
-                "Reasoning",
-                "Source",
-                "Release",
-            ])
-            .style(header_style)
+            TuiRow::new(vec!["Name", "Creator", "Release", "R", "S"])
+                .style(header_style)
         )
         .column_spacing(1)
         .highlight_symbol(">> ")
@@ -467,18 +473,20 @@ impl<'a> BenchmarkPicker<'a> {
                 .title(self.title_text()),
         );
 
-        frame.render_stateful_widget(table, chunks[0], &mut self.state);
+        frame.render_stateful_widget(table, main[0], &mut self.state);
 
-        let preview = Paragraph::new(self.preview_lines()).block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::DarkGray))
-                .title(" Preview "),
-        );
-        frame.render_widget(preview, chunks[1]);
+        let preview = Paragraph::new(self.preview_lines())
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::DarkGray))
+                    .title(" Preview "),
+            )
+            .wrap(Wrap { trim: false });
+        frame.render_widget(preview, main[1]);
 
         let controls = Paragraph::new(self.status_line());
-        frame.render_widget(controls, chunks[2]);
+        frame.render_widget(controls, outer[1]);
     }
 
     fn title_text(&self) -> String {
@@ -512,6 +520,8 @@ impl<'a> BenchmarkPicker<'a> {
     }
 
     fn preview_lines(&self) -> Vec<Line<'static>> {
+        use ratatui::text::Span;
+
         let Some(entry) = self.selected() else {
             return vec![
                 Line::from("No matches"),
@@ -519,21 +529,116 @@ impl<'a> BenchmarkPicker<'a> {
                 Line::from("Adjust the filter or clear it with Esc while filtering."),
             ];
         };
-        vec![
-            Line::from(format!("slug: {}", truncate_picker_text(&entry.slug, 72))),
-            Line::from(format!(
-                "coding: {}   math: {}   gpqa: {}",
-                format_metric(entry.coding_index),
-                format_metric(entry.math_index),
-                format_metric(entry.gpqa),
-            )),
-            Line::from(format!(
-                "ttft: {}   tok/s: {}   blended $/M: {}",
-                format_metric(entry.ttft),
-                format_metric(entry.output_tps),
-                format_metric(entry.price_blended),
-            )),
-        ]
+        let dim = Style::default().fg(Color::DarkGray);
+        let label = |s: &str| -> Span<'static> {
+            Span::styled(format!("{s}: "), dim)
+        };
+        let metric = |v: Option<f64>| -> Span<'static> {
+            match v {
+                Some(val) => Span::raw(format!("{val:.2}")),
+                None => Span::styled("\u{2014}", dim),
+            }
+        };
+
+        // Header
+        let mut lines = vec![
+            Line::from(vec![
+                Span::styled(
+                    entry.display_name.clone(),
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw("  "),
+                Span::styled(entry.slug.clone(), dim),
+            ]),
+        ];
+
+        // Categorical row: creator + reasoning + source
+        let reasoning_text = match entry.reasoning_status {
+            crate::benchmarks::ReasoningStatus::Reasoning => ("R", Color::Cyan),
+            crate::benchmarks::ReasoningStatus::Adaptive => ("A", Color::Cyan),
+            crate::benchmarks::ReasoningStatus::NonReasoning => ("NR", Color::DarkGray),
+            crate::benchmarks::ReasoningStatus::None => ("?", Color::DarkGray),
+        };
+        let source_text = match self.open_weights_map.get(&entry.slug).copied() {
+            Some(true) => ("Open", Color::Green),
+            Some(false) => ("Closed", Color::Red),
+            None => ("\u{2014}", Color::DarkGray),
+        };
+        let mut meta_spans = vec![
+            Span::styled(entry.creator_name.clone(), dim),
+            Span::raw("  "),
+            Span::styled(
+                reasoning_text.0.to_string(),
+                Style::default().fg(reasoning_text.1),
+            ),
+            Span::raw("  "),
+            Span::styled(
+                source_text.0.to_string(),
+                Style::default().fg(source_text.1),
+            ),
+        ];
+        if let Some(ref date) = entry.release_date {
+            meta_spans.push(Span::raw("  "));
+            meta_spans.push(Span::raw(date.clone()));
+        }
+        lines.push(Line::from(meta_spans));
+
+        // Benchmarks
+        lines.push(Line::from(""));
+        lines.push(Line::from(vec![
+            label("Intelligence"),
+            metric(entry.intelligence_index),
+            Span::raw("  "),
+            label("Coding"),
+            metric(entry.coding_index),
+            Span::raw("  "),
+            label("Math"),
+            metric(entry.math_index),
+        ]));
+        lines.push(Line::from(vec![
+            label("GPQA"),
+            metric(entry.gpqa),
+            Span::raw("  "),
+            label("HLE"),
+            metric(entry.hle),
+            Span::raw("  "),
+            label("MMLU-Pro"),
+            metric(entry.mmlu_pro),
+        ]));
+        lines.push(Line::from(vec![
+            label("LiveCode"),
+            metric(entry.livecodebench),
+            Span::raw("  "),
+            label("SciCode"),
+            metric(entry.scicode),
+            Span::raw("  "),
+            label("IFBench"),
+            metric(entry.ifbench),
+        ]));
+
+        // Performance + pricing
+        lines.push(Line::from(""));
+        lines.push(Line::from(vec![
+            label("Tok/s"),
+            metric(entry.output_tps),
+            Span::raw("  "),
+            label("TTFT"),
+            metric(entry.ttft),
+            Span::raw("  "),
+            label("Blended $/M"),
+            metric(entry.price_blended),
+        ]));
+        lines.push(Line::from(vec![
+            label("Input $/M"),
+            metric(entry.price_input),
+            Span::raw("  "),
+            label("Output $/M"),
+            metric(entry.price_output),
+        ]));
+
+        lines
     }
 
     fn status_line(&self) -> Line<'static> {
@@ -971,13 +1076,6 @@ fn format_sort_value(sort: BenchmarkSort, entry: &BenchmarkEntry) -> String {
             .clone()
             .unwrap_or_else(|| "\u{2014}".to_string()),
         _ => format_metric(sort.extract(entry)),
-    }
-}
-
-fn format_picker_sort_value(sort: BenchmarkSort, entry: &BenchmarkEntry) -> String {
-    match sort {
-        BenchmarkSort::Name => entry.slug.clone(),
-        _ => format_sort_value(sort, entry),
     }
 }
 
