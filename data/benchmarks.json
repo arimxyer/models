@@ -2902,12 +2902,12 @@
     "math_500": null,
     "aime": null,
     "aime_25": null,
-    "output_tps": 441.504,
-    "ttft": 0.518,
-    "ttfat": 5.048,
+    "output_tps": 424.423,
+    "ttft": 0.496,
+    "ttfat": 5.208,
     "price_input": 0.3,
-    "price_output": 0.825,
-    "price_blended": 0.431
+    "price_output": 0.8,
+    "price_blended": 0.412
   },
   {
     "id": "6e6e02fd-9cbd-417f-9bfc-673df89c313d",
