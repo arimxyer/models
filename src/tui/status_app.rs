@@ -300,4 +300,43 @@ mod tests {
             Some("gemini")
         );
     }
+
+    #[test]
+    fn health_counts_tallies_all_entries() {
+        let mut agents = HashMap::new();
+        agents.insert(
+            "a".to_string(),
+            Agent {
+                name: "A".to_string(),
+                repo: "owner/a".to_string(),
+                categories: vec![],
+                installation_method: None,
+                pricing: None,
+                supported_providers: vec![],
+                platform_support: vec![],
+                open_source: true,
+                cli_binary: None,
+                alt_binaries: vec![],
+                version_command: vec![],
+                version_regex: None,
+                config_files: vec![],
+                homepage: None,
+                docs: None,
+            },
+        );
+
+        let app = StatusApp::new(&AgentsFile {
+            schema_version: 1,
+            last_scraped: None,
+            scrape_source: None,
+            agents,
+        });
+
+        // All entries start as Unknown health (from placeholders)
+        let (op, deg, out, other) = app.health_counts();
+        assert_eq!(op, 0);
+        assert_eq!(deg, 0);
+        assert_eq!(out, 0);
+        assert!(other > 0); // all Unknown = other
+    }
 }

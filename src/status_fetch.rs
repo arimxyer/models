@@ -558,6 +558,8 @@ fn parse_rss_feed(source: OfficialStatusSource, xml: &str) -> Result<OfficialSna
         });
     }
 
+    incidents.truncate(20);
+
     let (health, summary, official_url) = if incidents.is_empty() {
         (
             ProviderHealth::Operational,
@@ -666,6 +668,8 @@ fn parse_atom_feed(source: OfficialStatusSource, xml: &str) -> Result<OfficialSn
             affected_components: vec![],
         });
     }
+
+    incidents.truncate(20);
 
     if incidents.is_empty() {
         return Err("atom feed entry missing".to_string());
@@ -877,8 +881,11 @@ struct OfficialIncident {
 
 #[derive(Debug, Deserialize)]
 struct OfficialIncidentUpdate {
+    #[serde(default)]
     status: String,
+    #[serde(default)]
     body: String,
+    #[serde(default)]
     created_at: String,
 }
 
@@ -1115,5 +1122,142 @@ mod tests {
             snapshot.incidents[0].created_at.as_deref(),
             Some("2026-02-27T10:00:00+00:00")
         );
+    }
+
+    #[test]
+    fn from_summary_extracts_components_and_incidents() {
+        let payload = OfficialSummaryResponse {
+            page: OfficialPage {
+                name: Some("Test Status".to_string()),
+                url: Some("https://status.test.com".to_string()),
+                updated_at: Some("2026-03-12T00:00:00Z".to_string()),
+            },
+            status: OfficialStatus {
+                description: "Partial System Outage".to_string(),
+                indicator: Some("major".to_string()),
+            },
+            incidents: vec![OfficialIncident {
+                name: "API errors".to_string(),
+                status: "investigating".to_string(),
+                impact: "major".to_string(),
+                shortlink: Some("https://stspg.io/abc".to_string()),
+                created_at: Some("2026-03-12T10:00:00Z".to_string()),
+                updated_at: Some("2026-03-12T10:30:00Z".to_string()),
+                incident_updates: vec![OfficialIncidentUpdate {
+                    status: "investigating".to_string(),
+                    body: "We are investigating elevated error rates.".to_string(),
+                    created_at: "2026-03-12T10:30:00Z".to_string(),
+                }],
+                components: vec![OfficialIncidentComponent {
+                    name: "API".to_string(),
+                }],
+            }],
+            components: vec![
+                OfficialComponent {
+                    id: Some("group1".to_string()),
+                    name: "Core Services".to_string(),
+                    status: "operational".to_string(),
+                    group_id: None,
+                    group: Some(true),
+                },
+                OfficialComponent {
+                    id: Some("c1".to_string()),
+                    name: "API".to_string(),
+                    status: "major_outage".to_string(),
+                    group_id: Some("group1".to_string()),
+                    group: None,
+                },
+                OfficialComponent {
+                    id: Some("c2".to_string()),
+                    name: "Dashboard".to_string(),
+                    status: "operational".to_string(),
+                    group_id: Some("group1".to_string()),
+                    group: None,
+                },
+            ],
+            scheduled_maintenances: vec![OfficialScheduledMaintenance {
+                name: "Database upgrade".to_string(),
+                status: "scheduled".to_string(),
+                impact: "minor".to_string(),
+                scheduled_for: Some("2026-03-15T02:00:00Z".to_string()),
+                scheduled_until: Some("2026-03-15T06:00:00Z".to_string()),
+                components: vec![OfficialIncidentComponent {
+                    name: "API".to_string(),
+                }],
+            }],
+        };
+
+        let snapshot = OfficialSnapshot::from_summary(OfficialStatusSource::OpenAi, payload);
+
+        // Health from indicator
+        assert_eq!(snapshot.health, ProviderHealth::Outage);
+
+        // Components: group header filtered out, 2 real components remain
+        assert_eq!(snapshot.components.len(), 2);
+        assert_eq!(snapshot.components[0].name, "API");
+        assert_eq!(snapshot.components[0].status, "major_outage");
+        assert_eq!(
+            snapshot.components[0].group_name.as_deref(),
+            Some("Core Services")
+        );
+        assert_eq!(snapshot.components[1].name, "Dashboard");
+        assert_eq!(snapshot.components[1].status, "operational");
+
+        // Incidents
+        assert_eq!(snapshot.incidents.len(), 1);
+        assert_eq!(snapshot.incidents[0].name, "API errors");
+        assert_eq!(snapshot.incidents[0].status, "investigating");
+        assert_eq!(snapshot.incidents[0].impact, "major");
+        assert_eq!(
+            snapshot.incidents[0].shortlink.as_deref(),
+            Some("https://stspg.io/abc")
+        );
+        assert!(snapshot.incidents[0].latest_update.is_some());
+        assert_eq!(snapshot.incidents[0].affected_components, vec!["API"]);
+
+        // Scheduled maintenances
+        assert_eq!(snapshot.scheduled_maintenances.len(), 1);
+        assert_eq!(snapshot.scheduled_maintenances[0].name, "Database upgrade");
+        assert_eq!(snapshot.scheduled_maintenances[0].status, "scheduled");
+    }
+
+    #[test]
+    fn indicator_none_maps_to_operational() {
+        let payload = OfficialSummaryResponse {
+            page: OfficialPage {
+                name: None,
+                url: None,
+                updated_at: None,
+            },
+            status: OfficialStatus {
+                description: "All Systems Operational".to_string(),
+                indicator: Some("none".to_string()),
+            },
+            incidents: vec![],
+            components: vec![],
+            scheduled_maintenances: vec![],
+        };
+        let snapshot = OfficialSnapshot::from_summary(OfficialStatusSource::OpenAi, payload);
+        assert_eq!(snapshot.health, ProviderHealth::Operational);
+    }
+
+    #[test]
+    fn missing_indicator_falls_back_to_description() {
+        let payload = OfficialSummaryResponse {
+            page: OfficialPage {
+                name: None,
+                url: None,
+                updated_at: None,
+            },
+            status: OfficialStatus {
+                description: "Partial System Degradation".to_string(),
+                indicator: None,
+            },
+            incidents: vec![],
+            components: vec![],
+            scheduled_maintenances: vec![],
+        };
+        let snapshot = OfficialSnapshot::from_summary(OfficialStatusSource::OpenAi, payload);
+        assert_eq!(snapshot.health, ProviderHealth::Degraded);
     }
 }
