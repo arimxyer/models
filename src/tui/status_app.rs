@@ -5,8 +5,8 @@ use ratatui::widgets::ListState;
 
 use crate::agents::AgentsFile;
 use crate::status::{
-    display_name_for_provider, source_slug_for_provider, strategy_for_provider, ProviderStatus,
-    StatusProviderSeed,
+    display_name_for_provider, source_slug_for_provider, status_registry_entry,
+    strategy_for_provider, ProviderStatus, StatusProviderSeed,
 };
 
 const PAGE_SIZE: usize = 10;
@@ -43,7 +43,9 @@ impl StatusApp {
                     .or_insert_with(|| StatusProviderSeed {
                         slug: slug.clone(),
                         display_name: display_name_for_provider(slug),
-                        source_slug: source_slug_for_provider(slug).to_string(),
+                        source_slug: status_registry_entry(slug)
+                            .map(|entry| entry.source_slug.to_string())
+                            .unwrap_or_else(|| source_slug_for_provider(slug).to_string()),
                         strategy: strategy_for_provider(slug),
                     });
                 related_agents
