@@ -109,6 +109,14 @@ pub enum OfficialStatusSource {
     OpenRouter,
     GoogleGeminiJson,
     Moonshot,
+    Vercel,
+    Helicone,
+    Groq,
+    Cohere,
+    Cerebras,
+    Cloudflare,
+    Aws,
+    Azure,
     Cursor,
     GitHub,
     DeepSeek,
@@ -125,6 +133,14 @@ impl OfficialStatusSource {
             Self::OpenRouter => "OpenRouter Status",
             Self::GoogleGeminiJson => "Google Cloud Service Health",
             Self::Moonshot => "Moonshot AI Status",
+            Self::Vercel => "Vercel Status",
+            Self::Helicone => "Helicone Status",
+            Self::Groq => "Groq Status",
+            Self::Cohere => "Cohere Status",
+            Self::Cerebras => "Cerebras Status",
+            Self::Cloudflare => "Cloudflare Status",
+            Self::Aws => "AWS Service Health",
+            Self::Azure => "Azure Status",
             Self::Cursor => "Cursor Status",
             Self::GitHub => "GitHub Status",
             Self::DeepSeek => "DeepSeek Status",
@@ -141,6 +157,14 @@ impl OfficialStatusSource {
             Self::OpenRouter => "https://status.openrouter.ai/incidents.rss",
             Self::GoogleGeminiJson => "https://status.cloud.google.com/incidents.json",
             Self::Moonshot => "https://status.moonshot.cn/api/v2/summary.json",
+            Self::Vercel => "https://www.vercel-status.com/api/v2/summary.json",
+            Self::Helicone => "https://status.helicone.ai/feed.rss",
+            Self::Groq => "https://groqstatus.com/api/v2/summary.json",
+            Self::Cohere => "https://status.cohere.com/api/v2/summary.json",
+            Self::Cerebras => "https://status.cerebras.ai/api/v2/summary.json",
+            Self::Cloudflare => "https://www.cloudflarestatus.com/api/v2/summary.json",
+            Self::Aws => "https://status.aws.amazon.com/rss/all.rss",
+            Self::Azure => "https://azure.status.microsoft/en-us/status/feed/",
             Self::Cursor => "https://status.cursor.com/api/v2/summary.json",
             Self::GitHub => "https://www.githubstatus.com/api/v2/summary.json",
             Self::DeepSeek => "https://status.deepseek.com/api/v2/summary.json",
@@ -159,6 +183,14 @@ impl OfficialStatusSource {
                 "https://status.cloud.google.com/products/Z0FZJAMvEB4j3NbCJs6B/history"
             }
             Self::Moonshot => "https://status.moonshot.cn",
+            Self::Vercel => "https://www.vercel-status.com",
+            Self::Helicone => "https://status.helicone.ai",
+            Self::Groq => "https://groqstatus.com",
+            Self::Cohere => "https://status.cohere.com",
+            Self::Cerebras => "https://status.cerebras.ai",
+            Self::Cloudflare => "https://www.cloudflarestatus.com",
+            Self::Aws => "https://status.aws.amazon.com",
+            Self::Azure => "https://azure.status.microsoft/en-us/status",
             Self::Cursor => "https://status.cursor.com",
             Self::GitHub => "https://www.githubstatus.com",
             Self::DeepSeek => "https://status.deepseek.com",
@@ -183,6 +215,21 @@ pub struct StatusRegistryEntry {
     pub strategy: StatusStrategy,
     pub support_tier: StatusSupportTier,
 }
+
+pub const STATUS_SOURCE_ALIASES: &[(&str, &str)] = &[
+    ("github-copilot", "github"),
+    ("github-models", "github"),
+    ("moonshotai", "moonshot"),
+    ("moonshotai-cn", "moonshot"),
+    ("kimi-for-coding", "moonshot"),
+    ("google-vertex", "google"),
+    ("google-vertex-anthropic", "google"),
+    ("perplexity-agent", "perplexity"),
+    ("amazon-bedrock", "aws"),
+    ("azure-cognitive-services", "azure"),
+    ("cloudflare-ai-gateway", "cloudflare"),
+    ("cloudflare-workers-ai", "cloudflare"),
+];
 
 pub const STATUS_REGISTRY: &[StatusRegistryEntry] = &[
     StatusRegistryEntry {
@@ -290,6 +337,86 @@ pub const STATUS_REGISTRY: &[StatusRegistryEntry] = &[
         support_tier: StatusSupportTier::Curated,
     },
     StatusRegistryEntry {
+        slug: "vercel",
+        display_name: "Vercel",
+        source_slug: "vercel",
+        strategy: StatusStrategy::OfficialFirst {
+            official: OfficialStatusSource::Vercel,
+            fallback_source_slug: None,
+        },
+        support_tier: StatusSupportTier::Curated,
+    },
+    StatusRegistryEntry {
+        slug: "helicone",
+        display_name: "Helicone",
+        source_slug: "helicone",
+        strategy: StatusStrategy::OfficialFirst {
+            official: OfficialStatusSource::Helicone,
+            fallback_source_slug: None,
+        },
+        support_tier: StatusSupportTier::Curated,
+    },
+    StatusRegistryEntry {
+        slug: "groq",
+        display_name: "Groq",
+        source_slug: "groq",
+        strategy: StatusStrategy::OfficialFirst {
+            official: OfficialStatusSource::Groq,
+            fallback_source_slug: None,
+        },
+        support_tier: StatusSupportTier::Curated,
+    },
+    StatusRegistryEntry {
+        slug: "cohere",
+        display_name: "Cohere",
+        source_slug: "cohere",
+        strategy: StatusStrategy::OfficialFirst {
+            official: OfficialStatusSource::Cohere,
+            fallback_source_slug: None,
+        },
+        support_tier: StatusSupportTier::Curated,
+    },
+    StatusRegistryEntry {
+        slug: "cerebras",
+        display_name: "Cerebras",
+        source_slug: "cerebras",
+        strategy: StatusStrategy::OfficialFirst {
+            official: OfficialStatusSource::Cerebras,
+            fallback_source_slug: None,
+        },
+        support_tier: StatusSupportTier::Curated,
+    },
+    StatusRegistryEntry {
+        slug: "cloudflare",
+        display_name: "Cloudflare",
+        source_slug: "cloudflare",
+        strategy: StatusStrategy::OfficialFirst {
+            official: OfficialStatusSource::Cloudflare,
+            fallback_source_slug: None,
+        },
+        support_tier: StatusSupportTier::Curated,
+    },
+    StatusRegistryEntry {
+        slug: "aws",
+        display_name: "AWS",
+        source_slug: "aws",
+        strategy: StatusStrategy::OfficialFirst {
+            official: OfficialStatusSource::Aws,
+            fallback_source_slug: None,
+        },
+        support_tier: StatusSupportTier::Curated,
+    },
+    StatusRegistryEntry {
+        slug: "azure",
+        display_name: "Azure",
+        source_slug: "azure",
+        strategy: StatusStrategy::OfficialFirst {
+            official: OfficialStatusSource::Azure,
+            fallback_source_slug: None,
+        },
+        support_tier: StatusSupportTier::Curated,
+    },
+    StatusRegistryEntry {
         slug: "together-ai",
         display_name: "Together AI",
         source_slug: "together-ai",
@@ -358,8 +485,30 @@ impl ProviderStatus {
     }
 }
 
+pub fn canonical_status_slug(slug: &str) -> &str {
+    STATUS_SOURCE_ALIASES
+        .iter()
+        .find_map(|(alias, canonical)| (*alias == slug).then_some(*canonical))
+        .unwrap_or(slug)
+}
+
+pub fn status_seed_for_provider(slug: &str) -> StatusProviderSeed {
+    let canonical = canonical_status_slug(slug);
+    let entry = status_registry_entry(canonical);
+    StatusProviderSeed {
+        slug: slug.to_string(),
+        display_name: entry
+            .map(|entry| entry.display_name.to_string())
+            .unwrap_or_else(|| slug.to_string()),
+        source_slug: entry
+            .map(|entry| entry.source_slug.to_string())
+            .unwrap_or_else(|| canonical.to_string()),
+        strategy: strategy_for_provider(slug),
+    }
+}
+
 pub fn strategy_for_provider(slug: &str) -> StatusStrategy {
-    status_registry_entry(slug)
+    status_registry_entry(canonical_status_slug(slug))
         .map(|entry| entry.strategy)
         .unwrap_or(StatusStrategy::Unverified)
 }
@@ -426,6 +575,14 @@ mod tests {
             strategy_for_provider("moonshot"),
             StatusStrategy::OfficialFirst { .. }
         ));
+        assert!(matches!(
+            strategy_for_provider("moonshotai"),
+            StatusStrategy::OfficialFirst { .. }
+        ));
+        assert!(matches!(
+            strategy_for_provider("github-copilot"),
+            StatusStrategy::OfficialFirst { .. }
+        ));
         assert_eq!(strategy_for_provider("ollama"), StatusStrategy::Unverified);
         assert_eq!(strategy_for_provider("qwen"), StatusStrategy::Unverified);
     }
@@ -455,7 +612,25 @@ mod tests {
         assert!(status_registry_entry("cursor").is_some());
         assert!(status_registry_entry("perplexity").is_some());
         assert!(status_registry_entry("deepseek").is_some());
+        assert!(status_registry_entry("vercel").is_some());
+        assert!(status_registry_entry("helicone").is_some());
+        assert!(status_registry_entry("groq").is_some());
+        assert!(status_registry_entry("cohere").is_some());
+        assert!(status_registry_entry("cerebras").is_some());
+        assert!(status_registry_entry("cloudflare").is_some());
+        assert!(status_registry_entry("aws").is_some());
+        assert!(status_registry_entry("azure").is_some());
         assert!(status_registry_entry("together-ai").is_some());
         assert!(status_registry_entry("huggingface").is_some());
+    }
+
+    #[test]
+    fn aliases_map_to_canonical_registry_entries() {
+        assert_eq!(canonical_status_slug("github-copilot"), "github");
+        assert_eq!(canonical_status_slug("github-models"), "github");
+        assert_eq!(canonical_status_slug("moonshotai"), "moonshot");
+        assert_eq!(canonical_status_slug("amazon-bedrock"), "aws");
+        assert_eq!(canonical_status_slug("azure-cognitive-services"), "azure");
+        assert_eq!(canonical_status_slug("cloudflare-workers-ai"), "cloudflare");
     }
 }

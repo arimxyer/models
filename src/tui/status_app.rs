@@ -5,7 +5,7 @@ use ratatui::widgets::ListState;
 
 use crate::agents::AgentsFile;
 use crate::status::{
-    status_registry_entry, strategy_for_provider, ProviderStatus, StatusProviderSeed,
+    canonical_status_slug, status_seed_for_provider, ProviderStatus, StatusProviderSeed,
     STATUS_REGISTRY,
 };
 
@@ -50,18 +50,12 @@ impl StatusApp {
 
         for agent in agents_file.agents.values() {
             for slug in &agent.supported_providers {
+                let canonical = canonical_status_slug(slug).to_string();
                 by_slug
-                    .entry(slug.clone())
-                    .or_insert_with(|| StatusProviderSeed {
-                        slug: slug.clone(),
-                        display_name: slug.clone(),
-                        source_slug: status_registry_entry(slug)
-                            .map(|entry| entry.source_slug.to_string())
-                            .unwrap_or_else(|| slug.clone()),
-                        strategy: strategy_for_provider(slug),
-                    });
+                    .entry(canonical.clone())
+                    .or_insert_with(|| status_seed_for_provider(slug));
                 related_agents
-                    .entry(slug.clone())
+                    .entry(canonical)
                     .or_default()
                     .push(agent.name.clone());
             }
@@ -91,12 +85,7 @@ impl StatusApp {
     pub fn fetch_seeds(&self) -> Vec<StatusProviderSeed> {
         self.entries
             .iter()
-            .map(|entry| StatusProviderSeed {
-                slug: entry.slug.clone(),
-                display_name: entry.display_name.clone(),
-                source_slug: entry.source_slug.clone(),
-                strategy: strategy_for_provider(&entry.slug),
-            })
+            .map(|entry| status_seed_for_provider(&entry.slug))
             .collect()
     }
 

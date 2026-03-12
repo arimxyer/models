@@ -117,6 +117,11 @@ impl StatusFetcher {
             OfficialStatusSource::OpenAi
             | OfficialStatusSource::Anthropic
             | OfficialStatusSource::Moonshot
+            | OfficialStatusSource::Vercel
+            | OfficialStatusSource::Groq
+            | OfficialStatusSource::Cohere
+            | OfficialStatusSource::Cerebras
+            | OfficialStatusSource::Cloudflare
             | OfficialStatusSource::Cursor
             | OfficialStatusSource::GitHub
             | OfficialStatusSource::DeepSeek => {
@@ -138,7 +143,10 @@ impl StatusFetcher {
             OfficialStatusSource::OpenRouter
             | OfficialStatusSource::Perplexity
             | OfficialStatusSource::HuggingFace
-            | OfficialStatusSource::TogetherAi => {
+            | OfficialStatusSource::TogetherAi
+            | OfficialStatusSource::Helicone
+            | OfficialStatusSource::Aws
+            | OfficialStatusSource::Azure => {
                 let response = self
                     .client
                     .get(source.endpoint_url())
@@ -629,22 +637,12 @@ struct GoogleAffectedProduct {
 
 #[cfg(test)]
 mod tests {
-    use crate::status::{status_registry_entry, strategy_for_provider, StatusProvenance};
+    use crate::status::{status_seed_for_provider, StatusProvenance};
 
     use super::*;
 
     fn seed(slug: &str) -> StatusProviderSeed {
-        let entry = status_registry_entry(slug);
-        StatusProviderSeed {
-            slug: slug.to_string(),
-            display_name: entry
-                .map(|entry| entry.display_name.to_string())
-                .unwrap_or_else(|| slug.to_string()),
-            source_slug: entry
-                .map(|entry| entry.source_slug.to_string())
-                .unwrap_or_else(|| slug.to_string()),
-            strategy: strategy_for_provider(slug),
-        }
+        status_seed_for_provider(slug)
     }
 
     #[test]
