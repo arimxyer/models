@@ -376,14 +376,14 @@ fn handle_status_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Opti
             if focus == StatusFocus::List {
                 Some(Message::NextStatusProvider)
             } else {
-                None
+                Some(Message::ScrollStatusDetailDown)
             }
         }
         KeyCode::Char('k') | KeyCode::Up => {
             if focus == StatusFocus::List {
                 Some(Message::PrevStatusProvider)
             } else {
-                None
+                Some(Message::ScrollStatusDetailUp)
             }
         }
         KeyCode::Char('g') if focus == StatusFocus::List => {

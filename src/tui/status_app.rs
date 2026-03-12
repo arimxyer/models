@@ -5,8 +5,8 @@ use ratatui::widgets::ListState;
 
 use crate::agents::AgentsFile;
 use crate::status::{
-    canonical_status_slug, status_seed_for_provider, ProviderStatus, StatusProviderSeed,
-    STATUS_REGISTRY,
+    canonical_status_slug, status_seed_for_provider, ProviderHealth, ProviderStatus,
+    StatusProviderSeed, STATUS_REGISTRY,
 };
 
 const PAGE_SIZE: usize = 10;
@@ -191,6 +191,22 @@ impl StatusApp {
         self.selected = self.selected.saturating_sub(PAGE_SIZE);
         self.list_state.select(Some(self.selected));
         self.detail_scroll = 0;
+    }
+
+    pub fn health_counts(&self) -> (usize, usize, usize, usize) {
+        let mut op = 0;
+        let mut deg = 0;
+        let mut out = 0;
+        let mut other = 0;
+        for entry in &self.entries {
+            match entry.health {
+                ProviderHealth::Operational => op += 1,
+                ProviderHealth::Degraded => deg += 1,
+                ProviderHealth::Outage => out += 1,
+                _ => other += 1,
+            }
+        }
+        (op, deg, out, other)
     }
 
     pub fn switch_focus(&mut self) {

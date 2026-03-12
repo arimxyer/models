@@ -12,6 +12,7 @@ use super::app::{App, Filters, Focus, Mode, ProviderListItem, SortOrder, Tab};
 use crate::agents::{format_stars, FetchStatus};
 use crate::provider_category::{provider_category, ProviderCategory};
 use crate::status::ProviderHealth;
+use std::collections::BTreeMap;
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
@@ -118,6 +119,53 @@ fn status_health_icon(health: ProviderHealth) -> &'static str {
     }
 }
 
+fn component_status_icon(status: &str) -> &'static str {
+    match status {
+        "operational" => "●",
+        "degraded_performance" => "◐",
+        "partial_outage" => "✕",
+        "major_outage" => "✕",
+        "under_maintenance" => "◆",
+        _ => "?",
+    }
+}
+
+fn component_status_style(status: &str) -> Style {
+    match status {
+        "operational" => Style::default().fg(Color::Green),
+        "degraded_performance" | "partial_outage" => Style::default().fg(Color::Yellow),
+        "major_outage" => Style::default().fg(Color::Red),
+        "under_maintenance" => Style::default().fg(Color::Cyan),
+        _ => Style::default().fg(Color::DarkGray),
+    }
+}
+
+fn incident_impact_style(impact: &str) -> Style {
+    match impact {
+        "critical" | "major" => Style::default().fg(Color::Red),
+        "minor" => Style::default().fg(Color::Yellow),
+        _ => Style::default().fg(Color::DarkGray),
+    }
+}
+
+fn incident_status_style(status: &str) -> Style {
+    match status {
+        "investigating" | "identified" => Style::default().fg(Color::Yellow),
+        "monitoring" => Style::default().fg(Color::Cyan),
+        "resolved" | "postmortem" => Style::default().fg(Color::Green),
+        _ => Style::default().fg(Color::DarkGray),
+    }
+}
+
+fn maintenance_status_style(status: &str) -> Style {
+    match status {
+        "scheduled" => Style::default().fg(Color::Cyan),
+        "in_progress" | "verifying" => Style::default().fg(Color::Yellow),
+        "completed" => Style::default().fg(Color::Green),
+        _ => Style::default().fg(Color::DarkGray),
+    }
+}
+
 fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
     use super::status_app::StatusFocus;
 
@@ -130,8 +178,29 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
 
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Length(28), Constraint::Min(0)])
+        .constraints([Constraint::Length(32), Constraint::Min(0)])
         .split(area);
+
+    // Split left panel: 1 line for aggregate bar + rest for list
+    let left_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(1), Constraint::Min(0)])
+        .split(chunks[0]);
+
+    // Aggregate health bar
+    let (op, deg, out, other) = status_app.health_counts();
+    let agg_line = Line::from(vec![
+        Span::raw(" "),
+        Span::styled("●", Style::default().fg(Color::Green)),
+        Span::raw(format!(" {}  ", op)),
+        Span::styled("◐", Style::default().fg(Color::Yellow)),
+        Span::raw(format!(" {}  ", deg)),
+        Span::styled("✗", Style::default().fg(Color::Red)),
+        Span::raw(format!(" {}  ", out)),
+        Span::styled("?", Style::default().fg(Color::DarkGray)),
+        Span::raw(format!(" {}", other)),
+    ]);
+    f.render_widget(Paragraph::new(agg_line), left_chunks[0]);
 
     let list_border = if status_app.focus == StatusFocus::List {
         Style::default().fg(Color::Cyan)
@@ -179,6 +248,13 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     },
                 ),
             ];
+            let incident_count = entry.incidents.len();
+            if incident_count > 0 {
+                spans.push(Span::styled(
+                    format!(" {incident_count}!"),
+                    Style::default().fg(Color::Yellow),
+                ));
+            }
             let provenance_suffix = match entry.provenance {
                 crate::status::StatusProvenance::Official => "  off",
                 crate::status::StatusProvenance::Fallback => "  fb",
@@ -198,137 +274,344 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
             .border_style(list_border)
             .title(title),
     );
-    f.render_stateful_widget(list, chunks[0], &mut status_app.list_state);
+    f.render_stateful_widget(list, left_chunks[1], &mut status_app.list_state);
 
     let detail_lines = if let Some(entry) = status_app.current_entry() {
-        let mut lines = vec![
-            Line::from(vec![
-                Span::styled(
-                    entry.display_name.clone(),
-                    Style::default()
-                        .fg(Color::White)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::raw("  "),
-                Span::styled(entry.health.label(), status_health_style(entry.health)),
-            ]),
-            Line::from(Span::styled(
-                format!("Slug: {}", entry.slug),
-                Style::default().fg(Color::DarkGray),
-            )),
-            Line::from(vec![
-                Span::styled("Trust level: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(entry.provenance.label()),
-            ]),
-            Line::from(""),
-        ];
+        let mut lines = Vec::new();
 
+        // -- Section 1: Header --
         lines.push(Line::from(vec![
-            Span::styled("Chosen source: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                format!(
+                    "{} {}",
+                    status_health_icon(entry.health),
+                    entry.display_name
+                ),
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw("  "),
+            Span::styled(
+                entry.health.label(),
+                status_health_style(entry.health).add_modifier(Modifier::BOLD),
+            ),
+            Span::raw("  "),
+            Span::styled(
+                entry.provenance.label(),
+                Style::default().fg(Color::DarkGray),
+            ),
+        ]));
+
+        if let Some(registry_entry) = crate::status::status_registry_entry(&entry.slug) {
+            let tier_label = match registry_entry.support_tier {
+                crate::status::StatusSupportTier::Required => "Required",
+                crate::status::StatusSupportTier::Curated => "Curated",
+            };
+            lines.push(Line::from(vec![
+                Span::styled("Support tier: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(tier_label),
+            ]));
+        }
+
+        // -- Section 2: Components --
+        if !entry.components.is_empty() {
+            lines.push(Line::from(""));
+            lines.push(Line::from(Span::styled(
+                "Components",
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD),
+            )));
+
+            // Group components: those with group_name go under their group, others are ungrouped
+            let mut grouped: BTreeMap<String, Vec<&crate::status::ComponentStatus>> =
+                BTreeMap::new();
+            let mut ungrouped: Vec<&crate::status::ComponentStatus> = Vec::new();
+
+            for comp in &entry.components {
+                if let Some(group) = &comp.group_name {
+                    grouped.entry(group.clone()).or_default().push(comp);
+                } else {
+                    ungrouped.push(comp);
+                }
+            }
+
+            let max_components = 10;
+            let mut shown = 0;
+            let total = entry.components.len();
+
+            // Show ungrouped first
+            for comp in &ungrouped {
+                if shown >= max_components {
+                    break;
+                }
+                lines.push(Line::from(vec![
+                    Span::raw("  "),
+                    Span::styled(
+                        component_status_icon(&comp.status),
+                        component_status_style(&comp.status),
+                    ),
+                    Span::raw(" "),
+                    Span::raw(comp.name.clone()),
+                ]));
+                shown += 1;
+            }
+
+            // Show grouped
+            for (group_name, comps) in &grouped {
+                if shown >= max_components {
+                    break;
+                }
+                lines.push(Line::from(Span::styled(
+                    format!("  {group_name}"),
+                    Style::default().fg(Color::DarkGray),
+                )));
+                for comp in comps {
+                    if shown >= max_components {
+                        break;
+                    }
+                    lines.push(Line::from(vec![
+                        Span::raw("    "),
+                        Span::styled(
+                            component_status_icon(&comp.status),
+                            component_status_style(&comp.status),
+                        ),
+                        Span::raw(" "),
+                        Span::raw(comp.name.clone()),
+                    ]));
+                    shown += 1;
+                }
+            }
+
+            if total > max_components {
+                lines.push(Line::from(Span::styled(
+                    format!("  (+{} more)", total - max_components),
+                    Style::default().fg(Color::DarkGray),
+                )));
+            }
+        }
+
+        // -- Section 3: Active Incidents --
+        if !entry.incidents.is_empty() {
+            lines.push(Line::from(""));
+            let all_resolved = entry
+                .incidents
+                .iter()
+                .all(|i| i.status == "resolved" || i.status == "postmortem");
+            lines.push(Line::from(Span::styled(
+                if all_resolved {
+                    "Recent Incidents"
+                } else {
+                    "Active Incidents"
+                },
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD),
+            )));
+
+            let max_incidents = 5;
+            for (i, incident) in entry.incidents.iter().enumerate() {
+                if i >= max_incidents {
+                    lines.push(Line::from(Span::styled(
+                        format!("  (+{} more)", entry.incidents.len() - max_incidents),
+                        Style::default().fg(Color::DarkGray),
+                    )));
+                    break;
+                }
+                // Incident name + impact badge
+                lines.push(Line::from(vec![
+                    Span::styled("  \u{25b8} ", Style::default().fg(Color::Yellow)),
+                    Span::styled(
+                        truncate(&incident.name, 50),
+                        Style::default().add_modifier(Modifier::BOLD),
+                    ),
+                    Span::raw("  "),
+                    Span::styled(
+                        format!("[{}]", incident.impact),
+                        incident_impact_style(&incident.impact),
+                    ),
+                ]));
+                // Status + created date
+                let created_str = incident
+                    .created_at
+                    .as_deref()
+                    .and_then(crate::agents::helpers::parse_date)
+                    .map(|dt| dt.format("%Y-%m-%d %H:%M").to_string())
+                    .unwrap_or_default();
+                let mut status_line = vec![
+                    Span::raw("    "),
+                    Span::styled(&incident.status, incident_status_style(&incident.status)),
+                ];
+                if !created_str.is_empty() {
+                    status_line.push(Span::styled(
+                        "  \u{2022}  ",
+                        Style::default().fg(Color::DarkGray),
+                    ));
+                    status_line.push(Span::styled(
+                        created_str,
+                        Style::default().fg(Color::DarkGray),
+                    ));
+                }
+                lines.push(Line::from(status_line));
+                // Latest update body
+                if let Some(update) = &incident.latest_update {
+                    if !update.body.is_empty() {
+                        lines.push(Line::from(vec![
+                            Span::raw("    "),
+                            Span::styled(
+                                truncate(&update.body, 80),
+                                Style::default().fg(Color::DarkGray),
+                            ),
+                        ]));
+                    }
+                }
+                // Affected components
+                if !incident.affected_components.is_empty() {
+                    lines.push(Line::from(vec![
+                        Span::styled("    Affects: ", Style::default().fg(Color::DarkGray)),
+                        Span::raw(incident.affected_components.join(", ")),
+                    ]));
+                }
+            }
+        }
+
+        // -- Section 4: Scheduled Maintenance --
+        if !entry.scheduled_maintenances.is_empty() {
+            lines.push(Line::from(""));
+            lines.push(Line::from(Span::styled(
+                "Scheduled Maintenance",
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD),
+            )));
+
+            for maint in &entry.scheduled_maintenances {
+                // Name + status badge
+                lines.push(Line::from(vec![
+                    Span::styled("  \u{25c6} ", Style::default().fg(Color::Cyan)),
+                    Span::styled(
+                        truncate(&maint.name, 50),
+                        Style::default().add_modifier(Modifier::BOLD),
+                    ),
+                    Span::raw("  "),
+                    Span::styled(
+                        format!("[{}]", maint.status),
+                        maintenance_status_style(&maint.status),
+                    ),
+                ]));
+                // Window
+                let from_str = maint
+                    .scheduled_for
+                    .as_deref()
+                    .and_then(crate::agents::helpers::parse_date)
+                    .map(|dt| dt.format("%Y-%m-%d %H:%M UTC").to_string());
+                let until_str = maint
+                    .scheduled_until
+                    .as_deref()
+                    .and_then(crate::agents::helpers::parse_date)
+                    .map(|dt| dt.format("%H:%M UTC").to_string());
+                if let Some(from) = from_str {
+                    let window = if let Some(until) = until_str {
+                        format!("{from} \u{2192} {until}")
+                    } else {
+                        from
+                    };
+                    lines.push(Line::from(vec![
+                        Span::styled("    Window: ", Style::default().fg(Color::DarkGray)),
+                        Span::raw(window),
+                    ]));
+                }
+                // Affected components
+                if !maint.affected_components.is_empty() {
+                    lines.push(Line::from(vec![
+                        Span::styled("    Affects: ", Style::default().fg(Color::DarkGray)),
+                        Span::raw(maint.affected_components.join(", ")),
+                    ]));
+                }
+            }
+        }
+
+        // -- Section 5: Metadata --
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            "Source",
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
+        )));
+        lines.push(Line::from(vec![
+            Span::styled("  Source: ", Style::default().fg(Color::DarkGray)),
             Span::raw(
                 entry
                     .source_label
                     .clone()
                     .unwrap_or_else(|| "Unavailable".to_string()),
             ),
+            if let Some(method) = entry.source_method {
+                Span::styled(
+                    format!("  ({})", method.label()),
+                    Style::default().fg(Color::DarkGray),
+                )
+            } else {
+                Span::raw("")
+            },
         ]));
-        if let Some(method) = entry.source_method {
-            lines.push(Line::from(vec![
-                Span::styled("Source method: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(method.label()),
-            ]));
-        }
-        if entry.source_slug != entry.slug {
-            lines.push(Line::from(vec![
-                Span::styled("Mapped slug: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(format!("{} → {}", entry.slug, entry.source_slug)),
-            ]));
-        }
         lines.push(Line::from(vec![
-            Span::styled("Last checked: ", Style::default().fg(Color::DarkGray)),
+            Span::styled("  Last checked: ", Style::default().fg(Color::DarkGray)),
             Span::raw(
                 entry
                     .last_checked
                     .as_deref()
                     .and_then(crate::agents::helpers::parse_date)
-                    .map(|dt| dt.format("%Y-%m-%d %H:%M UTC").to_string())
+                    .map(|dt| crate::agents::helpers::format_relative_time(&dt))
                     .unwrap_or_else(|| "Unknown".to_string()),
             ),
         ]));
-        lines.push(Line::from(vec![
-            Span::styled("Displayed status: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(entry.health.label(), status_health_style(entry.health)),
-        ]));
-        lines.push(Line::from(vec![
-            Span::styled("Official URL: ", Style::default().fg(Color::DarkGray)),
-            Span::raw(
-                entry
-                    .official_url
-                    .clone()
-                    .unwrap_or_else(|| "Unavailable".to_string()),
-            ),
-        ]));
-        lines.push(Line::from(vec![
-            Span::styled("Fallback URL: ", Style::default().fg(Color::DarkGray)),
-            Span::raw(
-                entry
-                    .fallback_url
-                    .clone()
-                    .unwrap_or_else(|| "Unavailable".to_string()),
-            ),
-        ]));
-        if let Some(summary) = &entry.summary {
-            lines.push(Line::from(""));
-            lines.push(Line::from(summary.clone()));
+        if let Some(url) = &entry.official_url {
+            lines.push(Line::from(vec![
+                Span::styled("  Official: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(url.clone()),
+            ]));
+        }
+        if let Some(url) = &entry.fallback_url {
+            lines.push(Line::from(vec![
+                Span::styled("  Fallback: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(url.clone()),
+            ]));
         }
 
-        lines.push(Line::from(""));
-        lines.push(Line::from(Span::styled(
-            "Related agents (from local catalog):",
-            Style::default().add_modifier(Modifier::BOLD),
-        )));
+        // -- Section 6: Related Agents --
         let related_agents = status_app.related_agents_for(&entry.slug);
-        if related_agents.is_empty() {
+        if !related_agents.is_empty() {
+            lines.push(Line::from(""));
             lines.push(Line::from(Span::styled(
-                "None in curated catalog",
-                Style::default().fg(Color::DarkGray),
+                "Related Agents",
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD),
             )));
-        } else {
             for name in related_agents {
-                lines.push(Line::from(format!("• {}", name)));
+                lines.push(Line::from(format!("  \u{2022} {name}")));
             }
         }
 
-        lines.push(Line::from(""));
-        if entry.provenance == crate::status::StatusProvenance::Unavailable {
-            lines.push(Line::from(Span::styled(
-                "No verified machine-readable source is available for this provider in this pass.",
-                Style::default().fg(Color::Yellow),
-            )));
-        } else if entry.provenance == crate::status::StatusProvenance::Fallback {
-            lines.push(Line::from(Span::styled(
-                "This provider is currently shown using fallback data rather than an official machine-readable source.",
-                Style::default().fg(Color::DarkGray),
-            )));
-        } else {
-            lines.push(Line::from(Span::styled(
-                "This provider is currently backed by an official machine-readable source.",
-                Style::default().fg(Color::DarkGray),
-            )));
-        }
-
+        // Loading / error notes
         if let Some(error) = &status_app.last_error {
+            lines.push(Line::from(""));
             lines.push(Line::from(vec![
                 Span::styled("Fetch note: ", Style::default().fg(Color::DarkGray)),
                 Span::styled(error.clone(), Style::default().fg(Color::Yellow)),
             ]));
         } else if status_app.loading {
+            lines.push(Line::from(""));
             lines.push(Line::from(Span::styled(
-                "Loading provider status…",
+                "Loading provider status\u{2026}",
                 Style::default().fg(Color::Yellow),
             )));
         }
 
+        // -- Section 7: Keybinding footer --
         lines.push(Line::from(""));
         lines.push(Line::from(vec![
             Span::styled(" o ", Style::default().fg(Color::Yellow)),

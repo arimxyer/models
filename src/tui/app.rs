@@ -217,6 +217,8 @@ pub enum Message {
     SwitchStatusFocus,
     RefreshStatus,
     OpenStatusPage,
+    ScrollStatusDetailUp,
+    ScrollStatusDetailDown,
     // Async data messages
     GitHubDataReceived(String, GitHubData),
     GitHubFetchFailed(String, String), // (agent_id, error_message)
@@ -788,6 +790,16 @@ impl App {
             }
             Message::OpenStatusPage => {
                 // Handled in main loop
+            }
+            Message::ScrollStatusDetailUp => {
+                if let Some(ref mut status_app) = self.status_app {
+                    status_app.detail_scroll = status_app.detail_scroll.saturating_sub(1);
+                }
+            }
+            Message::ScrollStatusDetailDown => {
+                if let Some(ref mut status_app) = self.status_app {
+                    status_app.detail_scroll = status_app.detail_scroll.saturating_add(1);
+                }
             }
             Message::SwitchAgentFocus => {
                 if let Some(ref mut agents_app) = self.agents_app {
