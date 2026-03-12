@@ -378,6 +378,36 @@ impl OfficialSnapshot {
         let summary = latest.map(|incident| incident.external_desc.clone());
         let last_checked = latest.and_then(|incident| incident.modified.clone());
 
+        let active_incidents: Vec<ActiveIncident> = matching
+            .iter()
+            .map(|incident| {
+                let impact = match incident.severity.as_str() {
+                    "high" => "major".to_string(),
+                    "medium" => "minor".to_string(),
+                    _ => "none".to_string(),
+                };
+                let status = if incident.end.is_none() {
+                    "active".to_string()
+                } else {
+                    "resolved".to_string()
+                };
+                let shortlink = incident
+                    .uri
+                    .as_ref()
+                    .map(|uri| format!("https://status.cloud.google.com{uri}"));
+                ActiveIncident {
+                    name: incident.external_desc.clone(),
+                    status,
+                    impact,
+                    shortlink,
+                    created_at: incident.begin.clone(),
+                    updated_at: incident.end.clone(),
+                    latest_update: None,
+                    affected_components: vec![],
+                }
+            })
+            .collect();
+
         Self {
             label: product.title.clone(),
             method: StatusSourceMethod::GoogleCloudJson,
@@ -389,7 +419,7 @@ impl OfficialSnapshot {
             last_checked,
             summary,
             components: Vec::new(),
-            incidents: Vec::new(),
+            incidents: active_incidents,
             scheduled_maintenances: Vec::new(),
         }
     }
@@ -422,6 +452,32 @@ fn parse_feed(source: OfficialStatusSource, xml: &str) -> Result<OfficialSnapsho
     parse_atom_feed(source, xml).or_else(|_| parse_rss_feed(source, xml))
 }
 
+fn infer_status_from_feed(text: &str) -> String {
+    let upper = text.to_uppercase();
+    if upper.contains("RESOLVED") || upper.contains("RECOVERED") {
+        "resolved".to_string()
+    } else if upper.contains("MONITORING") {
+        "monitoring".to_string()
+    } else if upper.contains("IDENTIFIED") {
+        "identified".to_string()
+    } else if upper.contains("INVESTIGATING") {
+        "investigating".to_string()
+    } else {
+        "unknown".to_string()
+    }
+}
+
+fn infer_impact_from_feed(text: &str) -> String {
+    let upper = text.to_uppercase();
+    if upper.contains("MAJOR") || upper.contains("OUTAGE") {
+        "major".to_string()
+    } else if upper.contains("MINOR") || upper.contains("DEGRADED") || upper.contains("PARTIAL") {
+        "minor".to_string()
+    } else {
+        "none".to_string()
+    }
+}
+
 fn parse_rss_feed(source: OfficialStatusSource, xml: &str) -> Result<OfficialSnapshot, String> {
     let title_re =
         Regex::new(r"(?s)<channel>.*?<title>(.*?)</title>").map_err(|err| err.to_string())?;
@@ -432,6 +488,8 @@ fn parse_rss_feed(source: OfficialStatusSource, xml: &str) -> Result<OfficialSna
     let item_description_re =
         Regex::new(r"(?s)<description>(.*?)</description>").map_err(|err| err.to_string())?;
     let item_link_re = Regex::new(r"(?s)<link>(.*?)</link>").map_err(|err| err.to_string())?;
+    let item_pubdate_re =
+        Regex::new(r"(?s)<pubDate>(.*?)</pubDate>").map_err(|err| err.to_string())?;
 
     let channel_title = title_re
         .captures(xml)
@@ -442,12 +500,14 @@ fn parse_rss_feed(source: OfficialStatusSource, xml: &str) -> Result<OfficialSna
         .captures(xml)
         .and_then(|caps| caps.get(1))
         .map(|m| decode_xml(m.as_str()).trim().to_string());
-    let item = item_re
-        .captures(xml)
-        .and_then(|caps| caps.get(1))
-        .map(|m| m.as_str());
 
-    let (health, summary, official_url) = if let Some(item_block) = item {
+    let mut incidents = Vec::new();
+    let mut first_health = None;
+    let mut first_summary = None;
+    let mut first_url = None;
+
+    for item_caps in item_re.captures_iter(xml) {
+        let item_block = item_caps.get(1).map(|m| m.as_str()).unwrap_or("");
         let title = item_title_re
             .captures(item_block)
             .and_then(|caps| caps.get(1))
@@ -463,17 +523,52 @@ fn parse_rss_feed(source: OfficialStatusSource, xml: &str) -> Result<OfficialSna
             .and_then(|caps| caps.get(1))
             .map(|m| decode_xml(m.as_str()).trim().to_string())
             .unwrap_or_else(|| source.page_url().to_string());
+        let pubdate = item_pubdate_re
+            .captures(item_block)
+            .and_then(|caps| caps.get(1))
+            .map(|m| decode_xml(m.as_str()).trim().to_string());
+
         let combined = format!("{title} {description}");
-        (
-            health_from_feed_text(&combined),
-            Some(prefer_summary(&title, &description)),
-            link,
-        )
-    } else {
+
+        if first_health.is_none() {
+            first_health = Some(health_from_feed_text(&combined));
+            first_summary = Some(prefer_summary(&title, &description));
+            first_url = Some(link.clone());
+        }
+
+        let latest_update = if !description.is_empty() {
+            Some(IncidentUpdate {
+                status: infer_status_from_feed(&description),
+                body: description,
+                created_at: pubdate.clone().unwrap_or_default(),
+            })
+        } else {
+            None
+        };
+
+        incidents.push(ActiveIncident {
+            name: title,
+            status: infer_status_from_feed(&combined),
+            impact: infer_impact_from_feed(&combined),
+            shortlink: Some(link),
+            created_at: pubdate,
+            updated_at: None,
+            latest_update,
+            affected_components: vec![],
+        });
+    }
+
+    let (health, summary, official_url) = if incidents.is_empty() {
         (
             ProviderHealth::Operational,
             Some("No incidents recorded".to_string()),
             source.page_url().to_string(),
+        )
+    } else {
+        (
+            first_health.unwrap_or(ProviderHealth::Operational),
+            first_summary,
+            first_url.unwrap_or_else(|| source.page_url().to_string()),
         )
     };
 
@@ -485,7 +580,7 @@ fn parse_rss_feed(source: OfficialStatusSource, xml: &str) -> Result<OfficialSna
         last_checked,
         summary,
         components: Vec::new(),
-        incidents: Vec::new(),
+        incidents,
         scheduled_maintenances: Vec::new(),
     })
 }
@@ -514,38 +609,77 @@ fn parse_atom_feed(source: OfficialStatusSource, xml: &str) -> Result<OfficialSn
         .captures(xml)
         .and_then(|caps| caps.get(1))
         .map(|m| decode_xml(m.as_str()).trim().to_string());
-    let entry_block = entry_re
-        .captures(xml)
-        .and_then(|caps| caps.get(1))
-        .map(|m| m.as_str())
-        .ok_or_else(|| "atom feed entry missing".to_string())?;
 
-    let title = entry_title_re
-        .captures(entry_block)
-        .and_then(|caps| caps.get(1))
-        .map(|m| strip_markup(&decode_xml(m.as_str())))
-        .unwrap_or_default();
-    let body = entry_body_re
-        .captures(entry_block)
-        .and_then(|caps| caps.get(1))
-        .map(|m| strip_markup(&decode_xml(m.as_str())))
-        .unwrap_or_default();
-    let official_url = entry_link_re
-        .captures(entry_block)
-        .and_then(|caps| caps.get(1))
-        .map(|m| decode_xml(m.as_str()).trim().to_string())
-        .unwrap_or_else(|| source.page_url().to_string());
-    let combined = format!("{title} {body}");
+    let mut incidents = Vec::new();
+    let mut first_health = None;
+    let mut first_summary = None;
+    let mut first_url = None;
+
+    for entry_caps in entry_re.captures_iter(xml) {
+        let entry_block = entry_caps.get(1).map(|m| m.as_str()).unwrap_or("");
+        let title = entry_title_re
+            .captures(entry_block)
+            .and_then(|caps| caps.get(1))
+            .map(|m| strip_markup(&decode_xml(m.as_str())))
+            .unwrap_or_default();
+        let body = entry_body_re
+            .captures(entry_block)
+            .and_then(|caps| caps.get(1))
+            .map(|m| strip_markup(&decode_xml(m.as_str())))
+            .unwrap_or_default();
+        let link = entry_link_re
+            .captures(entry_block)
+            .and_then(|caps| caps.get(1))
+            .map(|m| decode_xml(m.as_str()).trim().to_string())
+            .unwrap_or_else(|| source.page_url().to_string());
+        let entry_updated = updated_re
+            .captures(entry_block)
+            .and_then(|caps| caps.get(1))
+            .map(|m| decode_xml(m.as_str()).trim().to_string());
+
+        let combined = format!("{title} {body}");
+
+        if first_health.is_none() {
+            first_health = Some(health_from_feed_text(&combined));
+            first_summary = Some(prefer_summary(&title, &body));
+            first_url = Some(link.clone());
+        }
+
+        let latest_update = if !body.is_empty() {
+            Some(IncidentUpdate {
+                status: infer_status_from_feed(&body),
+                body: body.clone(),
+                created_at: entry_updated.clone().unwrap_or_default(),
+            })
+        } else {
+            None
+        };
+
+        incidents.push(ActiveIncident {
+            name: title,
+            status: infer_status_from_feed(&combined),
+            impact: infer_impact_from_feed(&combined),
+            shortlink: Some(link),
+            created_at: entry_updated,
+            updated_at: None,
+            latest_update,
+            affected_components: vec![],
+        });
+    }
+
+    if incidents.is_empty() {
+        return Err("atom feed entry missing".to_string());
+    }
 
     Ok(OfficialSnapshot {
         label: feed_title,
         method: StatusSourceMethod::Feed,
-        health: health_from_feed_text(&combined),
-        official_url,
+        health: first_health.unwrap_or(ProviderHealth::Unknown),
+        official_url: first_url.unwrap_or_else(|| source.page_url().to_string()),
         last_checked,
-        summary: Some(prefer_summary(&title, &body)),
+        summary: first_summary,
         components: Vec::new(),
-        incidents: Vec::new(),
+        incidents,
         scheduled_maintenances: Vec::new(),
     })
 }
@@ -770,7 +904,11 @@ struct GoogleIncident {
     #[serde(default)]
     modified: Option<String>,
     #[serde(default)]
+    begin: Option<String>,
+    #[serde(default)]
     end: Option<String>,
+    #[serde(default)]
+    uri: Option<String>,
     severity: String,
     status_impact: String,
     #[serde(default)]
@@ -877,6 +1015,12 @@ mod tests {
               <pubDate>Thu, 19 Feb 2026 16:38:24 GMT</pubDate>
               <link>https://status.openrouter.ai/incidents/lrkj1G0wmMoe</link>
             </item>
+            <item>
+              <title>API latency issues</title>
+              <description><![CDATA[<strong>Investigating</strong> - We are investigating increased latency.]]></description>
+              <pubDate>Wed, 18 Feb 2026 10:00:00 GMT</pubDate>
+              <link>https://status.openrouter.ai/incidents/abc123</link>
+            </item>
           </channel>
         </rss>
         "#;
@@ -887,6 +1031,15 @@ mod tests {
         assert_eq!(
             parsed.summary.as_deref(),
             Some("Degraded website login — RESOLVED - This incident has been resolved.")
+        );
+        assert_eq!(parsed.incidents.len(), 2);
+        assert_eq!(parsed.incidents[0].name, "Degraded website login");
+        assert_eq!(parsed.incidents[0].status, "resolved");
+        assert_eq!(parsed.incidents[1].name, "API latency issues");
+        assert_eq!(parsed.incidents[1].status, "investigating");
+        assert_eq!(
+            parsed.incidents[1].shortlink.as_deref(),
+            Some("https://status.openrouter.ai/incidents/abc123")
         );
     }
 
@@ -902,6 +1055,12 @@ mod tests {
             <link rel="alternate" type="text/html" href="https://status.perplexity.com/incident/test"/>
             <content type="html"><![CDATA[<p><strong>Investigating</strong> - We are currently investigating this incident affecting Sonar API.</p>]]></content>
           </entry>
+          <entry>
+            <title>Search downtime</title>
+            <updated>2026-02-15T10:00:00.000+00:00</updated>
+            <link rel="alternate" type="text/html" href="https://status.perplexity.com/incident/older"/>
+            <content type="html"><![CDATA[<p><strong>Resolved</strong> - This issue has been resolved.</p>]]></content>
+          </entry>
         </feed>
         "#;
 
@@ -912,6 +1071,11 @@ mod tests {
             parsed.official_url,
             "https://status.perplexity.com/incident/test"
         );
+        assert_eq!(parsed.incidents.len(), 2);
+        assert_eq!(parsed.incidents[0].name, "Sonar API incident");
+        assert_eq!(parsed.incidents[0].status, "investigating");
+        assert_eq!(parsed.incidents[1].name, "Search downtime");
+        assert_eq!(parsed.incidents[1].status, "resolved");
     }
 
     #[test]
@@ -924,7 +1088,9 @@ mod tests {
             external_desc: "Vertex AI Gemini API customers experienced increased error rates"
                 .to_string(),
             modified: Some("2026-03-09T05:25:43+00:00".to_string()),
+            begin: Some("2026-02-27T10:00:00+00:00".to_string()),
             end: Some("2026-02-27T14:35:00+00:00".to_string()),
+            uri: Some("/incidents/RiFm4GRdELxBfnY7qRAG".to_string()),
             severity: "low".to_string(),
             status_impact: "SERVICE_INFORMATION".to_string(),
             affected_products: vec![GoogleAffectedProduct {
@@ -938,5 +1104,16 @@ mod tests {
         assert!(snapshot
             .official_url
             .contains("Z0FZJAMvEB4j3NbCJs6B/history"));
+        assert_eq!(snapshot.incidents.len(), 1);
+        assert_eq!(snapshot.incidents[0].status, "resolved");
+        assert_eq!(snapshot.incidents[0].impact, "none");
+        assert_eq!(
+            snapshot.incidents[0].shortlink.as_deref(),
+            Some("https://status.cloud.google.com/incidents/RiFm4GRdELxBfnY7qRAG")
+        );
+        assert_eq!(
+            snapshot.incidents[0].created_at.as_deref(),
+            Some("2026-02-27T10:00:00+00:00")
+        );
     }
 }
