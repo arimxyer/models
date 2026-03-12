@@ -517,6 +517,42 @@ pub struct StatusProviderSeed {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ComponentStatus {
+    pub name: String,
+    pub status: String,
+    pub group_name: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IncidentUpdate {
+    pub status: String,
+    pub body: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ActiveIncident {
+    pub name: String,
+    pub status: String,
+    pub impact: String,
+    pub shortlink: Option<String>,
+    pub created_at: Option<String>,
+    pub updated_at: Option<String>,
+    pub latest_update: Option<IncidentUpdate>,
+    pub affected_components: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScheduledMaintenance {
+    pub name: String,
+    pub status: String,
+    pub impact: String,
+    pub scheduled_for: Option<String>,
+    pub scheduled_until: Option<String>,
+    pub affected_components: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProviderStatus {
     pub slug: String,
     pub display_name: String,
@@ -529,6 +565,9 @@ pub struct ProviderStatus {
     pub fallback_url: Option<String>,
     pub last_checked: Option<String>,
     pub summary: Option<String>,
+    pub components: Vec<ComponentStatus>,
+    pub incidents: Vec<ActiveIncident>,
+    pub scheduled_maintenances: Vec<ScheduledMaintenance>,
 }
 
 impl ProviderStatus {
@@ -545,6 +584,9 @@ impl ProviderStatus {
             fallback_url: None,
             last_checked: None,
             summary: None,
+            components: Vec::new(),
+            incidents: Vec::new(),
+            scheduled_maintenances: Vec::new(),
         }
     }
 
@@ -691,6 +733,9 @@ mod tests {
             fallback_url: Some("https://apistatuscheck.com/api/openai".to_string()),
             last_checked: None,
             summary: None,
+            components: Vec::new(),
+            incidents: Vec::new(),
+            scheduled_maintenances: Vec::new(),
         };
 
         assert_eq!(status.best_open_url(), Some("https://status.openai.com"));

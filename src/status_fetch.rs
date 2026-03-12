@@ -2,8 +2,9 @@ use regex::Regex;
 use serde::Deserialize;
 
 use crate::status::{
-    OfficialStatusSource, ProviderHealth, ProviderStatus, StatusProvenance, StatusProviderSeed,
-    StatusSourceMethod, StatusStrategy,
+    ActiveIncident, ComponentStatus, IncidentUpdate, OfficialStatusSource, ProviderHealth,
+    ProviderStatus, ScheduledMaintenance, StatusProvenance, StatusProviderSeed, StatusSourceMethod,
+    StatusStrategy,
 };
 
 const API_STATUS_CHECK_URL: &str = "https://apistatuscheck.com/api/status?api=";
@@ -240,6 +241,9 @@ struct OfficialSnapshot {
     official_url: String,
     last_checked: Option<String>,
     summary: Option<String>,
+    components: Vec<ComponentStatus>,
+    incidents: Vec<ActiveIncident>,
+    scheduled_maintenances: Vec<ScheduledMaintenance>,
 }
 
 impl OfficialSnapshot {
@@ -251,6 +255,76 @@ impl OfficialSnapshot {
             )
         });
 
+        let health = match payload.status.indicator.as_deref() {
+            Some("none") => ProviderHealth::Operational,
+            Some("minor") => ProviderHealth::Degraded,
+            Some("major") | Some("critical") => ProviderHealth::Outage,
+            Some("maintenance") => ProviderHealth::Maintenance,
+            _ => ProviderHealth::from_api_status(&payload.status.description),
+        };
+
+        // Build group name lookup: components where group==true are group headers
+        let group_names: Vec<(&str, &str)> = payload
+            .components
+            .iter()
+            .filter(|c| c.group == Some(true))
+            .filter_map(|c| c.id.as_deref().map(|id| (id, c.name.as_str())))
+            .collect();
+
+        let components: Vec<ComponentStatus> = payload
+            .components
+            .iter()
+            .filter(|c| c.group != Some(true))
+            .map(|c| {
+                let group_name = c.group_id.as_deref().and_then(|gid| {
+                    group_names
+                        .iter()
+                        .find(|(id, _)| *id == gid)
+                        .map(|(_, name)| (*name).to_string())
+                });
+                ComponentStatus {
+                    name: c.name.clone(),
+                    status: c.status.clone(),
+                    group_name,
+                }
+            })
+            .collect();
+
+        let incidents: Vec<ActiveIncident> = payload
+            .incidents
+            .iter()
+            .map(|inc| {
+                let latest_update = inc.incident_updates.first().map(|u| IncidentUpdate {
+                    status: u.status.clone(),
+                    body: u.body.clone(),
+                    created_at: u.created_at.clone(),
+                });
+                ActiveIncident {
+                    name: inc.name.clone(),
+                    status: inc.status.clone(),
+                    impact: inc.impact.clone(),
+                    shortlink: inc.shortlink.clone(),
+                    created_at: inc.created_at.clone(),
+                    updated_at: inc.updated_at.clone(),
+                    latest_update,
+                    affected_components: inc.components.iter().map(|c| c.name.clone()).collect(),
+                }
+            })
+            .collect();
+
+        let scheduled_maintenances: Vec<ScheduledMaintenance> = payload
+            .scheduled_maintenances
+            .iter()
+            .map(|m| ScheduledMaintenance {
+                name: m.name.clone(),
+                status: m.status.clone(),
+                impact: m.impact.clone(),
+                scheduled_for: m.scheduled_for.clone(),
+                scheduled_until: m.scheduled_until.clone(),
+                affected_components: m.components.iter().map(|c| c.name.clone()).collect(),
+            })
+            .collect();
+
         Self {
             label: payload
                 .page
@@ -258,13 +332,16 @@ impl OfficialSnapshot {
                 .or_else(|| Some(source.label().to_string()))
                 .unwrap_or_else(|| source.label().to_string()),
             method: StatusSourceMethod::StatuspageV2,
-            health: ProviderHealth::from_api_status(&payload.status.description),
+            health,
             official_url: payload
                 .page
                 .url
                 .unwrap_or_else(|| source.page_url().to_string()),
             last_checked: payload.page.updated_at,
             summary: incident_summary.or(Some(payload.status.description)),
+            components,
+            incidents,
+            scheduled_maintenances,
         }
     }
 
@@ -311,6 +388,9 @@ impl OfficialSnapshot {
             ),
             last_checked,
             summary,
+            components: Vec::new(),
+            incidents: Vec::new(),
+            scheduled_maintenances: Vec::new(),
         }
     }
 }
@@ -404,6 +484,9 @@ fn parse_rss_feed(source: OfficialStatusSource, xml: &str) -> Result<OfficialSna
         official_url,
         last_checked,
         summary,
+        components: Vec::new(),
+        incidents: Vec::new(),
+        scheduled_maintenances: Vec::new(),
     })
 }
 
@@ -461,6 +544,9 @@ fn parse_atom_feed(source: OfficialStatusSource, xml: &str) -> Result<OfficialSn
         official_url,
         last_checked,
         summary: Some(prefer_summary(&title, &body)),
+        components: Vec::new(),
+        incidents: Vec::new(),
+        scheduled_maintenances: Vec::new(),
     })
 }
 
@@ -527,6 +613,9 @@ fn resolve_provider_status(
         status.official_url = Some(official.official_url);
         status.last_checked = official.last_checked;
         status.summary = official.summary;
+        status.components = official.components;
+        status.incidents = official.incidents;
+        status.scheduled_maintenances = official.scheduled_maintenances;
         return status;
     }
 
@@ -587,6 +676,35 @@ struct OfficialSummaryResponse {
     status: OfficialStatus,
     #[serde(default)]
     incidents: Vec<OfficialIncident>,
+    #[serde(default)]
+    components: Vec<OfficialComponent>,
+    #[serde(default)]
+    scheduled_maintenances: Vec<OfficialScheduledMaintenance>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OfficialComponent {
+    #[serde(default)]
+    id: Option<String>,
+    name: String,
+    status: String,
+    #[serde(default)]
+    group_id: Option<String>,
+    #[serde(default)]
+    group: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OfficialScheduledMaintenance {
+    name: String,
+    status: String,
+    impact: String,
+    #[serde(default)]
+    scheduled_for: Option<String>,
+    #[serde(default)]
+    scheduled_until: Option<String>,
+    #[serde(default)]
+    components: Vec<OfficialIncidentComponent>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -602,6 +720,8 @@ struct OfficialPage {
 #[derive(Debug, Deserialize)]
 struct OfficialStatus {
     description: String,
+    #[serde(default)]
+    indicator: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -609,6 +729,28 @@ struct OfficialIncident {
     name: String,
     status: String,
     impact: String,
+    #[serde(default)]
+    shortlink: Option<String>,
+    #[serde(default)]
+    created_at: Option<String>,
+    #[serde(default)]
+    updated_at: Option<String>,
+    #[serde(default)]
+    incident_updates: Vec<OfficialIncidentUpdate>,
+    #[serde(default)]
+    components: Vec<OfficialIncidentComponent>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OfficialIncidentUpdate {
+    status: String,
+    body: String,
+    created_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct OfficialIncidentComponent {
+    name: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -661,6 +803,9 @@ mod tests {
                 official_url: "https://status.openai.com".to_string(),
                 last_checked: Some("2026-03-11T00:00:00Z".to_string()),
                 summary: Some("Partial System Degradation".to_string()),
+                components: Vec::new(),
+                incidents: Vec::new(),
+                scheduled_maintenances: Vec::new(),
             }),
             Some(FallbackSnapshot {
                 label: "OpenAI".to_string(),
