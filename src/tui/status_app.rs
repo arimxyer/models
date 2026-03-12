@@ -5,8 +5,8 @@ use ratatui::widgets::ListState;
 
 use crate::agents::AgentsFile;
 use crate::status::{
-    display_name_for_provider, source_slug_for_provider, status_registry_entry,
-    strategy_for_provider, ProviderStatus, StatusProviderSeed,
+    status_registry_entry, strategy_for_provider, ProviderStatus, StatusProviderSeed,
+    STATUS_REGISTRY,
 };
 
 const PAGE_SIZE: usize = 10;
@@ -36,16 +36,28 @@ impl StatusApp {
         let mut by_slug: BTreeMap<String, StatusProviderSeed> = BTreeMap::new();
         let mut related_agents: HashMap<String, Vec<String>> = HashMap::new();
 
+        for entry in STATUS_REGISTRY {
+            by_slug.insert(
+                entry.slug.to_string(),
+                StatusProviderSeed {
+                    slug: entry.slug.to_string(),
+                    display_name: entry.display_name.to_string(),
+                    source_slug: entry.source_slug.to_string(),
+                    strategy: entry.strategy,
+                },
+            );
+        }
+
         for agent in agents_file.agents.values() {
             for slug in &agent.supported_providers {
                 by_slug
                     .entry(slug.clone())
                     .or_insert_with(|| StatusProviderSeed {
                         slug: slug.clone(),
-                        display_name: display_name_for_provider(slug),
+                        display_name: slug.clone(),
                         source_slug: status_registry_entry(slug)
                             .map(|entry| entry.source_slug.to_string())
-                            .unwrap_or_else(|| source_slug_for_provider(slug).to_string()),
+                            .unwrap_or_else(|| slug.clone()),
                         strategy: strategy_for_provider(slug),
                     });
                 related_agents
@@ -264,7 +276,10 @@ mod tests {
             .iter()
             .map(|entry| entry.slug.as_str())
             .collect();
-        assert_eq!(slugs, vec!["google", "openai"]);
+        assert!(slugs.contains(&"google"));
+        assert!(slugs.contains(&"openai"));
+        assert!(slugs.contains(&"openrouter"));
+        assert!(slugs.contains(&"cursor"));
         assert_eq!(
             app.entries
                 .iter()

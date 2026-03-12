@@ -69,9 +69,10 @@ impl StatusFetcher {
                         last_error = Some(err.clone());
                     }
 
-                    let fallback_result = match official_result {
-                        Ok(_) => None,
-                        Err(_) => match self.fetch_fallback(fallback_source_slug).await {
+                    let fallback_result = match (official_result.as_ref(), fallback_source_slug) {
+                        (Ok(_), _) | (_, None) => None,
+                        (Err(_), Some(source_slug)) => match self.fetch_fallback(source_slug).await
+                        {
                             Ok(snapshot) => {
                                 successes += 1;
                                 Some(snapshot)
@@ -85,22 +86,7 @@ impl StatusFetcher {
 
                     resolve_provider_status(seed, official_result.ok(), fallback_result)
                 }
-                StatusStrategy::FallbackOnly {
-                    fallback_source_slug,
-                } => {
-                    let fallback_result = match self.fetch_fallback(fallback_source_slug).await {
-                        Ok(snapshot) => {
-                            successes += 1;
-                            Some(snapshot)
-                        }
-                        Err(err) => {
-                            last_error = Some(err);
-                            None
-                        }
-                    };
-                    resolve_provider_status(seed, None, fallback_result)
-                }
-                StatusStrategy::Unsupported => resolve_provider_status(seed, None, None),
+                StatusStrategy::Unverified => resolve_provider_status(seed, None, None),
             };
 
             entries.push(resolved);
@@ -128,10 +114,15 @@ impl StatusFetcher {
         google_products: Option<&GoogleProductsResponse>,
     ) -> Result<OfficialSnapshot, String> {
         match source {
-            OfficialStatusSource::OpenAi | OfficialStatusSource::Anthropic => {
+            OfficialStatusSource::OpenAi
+            | OfficialStatusSource::Anthropic
+            | OfficialStatusSource::Moonshot
+            | OfficialStatusSource::Cursor
+            | OfficialStatusSource::GitHub
+            | OfficialStatusSource::DeepSeek => {
                 let response = self
                     .client
-                    .get(source.summary_url())
+                    .get(source.endpoint_url())
                     .send()
                     .await
                     .map_err(|err| err.to_string())?;
@@ -144,10 +135,13 @@ impl StatusFetcher {
                     response.json().await.map_err(|err| err.to_string())?;
                 Ok(OfficialSnapshot::from_summary(source, payload))
             }
-            OfficialStatusSource::OpenRouterRss => {
+            OfficialStatusSource::OpenRouter
+            | OfficialStatusSource::Perplexity
+            | OfficialStatusSource::HuggingFace
+            | OfficialStatusSource::TogetherAi => {
                 let response = self
                     .client
-                    .get(source.summary_url())
+                    .get(source.endpoint_url())
                     .send()
                     .await
                     .map_err(|err| err.to_string())?;
@@ -157,7 +151,7 @@ impl StatusFetcher {
                 }
 
                 let body = response.text().await.map_err(|err| err.to_string())?;
-                parse_openrouter_rss(&body)
+                parse_feed(source, &body)
             }
             OfficialStatusSource::GoogleGeminiJson => {
                 let products =
@@ -172,7 +166,7 @@ impl StatusFetcher {
 
                 let response = self
                     .client
-                    .get(source.summary_url())
+                    .get(source.endpoint_url())
                     .send()
                     .await
                     .map_err(|err| err.to_string())?;
@@ -255,7 +249,7 @@ impl OfficialSnapshot {
             official_url: payload
                 .page
                 .url
-                .unwrap_or_else(|| source.summary_url().to_string()),
+                .unwrap_or_else(|| source.page_url().to_string()),
             last_checked: payload.page.updated_at,
             summary: incident_summary.or(Some(payload.status.description)),
         }
@@ -331,57 +325,178 @@ impl FallbackSnapshot {
     }
 }
 
-fn parse_openrouter_rss(xml: &str) -> Result<OfficialSnapshot, String> {
-    let title_re = Regex::new(r"(?s)<title>([^<]+)</title>").map_err(|err| err.to_string())?;
+fn parse_feed(source: OfficialStatusSource, xml: &str) -> Result<OfficialSnapshot, String> {
+    parse_atom_feed(source, xml).or_else(|_| parse_rss_feed(source, xml))
+}
+
+fn parse_rss_feed(source: OfficialStatusSource, xml: &str) -> Result<OfficialSnapshot, String> {
+    let title_re =
+        Regex::new(r"(?s)<channel>.*?<title>(.*?)</title>").map_err(|err| err.to_string())?;
     let build_re =
-        Regex::new(r"(?s)<lastBuildDate>([^<]+)</lastBuildDate>").map_err(|err| err.to_string())?;
-    let item_re = Regex::new(r"(?s)<item>\s*<title>([^<]+)</title>.*?<description><!\[CDATA\[(.*?)\]\]></description>.*?<link>([^<]+)</link>")
-        .map_err(|err| err.to_string())?;
+        Regex::new(r"(?s)<lastBuildDate>(.*?)</lastBuildDate>").map_err(|err| err.to_string())?;
+    let item_re = Regex::new(r"(?s)<item>(.*?)</item>").map_err(|err| err.to_string())?;
+    let item_title_re = Regex::new(r"(?s)<title>(.*?)</title>").map_err(|err| err.to_string())?;
+    let item_description_re =
+        Regex::new(r"(?s)<description>(.*?)</description>").map_err(|err| err.to_string())?;
+    let item_link_re = Regex::new(r"(?s)<link>(.*?)</link>").map_err(|err| err.to_string())?;
 
     let channel_title = title_re
-        .captures_iter(xml)
-        .next()
+        .captures(xml)
         .and_then(|caps| caps.get(1))
-        .map(|m| m.as_str().trim().to_string())
-        .unwrap_or_else(|| "OpenRouter Status".to_string());
+        .map(|m| decode_xml(m.as_str()).trim().to_string())
+        .unwrap_or_else(|| source.label().to_string());
     let last_checked = build_re
         .captures(xml)
         .and_then(|caps| caps.get(1))
-        .map(|m| m.as_str().trim().to_string());
-    let item = item_re.captures(xml);
+        .map(|m| decode_xml(m.as_str()).trim().to_string());
+    let item = item_re
+        .captures(xml)
+        .and_then(|caps| caps.get(1))
+        .map(|m| m.as_str());
 
-    let (health, summary, official_url) = if let Some(caps) = item {
-        let incident_title = caps.get(1).map(|m| m.as_str().trim()).unwrap_or("");
-        let description = caps.get(2).map(|m| m.as_str()).unwrap_or("");
-        let link = caps
-            .get(3)
-            .map(|m| m.as_str().to_string())
-            .unwrap_or_else(|| "https://status.openrouter.ai".to_string());
-        let upper = description.to_uppercase();
-        let health = if upper.contains("RESOLVED") || upper.contains("OPERATIONAL AGAIN") {
-            ProviderHealth::Operational
-        } else if upper.contains("INVESTIGATING") || upper.contains("IDENTIFIED") {
-            ProviderHealth::Degraded
-        } else {
-            ProviderHealth::Unknown
-        };
-        (health, Some(incident_title.to_string()), link)
+    let (health, summary, official_url) = if let Some(item_block) = item {
+        let title = item_title_re
+            .captures(item_block)
+            .and_then(|caps| caps.get(1))
+            .map(|m| strip_markup(&decode_xml(m.as_str())))
+            .unwrap_or_default();
+        let description = item_description_re
+            .captures(item_block)
+            .and_then(|caps| caps.get(1))
+            .map(|m| strip_markup(&decode_xml(m.as_str())))
+            .unwrap_or_default();
+        let link = item_link_re
+            .captures(item_block)
+            .and_then(|caps| caps.get(1))
+            .map(|m| decode_xml(m.as_str()).trim().to_string())
+            .unwrap_or_else(|| source.page_url().to_string());
+        let combined = format!("{title} {description}");
+        (
+            health_from_feed_text(&combined),
+            Some(prefer_summary(&title, &description)),
+            link,
+        )
     } else {
         (
             ProviderHealth::Operational,
             Some("No incidents recorded".to_string()),
-            "https://status.openrouter.ai".to_string(),
+            source.page_url().to_string(),
         )
     };
 
     Ok(OfficialSnapshot {
         label: channel_title,
-        method: StatusSourceMethod::RssFeed,
+        method: StatusSourceMethod::Feed,
         health,
         official_url,
         last_checked,
         summary,
     })
+}
+
+fn parse_atom_feed(source: OfficialStatusSource, xml: &str) -> Result<OfficialSnapshot, String> {
+    if !xml.contains("<feed") {
+        return Err("not an atom feed".to_string());
+    }
+
+    let title_re =
+        Regex::new(r"(?s)<feed[^>]*>.*?<title>(.*?)</title>").map_err(|err| err.to_string())?;
+    let updated_re = Regex::new(r"(?s)<updated>(.*?)</updated>").map_err(|err| err.to_string())?;
+    let entry_re = Regex::new(r"(?s)<entry>(.*?)</entry>").map_err(|err| err.to_string())?;
+    let entry_title_re = Regex::new(r"(?s)<title>(.*?)</title>").map_err(|err| err.to_string())?;
+    let entry_body_re = Regex::new(r"(?s)<(?:content|summary)[^>]*>(.*?)</(?:content|summary)>")
+        .map_err(|err| err.to_string())?;
+    let entry_link_re =
+        Regex::new(r#"(?s)<link[^>]*href="(.*?)"[^>]*/?>"#).map_err(|err| err.to_string())?;
+
+    let feed_title = title_re
+        .captures(xml)
+        .and_then(|caps| caps.get(1))
+        .map(|m| decode_xml(m.as_str()).trim().to_string())
+        .unwrap_or_else(|| source.label().to_string());
+    let last_checked = updated_re
+        .captures(xml)
+        .and_then(|caps| caps.get(1))
+        .map(|m| decode_xml(m.as_str()).trim().to_string());
+    let entry_block = entry_re
+        .captures(xml)
+        .and_then(|caps| caps.get(1))
+        .map(|m| m.as_str())
+        .ok_or_else(|| "atom feed entry missing".to_string())?;
+
+    let title = entry_title_re
+        .captures(entry_block)
+        .and_then(|caps| caps.get(1))
+        .map(|m| strip_markup(&decode_xml(m.as_str())))
+        .unwrap_or_default();
+    let body = entry_body_re
+        .captures(entry_block)
+        .and_then(|caps| caps.get(1))
+        .map(|m| strip_markup(&decode_xml(m.as_str())))
+        .unwrap_or_default();
+    let official_url = entry_link_re
+        .captures(entry_block)
+        .and_then(|caps| caps.get(1))
+        .map(|m| decode_xml(m.as_str()).trim().to_string())
+        .unwrap_or_else(|| source.page_url().to_string());
+    let combined = format!("{title} {body}");
+
+    Ok(OfficialSnapshot {
+        label: feed_title,
+        method: StatusSourceMethod::Feed,
+        health: health_from_feed_text(&combined),
+        official_url,
+        last_checked,
+        summary: Some(prefer_summary(&title, &body)),
+    })
+}
+
+fn health_from_feed_text(text: &str) -> ProviderHealth {
+    let upper = text.to_uppercase();
+    if upper.contains("RECOVERED")
+        || upper.contains("RESOLVED")
+        || upper.contains("OPERATIONAL AGAIN")
+        || upper.contains("ALL SYSTEMS OPERATIONAL")
+    {
+        ProviderHealth::Operational
+    } else if upper.contains("OUTAGE") || upper.contains("WENT DOWN") || upper.contains("DOWN") {
+        ProviderHealth::Outage
+    } else if upper.contains("INVESTIGATING")
+        || upper.contains("IDENTIFIED")
+        || upper.contains("DEGRADED")
+        || upper.contains("PARTIAL")
+        || upper.contains("MINOR")
+    {
+        ProviderHealth::Degraded
+    } else {
+        ProviderHealth::Unknown
+    }
+}
+
+fn prefer_summary(title: &str, body: &str) -> String {
+    if body.is_empty() || body == title {
+        title.to_string()
+    } else if title.is_empty() {
+        body.to_string()
+    } else {
+        format!("{title} — {body}")
+    }
+}
+
+fn decode_xml(text: &str) -> String {
+    text.replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&amp;", "&")
+        .replace("&quot;", "\"")
+        .replace("&apos;", "'")
+}
+
+fn strip_markup(text: &str) -> String {
+    let without_cdata = text.replace("<![CDATA[", "").replace("]]>", "");
+    let no_tags = Regex::new(r"(?s)<[^>]+>")
+        .expect("valid regex")
+        .replace_all(&without_cdata, " ");
+    no_tags.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 fn resolve_provider_status(
@@ -415,16 +530,18 @@ fn resolve_provider_status(
     }
 
     status.summary = match seed.strategy {
-        StatusStrategy::Unsupported => Some(
-            "No verified machine-readable official or fallback source is configured for this provider."
+        StatusStrategy::Unverified => Some(
+            "No verified machine-readable official or fallback source has been added for this provider yet."
                 .to_string(),
         ),
-        StatusStrategy::OfficialFirst { .. } => {
-            Some("Official source unavailable and no fallback data could be loaded.".to_string())
-        }
-        StatusStrategy::FallbackOnly { .. } => {
-            Some("Fallback source unavailable for this provider.".to_string())
-        }
+        StatusStrategy::OfficialFirst {
+            fallback_source_slug: Some(_),
+            ..
+        } => Some("Official source unavailable and no fallback data could be loaded.".to_string()),
+        StatusStrategy::OfficialFirst {
+            fallback_source_slug: None,
+            ..
+        } => Some("Official source unavailable and no fallback source is configured.".to_string()),
     };
     status
 }
@@ -512,18 +629,20 @@ struct GoogleAffectedProduct {
 
 #[cfg(test)]
 mod tests {
-    use crate::status::{
-        display_name_for_provider, source_slug_for_provider, strategy_for_provider,
-        StatusProvenance,
-    };
+    use crate::status::{status_registry_entry, strategy_for_provider, StatusProvenance};
 
     use super::*;
 
     fn seed(slug: &str) -> StatusProviderSeed {
+        let entry = status_registry_entry(slug);
         StatusProviderSeed {
             slug: slug.to_string(),
-            display_name: display_name_for_provider(slug),
-            source_slug: source_slug_for_provider(slug).to_string(),
+            display_name: entry
+                .map(|entry| entry.display_name.to_string())
+                .unwrap_or_else(|| slug.to_string()),
+            source_slug: entry
+                .map(|entry| entry.source_slug.to_string())
+                .unwrap_or_else(|| slug.to_string()),
             strategy: strategy_for_provider(slug),
         }
     }
@@ -586,14 +705,14 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_provider_stays_unavailable() {
-        let status = resolve_provider_status(&seed("moonshot"), None, None);
+    fn unverified_provider_stays_unavailable() {
+        let status = resolve_provider_status(&seed("qwen"), None, None);
         assert_eq!(status.provenance, StatusProvenance::Unavailable);
         assert!(status
             .summary
             .as_deref()
             .unwrap_or_default()
-            .contains("No verified machine-readable"));
+            .contains("added for this provider yet"));
     }
 
     #[test]
@@ -614,10 +733,37 @@ mod tests {
         </rss>
         "#;
 
-        let parsed = parse_openrouter_rss(xml).expect("rss parses");
-        assert_eq!(parsed.method, StatusSourceMethod::RssFeed);
+        let parsed = parse_feed(OfficialStatusSource::OpenRouter, xml).expect("rss parses");
+        assert_eq!(parsed.method, StatusSourceMethod::Feed);
         assert_eq!(parsed.health, ProviderHealth::Operational);
-        assert_eq!(parsed.summary.as_deref(), Some("Degraded website login"));
+        assert_eq!(
+            parsed.summary.as_deref(),
+            Some("Degraded website login — RESOLVED - This incident has been resolved.")
+        );
+    }
+
+    #[test]
+    fn parses_atom_feed() {
+        let xml = r#"
+        <feed xmlns="http://www.w3.org/2005/Atom">
+          <title>Perplexity Status - Incident history</title>
+          <updated>2026-02-16T21:35:20.315+00:00</updated>
+          <entry>
+            <title>Sonar API incident</title>
+            <updated>2026-02-16T21:35:20.315+00:00</updated>
+            <link rel="alternate" type="text/html" href="https://status.perplexity.com/incident/test"/>
+            <content type="html"><![CDATA[<p><strong>Investigating</strong> - We are currently investigating this incident affecting Sonar API.</p>]]></content>
+          </entry>
+        </feed>
+        "#;
+
+        let parsed = parse_feed(OfficialStatusSource::Perplexity, xml).expect("atom parses");
+        assert_eq!(parsed.method, StatusSourceMethod::Feed);
+        assert_eq!(parsed.health, ProviderHealth::Degraded);
+        assert_eq!(
+            parsed.official_url,
+            "https://status.perplexity.com/incident/test"
+        );
     }
 
     #[test]

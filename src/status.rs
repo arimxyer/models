@@ -77,7 +77,7 @@ impl StatusProvenance {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StatusSourceMethod {
     StatuspageV2,
-    RssFeed,
+    Feed,
     GoogleCloudJson,
     ApiStatusCheck,
 }
@@ -86,7 +86,7 @@ impl StatusSourceMethod {
     pub fn label(&self) -> &'static str {
         match self {
             Self::StatuspageV2 => "Statuspage API",
-            Self::RssFeed => "RSS Feed",
+            Self::Feed => "RSS / Atom Feed",
             Self::GoogleCloudJson => "Google JSON",
             Self::ApiStatusCheck => "API Status Check",
         }
@@ -97,20 +97,24 @@ impl StatusSourceMethod {
 pub enum StatusStrategy {
     OfficialFirst {
         official: OfficialStatusSource,
-        fallback_source_slug: &'static str,
+        fallback_source_slug: Option<&'static str>,
     },
-    FallbackOnly {
-        fallback_source_slug: &'static str,
-    },
-    Unsupported,
+    Unverified,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OfficialStatusSource {
     OpenAi,
     Anthropic,
-    OpenRouterRss,
+    OpenRouter,
     GoogleGeminiJson,
+    Moonshot,
+    Cursor,
+    GitHub,
+    DeepSeek,
+    Perplexity,
+    HuggingFace,
+    TogetherAi,
 }
 
 impl OfficialStatusSource {
@@ -118,17 +122,49 @@ impl OfficialStatusSource {
         match self {
             Self::OpenAi => "OpenAI Status",
             Self::Anthropic => "Claude Status",
-            Self::OpenRouterRss => "OpenRouter Status",
+            Self::OpenRouter => "OpenRouter Status",
             Self::GoogleGeminiJson => "Google Cloud Service Health",
+            Self::Moonshot => "Moonshot AI Status",
+            Self::Cursor => "Cursor Status",
+            Self::GitHub => "GitHub Status",
+            Self::DeepSeek => "DeepSeek Status",
+            Self::Perplexity => "Perplexity Status",
+            Self::HuggingFace => "Hugging Face Status",
+            Self::TogetherAi => "Together AI Status",
         }
     }
 
-    pub fn summary_url(&self) -> &'static str {
+    pub fn endpoint_url(&self) -> &'static str {
         match self {
             Self::OpenAi => "https://status.openai.com/api/v2/summary.json",
             Self::Anthropic => "https://status.anthropic.com/api/v2/summary.json",
-            Self::OpenRouterRss => "https://status.openrouter.ai/incidents.rss",
+            Self::OpenRouter => "https://status.openrouter.ai/incidents.rss",
             Self::GoogleGeminiJson => "https://status.cloud.google.com/incidents.json",
+            Self::Moonshot => "https://status.moonshot.cn/api/v2/summary.json",
+            Self::Cursor => "https://status.cursor.com/api/v2/summary.json",
+            Self::GitHub => "https://www.githubstatus.com/api/v2/summary.json",
+            Self::DeepSeek => "https://status.deepseek.com/api/v2/summary.json",
+            Self::Perplexity => "https://status.perplexity.com/feed",
+            Self::HuggingFace => "https://status.huggingface.co/feed.rss",
+            Self::TogetherAi => "https://status.together.ai/feed.rss",
+        }
+    }
+
+    pub fn page_url(&self) -> &'static str {
+        match self {
+            Self::OpenAi => "https://status.openai.com",
+            Self::Anthropic => "https://status.anthropic.com",
+            Self::OpenRouter => "https://status.openrouter.ai",
+            Self::GoogleGeminiJson => {
+                "https://status.cloud.google.com/products/Z0FZJAMvEB4j3NbCJs6B/history"
+            }
+            Self::Moonshot => "https://status.moonshot.cn",
+            Self::Cursor => "https://status.cursor.com",
+            Self::GitHub => "https://www.githubstatus.com",
+            Self::DeepSeek => "https://status.deepseek.com",
+            Self::Perplexity => "https://status.perplexity.com",
+            Self::HuggingFace => "https://status.huggingface.co",
+            Self::TogetherAi => "https://status.together.ai",
         }
     }
 }
@@ -155,7 +191,7 @@ pub const STATUS_REGISTRY: &[StatusRegistryEntry] = &[
         source_slug: "openai",
         strategy: StatusStrategy::OfficialFirst {
             official: OfficialStatusSource::OpenAi,
-            fallback_source_slug: "openai",
+            fallback_source_slug: Some("openai"),
         },
         support_tier: StatusSupportTier::Required,
     },
@@ -165,7 +201,7 @@ pub const STATUS_REGISTRY: &[StatusRegistryEntry] = &[
         source_slug: "anthropic",
         strategy: StatusStrategy::OfficialFirst {
             official: OfficialStatusSource::Anthropic,
-            fallback_source_slug: "anthropic",
+            fallback_source_slug: Some("anthropic"),
         },
         support_tier: StatusSupportTier::Required,
     },
@@ -174,8 +210,8 @@ pub const STATUS_REGISTRY: &[StatusRegistryEntry] = &[
         display_name: "OpenRouter",
         source_slug: "openrouter",
         strategy: StatusStrategy::OfficialFirst {
-            official: OfficialStatusSource::OpenRouterRss,
-            fallback_source_slug: "openrouter",
+            official: OfficialStatusSource::OpenRouter,
+            fallback_source_slug: Some("openrouter"),
         },
         support_tier: StatusSupportTier::Required,
     },
@@ -185,7 +221,7 @@ pub const STATUS_REGISTRY: &[StatusRegistryEntry] = &[
         source_slug: "gemini",
         strategy: StatusStrategy::OfficialFirst {
             official: OfficialStatusSource::GoogleGeminiJson,
-            fallback_source_slug: "gemini",
+            fallback_source_slug: Some("gemini"),
         },
         support_tier: StatusSupportTier::Required,
     },
@@ -193,29 +229,33 @@ pub const STATUS_REGISTRY: &[StatusRegistryEntry] = &[
         slug: "moonshot",
         display_name: "Moonshot",
         source_slug: "moonshot",
-        strategy: StatusStrategy::Unsupported,
+        strategy: StatusStrategy::OfficialFirst {
+            official: OfficialStatusSource::Moonshot,
+            fallback_source_slug: Some("moonshot"),
+        },
         support_tier: StatusSupportTier::Required,
     },
     StatusRegistryEntry {
         slug: "ollama",
         display_name: "Ollama",
         source_slug: "ollama",
-        strategy: StatusStrategy::Unsupported,
+        strategy: StatusStrategy::Unverified,
         support_tier: StatusSupportTier::Required,
     },
     StatusRegistryEntry {
         slug: "qwen",
         display_name: "Qwen",
         source_slug: "qwen",
-        strategy: StatusStrategy::Unsupported,
+        strategy: StatusStrategy::Unverified,
         support_tier: StatusSupportTier::Required,
     },
     StatusRegistryEntry {
-        slug: "github-copilot",
-        display_name: "GitHub Copilot",
-        source_slug: "github-copilot",
-        strategy: StatusStrategy::FallbackOnly {
-            fallback_source_slug: "github-copilot",
+        slug: "github",
+        display_name: "GitHub",
+        source_slug: "github",
+        strategy: StatusStrategy::OfficialFirst {
+            official: OfficialStatusSource::GitHub,
+            fallback_source_slug: None,
         },
         support_tier: StatusSupportTier::Curated,
     },
@@ -223,8 +263,9 @@ pub const STATUS_REGISTRY: &[StatusRegistryEntry] = &[
         slug: "cursor",
         display_name: "Cursor",
         source_slug: "cursor",
-        strategy: StatusStrategy::FallbackOnly {
-            fallback_source_slug: "cursor",
+        strategy: StatusStrategy::OfficialFirst {
+            official: OfficialStatusSource::Cursor,
+            fallback_source_slug: Some("cursor"),
         },
         support_tier: StatusSupportTier::Curated,
     },
@@ -232,8 +273,9 @@ pub const STATUS_REGISTRY: &[StatusRegistryEntry] = &[
         slug: "perplexity",
         display_name: "Perplexity",
         source_slug: "perplexity",
-        strategy: StatusStrategy::FallbackOnly {
-            fallback_source_slug: "perplexity",
+        strategy: StatusStrategy::OfficialFirst {
+            official: OfficialStatusSource::Perplexity,
+            fallback_source_slug: Some("perplexity"),
         },
         support_tier: StatusSupportTier::Curated,
     },
@@ -241,8 +283,9 @@ pub const STATUS_REGISTRY: &[StatusRegistryEntry] = &[
         slug: "deepseek",
         display_name: "DeepSeek",
         source_slug: "deepseek",
-        strategy: StatusStrategy::FallbackOnly {
-            fallback_source_slug: "deepseek",
+        strategy: StatusStrategy::OfficialFirst {
+            official: OfficialStatusSource::DeepSeek,
+            fallback_source_slug: Some("deepseek"),
         },
         support_tier: StatusSupportTier::Curated,
     },
@@ -250,8 +293,9 @@ pub const STATUS_REGISTRY: &[StatusRegistryEntry] = &[
         slug: "together-ai",
         display_name: "Together AI",
         source_slug: "together-ai",
-        strategy: StatusStrategy::FallbackOnly {
-            fallback_source_slug: "together-ai",
+        strategy: StatusStrategy::OfficialFirst {
+            official: OfficialStatusSource::TogetherAi,
+            fallback_source_slug: Some("together-ai"),
         },
         support_tier: StatusSupportTier::Curated,
     },
@@ -259,8 +303,9 @@ pub const STATUS_REGISTRY: &[StatusRegistryEntry] = &[
         slug: "huggingface",
         display_name: "Hugging Face",
         source_slug: "huggingface",
-        strategy: StatusStrategy::FallbackOnly {
-            fallback_source_slug: "huggingface",
+        strategy: StatusStrategy::OfficialFirst {
+            official: OfficialStatusSource::HuggingFace,
+            fallback_source_slug: Some("huggingface"),
         },
         support_tier: StatusSupportTier::Curated,
     },
@@ -313,29 +358,10 @@ impl ProviderStatus {
     }
 }
 
-pub fn source_slug_for_provider(slug: &str) -> &str {
-    match slug {
-        "google" => "gemini",
-        other => other,
-    }
-}
-
-pub fn display_name_for_provider(slug: &str) -> String {
-    status_registry_entry(slug)
-        .map(|entry| entry.display_name.to_string())
-        .unwrap_or_else(|| {
-            let mut chars = slug.chars();
-            match chars.next() {
-                Some(first) => format!("{}{}", first.to_ascii_uppercase(), chars.as_str()),
-                None => slug.to_string(),
-            }
-        })
-}
-
 pub fn strategy_for_provider(slug: &str) -> StatusStrategy {
     status_registry_entry(slug)
         .map(|entry| entry.strategy)
-        .unwrap_or(StatusStrategy::Unsupported)
+        .unwrap_or(StatusStrategy::Unverified)
 }
 
 pub fn status_registry_entry(slug: &str) -> Option<&'static StatusRegistryEntry> {
@@ -368,8 +394,14 @@ mod tests {
 
     #[test]
     fn google_maps_to_gemini_source_slug() {
-        assert_eq!(source_slug_for_provider("google"), "gemini");
-        assert_eq!(source_slug_for_provider("openai"), "openai");
+        assert_eq!(
+            status_registry_entry("google").map(|entry| entry.source_slug),
+            Some("gemini")
+        );
+        assert_eq!(
+            status_registry_entry("openai").map(|entry| entry.source_slug),
+            Some("openai")
+        );
     }
 
     #[test]
@@ -390,12 +422,12 @@ mod tests {
             strategy_for_provider("google"),
             StatusStrategy::OfficialFirst { .. }
         ));
-        assert_eq!(
+        assert!(matches!(
             strategy_for_provider("moonshot"),
-            StatusStrategy::Unsupported
-        );
-        assert_eq!(strategy_for_provider("ollama"), StatusStrategy::Unsupported);
-        assert_eq!(strategy_for_provider("qwen"), StatusStrategy::Unsupported);
+            StatusStrategy::OfficialFirst { .. }
+        ));
+        assert_eq!(strategy_for_provider("ollama"), StatusStrategy::Unverified);
+        assert_eq!(strategy_for_provider("qwen"), StatusStrategy::Unverified);
     }
 
     #[test]
@@ -419,7 +451,7 @@ mod tests {
 
     #[test]
     fn registry_contains_curated_sources() {
-        assert!(status_registry_entry("github-copilot").is_some());
+        assert!(status_registry_entry("github").is_some());
         assert!(status_registry_entry("cursor").is_some());
         assert!(status_registry_entry("perplexity").is_some());
         assert!(status_registry_entry("deepseek").is_some());
