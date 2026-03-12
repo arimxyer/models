@@ -109,6 +109,11 @@ pub enum OfficialStatusSource {
     OpenRouter,
     GoogleGeminiJson,
     Moonshot,
+    Xai,
+    GitLab,
+    Poe,
+    NanoGpt,
+    Nvidia,
     Vercel,
     Helicone,
     Groq,
@@ -133,6 +138,11 @@ impl OfficialStatusSource {
             Self::OpenRouter => "OpenRouter Status",
             Self::GoogleGeminiJson => "Google Cloud Service Health",
             Self::Moonshot => "Moonshot AI Status",
+            Self::Xai => "xAI Status",
+            Self::GitLab => "GitLab Status",
+            Self::Poe => "Poe Status",
+            Self::NanoGpt => "NanoGPT Status",
+            Self::Nvidia => "NVIDIA NGC Status",
             Self::Vercel => "Vercel Status",
             Self::Helicone => "Helicone Status",
             Self::Groq => "Groq Status",
@@ -157,6 +167,11 @@ impl OfficialStatusSource {
             Self::OpenRouter => "https://status.openrouter.ai/incidents.rss",
             Self::GoogleGeminiJson => "https://status.cloud.google.com/incidents.json",
             Self::Moonshot => "https://status.moonshot.cn/api/v2/summary.json",
+            Self::Xai => "https://status.x.ai/feed.xml",
+            Self::GitLab => "https://status.gitlab.com/pages/5b36dc6502d06804c08349f7/rss",
+            Self::Poe => "https://status.poe.com/feed.rss",
+            Self::NanoGpt => "https://status.nano-gpt.com/feed.rss",
+            Self::Nvidia => "https://status.ngc.nvidia.com/history.rss",
             Self::Vercel => "https://www.vercel-status.com/api/v2/summary.json",
             Self::Helicone => "https://status.helicone.ai/feed.rss",
             Self::Groq => "https://groqstatus.com/api/v2/summary.json",
@@ -183,6 +198,11 @@ impl OfficialStatusSource {
                 "https://status.cloud.google.com/products/Z0FZJAMvEB4j3NbCJs6B/history"
             }
             Self::Moonshot => "https://status.moonshot.cn",
+            Self::Xai => "https://status.x.ai",
+            Self::GitLab => "https://status.gitlab.com",
+            Self::Poe => "https://status.poe.com",
+            Self::NanoGpt => "https://status.nano-gpt.com",
+            Self::Nvidia => "https://status.ngc.nvidia.com",
             Self::Vercel => "https://www.vercel-status.com",
             Self::Helicone => "https://status.helicone.ai",
             Self::Groq => "https://groqstatus.com",
@@ -333,6 +353,56 @@ pub const STATUS_REGISTRY: &[StatusRegistryEntry] = &[
         strategy: StatusStrategy::OfficialFirst {
             official: OfficialStatusSource::DeepSeek,
             fallback_source_slug: Some("deepseek"),
+        },
+        support_tier: StatusSupportTier::Curated,
+    },
+    StatusRegistryEntry {
+        slug: "xai",
+        display_name: "xAI",
+        source_slug: "xai",
+        strategy: StatusStrategy::OfficialFirst {
+            official: OfficialStatusSource::Xai,
+            fallback_source_slug: None,
+        },
+        support_tier: StatusSupportTier::Curated,
+    },
+    StatusRegistryEntry {
+        slug: "gitlab",
+        display_name: "GitLab",
+        source_slug: "gitlab",
+        strategy: StatusStrategy::OfficialFirst {
+            official: OfficialStatusSource::GitLab,
+            fallback_source_slug: None,
+        },
+        support_tier: StatusSupportTier::Curated,
+    },
+    StatusRegistryEntry {
+        slug: "poe",
+        display_name: "Poe",
+        source_slug: "poe",
+        strategy: StatusStrategy::OfficialFirst {
+            official: OfficialStatusSource::Poe,
+            fallback_source_slug: None,
+        },
+        support_tier: StatusSupportTier::Curated,
+    },
+    StatusRegistryEntry {
+        slug: "nano-gpt",
+        display_name: "NanoGPT",
+        source_slug: "nano-gpt",
+        strategy: StatusStrategy::OfficialFirst {
+            official: OfficialStatusSource::NanoGpt,
+            fallback_source_slug: None,
+        },
+        support_tier: StatusSupportTier::Curated,
+    },
+    StatusRegistryEntry {
+        slug: "nvidia",
+        display_name: "NVIDIA",
+        source_slug: "nvidia",
+        strategy: StatusStrategy::OfficialFirst {
+            official: OfficialStatusSource::Nvidia,
+            fallback_source_slug: None,
         },
         support_tier: StatusSupportTier::Curated,
     },
@@ -583,6 +653,26 @@ mod tests {
             strategy_for_provider("github-copilot"),
             StatusStrategy::OfficialFirst { .. }
         ));
+        assert!(matches!(
+            strategy_for_provider("xai"),
+            StatusStrategy::OfficialFirst { .. }
+        ));
+        assert!(matches!(
+            strategy_for_provider("gitlab"),
+            StatusStrategy::OfficialFirst { .. }
+        ));
+        assert!(matches!(
+            strategy_for_provider("poe"),
+            StatusStrategy::OfficialFirst { .. }
+        ));
+        assert!(matches!(
+            strategy_for_provider("nano-gpt"),
+            StatusStrategy::OfficialFirst { .. }
+        ));
+        assert!(matches!(
+            strategy_for_provider("nvidia"),
+            StatusStrategy::OfficialFirst { .. }
+        ));
         assert_eq!(strategy_for_provider("ollama"), StatusStrategy::Unverified);
         assert_eq!(strategy_for_provider("qwen"), StatusStrategy::Unverified);
     }
@@ -612,6 +702,11 @@ mod tests {
         assert!(status_registry_entry("cursor").is_some());
         assert!(status_registry_entry("perplexity").is_some());
         assert!(status_registry_entry("deepseek").is_some());
+        assert!(status_registry_entry("xai").is_some());
+        assert!(status_registry_entry("gitlab").is_some());
+        assert!(status_registry_entry("poe").is_some());
+        assert!(status_registry_entry("nano-gpt").is_some());
+        assert!(status_registry_entry("nvidia").is_some());
         assert!(status_registry_entry("vercel").is_some());
         assert!(status_registry_entry("helicone").is_some());
         assert!(status_registry_entry("groq").is_some());

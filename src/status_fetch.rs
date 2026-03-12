@@ -141,6 +141,11 @@ impl StatusFetcher {
                 Ok(OfficialSnapshot::from_summary(source, payload))
             }
             OfficialStatusSource::OpenRouter
+            | OfficialStatusSource::Xai
+            | OfficialStatusSource::GitLab
+            | OfficialStatusSource::Poe
+            | OfficialStatusSource::NanoGpt
+            | OfficialStatusSource::Nvidia
             | OfficialStatusSource::Perplexity
             | OfficialStatusSource::HuggingFace
             | OfficialStatusSource::TogetherAi
