@@ -37,7 +37,7 @@
     "creator_id": "e67e56e3-15cd-43db-b679-da4660a69f41",
     "creator_name": "OpenAI",
     "release_date": "2026-03-05",
-    "intelligence_index": 57.2,
+    "intelligence_index": 57,
     "coding_index": 57.3,
     "math_index": null,
     "mmlu_pro": null,
@@ -5572,12 +5572,12 @@
     "math_500": null,
     "aime": null,
     "aime_25": null,
-    "output_tps": 154.995,
-    "ttft": 0.832,
-    "ttfat": 0.832,
-    "price_input": 0.2,
+    "output_tps": 155.663,
+    "ttft": 0.876,
+    "ttfat": 0.876,
+    "price_input": 0.35,
     "price_output": 1.2,
-    "price_blended": 0.525
+    "price_blended": 0.6
   },
   {
     "id": "2d28a13a-096e-475a-beb8-26bbd1c7d51c",
