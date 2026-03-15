@@ -12,7 +12,6 @@ use super::app::{App, Filters, Focus, Mode, ProviderListItem, SortOrder, Tab};
 use crate::agents::{format_stars, FetchStatus};
 use crate::provider_category::{provider_category, ProviderCategory};
 use crate::status::ProviderHealth;
-use std::collections::BTreeMap;
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
@@ -120,50 +119,61 @@ fn status_health_icon(health: ProviderHealth) -> &'static str {
 }
 
 fn component_status_icon(status: &str) -> &'static str {
-    match status {
-        "operational" => "●",
-        "degraded_performance" => "◐",
-        "partial_outage" => "✕",
-        "major_outage" => "✕",
-        "under_maintenance" => "◆",
-        _ => "?",
+    let s = status.to_lowercase();
+    if s.contains("operational") {
+        "●"
+    } else if s.contains("degraded") || s.contains("partial") {
+        "◐"
+    } else if s.contains("outage") || s.contains("major") || s.contains("down") {
+        "✕"
+    } else if s.contains("maintenance") {
+        "◆"
+    } else {
+        "?"
     }
 }
 
 fn component_status_style(status: &str) -> Style {
-    match status {
-        "operational" => Style::default().fg(Color::Green),
-        "degraded_performance" | "partial_outage" => Style::default().fg(Color::Yellow),
-        "major_outage" => Style::default().fg(Color::Red),
-        "under_maintenance" => Style::default().fg(Color::Cyan),
-        _ => Style::default().fg(Color::DarkGray),
+    let s = status.to_lowercase();
+    if s.contains("operational") {
+        Style::default().fg(Color::Green)
+    } else if s.contains("degraded") || s.contains("partial") {
+        Style::default().fg(Color::Yellow)
+    } else if s.contains("outage") || s.contains("major") || s.contains("down") {
+        Style::default().fg(Color::Red)
+    } else if s.contains("maintenance") {
+        Style::default().fg(Color::Cyan)
+    } else {
+        Style::default().fg(Color::DarkGray)
     }
 }
 
-fn incident_impact_style(impact: &str) -> Style {
-    match impact {
-        "critical" | "major" => Style::default().fg(Color::Red),
-        "minor" => Style::default().fg(Color::Yellow),
-        _ => Style::default().fg(Color::DarkGray),
-    }
+/// 6-char left-aligned gutter tag (padded with spaces, DarkGray) + content spans at column 7.
+fn gutter_line<'a>(tag: &str, spans: Vec<Span<'a>>) -> Line<'a> {
+    let padded = format!("{:<6}", tag);
+    let mut all = vec![Span::styled(padded, Style::default().fg(Color::DarkGray))];
+    all.extend(spans);
+    Line::from(all)
 }
 
-fn incident_status_style(status: &str) -> Style {
-    match status {
-        "investigating" | "identified" => Style::default().fg(Color::Yellow),
-        "monitoring" => Style::default().fg(Color::Cyan),
-        "resolved" | "postmortem" => Style::default().fg(Color::Green),
-        _ => Style::default().fg(Color::DarkGray),
+/// Chinese component name map for DeepSeek and others.
+const CHINESE_NAME_MAP: &[(&str, &str)] =
+    &[("API 服务", "API Service"), ("网页对话服务", "Web Chat")];
+
+fn translate_component_name(name: &str) -> String {
+    for &(chinese, english) in CHINESE_NAME_MAP {
+        if name == chinese {
+            return format!("{} ({})", english, chinese);
+        }
     }
+    name.to_string()
 }
 
-fn maintenance_status_style(status: &str) -> Style {
-    match status {
-        "scheduled" => Style::default().fg(Color::Cyan),
-        "in_progress" | "verifying" => Style::default().fg(Color::Yellow),
-        "completed" => Style::default().fg(Color::Green),
-        _ => Style::default().fg(Color::DarkGray),
-    }
+/// Format a timestamp string as relative time (e.g. "2h ago").
+fn format_relative_time_from_str(ts: &str) -> String {
+    crate::agents::helpers::parse_date(ts)
+        .map(|dt| crate::agents::helpers::format_relative_time(&dt))
+        .unwrap_or_else(|| ts.to_string())
 }
 
 fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
@@ -277,347 +287,401 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
     f.render_stateful_widget(list, left_chunks[1], &mut status_app.list_state);
 
     let detail_lines = if let Some(entry) = status_app.current_entry() {
-        let mut lines = Vec::new();
+        let entry_slug = entry.slug.clone();
+        let related_agents = status_app.related_agents_for(&entry_slug).to_vec();
 
-        // -- Section 1: Header --
+        let mut lines: Vec<Line> = Vec::new();
+
+        // ── Header: health icon + name + status label ──────────────────────
         lines.push(Line::from(vec![
             Span::styled(
-                format!(
-                    "{} {}",
-                    status_health_icon(entry.health),
-                    entry.display_name
-                ),
+                status_health_icon(entry.health),
+                status_health_style(entry.health),
+            ),
+            Span::raw(" "),
+            Span::styled(
+                entry.display_name.clone(),
                 Style::default()
                     .fg(Color::White)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::raw("  "),
-            Span::styled(
-                entry.health.label(),
-                status_health_style(entry.health).add_modifier(Modifier::BOLD),
-            ),
-            Span::raw("  "),
-            Span::styled(
-                entry.provenance.label(),
-                Style::default().fg(Color::DarkGray),
-            ),
+            Span::styled(entry.health.label(), status_health_style(entry.health)),
         ]));
+        lines.push(Line::from(""));
 
-        if let Some(registry_entry) = crate::status::status_registry_entry(&entry.slug) {
-            let tier_label = match registry_entry.support_tier {
-                crate::status::StatusSupportTier::Required => "Required",
-                crate::status::StatusSupportTier::Curated => "Curated",
-            };
-            lines.push(Line::from(vec![
-                Span::styled("Support tier: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(tier_label),
-            ]));
-        }
-
-        // -- Section 2: Components --
-        if !entry.components.is_empty() {
-            lines.push(Line::from(""));
-            lines.push(Line::from(Span::styled(
-                "Components",
-                Style::default()
-                    .fg(Color::White)
-                    .add_modifier(Modifier::BOLD),
-            )));
-
-            // Group components: those with group_name go under their group, others are ungrouped
-            let mut grouped: BTreeMap<String, Vec<&crate::status::ComponentStatus>> =
-                BTreeMap::new();
-            let mut ungrouped: Vec<&crate::status::ComponentStatus> = Vec::new();
-
-            for comp in &entry.components {
-                if let Some(group) = &comp.group_name {
-                    grouped.entry(group.clone()).or_default().push(comp);
-                } else {
-                    ungrouped.push(comp);
-                }
-            }
-
-            let max_components = 10;
-            let mut shown = 0;
-            let total = entry.components.len();
-
-            // Show ungrouped first
-            for comp in &ungrouped {
-                if shown >= max_components {
-                    break;
-                }
-                lines.push(Line::from(vec![
-                    Span::raw("  "),
-                    Span::styled(
-                        component_status_icon(&comp.status),
-                        component_status_style(&comp.status),
-                    ),
-                    Span::raw(" "),
-                    Span::raw(comp.name.clone()),
-                ]));
-                shown += 1;
-            }
-
-            // Show grouped
-            for (group_name, comps) in &grouped {
-                if shown >= max_components {
-                    break;
-                }
-                lines.push(Line::from(Span::styled(
-                    format!("  {group_name}"),
+        // ── COMP section ───────────────────────────────────────────────────
+        let components: &[crate::status::ComponentStatus] = &entry.components;
+        if components.is_empty() {
+            lines.push(gutter_line(
+                "COMP",
+                vec![Span::styled(
+                    "No components reported",
                     Style::default().fg(Color::DarkGray),
-                )));
-                for comp in comps {
-                    if shown >= max_components {
-                        break;
+                )],
+            ));
+        } else {
+            // Group components by group_name
+            let mut groups: std::collections::BTreeMap<
+                String,
+                Vec<&crate::status::ComponentStatus>,
+            > = std::collections::BTreeMap::new();
+            let infra_groups = ["Website", "API", "Infrastructure"];
+            for comp in components {
+                let key = comp
+                    .group_name
+                    .clone()
+                    .unwrap_or_else(|| "__ungrouped__".to_string());
+                groups.entry(key).or_default().push(comp);
+            }
+
+            let mut first_comp_line = true;
+            for (group_key, group_comps) in &groups {
+                let is_infra =
+                    group_key == "__ungrouped__" || infra_groups.contains(&group_key.as_str());
+
+                if !is_infra {
+                    // Smart collapse: check if all share same status
+                    let first_status = group_comps[0].status.as_str();
+                    let all_same = group_comps.iter().all(|c| c.status == first_status);
+
+                    if all_same {
+                        let tag = if first_comp_line { "COMP" } else { "" };
+                        first_comp_line = false;
+                        lines.push(gutter_line(
+                            tag,
+                            vec![
+                                Span::styled(
+                                    component_status_icon(first_status),
+                                    component_status_style(first_status),
+                                ),
+                                Span::raw(" "),
+                                Span::raw(format!(
+                                    "{} {}: all {}",
+                                    group_comps.len(),
+                                    group_key,
+                                    first_status
+                                )),
+                            ],
+                        ));
+                        continue;
                     }
-                    lines.push(Line::from(vec![
-                        Span::raw("    "),
-                        Span::styled(
-                            component_status_icon(&comp.status),
-                            component_status_style(&comp.status),
-                        ),
-                        Span::raw(" "),
-                        Span::raw(comp.name.clone()),
-                    ]));
-                    shown += 1;
                 }
-            }
 
-            if total > max_components {
-                lines.push(Line::from(Span::styled(
-                    format!("  (+{} more)", total - max_components),
-                    Style::default().fg(Color::DarkGray),
-                )));
-            }
-        }
+                // List each component individually
+                let max_name_width = group_comps
+                    .iter()
+                    .map(|c| translate_component_name(&c.name).len())
+                    .max()
+                    .unwrap_or(0);
 
-        // -- Section 3: Active Incidents --
-        if !entry.incidents.is_empty() {
-            lines.push(Line::from(""));
-            let all_resolved = entry
-                .incidents
-                .iter()
-                .all(|i| i.status == "resolved" || i.status == "postmortem");
-            lines.push(Line::from(Span::styled(
-                if all_resolved {
-                    "Recent Incidents"
-                } else {
-                    "Active Incidents"
-                },
-                Style::default()
-                    .fg(Color::White)
-                    .add_modifier(Modifier::BOLD),
-            )));
-
-            let max_incidents = 5;
-            for (i, incident) in entry.incidents.iter().enumerate() {
-                if i >= max_incidents {
-                    lines.push(Line::from(Span::styled(
-                        format!("  (+{} more)", entry.incidents.len() - max_incidents),
-                        Style::default().fg(Color::DarkGray),
-                    )));
-                    break;
-                }
-                // Incident name + impact badge
-                lines.push(Line::from(vec![
-                    Span::styled("  \u{25b8} ", Style::default().fg(Color::Yellow)),
-                    Span::styled(
-                        truncate(&incident.name, 50),
-                        Style::default().add_modifier(Modifier::BOLD),
-                    ),
-                    Span::raw("  "),
-                    Span::styled(
-                        format!("[{}]", incident.impact),
-                        incident_impact_style(&incident.impact),
-                    ),
-                ]));
-                // Status + created date
-                let created_str = incident
-                    .created_at
-                    .as_deref()
-                    .and_then(crate::agents::helpers::parse_date)
-                    .map(|dt| dt.format("%Y-%m-%d %H:%M").to_string())
-                    .unwrap_or_default();
-                let mut status_line = vec![
-                    Span::raw("    "),
-                    Span::styled(&incident.status, incident_status_style(&incident.status)),
-                ];
-                if !created_str.is_empty() {
-                    status_line.push(Span::styled(
-                        "  \u{2022}  ",
-                        Style::default().fg(Color::DarkGray),
-                    ));
-                    status_line.push(Span::styled(
-                        created_str,
-                        Style::default().fg(Color::DarkGray),
-                    ));
-                }
-                lines.push(Line::from(status_line));
-                // Latest update body
-                if let Some(update) = &incident.latest_update {
-                    if !update.body.is_empty() {
-                        lines.push(Line::from(vec![
-                            Span::raw("    "),
+                for comp in group_comps {
+                    let tag = if first_comp_line { "COMP" } else { "" };
+                    first_comp_line = false;
+                    let display_name = translate_component_name(&comp.name);
+                    lines.push(gutter_line(
+                        tag,
+                        vec![
                             Span::styled(
-                                truncate(&update.body, 80),
-                                Style::default().fg(Color::DarkGray),
+                                component_status_icon(&comp.status),
+                                component_status_style(&comp.status),
                             ),
-                        ]));
+                            Span::raw(" "),
+                            Span::raw(format!("{:<width$}", display_name, width = max_name_width)),
+                            Span::raw("  "),
+                            Span::styled(comp.status.clone(), component_status_style(&comp.status)),
+                        ],
+                    ));
+                }
+            }
+        }
+        lines.push(Line::from(""));
+
+        // ── INCDT section ──────────────────────────────────────────────────
+        let incidents: &[crate::status::ActiveIncident] = &entry.incidents;
+        if incidents.is_empty() {
+            lines.push(gutter_line(
+                "INCDT",
+                vec![Span::styled(
+                    "No active incidents",
+                    Style::default().fg(Color::DarkGray),
+                )],
+            ));
+        } else {
+            let phase_order = ["investigating", "identified", "monitoring", "resolved"];
+            let shown = incidents.iter().take(5);
+            let total = incidents.len();
+
+            for (i, incident) in shown.enumerate() {
+                let tag = if i == 0 { "INCDT" } else { "" };
+
+                // Lifecycle ladder: ●──●──◉──○
+                let current_phase = incident.status.to_lowercase();
+                let current_idx = phase_order
+                    .iter()
+                    .position(|&p| current_phase.contains(p))
+                    .unwrap_or(0);
+
+                let mut ladder_spans: Vec<Span> = Vec::new();
+                for (pi, &phase) in phase_order.iter().enumerate() {
+                    if pi > 0 {
+                        ladder_spans.push(Span::styled("──", Style::default().fg(Color::DarkGray)));
+                    }
+                    if pi < current_idx {
+                        // completed
+                        ladder_spans.push(Span::styled("●", Style::default().fg(Color::Green)));
+                    } else if pi == current_idx {
+                        // active phase
+                        let color = match phase {
+                            "investigating" | "identified" => Color::Yellow,
+                            "monitoring" => Color::Cyan,
+                            "resolved" => Color::Green,
+                            _ => Color::Yellow,
+                        };
+                        ladder_spans.push(Span::styled("◉", Style::default().fg(color)));
+                    } else {
+                        // future
+                        ladder_spans.push(Span::styled("○", Style::default().fg(Color::DarkGray)));
                     }
                 }
+
+                // Impact badge
+                let (impact_text, impact_color) = match incident.impact.to_lowercase().as_str() {
+                    s if s.contains("major") || s.contains("critical") => ("[major]", Color::Red),
+                    s if s.contains("minor") => ("[minor]", Color::Yellow),
+                    _ => ("[none]", Color::DarkGray),
+                };
+
+                let mut ladder_line_spans = ladder_spans;
+                ladder_line_spans.push(Span::raw("  "));
+                ladder_line_spans
+                    .push(Span::styled(impact_text, Style::default().fg(impact_color)));
+                lines.push(gutter_line(tag, ladder_line_spans));
+
+                // Phase labels line
+                lines.push(gutter_line(
+                    "",
+                    vec![Span::styled(
+                        "investigating  identified  monitoring  resolved",
+                        Style::default().fg(Color::DarkGray),
+                    )],
+                ));
+
+                // Incident name
+                lines.push(gutter_line(
+                    "",
+                    vec![Span::styled(
+                        incident.name.clone(),
+                        Style::default().add_modifier(Modifier::BOLD),
+                    )],
+                ));
+
+                // Latest update body (truncated to 80 chars)
+                if let Some(update) = &incident.latest_update {
+                    let body = if update.body.len() > 80 {
+                        format!("{}…", &update.body[..79])
+                    } else {
+                        update.body.clone()
+                    };
+                    lines.push(gutter_line("", vec![Span::raw(body)]));
+                }
+
                 // Affected components
                 if !incident.affected_components.is_empty() {
-                    lines.push(Line::from(vec![
-                        Span::styled("    Affects: ", Style::default().fg(Color::DarkGray)),
-                        Span::raw(incident.affected_components.join(", ")),
-                    ]));
+                    lines.push(gutter_line(
+                        "",
+                        vec![
+                            Span::styled("Affects: ", Style::default().fg(Color::DarkGray)),
+                            Span::raw(incident.affected_components.join(", ")),
+                        ],
+                    ));
+                }
+
+                // Timestamp
+                if let Some(ts) = incident
+                    .updated_at
+                    .as_deref()
+                    .or(incident.created_at.as_deref())
+                {
+                    lines.push(gutter_line(
+                        "",
+                        vec![Span::styled(
+                            format_relative_time_from_str(ts),
+                            Style::default().fg(Color::DarkGray),
+                        )],
+                    ));
+                }
+
+                if i < total.min(5) - 1 {
+                    lines.push(gutter_line("", vec![Span::raw("")]));
                 }
             }
+
+            if total > 5 {
+                lines.push(gutter_line(
+                    "",
+                    vec![Span::styled(
+                        format!("+{} more", total - 5),
+                        Style::default().fg(Color::DarkGray),
+                    )],
+                ));
+            }
         }
+        lines.push(Line::from(""));
 
-        // -- Section 4: Scheduled Maintenance --
-        if !entry.scheduled_maintenances.is_empty() {
-            lines.push(Line::from(""));
-            lines.push(Line::from(Span::styled(
-                "Scheduled Maintenance",
-                Style::default()
-                    .fg(Color::White)
-                    .add_modifier(Modifier::BOLD),
-            )));
+        // ── MAINT section ──────────────────────────────────────────────────
+        let maintenances: &[crate::status::ScheduledMaintenance] = &entry.scheduled_maintenances;
+        if maintenances.is_empty() {
+            lines.push(gutter_line(
+                "MAINT",
+                vec![Span::styled(
+                    "No scheduled maintenance",
+                    Style::default().fg(Color::DarkGray),
+                )],
+            ));
+        } else {
+            for (i, maint) in maintenances.iter().enumerate() {
+                let tag = if i == 0 { "MAINT" } else { "" };
 
-            for maint in &entry.scheduled_maintenances {
-                // Name + status badge
-                lines.push(Line::from(vec![
-                    Span::styled("  \u{25c6} ", Style::default().fg(Color::Cyan)),
-                    Span::styled(
-                        truncate(&maint.name, 50),
+                // Name
+                lines.push(gutter_line(
+                    tag,
+                    vec![Span::styled(
+                        maint.name.clone(),
                         Style::default().add_modifier(Modifier::BOLD),
-                    ),
-                    Span::raw("  "),
-                    Span::styled(
-                        format!("[{}]", maint.status),
-                        maintenance_status_style(&maint.status),
-                    ),
-                ]));
-                // Window
-                let from_str = maint
-                    .scheduled_for
-                    .as_deref()
-                    .and_then(crate::agents::helpers::parse_date)
-                    .map(|dt| dt.format("%Y-%m-%d %H:%M UTC").to_string());
-                let until_str = maint
-                    .scheduled_until
-                    .as_deref()
-                    .and_then(crate::agents::helpers::parse_date)
-                    .map(|dt| dt.format("%H:%M UTC").to_string());
-                if let Some(from) = from_str {
-                    let window = if let Some(until) = until_str {
-                        format!("{from} \u{2192} {until}")
-                    } else {
-                        from
-                    };
-                    lines.push(Line::from(vec![
-                        Span::styled("    Window: ", Style::default().fg(Color::DarkGray)),
-                        Span::raw(window),
-                    ]));
+                    )],
+                ));
+
+                // Time progress bar
+                let bar_width = 20usize;
+                if let (Some(start_str), Some(end_str)) = (
+                    maint.scheduled_for.as_deref(),
+                    maint.scheduled_until.as_deref(),
+                ) {
+                    if let (Some(start), Some(end)) = (
+                        crate::agents::helpers::parse_date(start_str),
+                        crate::agents::helpers::parse_date(end_str),
+                    ) {
+                        let now = chrono::Utc::now();
+                        let total_secs = (end - start).num_seconds().max(1);
+                        let elapsed_secs = (now - start).num_seconds().clamp(0, total_secs);
+                        let pct = (elapsed_secs * 100 / total_secs) as usize;
+                        let filled = (elapsed_secs * bar_width as i64 / total_secs) as usize;
+                        let empty = bar_width.saturating_sub(filled);
+
+                        let bar_filled = "━".repeat(filled);
+                        let bar_empty = "░".repeat(empty);
+                        let remaining_secs = total_secs - elapsed_secs;
+                        let remaining_label = if remaining_secs > 3600 {
+                            format!("{}h remaining", remaining_secs / 3600)
+                        } else if remaining_secs > 60 {
+                            format!("{}m remaining", remaining_secs / 60)
+                        } else {
+                            "finishing soon".to_string()
+                        };
+
+                        lines.push(gutter_line(
+                            "",
+                            vec![
+                                Span::styled(bar_filled, Style::default().fg(Color::Cyan)),
+                                Span::styled(bar_empty, Style::default().fg(Color::DarkGray)),
+                                Span::raw(format!("  {}% — {}", pct, remaining_label)),
+                            ],
+                        ));
+
+                        lines.push(gutter_line(
+                            "",
+                            vec![Span::styled(
+                                format!(
+                                    "{} → {}",
+                                    format_relative_time_from_str(start_str),
+                                    format_relative_time_from_str(end_str)
+                                ),
+                                Style::default().fg(Color::DarkGray),
+                            )],
+                        ));
+                    }
                 }
+
                 // Affected components
                 if !maint.affected_components.is_empty() {
-                    lines.push(Line::from(vec![
-                        Span::styled("    Affects: ", Style::default().fg(Color::DarkGray)),
-                        Span::raw(maint.affected_components.join(", ")),
-                    ]));
+                    lines.push(gutter_line(
+                        "",
+                        vec![
+                            Span::styled("Affects: ", Style::default().fg(Color::DarkGray)),
+                            Span::raw(maint.affected_components.join(", ")),
+                        ],
+                    ));
+                }
+
+                if i < maintenances.len() - 1 {
+                    lines.push(gutter_line("", vec![Span::raw("")]));
                 }
             }
         }
-
-        // -- Section 5: Metadata --
         lines.push(Line::from(""));
-        lines.push(Line::from(Span::styled(
-            "Source",
-            Style::default()
-                .fg(Color::White)
-                .add_modifier(Modifier::BOLD),
-        )));
-        lines.push(Line::from(vec![
-            Span::styled("  Source: ", Style::default().fg(Color::DarkGray)),
-            Span::raw(
-                entry
-                    .source_label
-                    .clone()
-                    .unwrap_or_else(|| "Unavailable".to_string()),
-            ),
-            if let Some(method) = entry.source_method {
+
+        // ── SRC section ────────────────────────────────────────────────────
+        let source_name = entry.source_label.as_deref().unwrap_or("Unavailable");
+        let method_label = entry.source_method.map(|m| m.label()).unwrap_or("Unknown");
+
+        lines.push(gutter_line(
+            "SRC",
+            vec![
+                Span::raw(source_name.to_string()),
+                Span::raw("  "),
                 Span::styled(
-                    format!("  ({})", method.label()),
+                    format!("[{}]", method_label),
                     Style::default().fg(Color::DarkGray),
-                )
-            } else {
-                Span::raw("")
-            },
-        ]));
-        lines.push(Line::from(vec![
-            Span::styled("  Last checked: ", Style::default().fg(Color::DarkGray)),
-            Span::raw(
-                entry
-                    .last_checked
-                    .as_deref()
-                    .and_then(crate::agents::helpers::parse_date)
-                    .map(|dt| crate::agents::helpers::format_relative_time(&dt))
-                    .unwrap_or_else(|| "Unknown".to_string()),
-            ),
-        ]));
+                ),
+            ],
+        ));
+
+        // Last checked
+        let last_checked_display = entry
+            .last_checked
+            .as_deref()
+            .map(format_relative_time_from_str)
+            .unwrap_or_else(|| "Unknown".to_string());
+        lines.push(gutter_line(
+            "",
+            vec![
+                Span::styled("checked: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(last_checked_display),
+            ],
+        ));
+
+        // Official URL
         if let Some(url) = &entry.official_url {
-            lines.push(Line::from(vec![
-                Span::styled("  Official: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(url.clone()),
-            ]));
-        }
-        if let Some(url) = &entry.fallback_url {
-            lines.push(Line::from(vec![
-                Span::styled("  Fallback: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(url.clone()),
-            ]));
+            lines.push(gutter_line(
+                "",
+                vec![
+                    Span::styled("url: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(url.clone()),
+                ],
+            ));
         }
 
-        // -- Section 6: Related Agents --
-        let related_agents = status_app.related_agents_for(&entry.slug);
+        // Related agents
         if !related_agents.is_empty() {
-            lines.push(Line::from(""));
-            lines.push(Line::from(Span::styled(
-                "Related Agents",
-                Style::default()
-                    .fg(Color::White)
-                    .add_modifier(Modifier::BOLD),
-            )));
-            for name in related_agents {
-                lines.push(Line::from(format!("  \u{2022} {name}")));
-            }
+            lines.push(gutter_line(
+                "",
+                vec![
+                    Span::styled("agents: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(related_agents.join(", ")),
+                ],
+            ));
         }
-
-        // Loading / error notes
-        if let Some(error) = &status_app.last_error {
-            lines.push(Line::from(""));
-            lines.push(Line::from(vec![
-                Span::styled("Fetch note: ", Style::default().fg(Color::DarkGray)),
-                Span::styled(error.clone(), Style::default().fg(Color::Yellow)),
-            ]));
-        } else if status_app.loading {
-            lines.push(Line::from(""));
-            lines.push(Line::from(Span::styled(
-                "Loading provider status\u{2026}",
-                Style::default().fg(Color::Yellow),
-            )));
-        }
-
-        // -- Section 7: Keybinding footer --
         lines.push(Line::from(""));
+
+        // ── Footer hints ───────────────────────────────────────────────────
         lines.push(Line::from(vec![
             Span::styled(" o ", Style::default().fg(Color::Yellow)),
-            Span::raw("open status page  "),
+            Span::raw("open  "),
             Span::styled(" r ", Style::default().fg(Color::Yellow)),
-            Span::raw("refresh"),
+            Span::raw("refresh  "),
+            Span::styled(" Tab ", Style::default().fg(Color::Yellow)),
+            Span::raw("focus list"),
         ]));
 
         lines
