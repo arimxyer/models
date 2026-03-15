@@ -1,3 +1,4 @@
+use ratatui::widgets::canvas::{Canvas, Context as CanvasContext, Painter, Shape};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -7,11 +8,57 @@ use ratatui::{
     },
     Frame,
 };
+use tui_piechart::{PieChart, PieSlice};
 
 use super::app::{App, Filters, Focus, Mode, ProviderListItem, SortOrder, Tab};
 use crate::agents::{format_stars, FetchStatus};
 use crate::provider_category::{provider_category, ProviderCategory};
 use crate::status::ProviderHealth;
+
+/// Data for the Canvas-rendered heatmap stacked bar chart.
+struct HeatmapGroup {
+    label: String,
+    op: u32,
+    deg: u32,
+    out: u32,
+    maint: u32,
+}
+
+/// A filled rectangle shape for ratatui Canvas (the built-in Rectangle only draws outlines).
+struct FilledRect {
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    color: Color,
+}
+
+impl Shape for FilledRect {
+    fn draw(&self, painter: &mut Painter) {
+        let (&[x_min, x_max], &[y_min, y_max]) = painter.bounds();
+        let x_range = x_max - x_min;
+        let y_range = y_max - y_min;
+        if x_range <= 0.0 || y_range <= 0.0 {
+            return;
+        }
+        // Step size derived from the coordinate range. 200 steps across the full
+        // range is enough for any typical terminal width (up to ~200 cols) with
+        // 2x oversampling for HalfBlock marker.
+        let step_x = x_range / 200.0;
+        let step_y = y_range / 100.0;
+        let mut x = self.x;
+        while x <= self.x + self.width {
+            let mut y = self.y;
+            while y <= self.y + self.height {
+                if let Some((px, py)) = painter.get_point(x, y) {
+                    painter.paint(px, py, self.color);
+                }
+                y += step_y;
+            }
+            x += step_x;
+        }
+    }
+}
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
@@ -293,6 +340,11 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
 
     let comp_view = status_app.comp_view;
 
+    // Pie chart slice data extracted from the Donut view arm
+    let mut pie_chart_data: Option<Vec<PieSlice<'static>>> = None;
+    // Heatmap group data for the plotters-rendered stacked bar chart
+    let mut heatmap_data: Option<Vec<HeatmapGroup>> = None;
+
     let detail_lines = if let Some(entry) = status_app.current_entry() {
         let entry_slug = entry.slug.clone();
         let related_agents = status_app.related_agents_for(&entry_slug).to_vec();
@@ -541,105 +593,28 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     }
                 }
                 CompView::Donut => {
-                    // Map proportions to 20 arc positions
-                    let positions = 20u32;
-                    let r_slots = if out > 0 {
-                        (out * positions).div_ceil(total).max(1)
-                    } else {
-                        0
-                    };
-                    let y_slots = if deg > 0 {
-                        (deg * positions).div_ceil(total).max(1)
-                    } else {
-                        0
-                    };
-                    let c_slots = if maint > 0 {
-                        (maint * positions).div_ceil(total).max(1)
-                    } else {
-                        0
-                    };
-                    let g_slots = positions.saturating_sub(r_slots + y_slots + c_slots);
+                    lines.push(gutter_line("COMP", summary_spans));
 
-                    // Color array: green first (clockwise from top-left), then yellow, red, cyan
-                    let mut arc: Vec<Color> = Vec::with_capacity(20);
-                    for _ in 0..g_slots {
-                        arc.push(Color::Green);
+                    // Build pie chart slices for separate widget rendering
+                    let mut slices = Vec::new();
+                    if op > 0 {
+                        slices.push(PieSlice::new("Operational", f64::from(op), Color::Green));
                     }
-                    for _ in 0..y_slots {
-                        arc.push(Color::Yellow);
+                    if deg > 0 {
+                        slices.push(PieSlice::new("Degraded", f64::from(deg), Color::Yellow));
                     }
-                    for _ in 0..r_slots {
-                        arc.push(Color::Red);
+                    if out > 0 {
+                        slices.push(PieSlice::new("Outage", f64::from(out), Color::Red));
                     }
-                    for _ in 0..c_slots {
-                        arc.push(Color::Cyan);
+                    if maint > 0 {
+                        slices.push(PieSlice::new("Maintenance", f64::from(maint), Color::Cyan));
                     }
-                    while arc.len() < 20 {
-                        arc.push(Color::Green);
-                    }
-
-                    // Center text (7 chars wide, shown in row 2)
-                    let center_text = if non_op == 0 {
-                        format!("{:^7}", format!("{}●", total))
-                    } else {
-                        format!("{:^7}", total)
-                    };
-
-                    // Row 0: " " + 7x▄ + " " + summary
-                    let mut r0: Vec<Span> = vec![Span::raw(" ")];
-                    for color in arc.iter().take(7) {
-                        r0.push(Span::styled("▄", Style::default().fg(*color)));
-                    }
-                    r0.push(Span::raw("   "));
-                    r0.extend(summary_spans);
-                    lines.push(gutter_line("COMP", r0));
-
-                    // Row 1: left wall (pos 19) + 7 spaces + right wall (pos 7)
-                    lines.push(gutter_line(
-                        "",
-                        vec![
-                            Span::styled("█", Style::default().fg(arc[19])),
-                            Span::raw("       "),
-                            Span::styled("█", Style::default().fg(arc[7])),
-                        ],
-                    ));
-
-                    // Row 2: left wall (pos 18) + center text + right wall (pos 8)
-                    lines.push(gutter_line(
-                        "",
-                        vec![
-                            Span::styled("█", Style::default().fg(arc[18])),
-                            Span::styled(
-                                center_text,
-                                Style::default()
-                                    .fg(Color::White)
-                                    .add_modifier(Modifier::BOLD),
-                            ),
-                            Span::styled("█", Style::default().fg(arc[8])),
-                        ],
-                    ));
-
-                    // Row 3: left wall (pos 17) + 7 spaces + right wall (pos 9)
-                    lines.push(gutter_line(
-                        "",
-                        vec![
-                            Span::styled("█", Style::default().fg(arc[17])),
-                            Span::raw("       "),
-                            Span::styled("█", Style::default().fg(arc[9])),
-                        ],
-                    ));
-
-                    // Row 4: " " + 7x▀ (bottom arc, reversed: pos 16 down to 10)
-                    let mut r4: Vec<Span> = vec![Span::raw(" ")];
-                    for i in (10..17).rev() {
-                        r4.push(Span::styled("▀", Style::default().fg(arc[i])));
-                    }
-                    lines.push(gutter_line("", r4));
+                    pie_chart_data = Some(slices);
                 }
                 CompView::Heatmap => {
                     lines.push(gutter_line("COMP", summary_spans));
 
-                    // Group ALL components by group_name
+                    // Group ALL components by group_name and count statuses
                     let mut groups: std::collections::BTreeMap<
                         String,
                         Vec<&crate::status::ComponentStatus>,
@@ -648,36 +623,34 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                         let key = comp
                             .group_name
                             .clone()
-                            .unwrap_or_else(|| "__ungrouped__".to_string());
+                            .unwrap_or_else(|| "Other".to_string());
                         groups.entry(key).or_default().push(comp);
                     }
 
-                    let max_label = groups
-                        .keys()
-                        .filter(|k| *k != "__ungrouped__")
-                        .map(|k| k.len())
-                        .max()
-                        .unwrap_or(0)
-                        .min(8);
-
+                    let mut hm_groups: Vec<HeatmapGroup> = Vec::new();
                     for (key, comps) in &groups {
-                        let mut spans: Vec<Span> = Vec::new();
-                        if key != "__ungrouped__" {
-                            let label = if key.len() > max_label {
-                                &key[..max_label]
-                            } else {
-                                key.as_str()
-                            };
-                            spans.push(Span::styled(
-                                format!("{:<width$}╎", label, width = max_label),
-                                Style::default().fg(Color::DarkGray),
-                            ));
-                        }
+                        let mut g_op = 0u32;
+                        let mut g_deg = 0u32;
+                        let mut g_out = 0u32;
+                        let mut g_maint = 0u32;
                         for comp in comps {
-                            spans.push(Span::styled("█", component_status_style(&comp.status)));
+                            match component_status_icon(&comp.status) {
+                                "●" => g_op += 1,
+                                "◐" => g_deg += 1,
+                                "✕" => g_out += 1,
+                                "◆" => g_maint += 1,
+                                _ => {}
+                            }
                         }
-                        lines.push(gutter_line("", spans));
+                        hm_groups.push(HeatmapGroup {
+                            label: key.clone(),
+                            op: g_op,
+                            deg: g_deg,
+                            out: g_out,
+                            maint: g_maint,
+                        });
                     }
+                    heatmap_data = Some(hm_groups);
                 }
                 CompView::Isotype => {
                     let multiplier = ((total as f64) / 20.0).ceil().max(1.0) as u32;
@@ -1023,16 +996,181 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
         ))]
     };
 
-    let paragraph = Paragraph::new(detail_lines)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(detail_border)
-                .title(" Details "),
-        )
-        .wrap(Wrap { trim: false })
-        .scroll((status_app.detail_scroll, 0));
-    f.render_widget(paragraph, chunks[1]);
+    let detail_area = chunks[1];
+
+    if let Some(slices) = pie_chart_data {
+        // Split detail area: top for PieChart, bottom for scrollable Paragraph
+        let detail_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(12), Constraint::Min(0)])
+            .split(detail_area);
+
+        let pie = PieChart::new(slices)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(detail_border)
+                    .title(" Details "),
+            )
+            .show_legend(true)
+            .show_percentages(true)
+            .legend_position(tui_piechart::LegendPosition::Right);
+        f.render_widget(pie, detail_chunks[0]);
+
+        let paragraph = Paragraph::new(detail_lines)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(detail_border),
+            )
+            .wrap(Wrap { trim: false })
+            .scroll((status_app.detail_scroll, 0));
+        f.render_widget(paragraph, detail_chunks[1]);
+    } else if let Some(groups) = heatmap_data {
+        // Split detail area: top for heatmap chart, bottom for scrollable Paragraph
+        let chart_height = (groups.len() as u16).clamp(3, 10) + 3; // rows + border
+        let detail_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(chart_height), Constraint::Min(0)])
+            .split(detail_area);
+
+        let chart_block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(detail_border)
+            .title(" Details ");
+        let chart_inner = chart_block.inner(detail_chunks[0]);
+        f.render_widget(chart_block, detail_chunks[0]);
+
+        // Render stacked horizontal bar chart via Canvas
+        let num_groups = groups.len();
+        if num_groups > 0 {
+            let max_label_len = groups
+                .iter()
+                .map(|g| g.label.len())
+                .max()
+                .unwrap_or(0)
+                .min(12);
+            // Reserve label columns + 1 separator on the left
+            let label_cols = (max_label_len + 1) as u16;
+            let bar_cols = chart_inner.width.saturating_sub(label_cols);
+
+            if bar_cols > 0 {
+                let label_area = Rect {
+                    x: chart_inner.x,
+                    y: chart_inner.y,
+                    width: label_cols,
+                    height: chart_inner.height,
+                };
+                let bar_area = Rect {
+                    x: chart_inner.x + label_cols,
+                    y: chart_inner.y,
+                    width: bar_cols,
+                    height: chart_inner.height,
+                };
+
+                // Draw group labels as text lines
+                let row_height = chart_inner.height as f64 / num_groups as f64;
+                let mut label_lines: Vec<Line> = Vec::new();
+                for group in &groups {
+                    let label = if group.label.len() > max_label_len {
+                        format!("{:>w$}╎", &group.label[..max_label_len], w = max_label_len)
+                    } else {
+                        format!("{:>w$}╎", group.label, w = max_label_len)
+                    };
+                    // If each row spans multiple terminal lines, pad with blanks
+                    let row_lines = row_height.floor().max(1.0) as usize;
+                    let mid = row_lines / 2;
+                    for li in 0..row_lines {
+                        if li == mid {
+                            label_lines.push(Line::from(Span::styled(
+                                label.clone(),
+                                Style::default().fg(Color::DarkGray),
+                            )));
+                        } else {
+                            label_lines.push(Line::from(""));
+                        }
+                    }
+                }
+                let label_para = Paragraph::new(label_lines);
+                f.render_widget(label_para, label_area);
+
+                // Find max total for proportional scaling
+                let max_total = groups
+                    .iter()
+                    .map(|g| g.op + g.deg + g.out + g.maint)
+                    .max()
+                    .unwrap_or(1)
+                    .max(1) as f64;
+
+                // Canvas coordinate system: x in [0, max_total], y in [0, num_groups]
+                let canvas_widget = Canvas::default()
+                    .x_bounds([0.0, max_total])
+                    .y_bounds([0.0, num_groups as f64])
+                    .marker(ratatui::symbols::Marker::HalfBlock)
+                    .paint(|ctx: &mut CanvasContext<'_>| {
+                        let gap = 0.15; // gap between rows
+                        for (i, group) in groups.iter().enumerate() {
+                            let group_total = group.op + group.deg + group.out + group.maint;
+                            if group_total == 0 {
+                                continue;
+                            }
+
+                            // y increases upward in canvas, so row 0 is at the top
+                            let y_base = (num_groups - 1 - i) as f64 + gap;
+                            let bar_h = 1.0 - 2.0 * gap;
+
+                            // Scale bar width proportional to max_total
+                            let scale = max_total / group_total as f64;
+
+                            let segments: [(u32, Color); 4] = [
+                                (group.op, Color::Green),
+                                (group.deg, Color::Yellow),
+                                (group.out, Color::Red),
+                                (group.maint, Color::Cyan),
+                            ];
+
+                            let mut x_cursor = 0.0_f64;
+                            for &(count, color) in &segments {
+                                if count == 0 {
+                                    continue;
+                                }
+                                let seg_w = count as f64 * scale;
+                                ctx.draw(&FilledRect {
+                                    x: x_cursor,
+                                    y: y_base,
+                                    width: seg_w,
+                                    height: bar_h,
+                                    color,
+                                });
+                                x_cursor += seg_w;
+                            }
+                        }
+                    });
+                f.render_widget(canvas_widget, bar_area);
+            }
+        }
+
+        let paragraph = Paragraph::new(detail_lines)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(detail_border),
+            )
+            .wrap(Wrap { trim: false })
+            .scroll((status_app.detail_scroll, 0));
+        f.render_widget(paragraph, detail_chunks[1]);
+    } else {
+        let paragraph = Paragraph::new(detail_lines)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(detail_border)
+                    .title(" Details "),
+            )
+            .wrap(Wrap { trim: false })
+            .scroll((status_app.detail_scroll, 0));
+        f.render_widget(paragraph, detail_area);
+    }
 }
 
 fn provider_detail_lines(app: &App) -> Vec<Line<'static>> {
