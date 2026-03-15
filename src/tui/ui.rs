@@ -341,88 +341,171 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
             ));
         }
 
-        // ── COMP section ───────────────────────────────────────────────────
+        // ── COMP section (summary-first) ─────────────────────────────────
         let components: &[crate::status::ComponentStatus] = &entry.components;
-        if components.is_empty() {
-            lines.push(gutter_line(
-                "COMP",
-                vec![Span::styled(
-                    "No components reported",
-                    Style::default().fg(Color::DarkGray),
-                )],
-            ));
-        } else {
-            // Group components by group_name
-            let mut groups: std::collections::BTreeMap<
-                String,
-                Vec<&crate::status::ComponentStatus>,
-            > = std::collections::BTreeMap::new();
-            let infra_groups = ["Website", "API", "Infrastructure"];
+        if !components.is_empty() {
+            // Count by health bucket
+            let mut op = 0u32;
+            let mut deg = 0u32;
+            let mut out = 0u32;
+            let mut maint = 0u32;
             for comp in components {
-                let key = comp
-                    .group_name
-                    .clone()
-                    .unwrap_or_else(|| "__ungrouped__".to_string());
-                groups.entry(key).or_default().push(comp);
+                match component_status_icon(&comp.status) {
+                    "●" => op += 1,
+                    "◐" => deg += 1,
+                    "✕" => out += 1,
+                    "◆" => maint += 1,
+                    _ => {}
+                }
             }
+            let total = components.len() as u32;
+            let non_op = total - op;
 
-            let mut first_comp_line = true;
-            for (group_key, group_comps) in &groups {
-                let is_infra =
-                    group_key == "__ungrouped__" || infra_groups.contains(&group_key.as_str());
+            // Summary line — always shown
+            let mut summary_spans: Vec<Span> = Vec::new();
+            if op > 0 {
+                summary_spans.push(Span::styled("●", Style::default().fg(Color::Green)));
+                summary_spans.push(Span::raw(format!(" {}", op)));
+            }
+            if deg > 0 {
+                if !summary_spans.is_empty() {
+                    summary_spans.push(Span::raw("  "));
+                }
+                summary_spans.push(Span::styled("◐", Style::default().fg(Color::Yellow)));
+                summary_spans.push(Span::raw(format!(" {}", deg)));
+            }
+            if out > 0 {
+                if !summary_spans.is_empty() {
+                    summary_spans.push(Span::raw("  "));
+                }
+                summary_spans.push(Span::styled("✕", Style::default().fg(Color::Red)));
+                summary_spans.push(Span::raw(format!(" {}", out)));
+            }
+            if maint > 0 {
+                if !summary_spans.is_empty() {
+                    summary_spans.push(Span::raw("  "));
+                }
+                summary_spans.push(Span::styled("◆", Style::default().fg(Color::Cyan)));
+                summary_spans.push(Span::raw(format!(" {}", maint)));
+            }
+            if non_op == 0 {
+                summary_spans.push(Span::styled(
+                    format!(" of {} operational", total),
+                    Style::default().fg(Color::DarkGray),
+                ));
+            } else {
+                summary_spans.push(Span::styled(
+                    format!("  of {}", total),
+                    Style::default().fg(Color::DarkGray),
+                ));
+            }
+            lines.push(gutter_line("COMP", summary_spans));
 
-                if !is_infra {
-                    // Smart collapse: check if all share same status
-                    let first_status = group_comps[0].status.as_str();
-                    let all_same = group_comps.iter().all(|c| c.status == first_status);
-
-                    if all_same {
-                        let tag = if first_comp_line { "COMP" } else { "" };
-                        first_comp_line = false;
-                        lines.push(gutter_line(
-                            tag,
-                            vec![
-                                Span::styled(
-                                    component_status_icon(first_status),
-                                    component_status_style(first_status),
-                                ),
-                                Span::raw(" "),
-                                Span::raw(format!(
-                                    "{} {}: all {}",
-                                    group_comps.len(),
-                                    group_key,
-                                    first_status
-                                )),
-                            ],
-                        ));
-                        continue;
+            // Expansion: only non-operational components
+            if non_op > 0 {
+                // Group by group_name
+                let mut groups: std::collections::BTreeMap<
+                    String,
+                    Vec<&crate::status::ComponentStatus>,
+                > = std::collections::BTreeMap::new();
+                for comp in components {
+                    if component_status_icon(&comp.status) != "●" {
+                        let key = comp
+                            .group_name
+                            .clone()
+                            .unwrap_or_else(|| "__ungrouped__".to_string());
+                        groups.entry(key).or_default().push(comp);
                     }
                 }
 
-                // List each component individually
-                let max_name_width = group_comps
-                    .iter()
-                    .map(|c| translate_component_name(&c.name).len())
-                    .max()
-                    .unwrap_or(0);
+                for (group_key, group_comps) in &groups {
+                    if group_key == "__ungrouped__" {
+                        // List ungrouped non-op components directly
+                        for comp in group_comps {
+                            let display_name = translate_component_name(&comp.name);
+                            lines.push(gutter_line(
+                                "",
+                                vec![
+                                    Span::styled(
+                                        component_status_icon(&comp.status),
+                                        component_status_style(&comp.status),
+                                    ),
+                                    Span::raw(" "),
+                                    Span::raw(display_name),
+                                    Span::raw("  "),
+                                    Span::styled(
+                                        comp.status.clone(),
+                                        component_status_style(&comp.status),
+                                    ),
+                                ],
+                            ));
+                        }
+                    } else {
+                        // Group header with breakdown
+                        let group_total = components
+                            .iter()
+                            .filter(|c| c.group_name.as_deref() == Some(group_key))
+                            .count();
+                        let worst_icon = group_comps
+                            .iter()
+                            .map(|c| component_status_icon(&c.status))
+                            .min_by_key(|icon| match *icon {
+                                "✕" => 0,
+                                "◐" => 1,
+                                "◆" => 2,
+                                _ => 3,
+                            })
+                            .unwrap_or("?");
+                        let worst_style = component_status_style(
+                            group_comps
+                                .iter()
+                                .map(|c| c.status.as_str())
+                                .min_by_key(|s| match component_status_icon(s) {
+                                    "✕" => 0,
+                                    "◐" => 1,
+                                    "◆" => 2,
+                                    _ => 3,
+                                })
+                                .unwrap_or("unknown"),
+                        );
+                        lines.push(gutter_line(
+                            "",
+                            vec![
+                                Span::styled(worst_icon, worst_style),
+                                Span::raw(" "),
+                                Span::styled(
+                                    group_key.clone(),
+                                    Style::default().add_modifier(Modifier::BOLD),
+                                ),
+                                Span::styled(
+                                    format!("  ({} of {})", group_comps.len(), group_total),
+                                    Style::default().fg(Color::DarkGray),
+                                ),
+                            ],
+                        ));
 
-                for comp in group_comps {
-                    let tag = if first_comp_line { "COMP" } else { "" };
-                    first_comp_line = false;
-                    let display_name = translate_component_name(&comp.name);
-                    lines.push(gutter_line(
-                        tag,
-                        vec![
-                            Span::styled(
-                                component_status_icon(&comp.status),
-                                component_status_style(&comp.status),
-                            ),
-                            Span::raw(" "),
-                            Span::raw(format!("{:<width$}", display_name, width = max_name_width)),
-                            Span::raw("  "),
-                            Span::styled(comp.status.clone(), component_status_style(&comp.status)),
-                        ],
-                    ));
+                        // Nested non-op components within this group
+                        for comp in group_comps {
+                            let display_name = translate_component_name(&comp.name);
+                            lines.push(gutter_line(
+                                "",
+                                vec![
+                                    Span::raw("  "),
+                                    Span::styled(
+                                        component_status_icon(&comp.status),
+                                        component_status_style(&comp.status),
+                                    ),
+                                    Span::raw(" "),
+                                    Span::raw(display_name),
+                                    Span::raw("  "),
+                                    Span::styled(
+                                        comp.status.clone(),
+                                        component_status_style(&comp.status),
+                                    ),
+                                ],
+                            ));
+                        }
+                    }
                 }
             }
         }
