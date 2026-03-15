@@ -27,12 +27,7 @@ pub struct StatusFetcher {
 }
 
 impl StatusFetcher {
-    pub fn new() -> Self {
-        let client = reqwest::Client::builder()
-            .user_agent("models-tui")
-            .connect_timeout(Duration::from_secs(5))
-            .build()
-            .expect("Failed to build HTTP client");
+    pub fn with_client(client: reqwest::Client) -> Self {
         Self { client }
     }
 
@@ -252,12 +247,35 @@ async fn fetch_single(
             let official_result =
                 fetch_official(&client, official, google_products.as_deref()).await;
 
+            let official_err = official_result.as_ref().err().cloned();
+
             let fallback_result = match (&official_result, fallback_source_slug) {
-                (Ok(_), _) | (_, None) => None,
-                (Err(_), Some(slug)) => fetch_fallback(&client, slug).await.ok(),
+                (Ok(_), _) | (_, None) => Ok(None),
+                (Err(_), Some(slug)) => match fetch_fallback(&client, slug).await {
+                    Ok(snapshot) => Ok(Some(snapshot)),
+                    Err(e) => Err(e),
+                },
             };
 
-            resolve_provider_status(&seed, official_result.ok(), fallback_result)
+            let fallback_err = fallback_result.as_ref().err().cloned();
+
+            let mut status = resolve_provider_status(
+                &seed,
+                official_result.ok(),
+                fallback_result.ok().flatten(),
+            );
+
+            // Populate per-provider error when both sources failed
+            if status.provenance == StatusProvenance::Unavailable {
+                if let Some(ref off_err) = official_err {
+                    status.error = Some(match &fallback_err {
+                        Some(fb_err) => format!("official: {off_err}; fallback: {fb_err}"),
+                        None => format!("official: {off_err}"),
+                    });
+                }
+            }
+
+            status
         }
         StatusStrategy::Unverified => resolve_provider_status(&seed, None, None),
     }

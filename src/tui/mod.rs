@@ -54,7 +54,6 @@ pub enum FetchResult {
 struct StatusRuntime {
     rx: mpsc::Receiver<(u64, StatusFetchResult)>,
     tx: mpsc::Sender<(u64, StatusFetchResult)>,
-    #[allow(dead_code)]
     client: reqwest::Client,
     last_fetch_time: Option<Instant>,
     fetch_generation: u64,
@@ -167,22 +166,21 @@ pub async fn run(providers: ProvidersMap) -> Result<()> {
     });
 
     let (status_tx, status_rx) = mpsc::channel(4);
-    if let Some(ref status_app) = app.status_app {
-        let seeds = status_app.fetch_seeds();
-        let tx = status_tx.clone();
-        tokio::spawn(async move {
-            let fetcher = StatusFetcher::new();
-            let result = fetcher.fetch(&seeds).await;
-            let _ = tx.send((0, result)).await;
-        });
-    }
-
-    // Main loop - pass client and sender for dynamic fetches
     let status_client = reqwest::Client::builder()
         .user_agent("models-tui")
         .connect_timeout(Duration::from_secs(5))
         .build()
         .expect("Failed to build HTTP client");
+    if let Some(ref status_app) = app.status_app {
+        let seeds = status_app.fetch_seeds();
+        let tx = status_tx.clone();
+        let fetcher = StatusFetcher::with_client(status_client.clone());
+        tokio::spawn(async move {
+            let result = fetcher.fetch(&seeds).await;
+            let _ = tx.send((0, result)).await;
+        });
+    }
+
     let status_runtime = StatusRuntime {
         rx: status_rx,
         tx: status_tx,
@@ -316,8 +314,8 @@ fn run_app(
                     runtime.status.last_fetch_time = Some(Instant::now());
                     let seeds = status_app.fetch_seeds();
                     let tx = runtime.status.tx.clone();
+                    let fetcher = StatusFetcher::with_client(runtime.status.client.clone());
                     tokio::spawn(async move {
-                        let fetcher = StatusFetcher::new();
                         let result = fetcher.fetch(&seeds).await;
                         let _ = tx.send((gen, result)).await;
                     });
