@@ -307,7 +307,7 @@ fn run_app(
                 .status
                 .last_fetch_time
                 .is_some_and(|t| t.elapsed() < Duration::from_secs(2));
-            if (force || stale) && !recent {
+            if force || (stale && !recent) {
                 if let Some(ref status_app) = app.status_app {
                     runtime.status.fetch_generation += 1;
                     let gen = runtime.status.fetch_generation;
@@ -320,6 +320,8 @@ fn run_app(
                         let _ = tx.send((gen, result)).await;
                     });
                 }
+            } else if let Some(ref mut status_app) = app.status_app {
+                status_app.loading = false;
             }
         }
 
