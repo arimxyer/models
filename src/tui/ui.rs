@@ -1439,7 +1439,7 @@ fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
     }
 
     let list = List::new(items);
-    let mut state = app.model_list_state.clone();
+    let mut state = app.model_list_state;
     f.render_stateful_widget(list, inner_area, &mut state);
 }
 
@@ -1668,7 +1668,7 @@ fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut App) {
     let list = List::new(items);
 
     // Offset by 1 for header row
-    let mut state = agents_app.agent_list_state.clone();
+    let mut state = agents_app.agent_list_state;
     if let Some(selected) = state.selected() {
         state.select(Some(selected + 1));
     }
@@ -2579,7 +2579,7 @@ fn draw_benchmark_creators(f: &mut Frame, area: Rect, app: &mut App) {
         )
         .highlight_symbol(caret);
 
-    let mut state = bench_app.creator_list_state.clone();
+    let mut state = bench_app.creator_list_state;
     f.render_stateful_widget(list, chunks[1], &mut state);
 }
 
@@ -2748,7 +2748,7 @@ fn draw_benchmark_list_compact(f: &mut Frame, area: Rect, app: &mut App) {
         )
         .highlight_symbol("");
 
-    let mut state = bench_app.list_state.clone();
+    let mut state = bench_app.list_state;
     state.select(Some(bench_app.selected));
     f.render_stateful_widget(list, inner_area, &mut state);
 }
@@ -2942,7 +2942,7 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
     }
 
     let list = List::new(items);
-    let mut state = bench_app.list_state.clone();
+    let mut state = bench_app.list_state;
     // Offset by 1 for the header row
     state.select(Some(bench_app.selected + 1));
     f.render_stateful_widget(list, inner_area, &mut state);
