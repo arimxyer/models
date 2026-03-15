@@ -1,6 +1,10 @@
+use std::sync::Arc;
+use std::time::Duration;
+
 use regex::Regex;
 use serde::Deserialize;
 use serde_json::Value;
+use tokio::time::timeout;
 
 use crate::status::{
     ActiveIncident, ComponentStatus, IncidentUpdate, OfficialStatusSource, ProviderHealth,
@@ -26,17 +30,16 @@ impl StatusFetcher {
     pub fn new() -> Self {
         let client = reqwest::Client::builder()
             .user_agent("models-tui")
+            .connect_timeout(Duration::from_secs(5))
             .build()
             .expect("Failed to build HTTP client");
         Self { client }
     }
 
     pub async fn fetch(&self, seeds: &[StatusProviderSeed]) -> StatusFetchResult {
-        let mut entries = Vec::with_capacity(seeds.len());
-        let mut successes = 0usize;
         let mut last_error: Option<String> = None;
 
-        let google_products = if seeds.iter().any(|seed| {
+        let needs_google = seeds.iter().any(|seed| {
             matches!(
                 seed.strategy,
                 StatusStrategy::OfficialFirst {
@@ -44,9 +47,11 @@ impl StatusFetcher {
                     ..
                 }
             )
-        }) {
-            match self.fetch_google_products().await {
-                Ok(products) => Some(products),
+        });
+
+        let google_products: Option<Arc<GoogleProductsResponse>> = if needs_google {
+            match fetch_google_products(&self.client).await {
+                Ok(p) => Some(Arc::new(p)),
                 Err(err) => {
                     last_error = Some(err);
                     None
@@ -56,41 +61,17 @@ impl StatusFetcher {
             None
         };
 
+        let mut entries = Vec::with_capacity(seeds.len());
+        let mut successes = 0usize;
+
         for seed in seeds {
-            let resolved = match seed.strategy {
-                StatusStrategy::OfficialFirst {
-                    official,
-                    fallback_source_slug,
-                } => {
-                    let official_result = self
-                        .fetch_official(official, google_products.as_ref())
-                        .await;
-                    if official_result.is_ok() {
-                        successes += 1;
-                    } else if let Err(err) = &official_result {
-                        last_error = Some(err.clone());
-                    }
-
-                    let fallback_result = match (official_result.as_ref(), fallback_source_slug) {
-                        (Ok(_), _) | (_, None) => None,
-                        (Err(_), Some(source_slug)) => match self.fetch_fallback(source_slug).await
-                        {
-                            Ok(snapshot) => {
-                                successes += 1;
-                                Some(snapshot)
-                            }
-                            Err(err) => {
-                                last_error = Some(err);
-                                None
-                            }
-                        },
-                    };
-
-                    resolve_provider_status(seed, official_result.ok(), fallback_result)
-                }
-                StatusStrategy::Unverified => resolve_provider_status(seed, None, None),
-            };
-
+            let resolved =
+                fetch_single(self.client.clone(), seed.clone(), google_products.clone()).await;
+            if resolved.health != ProviderHealth::Unknown
+                || resolved.provenance != StatusProvenance::Unavailable
+            {
+                successes += 1;
+            }
             entries.push(resolved);
         }
 
@@ -109,84 +90,15 @@ impl StatusFetcher {
 
         StatusFetchResult::Fresh(entries)
     }
+}
 
-    async fn fetch_official(
-        &self,
-        source: OfficialStatusSource,
-        google_products: Option<&GoogleProductsResponse>,
-    ) -> Result<OfficialSnapshot, String> {
-        match source.source_method() {
-            StatusSourceMethod::StatuspageV2 => {
-                let body = self.fetch_text(source.endpoint_url()).await?;
-                parse_statuspage_v2_summary(source, &body)
-            }
-            StatusSourceMethod::IncidentIoShim => {
-                let body = self.fetch_text(source.endpoint_url()).await?;
-                let mut snapshot = parse_statuspage_v2_summary(source, &body)?;
-                let incidents_url = format!("{}/api/v2/incidents.json", source.page_url());
-                if let Ok(resp) = self.client.get(&incidents_url).send().await {
-                    if let Ok(text) = resp.text().await {
-                        if let Ok(incidents) = parse_incidents_json(&text) {
-                            snapshot.incidents = incidents;
-                        }
-                    }
-                }
-                Ok(snapshot)
-            }
-            StatusSourceMethod::BetterStack => {
-                let body = self.fetch_text(source.endpoint_url()).await?;
-                parse_better_stack(source, &body)
-            }
-            StatusSourceMethod::OnlineOrNot => {
-                let body = self.fetch_text(source.endpoint_url()).await?;
-                parse_onlineornot(source, &body)
-            }
-            StatusSourceMethod::StatusIo => {
-                let body = self.fetch_text(source.endpoint_url()).await?;
-                parse_status_io(source, &body)
-            }
-            StatusSourceMethod::Instatus => {
-                let body = self.fetch_text(source.endpoint_url()).await?;
-                let mut snapshot = parse_instatus_summary(source, &body)?;
-                let components_url = format!("{}/v2/components.json", source.page_url());
-                if let Ok(resp) = self.client.get(&components_url).send().await {
-                    if let Ok(text) = resp.text().await {
-                        if let Ok(components) = parse_instatus_components(&text) {
-                            snapshot.components = components;
-                        }
-                    }
-                }
-                Ok(snapshot)
-            }
-            StatusSourceMethod::Feed => {
-                let body = self.fetch_text(source.endpoint_url()).await?;
-                parse_feed(source, &body)
-            }
-            StatusSourceMethod::GoogleCloudJson => {
-                let products =
-                    google_products.ok_or_else(|| "missing google products catalog".to_string())?;
-                let product = products
-                    .products
-                    .iter()
-                    .find(|product| product.title == "Vertex Gemini API")
-                    .ok_or_else(|| {
-                        "Vertex Gemini API not found in Google products catalog".to_string()
-                    })?;
+// ---------------------------------------------------------------------------
+// Free async functions (extracted for future JoinSet::spawn compatibility)
+// ---------------------------------------------------------------------------
 
-                let body = self.fetch_text(source.endpoint_url()).await?;
-                let incidents: Vec<GoogleIncident> =
-                    serde_json::from_str(&body).map_err(|err| err.to_string())?;
-                Ok(OfficialSnapshot::from_google(product, &incidents))
-            }
-            StatusSourceMethod::ApiStatusCheck => {
-                Err("ApiStatusCheck is not an official source method".to_string())
-            }
-        }
-    }
-
-    async fn fetch_text(&self, url: &str) -> Result<String, String> {
-        let response = self
-            .client
+async fn fetch_text(client: &reqwest::Client, url: &str) -> Result<String, String> {
+    timeout(Duration::from_secs(5), async {
+        let response = client
             .get(url)
             .send()
             .await
@@ -197,16 +109,96 @@ impl StatusFetcher {
         }
 
         response.text().await.map_err(|err| err.to_string())
-    }
+    })
+    .await
+    .map_err(|_| "timed out after 5s".to_string())?
+}
 
-    async fn fetch_google_products(&self) -> Result<GoogleProductsResponse, String> {
-        let body = self.fetch_text(GOOGLE_PRODUCTS_URL).await?;
-        serde_json::from_str(&body).map_err(|err| err.to_string())
-    }
+async fn fetch_google_products(client: &reqwest::Client) -> Result<GoogleProductsResponse, String> {
+    let body = fetch_text(client, GOOGLE_PRODUCTS_URL).await?;
+    serde_json::from_str(&body).map_err(|err| err.to_string())
+}
 
-    async fn fetch_fallback(&self, source_slug: &str) -> Result<FallbackSnapshot, String> {
-        let response = self
-            .client
+async fn fetch_official(
+    client: &reqwest::Client,
+    source: OfficialStatusSource,
+    google_products: Option<&GoogleProductsResponse>,
+) -> Result<OfficialSnapshot, String> {
+    match source.source_method() {
+        StatusSourceMethod::StatuspageV2 => {
+            let body = fetch_text(client, source.endpoint_url()).await?;
+            parse_statuspage_v2_summary(source, &body)
+        }
+        StatusSourceMethod::IncidentIoShim => {
+            let body = fetch_text(client, source.endpoint_url()).await?;
+            let mut snapshot = parse_statuspage_v2_summary(source, &body)?;
+            let incidents_url = format!("{}/api/v2/incidents.json", source.page_url());
+            if let Ok(resp) = client.get(&incidents_url).send().await {
+                if let Ok(text) = resp.text().await {
+                    if let Ok(incidents) = parse_incidents_json(&text) {
+                        snapshot.incidents = incidents;
+                    }
+                }
+            }
+            Ok(snapshot)
+        }
+        StatusSourceMethod::BetterStack => {
+            let body = fetch_text(client, source.endpoint_url()).await?;
+            parse_better_stack(source, &body)
+        }
+        StatusSourceMethod::OnlineOrNot => {
+            let body = fetch_text(client, source.endpoint_url()).await?;
+            parse_onlineornot(source, &body)
+        }
+        StatusSourceMethod::StatusIo => {
+            let body = fetch_text(client, source.endpoint_url()).await?;
+            parse_status_io(source, &body)
+        }
+        StatusSourceMethod::Instatus => {
+            let body = fetch_text(client, source.endpoint_url()).await?;
+            let mut snapshot = parse_instatus_summary(source, &body)?;
+            let components_url = format!("{}/v2/components.json", source.page_url());
+            if let Ok(resp) = client.get(&components_url).send().await {
+                if let Ok(text) = resp.text().await {
+                    if let Ok(components) = parse_instatus_components(&text) {
+                        snapshot.components = components;
+                    }
+                }
+            }
+            Ok(snapshot)
+        }
+        StatusSourceMethod::Feed => {
+            let body = fetch_text(client, source.endpoint_url()).await?;
+            parse_feed(source, &body)
+        }
+        StatusSourceMethod::GoogleCloudJson => {
+            let products =
+                google_products.ok_or_else(|| "missing google products catalog".to_string())?;
+            let product = products
+                .products
+                .iter()
+                .find(|product| product.title == "Vertex Gemini API")
+                .ok_or_else(|| {
+                    "Vertex Gemini API not found in Google products catalog".to_string()
+                })?;
+
+            let body = fetch_text(client, source.endpoint_url()).await?;
+            let incidents: Vec<GoogleIncident> =
+                serde_json::from_str(&body).map_err(|err| err.to_string())?;
+            Ok(OfficialSnapshot::from_google(product, &incidents))
+        }
+        StatusSourceMethod::ApiStatusCheck => {
+            Err("ApiStatusCheck is not an official source method".to_string())
+        }
+    }
+}
+
+async fn fetch_fallback(
+    client: &reqwest::Client,
+    source_slug: &str,
+) -> Result<FallbackSnapshot, String> {
+    timeout(Duration::from_secs(5), async {
+        let response = client
             .get(format!("{API_STATUS_CHECK_URL}{source_slug}"))
             .send()
             .await
@@ -223,6 +215,32 @@ impl StatusFetcher {
         let payload: ApiStatusCheckResponse =
             response.json().await.map_err(|err| err.to_string())?;
         Ok(FallbackSnapshot::from_api_status(payload))
+    })
+    .await
+    .map_err(|_| "timed out after 5s".to_string())?
+}
+
+async fn fetch_single(
+    client: reqwest::Client,
+    seed: StatusProviderSeed,
+    google_products: Option<Arc<GoogleProductsResponse>>,
+) -> ProviderStatus {
+    match seed.strategy {
+        StatusStrategy::OfficialFirst {
+            official,
+            fallback_source_slug,
+        } => {
+            let official_result =
+                fetch_official(&client, official, google_products.as_deref()).await;
+
+            let fallback_result = match (&official_result, fallback_source_slug) {
+                (Ok(_), _) | (_, None) => None,
+                (Err(_), Some(slug)) => fetch_fallback(&client, slug).await.ok(),
+            };
+
+            resolve_provider_status(&seed, official_result.ok(), fallback_result)
+        }
+        StatusStrategy::Unverified => resolve_provider_status(&seed, None, None),
     }
 }
 
