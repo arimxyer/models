@@ -65,6 +65,7 @@ pub enum StatusProvenance {
 }
 
 impl StatusProvenance {
+    #[allow(dead_code)]
     pub fn label(&self) -> &'static str {
         match self {
             Self::Official => "Official",
@@ -75,11 +76,17 @@ impl StatusProvenance {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum StatusSourceMethod {
     StatuspageV2,
     Feed,
     GoogleCloudJson,
     ApiStatusCheck,
+    BetterStack,
+    IncidentIoShim,
+    OnlineOrNot,
+    StatusIo,
+    Instatus,
 }
 
 impl StatusSourceMethod {
@@ -89,6 +96,11 @@ impl StatusSourceMethod {
             Self::Feed => "RSS / Atom Feed",
             Self::GoogleCloudJson => "Google JSON",
             Self::ApiStatusCheck => "API Status Check",
+            Self::BetterStack => "Better Stack",
+            Self::IncidentIoShim => "incident.io",
+            Self::OnlineOrNot => "OnlineOrNot",
+            Self::StatusIo => "Status.io",
+            Self::Instatus => "Instatus",
         }
     }
 }
@@ -163,17 +175,17 @@ impl OfficialStatusSource {
     pub fn endpoint_url(&self) -> &'static str {
         match self {
             Self::OpenAi => "https://status.openai.com/api/v2/summary.json",
-            Self::Anthropic => "https://status.anthropic.com/api/v2/summary.json",
-            Self::OpenRouter => "https://status.openrouter.ai/incidents.rss",
+            Self::Anthropic => "https://status.claude.com/api/v2/summary.json",
+            Self::OpenRouter => "https://api.onlineornot.com/v1/status_pages/openrouter/summary",
             Self::GoogleGeminiJson => "https://status.cloud.google.com/incidents.json",
             Self::Moonshot => "https://status.moonshot.cn/api/v2/summary.json",
             Self::Xai => "https://status.x.ai/feed.xml",
-            Self::GitLab => "https://status.gitlab.com/pages/5b36dc6502d06804c08349f7/rss",
-            Self::Poe => "https://status.poe.com/feed.rss",
-            Self::NanoGpt => "https://status.nano-gpt.com/feed.rss",
-            Self::Nvidia => "https://status.ngc.nvidia.com/history.rss",
+            Self::GitLab => "https://api.status.io/1.0/status/5b36dc6502d06804c08349f7",
+            Self::Poe => "https://status.poe.com/api/v2/summary.json",
+            Self::NanoGpt => "https://status.nano-gpt.com/index.json",
+            Self::Nvidia => "https://status.ngc.nvidia.com/api/v2/summary.json",
             Self::Vercel => "https://www.vercel-status.com/api/v2/summary.json",
-            Self::Helicone => "https://status.helicone.ai/feed.rss",
+            Self::Helicone => "https://status.helicone.ai/index.json",
             Self::Groq => "https://groqstatus.com/api/v2/summary.json",
             Self::Cohere => "https://status.cohere.com/api/v2/summary.json",
             Self::Cerebras => "https://status.cerebras.ai/api/v2/summary.json",
@@ -183,16 +195,16 @@ impl OfficialStatusSource {
             Self::Cursor => "https://status.cursor.com/api/v2/summary.json",
             Self::GitHub => "https://www.githubstatus.com/api/v2/summary.json",
             Self::DeepSeek => "https://status.deepseek.com/api/v2/summary.json",
-            Self::Perplexity => "https://status.perplexity.com/feed",
-            Self::HuggingFace => "https://status.huggingface.co/feed.rss",
-            Self::TogetherAi => "https://status.together.ai/feed.rss",
+            Self::Perplexity => "https://status.perplexity.com/summary.json",
+            Self::HuggingFace => "https://status.huggingface.co/index.json",
+            Self::TogetherAi => "https://status.together.ai/index.json",
         }
     }
 
     pub fn page_url(&self) -> &'static str {
         match self {
             Self::OpenAi => "https://status.openai.com",
-            Self::Anthropic => "https://status.anthropic.com",
+            Self::Anthropic => "https://status.claude.com",
             Self::OpenRouter => "https://status.openrouter.ai",
             Self::GoogleGeminiJson => {
                 "https://status.cloud.google.com/products/Z0FZJAMvEB4j3NbCJs6B/history"
@@ -217,6 +229,39 @@ impl OfficialStatusSource {
             Self::Perplexity => "https://status.perplexity.com",
             Self::HuggingFace => "https://status.huggingface.co",
             Self::TogetherAi => "https://status.together.ai",
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn source_method(&self) -> StatusSourceMethod {
+        match self {
+            Self::Anthropic
+            | Self::Moonshot
+            | Self::Vercel
+            | Self::Cerebras
+            | Self::Cloudflare
+            | Self::Cursor
+            | Self::GitHub
+            | Self::DeepSeek
+            | Self::Nvidia => StatusSourceMethod::StatuspageV2,
+
+            Self::OpenAi | Self::Poe | Self::Groq | Self::Cohere => {
+                StatusSourceMethod::IncidentIoShim
+            }
+
+            Self::TogetherAi | Self::HuggingFace | Self::Helicone | Self::NanoGpt => {
+                StatusSourceMethod::BetterStack
+            }
+
+            Self::OpenRouter => StatusSourceMethod::OnlineOrNot,
+
+            Self::GitLab => StatusSourceMethod::StatusIo,
+
+            Self::Perplexity => StatusSourceMethod::Instatus,
+
+            Self::GoogleGeminiJson => StatusSourceMethod::GoogleCloudJson,
+
+            Self::Xai | Self::Aws | Self::Azure => StatusSourceMethod::Feed,
         }
     }
 }
@@ -300,20 +345,6 @@ pub const STATUS_REGISTRY: &[StatusRegistryEntry] = &[
             official: OfficialStatusSource::Moonshot,
             fallback_source_slug: Some("moonshot"),
         },
-        support_tier: StatusSupportTier::Required,
-    },
-    StatusRegistryEntry {
-        slug: "ollama",
-        display_name: "Ollama",
-        source_slug: "ollama",
-        strategy: StatusStrategy::Unverified,
-        support_tier: StatusSupportTier::Required,
-    },
-    StatusRegistryEntry {
-        slug: "qwen",
-        display_name: "Qwen",
-        source_slug: "qwen",
-        strategy: StatusStrategy::Unverified,
         support_tier: StatusSupportTier::Required,
     },
     StatusRegistryEntry {
@@ -509,14 +540,6 @@ pub const STATUS_REGISTRY: &[StatusRegistryEntry] = &[
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StatusProviderSeed {
-    pub slug: String,
-    pub display_name: String,
-    pub source_slug: String,
-    pub strategy: StatusStrategy,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ComponentStatus {
     pub name: String,
     pub status: String,
@@ -550,6 +573,14 @@ pub struct ScheduledMaintenance {
     pub scheduled_for: Option<String>,
     pub scheduled_until: Option<String>,
     pub affected_components: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StatusProviderSeed {
+    pub slug: String,
+    pub display_name: String,
+    pub source_slug: String,
+    pub strategy: StatusStrategy,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -715,8 +746,6 @@ mod tests {
             strategy_for_provider("nvidia"),
             StatusStrategy::OfficialFirst { .. }
         ));
-        assert_eq!(strategy_for_provider("ollama"), StatusStrategy::Unverified);
-        assert_eq!(strategy_for_provider("qwen"), StatusStrategy::Unverified);
     }
 
     #[test]

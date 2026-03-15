@@ -1,5 +1,6 @@
 use regex::Regex;
 use serde::Deserialize;
+use serde_json::Value;
 
 use crate::status::{
     ActiveIncident, ComponentStatus, IncidentUpdate, OfficialStatusSource, ProviderHealth,
@@ -114,60 +115,54 @@ impl StatusFetcher {
         source: OfficialStatusSource,
         google_products: Option<&GoogleProductsResponse>,
     ) -> Result<OfficialSnapshot, String> {
-        match source {
-            OfficialStatusSource::OpenAi
-            | OfficialStatusSource::Anthropic
-            | OfficialStatusSource::Moonshot
-            | OfficialStatusSource::Vercel
-            | OfficialStatusSource::Groq
-            | OfficialStatusSource::Cohere
-            | OfficialStatusSource::Cerebras
-            | OfficialStatusSource::Cloudflare
-            | OfficialStatusSource::Cursor
-            | OfficialStatusSource::GitHub
-            | OfficialStatusSource::DeepSeek => {
-                let response = self
-                    .client
-                    .get(source.endpoint_url())
-                    .send()
-                    .await
-                    .map_err(|err| err.to_string())?;
-
-                if !response.status().is_success() {
-                    return Err(format!("HTTP {}", response.status()));
-                }
-
-                let payload: OfficialSummaryResponse =
-                    response.json().await.map_err(|err| err.to_string())?;
-                Ok(OfficialSnapshot::from_summary(source, payload))
+        match source.source_method() {
+            StatusSourceMethod::StatuspageV2 => {
+                let body = self.fetch_text(source.endpoint_url()).await?;
+                parse_statuspage_v2_summary(source, &body)
             }
-            OfficialStatusSource::OpenRouter
-            | OfficialStatusSource::Xai
-            | OfficialStatusSource::GitLab
-            | OfficialStatusSource::Poe
-            | OfficialStatusSource::NanoGpt
-            | OfficialStatusSource::Nvidia
-            | OfficialStatusSource::Perplexity
-            | OfficialStatusSource::HuggingFace
-            | OfficialStatusSource::TogetherAi
-            | OfficialStatusSource::Helicone
-            | OfficialStatusSource::Aws
-            | OfficialStatusSource::Azure => {
-                let response = self
-                    .client
-                    .get(source.endpoint_url())
-                    .send()
-                    .await
-                    .map_err(|err| err.to_string())?;
-
-                if !response.status().is_success() {
-                    return Err(format!("HTTP {}", response.status()));
+            StatusSourceMethod::IncidentIoShim => {
+                let body = self.fetch_text(source.endpoint_url()).await?;
+                let mut snapshot = parse_statuspage_v2_summary(source, &body)?;
+                let incidents_url = format!("{}/api/v2/incidents.json", source.page_url());
+                if let Ok(resp) = self.client.get(&incidents_url).send().await {
+                    if let Ok(text) = resp.text().await {
+                        if let Ok(incidents) = parse_incidents_json(&text) {
+                            snapshot.incidents = incidents;
+                        }
+                    }
                 }
-
-                let body = response.text().await.map_err(|err| err.to_string())?;
+                Ok(snapshot)
+            }
+            StatusSourceMethod::BetterStack => {
+                let body = self.fetch_text(source.endpoint_url()).await?;
+                parse_better_stack(source, &body)
+            }
+            StatusSourceMethod::OnlineOrNot => {
+                let body = self.fetch_text(source.endpoint_url()).await?;
+                parse_onlineornot(source, &body)
+            }
+            StatusSourceMethod::StatusIo => {
+                let body = self.fetch_text(source.endpoint_url()).await?;
+                parse_status_io(source, &body)
+            }
+            StatusSourceMethod::Instatus => {
+                let body = self.fetch_text(source.endpoint_url()).await?;
+                let mut snapshot = parse_instatus_summary(source, &body)?;
+                let components_url = format!("{}/v2/components.json", source.page_url());
+                if let Ok(resp) = self.client.get(&components_url).send().await {
+                    if let Ok(text) = resp.text().await {
+                        if let Ok(components) = parse_instatus_components(&text) {
+                            snapshot.components = components;
+                        }
+                    }
+                }
+                Ok(snapshot)
+            }
+            StatusSourceMethod::Feed => {
+                let body = self.fetch_text(source.endpoint_url()).await?;
                 parse_feed(source, &body)
             }
-            OfficialStatusSource::GoogleGeminiJson => {
+            StatusSourceMethod::GoogleCloudJson => {
                 let products =
                     google_products.ok_or_else(|| "missing google products catalog".to_string())?;
                 let product = products
@@ -178,28 +173,21 @@ impl StatusFetcher {
                         "Vertex Gemini API not found in Google products catalog".to_string()
                     })?;
 
-                let response = self
-                    .client
-                    .get(source.endpoint_url())
-                    .send()
-                    .await
-                    .map_err(|err| err.to_string())?;
-
-                if !response.status().is_success() {
-                    return Err(format!("HTTP {}", response.status()));
-                }
-
+                let body = self.fetch_text(source.endpoint_url()).await?;
                 let incidents: Vec<GoogleIncident> =
-                    response.json().await.map_err(|err| err.to_string())?;
+                    serde_json::from_str(&body).map_err(|err| err.to_string())?;
                 Ok(OfficialSnapshot::from_google(product, &incidents))
+            }
+            StatusSourceMethod::ApiStatusCheck => {
+                Err("ApiStatusCheck is not an official source method".to_string())
             }
         }
     }
 
-    async fn fetch_google_products(&self) -> Result<GoogleProductsResponse, String> {
+    async fn fetch_text(&self, url: &str) -> Result<String, String> {
         let response = self
             .client
-            .get(GOOGLE_PRODUCTS_URL)
+            .get(url)
             .send()
             .await
             .map_err(|err| err.to_string())?;
@@ -208,7 +196,12 @@ impl StatusFetcher {
             return Err(format!("HTTP {}", response.status()));
         }
 
-        response.json().await.map_err(|err| err.to_string())
+        response.text().await.map_err(|err| err.to_string())
+    }
+
+    async fn fetch_google_products(&self) -> Result<GoogleProductsResponse, String> {
+        let body = self.fetch_text(GOOGLE_PRODUCTS_URL).await?;
+        serde_json::from_str(&body).map_err(|err| err.to_string())
     }
 
     async fn fetch_fallback(&self, source_slug: &str) -> Result<FallbackSnapshot, String> {
@@ -243,108 +236,10 @@ struct OfficialSnapshot {
     summary: Option<String>,
     components: Vec<ComponentStatus>,
     incidents: Vec<ActiveIncident>,
-    scheduled_maintenances: Vec<ScheduledMaintenance>,
+    maintenance: Vec<ScheduledMaintenance>,
 }
 
 impl OfficialSnapshot {
-    fn from_summary(source: OfficialStatusSource, payload: OfficialSummaryResponse) -> Self {
-        let incident_summary = payload.incidents.first().map(|incident| {
-            format!(
-                "{} ({}, {})",
-                incident.name, incident.impact, incident.status
-            )
-        });
-
-        let health = match payload.status.indicator.as_deref() {
-            Some("none") => ProviderHealth::Operational,
-            Some("minor") => ProviderHealth::Degraded,
-            Some("major") | Some("critical") => ProviderHealth::Outage,
-            Some("maintenance") => ProviderHealth::Maintenance,
-            _ => ProviderHealth::from_api_status(&payload.status.description),
-        };
-
-        // Build group name lookup: components where group==true are group headers
-        let group_names: Vec<(&str, &str)> = payload
-            .components
-            .iter()
-            .filter(|c| c.group == Some(true))
-            .filter_map(|c| c.id.as_deref().map(|id| (id, c.name.as_str())))
-            .collect();
-
-        let components: Vec<ComponentStatus> = payload
-            .components
-            .iter()
-            .filter(|c| c.group != Some(true))
-            .map(|c| {
-                let group_name = c.group_id.as_deref().and_then(|gid| {
-                    group_names
-                        .iter()
-                        .find(|(id, _)| *id == gid)
-                        .map(|(_, name)| (*name).to_string())
-                });
-                ComponentStatus {
-                    name: c.name.clone(),
-                    status: c.status.clone(),
-                    group_name,
-                }
-            })
-            .collect();
-
-        let incidents: Vec<ActiveIncident> = payload
-            .incidents
-            .iter()
-            .map(|inc| {
-                let latest_update = inc.incident_updates.first().map(|u| IncidentUpdate {
-                    status: u.status.clone(),
-                    body: u.body.clone(),
-                    created_at: u.created_at.clone(),
-                });
-                ActiveIncident {
-                    name: inc.name.clone(),
-                    status: inc.status.clone(),
-                    impact: inc.impact.clone(),
-                    shortlink: inc.shortlink.clone(),
-                    created_at: inc.created_at.clone(),
-                    updated_at: inc.updated_at.clone(),
-                    latest_update,
-                    affected_components: inc.components.iter().map(|c| c.name.clone()).collect(),
-                }
-            })
-            .collect();
-
-        let scheduled_maintenances: Vec<ScheduledMaintenance> = payload
-            .scheduled_maintenances
-            .iter()
-            .map(|m| ScheduledMaintenance {
-                name: m.name.clone(),
-                status: m.status.clone(),
-                impact: m.impact.clone(),
-                scheduled_for: m.scheduled_for.clone(),
-                scheduled_until: m.scheduled_until.clone(),
-                affected_components: m.components.iter().map(|c| c.name.clone()).collect(),
-            })
-            .collect();
-
-        Self {
-            label: payload
-                .page
-                .name
-                .or_else(|| Some(source.label().to_string()))
-                .unwrap_or_else(|| source.label().to_string()),
-            method: StatusSourceMethod::StatuspageV2,
-            health,
-            official_url: payload
-                .page
-                .url
-                .unwrap_or_else(|| source.page_url().to_string()),
-            last_checked: payload.page.updated_at,
-            summary: incident_summary.or(Some(payload.status.description)),
-            components,
-            incidents,
-            scheduled_maintenances,
-        }
-    }
-
     fn from_google(product: &GoogleProduct, incidents: &[GoogleIncident]) -> Self {
         let matching: Vec<_> = incidents
             .iter()
@@ -378,36 +273,6 @@ impl OfficialSnapshot {
         let summary = latest.map(|incident| incident.external_desc.clone());
         let last_checked = latest.and_then(|incident| incident.modified.clone());
 
-        let active_incidents: Vec<ActiveIncident> = matching
-            .iter()
-            .map(|incident| {
-                let impact = match incident.severity.as_str() {
-                    "high" => "major".to_string(),
-                    "medium" => "minor".to_string(),
-                    _ => "none".to_string(),
-                };
-                let status = if incident.end.is_none() {
-                    "active".to_string()
-                } else {
-                    "resolved".to_string()
-                };
-                let shortlink = incident
-                    .uri
-                    .as_ref()
-                    .map(|uri| format!("https://status.cloud.google.com{uri}"));
-                ActiveIncident {
-                    name: incident.external_desc.clone(),
-                    status,
-                    impact,
-                    shortlink,
-                    created_at: incident.begin.clone(),
-                    updated_at: incident.end.clone(),
-                    latest_update: None,
-                    affected_components: vec![],
-                }
-            })
-            .collect();
-
         Self {
             label: product.title.clone(),
             method: StatusSourceMethod::GoogleCloudJson,
@@ -419,8 +284,8 @@ impl OfficialSnapshot {
             last_checked,
             summary,
             components: Vec::new(),
-            incidents: active_incidents,
-            scheduled_maintenances: Vec::new(),
+            incidents: Vec::new(),
+            maintenance: Vec::new(),
         }
     }
 }
@@ -448,34 +313,641 @@ impl FallbackSnapshot {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Normalize component status strings from various platforms
+// ---------------------------------------------------------------------------
+
+fn normalize_component_status(raw: &str) -> String {
+    match raw {
+        // Instatus (UPPERCASECONCATENATED)
+        "OPERATIONAL" => "operational".to_string(),
+        "DEGRADEDPERFORMANCE" => "degraded_performance".to_string(),
+        "UNDERMAINTENANCE" => "under_maintenance".to_string(),
+        "MAJOROUTAGE" => "major_outage".to_string(),
+        "PARTIALOUTAGE" => "partial_outage".to_string(),
+        // Better Stack / OnlineOrNot
+        "degraded" => "degraded_performance".to_string(),
+        "downtime" | "outage" => "major_outage".to_string(),
+        // Already normalized or unknown — lowercase passthrough
+        other => other.to_lowercase(),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Statuspage V2 / incident.io parser (summary.json)
+// ---------------------------------------------------------------------------
+
+fn parse_statuspage_v2_summary(
+    source: OfficialStatusSource,
+    body: &str,
+) -> Result<OfficialSnapshot, String> {
+    let payload: OfficialSummaryResponse =
+        serde_json::from_str(body).map_err(|err| err.to_string())?;
+
+    let incident_summary = payload.incidents.first().map(|incident| {
+        format!(
+            "{} ({}, {})",
+            incident.name, incident.impact, incident.status
+        )
+    });
+
+    let components = payload
+        .components
+        .iter()
+        .map(|c| ComponentStatus {
+            name: c.name.clone(),
+            status: c.status.clone(),
+            group_name: c.group_name.clone(),
+        })
+        .collect();
+
+    let incidents = payload
+        .incidents
+        .iter()
+        .map(|i| ActiveIncident {
+            name: i.name.clone(),
+            status: i.status.clone(),
+            impact: i.impact.clone(),
+            shortlink: i.shortlink.clone(),
+            created_at: i.created_at.clone(),
+            updated_at: i.updated_at.clone(),
+            latest_update: i.incident_updates.first().map(|u| IncidentUpdate {
+                status: u.status.clone(),
+                body: u.body.clone(),
+                created_at: u.created_at.clone().unwrap_or_default(),
+            }),
+            affected_components: i.components.iter().map(|c| c.name.clone()).collect(),
+        })
+        .collect();
+
+    let maintenance = payload
+        .scheduled_maintenances
+        .iter()
+        .map(|m| ScheduledMaintenance {
+            name: m.name.clone(),
+            status: m.status.clone(),
+            impact: m.impact.clone().unwrap_or_default(),
+            scheduled_for: m.scheduled_for.clone(),
+            scheduled_until: m.scheduled_until.clone(),
+            affected_components: m.components.iter().map(|c| c.name.clone()).collect(),
+        })
+        .collect();
+
+    Ok(OfficialSnapshot {
+        label: payload
+            .page
+            .name
+            .or_else(|| Some(source.label().to_string()))
+            .unwrap_or_else(|| source.label().to_string()),
+        method: source.source_method(),
+        health: ProviderHealth::from_api_status(&payload.status.description),
+        official_url: payload
+            .page
+            .url
+            .unwrap_or_else(|| source.page_url().to_string()),
+        last_checked: payload.page.updated_at,
+        summary: incident_summary.or(Some(payload.status.description)),
+        components,
+        incidents,
+        maintenance,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Incidents JSON parser (for incident.io second call)
+// ---------------------------------------------------------------------------
+
+fn parse_incidents_json(body: &str) -> Result<Vec<ActiveIncident>, String> {
+    let v: Value = serde_json::from_str(body).map_err(|err| err.to_string())?;
+    let incidents = v
+        .get("incidents")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .map(|i| ActiveIncident {
+                    name: i
+                        .get("name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string(),
+                    status: i
+                        .get("status")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string(),
+                    impact: i
+                        .get("impact")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string(),
+                    shortlink: i
+                        .get("shortlink")
+                        .and_then(|v| v.as_str())
+                        .map(String::from),
+                    created_at: i
+                        .get("created_at")
+                        .and_then(|v| v.as_str())
+                        .map(String::from),
+                    updated_at: i
+                        .get("updated_at")
+                        .and_then(|v| v.as_str())
+                        .map(String::from),
+                    latest_update: i
+                        .get("incident_updates")
+                        .and_then(|v| v.as_array())
+                        .and_then(|arr| arr.first())
+                        .map(|u| IncidentUpdate {
+                            status: u
+                                .get("status")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or_default()
+                                .to_string(),
+                            body: u
+                                .get("body")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or_default()
+                                .to_string(),
+                            created_at: u
+                                .get("created_at")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or_default()
+                                .to_string(),
+                        }),
+                    affected_components: i
+                        .get("components")
+                        .and_then(|v| v.as_array())
+                        .map(|arr| {
+                            arr.iter()
+                                .filter_map(|c| {
+                                    c.get("name").and_then(|v| v.as_str()).map(String::from)
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default(),
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    Ok(incidents)
+}
+
+// ---------------------------------------------------------------------------
+// Better Stack parser (JSON:API format)
+// ---------------------------------------------------------------------------
+
+fn parse_better_stack(
+    source: OfficialStatusSource,
+    body: &str,
+) -> Result<OfficialSnapshot, String> {
+    let v: Value = serde_json::from_str(body).map_err(|err| err.to_string())?;
+
+    let aggregate_state = v
+        .pointer("/data/attributes/aggregate_state")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
+
+    let health = match aggregate_state {
+        "operational" => ProviderHealth::Operational,
+        "degraded" => ProviderHealth::Degraded,
+        "downtime" => ProviderHealth::Outage,
+        _ => ProviderHealth::Unknown,
+    };
+
+    let included = v.get("included").and_then(|v| v.as_array());
+
+    let components = included
+        .map(|arr| {
+            arr.iter()
+                .filter(|item| {
+                    item.get("type").and_then(|v| v.as_str()) == Some("status_page_resource")
+                })
+                .filter_map(|item| {
+                    let name = item
+                        .pointer("/attributes/resource_name")
+                        .and_then(|v| v.as_str())?;
+                    let status = item
+                        .pointer("/attributes/status")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("operational");
+                    Some(ComponentStatus {
+                        name: name.to_string(),
+                        status: normalize_component_status(status),
+                        group_name: None,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let incidents: Vec<ActiveIncident> = included
+        .map(|arr| {
+            arr.iter()
+                .filter(|item| item.get("type").and_then(|v| v.as_str()) == Some("status_report"))
+                .filter_map(|item| {
+                    let title = item.pointer("/attributes/title").and_then(|v| v.as_str())?;
+                    let message = item
+                        .pointer("/attributes/status_report_updates")
+                        .and_then(|v| v.as_array())
+                        .and_then(|arr| arr.first())
+                        .and_then(|u| u.get("message"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default();
+                    Some(ActiveIncident {
+                        name: title.to_string(),
+                        status: "investigating".to_string(),
+                        impact: message.to_string(),
+                        shortlink: None,
+                        created_at: None,
+                        updated_at: None,
+                        latest_update: None,
+                        affected_components: Vec::new(),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let summary = incidents
+        .first()
+        .map(|i| i.name.clone())
+        .or_else(|| Some(aggregate_state.to_string()));
+
+    Ok(OfficialSnapshot {
+        label: source.label().to_string(),
+        method: StatusSourceMethod::BetterStack,
+        health,
+        official_url: source.page_url().to_string(),
+        last_checked: None,
+        summary,
+        components,
+        incidents,
+        maintenance: Vec::new(),
+    })
+}
+
+// ---------------------------------------------------------------------------
+// OnlineOrNot parser
+// ---------------------------------------------------------------------------
+
+fn parse_onlineornot(source: OfficialStatusSource, body: &str) -> Result<OfficialSnapshot, String> {
+    let v: Value = serde_json::from_str(body).map_err(|err| err.to_string())?;
+
+    let result = v.get("result").ok_or("missing result field")?;
+
+    let status_str = result
+        .get("status")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
+
+    let health = match status_str {
+        "operational" | "up" => ProviderHealth::Operational,
+        "degraded" => ProviderHealth::Degraded,
+        "outage" | "down" => ProviderHealth::Outage,
+        _ => ProviderHealth::Unknown,
+    };
+
+    let components = result
+        .get("components")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|c| {
+                    let name = c.get("name").and_then(|v| v.as_str())?;
+                    let status = c
+                        .get("status")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("operational");
+                    Some(ComponentStatus {
+                        name: name.to_string(),
+                        status: normalize_component_status(status),
+                        group_name: None,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let incidents: Vec<ActiveIncident> = result
+        .get("active_incidents")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|i| {
+                    let name = i.get("name").and_then(|v| v.as_str())?;
+                    Some(ActiveIncident {
+                        name: name.to_string(),
+                        status: i
+                            .get("status")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or_default()
+                            .to_string(),
+                        impact: i
+                            .get("impact")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or_default()
+                            .to_string(),
+                        shortlink: None,
+                        created_at: None,
+                        updated_at: None,
+                        latest_update: None,
+                        affected_components: Vec::new(),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let maintenance: Vec<ScheduledMaintenance> = result
+        .get("scheduled_maintenance")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|m| {
+                    let name = m.get("name").and_then(|v| v.as_str())?;
+                    Some(ScheduledMaintenance {
+                        name: name.to_string(),
+                        status: m
+                            .get("status")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or_default()
+                            .to_string(),
+                        impact: String::new(),
+                        scheduled_for: None,
+                        scheduled_until: None,
+                        affected_components: Vec::new(),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let summary = incidents
+        .first()
+        .map(|i| i.name.clone())
+        .or_else(|| Some(status_str.to_string()));
+
+    Ok(OfficialSnapshot {
+        label: source.label().to_string(),
+        method: StatusSourceMethod::OnlineOrNot,
+        health,
+        official_url: source.page_url().to_string(),
+        last_checked: None,
+        summary,
+        components,
+        incidents,
+        maintenance,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Status.io parser
+// ---------------------------------------------------------------------------
+
+fn status_io_code_to_string(code: u64) -> String {
+    match code {
+        100 => "operational".to_string(),
+        300 => "degraded_performance".to_string(),
+        500 => "major_outage".to_string(),
+        600 => "under_maintenance".to_string(),
+        _ => format!("unknown_{code}"),
+    }
+}
+
+fn status_io_code_to_health(code: u64) -> ProviderHealth {
+    match code {
+        100 => ProviderHealth::Operational,
+        300 => ProviderHealth::Degraded,
+        500 => ProviderHealth::Outage,
+        600 => ProviderHealth::Maintenance,
+        _ => ProviderHealth::Unknown,
+    }
+}
+
+fn parse_status_io(source: OfficialStatusSource, body: &str) -> Result<OfficialSnapshot, String> {
+    let v: Value = serde_json::from_str(body).map_err(|err| err.to_string())?;
+
+    let result = v.get("result").ok_or("missing result field")?;
+
+    let overall_code = result
+        .pointer("/status_overall/status_code")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(100);
+
+    let health = status_io_code_to_health(overall_code);
+
+    let components: Vec<ComponentStatus> = result
+        .get("status")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .flat_map(|status_group| {
+                    let group_name = status_group
+                        .get("name")
+                        .and_then(|v| v.as_str())
+                        .map(String::from);
+                    status_group
+                        .get("containers")
+                        .and_then(|v| v.as_array())
+                        .into_iter()
+                        .flatten()
+                        .filter_map(move |c| {
+                            let name = c.get("name").and_then(|v| v.as_str())?;
+                            let code = c.get("status_code").and_then(|v| v.as_u64()).unwrap_or(100);
+                            Some(ComponentStatus {
+                                name: name.to_string(),
+                                status: status_io_code_to_string(code),
+                                group_name: group_name.clone(),
+                            })
+                        })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let incidents: Vec<ActiveIncident> = result
+        .get("incidents")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|i| {
+                    let name = i.get("name").and_then(|v| v.as_str())?;
+                    Some(ActiveIncident {
+                        name: name.to_string(),
+                        status: "investigating".to_string(),
+                        impact: "none".to_string(),
+                        shortlink: None,
+                        created_at: None,
+                        updated_at: None,
+                        latest_update: None,
+                        affected_components: Vec::new(),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let mut maintenance: Vec<ScheduledMaintenance> = Vec::new();
+    if let Some(maint) = result.get("maintenance") {
+        for key in &["active", "upcoming"] {
+            if let Some(arr) = maint.get(*key).and_then(|v| v.as_array()) {
+                for m in arr {
+                    if let Some(name) = m.get("name").and_then(|v| v.as_str()) {
+                        maintenance.push(ScheduledMaintenance {
+                            name: name.to_string(),
+                            status: (*key).to_string(),
+                            impact: String::new(),
+                            scheduled_for: None,
+                            scheduled_until: None,
+                            affected_components: Vec::new(),
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    let summary = incidents
+        .first()
+        .map(|i| i.name.clone())
+        .or_else(|| Some(status_io_code_to_string(overall_code)));
+
+    Ok(OfficialSnapshot {
+        label: source.label().to_string(),
+        method: StatusSourceMethod::StatusIo,
+        health,
+        official_url: source.page_url().to_string(),
+        last_checked: None,
+        summary,
+        components,
+        incidents,
+        maintenance,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Instatus parser
+// ---------------------------------------------------------------------------
+
+fn instatus_status_to_health(status: &str) -> ProviderHealth {
+    match status {
+        "UP" | "OPERATIONAL" => ProviderHealth::Operational,
+        "HASISSUES" | "DEGRADEDPERFORMANCE" => ProviderHealth::Degraded,
+        "MAJOROUTAGE" | "PARTIALOUTAGE" => ProviderHealth::Outage,
+        "UNDERMAINTENANCE" => ProviderHealth::Maintenance,
+        _ => ProviderHealth::Unknown,
+    }
+}
+
+fn parse_instatus_summary(
+    source: OfficialStatusSource,
+    body: &str,
+) -> Result<OfficialSnapshot, String> {
+    let v: Value = serde_json::from_str(body).map_err(|err| err.to_string())?;
+
+    let page_status = v
+        .pointer("/page/status")
+        .and_then(|v| v.as_str())
+        .unwrap_or("OPERATIONAL");
+
+    let health = instatus_status_to_health(page_status);
+
+    let incidents: Vec<ActiveIncident> = v
+        .get("activeIncidents")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|i| {
+                    let name = i.get("name").and_then(|v| v.as_str())?;
+                    Some(ActiveIncident {
+                        name: name.to_string(),
+                        status: i
+                            .get("status")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or_default()
+                            .to_string(),
+                        impact: i
+                            .get("impact")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or_default()
+                            .to_string(),
+                        shortlink: None,
+                        created_at: None,
+                        updated_at: None,
+                        latest_update: None,
+                        affected_components: Vec::new(),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let maintenance: Vec<ScheduledMaintenance> = v
+        .get("scheduledMaintenances")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|m| {
+                    let name = m.get("name").and_then(|v| v.as_str())?;
+                    Some(ScheduledMaintenance {
+                        name: name.to_string(),
+                        status: m
+                            .get("status")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or_default()
+                            .to_string(),
+                        impact: String::new(),
+                        scheduled_for: None,
+                        scheduled_until: None,
+                        affected_components: Vec::new(),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let summary = incidents
+        .first()
+        .map(|i| i.name.clone())
+        .or_else(|| Some(normalize_component_status(page_status)));
+
+    Ok(OfficialSnapshot {
+        label: source.label().to_string(),
+        method: StatusSourceMethod::Instatus,
+        health,
+        official_url: source.page_url().to_string(),
+        last_checked: None,
+        summary,
+        components: Vec::new(),
+        incidents,
+        maintenance,
+    })
+}
+
+fn parse_instatus_components(body: &str) -> Result<Vec<ComponentStatus>, String> {
+    let arr: Vec<Value> = serde_json::from_str(body).map_err(|err| err.to_string())?;
+    Ok(arr
+        .iter()
+        .filter_map(|c| {
+            let name = c.get("name").and_then(|v| v.as_str())?;
+            let status = c
+                .get("status")
+                .and_then(|v| v.as_str())
+                .unwrap_or("OPERATIONAL");
+            Some(ComponentStatus {
+                name: name.to_string(),
+                status: normalize_component_status(status),
+                group_name: None,
+            })
+        })
+        .collect())
+}
+
+// ---------------------------------------------------------------------------
+// RSS / Atom feed parsers
+// ---------------------------------------------------------------------------
+
 fn parse_feed(source: OfficialStatusSource, xml: &str) -> Result<OfficialSnapshot, String> {
     parse_atom_feed(source, xml).or_else(|_| parse_rss_feed(source, xml))
-}
-
-fn infer_status_from_feed(text: &str) -> String {
-    let upper = text.to_uppercase();
-    if upper.contains("RESOLVED") || upper.contains("RECOVERED") {
-        "resolved".to_string()
-    } else if upper.contains("MONITORING") {
-        "monitoring".to_string()
-    } else if upper.contains("IDENTIFIED") {
-        "identified".to_string()
-    } else if upper.contains("INVESTIGATING") {
-        "investigating".to_string()
-    } else {
-        "unknown".to_string()
-    }
-}
-
-fn infer_impact_from_feed(text: &str) -> String {
-    let upper = text.to_uppercase();
-    if upper.contains("MAJOR") || upper.contains("OUTAGE") {
-        "major".to_string()
-    } else if upper.contains("MINOR") || upper.contains("DEGRADED") || upper.contains("PARTIAL") {
-        "minor".to_string()
-    } else {
-        "none".to_string()
-    }
 }
 
 fn parse_rss_feed(source: OfficialStatusSource, xml: &str) -> Result<OfficialSnapshot, String> {
@@ -487,10 +959,6 @@ fn parse_rss_feed(source: OfficialStatusSource, xml: &str) -> Result<OfficialSna
     let item_title_re = Regex::new(r"(?s)<title>(.*?)</title>").map_err(|err| err.to_string())?;
     let item_description_re =
         Regex::new(r"(?s)<description>(.*?)</description>").map_err(|err| err.to_string())?;
-    let item_link_re = Regex::new(r"(?s)<link>(.*?)</link>").map_err(|err| err.to_string())?;
-    let item_pubdate_re =
-        Regex::new(r"(?s)<pubDate>(.*?)</pubDate>").map_err(|err| err.to_string())?;
-
     let channel_title = title_re
         .captures(xml)
         .and_then(|caps| caps.get(1))
@@ -500,14 +968,14 @@ fn parse_rss_feed(source: OfficialStatusSource, xml: &str) -> Result<OfficialSna
         .captures(xml)
         .and_then(|caps| caps.get(1))
         .map(|m| decode_xml(m.as_str()).trim().to_string());
+    let item = item_re
+        .captures(xml)
+        .and_then(|caps| caps.get(1))
+        .map(|m| m.as_str());
 
-    let mut incidents = Vec::new();
-    let mut first_health = None;
-    let mut first_summary = None;
-    let mut first_url = None;
+    let official_url = source.page_url().to_string();
 
-    for item_caps in item_re.captures_iter(xml) {
-        let item_block = item_caps.get(1).map(|m| m.as_str()).unwrap_or("");
+    let (health, summary) = if let Some(item_block) = item {
         let title = item_title_re
             .captures(item_block)
             .and_then(|caps| caps.get(1))
@@ -518,59 +986,15 @@ fn parse_rss_feed(source: OfficialStatusSource, xml: &str) -> Result<OfficialSna
             .and_then(|caps| caps.get(1))
             .map(|m| strip_markup(&decode_xml(m.as_str())))
             .unwrap_or_default();
-        let link = item_link_re
-            .captures(item_block)
-            .and_then(|caps| caps.get(1))
-            .map(|m| decode_xml(m.as_str()).trim().to_string())
-            .unwrap_or_else(|| source.page_url().to_string());
-        let pubdate = item_pubdate_re
-            .captures(item_block)
-            .and_then(|caps| caps.get(1))
-            .map(|m| decode_xml(m.as_str()).trim().to_string());
-
         let combined = format!("{title} {description}");
-
-        if first_health.is_none() {
-            first_health = Some(health_from_feed_text(&combined));
-            first_summary = Some(prefer_summary(&title, &description));
-            first_url = Some(link.clone());
-        }
-
-        let latest_update = if !description.is_empty() {
-            Some(IncidentUpdate {
-                status: infer_status_from_feed(&description),
-                body: description,
-                created_at: pubdate.clone().unwrap_or_default(),
-            })
-        } else {
-            None
-        };
-
-        incidents.push(ActiveIncident {
-            name: title,
-            status: infer_status_from_feed(&combined),
-            impact: infer_impact_from_feed(&combined),
-            shortlink: Some(link),
-            created_at: pubdate,
-            updated_at: None,
-            latest_update,
-            affected_components: vec![],
-        });
-    }
-
-    incidents.truncate(20);
-
-    let (health, summary, official_url) = if incidents.is_empty() {
         (
-            ProviderHealth::Operational,
-            Some("No incidents recorded".to_string()),
-            source.page_url().to_string(),
+            health_from_feed_text(&combined),
+            Some(prefer_summary(&title, &description)),
         )
     } else {
         (
-            first_health.unwrap_or(ProviderHealth::Operational),
-            first_summary,
-            first_url.unwrap_or_else(|| source.page_url().to_string()),
+            ProviderHealth::Operational,
+            Some("No incidents recorded".to_string()),
         )
     };
 
@@ -582,8 +1006,8 @@ fn parse_rss_feed(source: OfficialStatusSource, xml: &str) -> Result<OfficialSna
         last_checked,
         summary,
         components: Vec::new(),
-        incidents,
-        scheduled_maintenances: Vec::new(),
+        incidents: Vec::new(),
+        maintenance: Vec::new(),
     })
 }
 
@@ -611,82 +1035,45 @@ fn parse_atom_feed(source: OfficialStatusSource, xml: &str) -> Result<OfficialSn
         .captures(xml)
         .and_then(|caps| caps.get(1))
         .map(|m| decode_xml(m.as_str()).trim().to_string());
+    let entry_block = entry_re
+        .captures(xml)
+        .and_then(|caps| caps.get(1))
+        .map(|m| m.as_str())
+        .ok_or_else(|| "atom feed entry missing".to_string())?;
 
-    let mut incidents = Vec::new();
-    let mut first_health = None;
-    let mut first_summary = None;
-    let mut first_url = None;
-
-    for entry_caps in entry_re.captures_iter(xml) {
-        let entry_block = entry_caps.get(1).map(|m| m.as_str()).unwrap_or("");
-        let title = entry_title_re
-            .captures(entry_block)
-            .and_then(|caps| caps.get(1))
-            .map(|m| strip_markup(&decode_xml(m.as_str())))
-            .unwrap_or_default();
-        let body = entry_body_re
-            .captures(entry_block)
-            .and_then(|caps| caps.get(1))
-            .map(|m| strip_markup(&decode_xml(m.as_str())))
-            .unwrap_or_default();
-        let link = entry_link_re
-            .captures(entry_block)
-            .and_then(|caps| caps.get(1))
-            .map(|m| decode_xml(m.as_str()).trim().to_string())
-            .unwrap_or_else(|| source.page_url().to_string());
-        let entry_updated = updated_re
-            .captures(entry_block)
-            .and_then(|caps| caps.get(1))
-            .map(|m| decode_xml(m.as_str()).trim().to_string());
-
-        let combined = format!("{title} {body}");
-
-        if first_health.is_none() {
-            first_health = Some(health_from_feed_text(&combined));
-            first_summary = Some(prefer_summary(&title, &body));
-            first_url = Some(link.clone());
-        }
-
-        let latest_update = if !body.is_empty() {
-            Some(IncidentUpdate {
-                status: infer_status_from_feed(&body),
-                body: body.clone(),
-                created_at: entry_updated.clone().unwrap_or_default(),
-            })
-        } else {
-            None
-        };
-
-        incidents.push(ActiveIncident {
-            name: title,
-            status: infer_status_from_feed(&combined),
-            impact: infer_impact_from_feed(&combined),
-            shortlink: Some(link),
-            created_at: entry_updated,
-            updated_at: None,
-            latest_update,
-            affected_components: vec![],
-        });
-    }
-
-    incidents.truncate(20);
-
-    if incidents.is_empty() {
-        return Err("atom feed entry missing".to_string());
-    }
+    let title = entry_title_re
+        .captures(entry_block)
+        .and_then(|caps| caps.get(1))
+        .map(|m| strip_markup(&decode_xml(m.as_str())))
+        .unwrap_or_default();
+    let body = entry_body_re
+        .captures(entry_block)
+        .and_then(|caps| caps.get(1))
+        .map(|m| strip_markup(&decode_xml(m.as_str())))
+        .unwrap_or_default();
+    let official_url = entry_link_re
+        .captures(entry_block)
+        .and_then(|caps| caps.get(1))
+        .map(|m| decode_xml(m.as_str()).trim().to_string())
+        .unwrap_or_else(|| source.page_url().to_string());
+    let combined = format!("{title} {body}");
 
     Ok(OfficialSnapshot {
         label: feed_title,
         method: StatusSourceMethod::Feed,
-        health: first_health.unwrap_or(ProviderHealth::Unknown),
-        official_url: first_url.unwrap_or_else(|| source.page_url().to_string()),
+        health: health_from_feed_text(&combined),
+        official_url,
         last_checked,
-        summary: first_summary,
+        summary: Some(prefer_summary(&title, &body)),
         components: Vec::new(),
-        incidents,
-        scheduled_maintenances: Vec::new(),
+        incidents: Vec::new(),
+        maintenance: Vec::new(),
     })
 }
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 fn health_from_feed_text(text: &str) -> ProviderHealth {
     let upper = text.to_uppercase();
@@ -753,7 +1140,7 @@ fn resolve_provider_status(
         status.summary = official.summary;
         status.components = official.components;
         status.incidents = official.incidents;
-        status.scheduled_maintenances = official.scheduled_maintenances;
+        status.scheduled_maintenances = official.maintenance;
         return status;
     }
 
@@ -785,6 +1172,10 @@ fn resolve_provider_status(
     };
     status
 }
+
+// ---------------------------------------------------------------------------
+// Deserialization types
+// ---------------------------------------------------------------------------
 
 #[derive(Debug, Deserialize)]
 struct ApiStatusCheckResponse {
@@ -821,31 +1212,6 @@ struct OfficialSummaryResponse {
 }
 
 #[derive(Debug, Deserialize)]
-struct OfficialComponent {
-    #[serde(default)]
-    id: Option<String>,
-    name: String,
-    status: String,
-    #[serde(default)]
-    group_id: Option<String>,
-    #[serde(default)]
-    group: Option<bool>,
-}
-
-#[derive(Debug, Deserialize)]
-struct OfficialScheduledMaintenance {
-    name: String,
-    status: String,
-    impact: String,
-    #[serde(default)]
-    scheduled_for: Option<String>,
-    #[serde(default)]
-    scheduled_until: Option<String>,
-    #[serde(default)]
-    components: Vec<OfficialIncidentComponent>,
-}
-
-#[derive(Debug, Deserialize)]
 struct OfficialPage {
     #[serde(default)]
     name: Option<String>,
@@ -858,8 +1224,6 @@ struct OfficialPage {
 #[derive(Debug, Deserialize)]
 struct OfficialStatus {
     description: String,
-    #[serde(default)]
-    indicator: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -876,22 +1240,42 @@ struct OfficialIncident {
     #[serde(default)]
     incident_updates: Vec<OfficialIncidentUpdate>,
     #[serde(default)]
-    components: Vec<OfficialIncidentComponent>,
+    components: Vec<OfficialComponentRef>,
 }
 
 #[derive(Debug, Deserialize)]
 struct OfficialIncidentUpdate {
-    #[serde(default)]
     status: String,
-    #[serde(default)]
     body: String,
     #[serde(default)]
-    created_at: String,
+    created_at: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
-struct OfficialIncidentComponent {
+struct OfficialComponentRef {
     name: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct OfficialComponent {
+    name: String,
+    status: String,
+    #[serde(default)]
+    group_name: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OfficialScheduledMaintenance {
+    name: String,
+    status: String,
+    #[serde(default)]
+    impact: Option<String>,
+    #[serde(default)]
+    scheduled_for: Option<String>,
+    #[serde(default)]
+    scheduled_until: Option<String>,
+    #[serde(default)]
+    components: Vec<OfficialComponentRef>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -911,11 +1295,7 @@ struct GoogleIncident {
     #[serde(default)]
     modified: Option<String>,
     #[serde(default)]
-    begin: Option<String>,
-    #[serde(default)]
     end: Option<String>,
-    #[serde(default)]
-    uri: Option<String>,
     severity: String,
     status_impact: String,
     #[serde(default)]
@@ -950,7 +1330,7 @@ mod tests {
                 summary: Some("Partial System Degradation".to_string()),
                 components: Vec::new(),
                 incidents: Vec::new(),
-                scheduled_maintenances: Vec::new(),
+                maintenance: Vec::new(),
             }),
             Some(FallbackSnapshot {
                 label: "OpenAI".to_string(),
@@ -999,7 +1379,7 @@ mod tests {
 
     #[test]
     fn unverified_provider_stays_unavailable() {
-        let status = resolve_provider_status(&seed("qwen"), None, None);
+        let status = resolve_provider_status(&seed("some-nonexistent-provider"), None, None);
         assert_eq!(status.provenance, StatusProvenance::Unavailable);
         assert!(status
             .summary
@@ -1009,44 +1389,29 @@ mod tests {
     }
 
     #[test]
-    fn parses_openrouter_rss_feed() {
+    fn parses_xai_rss_feed() {
         let xml = r#"
         <rss version="2.0">
           <channel>
-            <title>OpenRouter Status - Incident History</title>
-            <link>https://status.openrouter.ai</link>
+            <title>xAI Status - Incident History</title>
+            <link>https://status.x.ai</link>
             <lastBuildDate>Thu, 12 Mar 2026 00:43:25 GMT</lastBuildDate>
             <item>
               <title>Degraded website login</title>
               <description><![CDATA[<strong>RESOLVED</strong> - <p>This incident has been resolved.</p>]]></description>
               <pubDate>Thu, 19 Feb 2026 16:38:24 GMT</pubDate>
-              <link>https://status.openrouter.ai/incidents/lrkj1G0wmMoe</link>
-            </item>
-            <item>
-              <title>API latency issues</title>
-              <description><![CDATA[<strong>Investigating</strong> - We are investigating increased latency.]]></description>
-              <pubDate>Wed, 18 Feb 2026 10:00:00 GMT</pubDate>
-              <link>https://status.openrouter.ai/incidents/abc123</link>
+              <link>https://status.x.ai/incidents/lrkj1G0wmMoe</link>
             </item>
           </channel>
         </rss>
         "#;
 
-        let parsed = parse_feed(OfficialStatusSource::OpenRouter, xml).expect("rss parses");
+        let parsed = parse_feed(OfficialStatusSource::Xai, xml).expect("rss parses");
         assert_eq!(parsed.method, StatusSourceMethod::Feed);
         assert_eq!(parsed.health, ProviderHealth::Operational);
         assert_eq!(
             parsed.summary.as_deref(),
             Some("Degraded website login — RESOLVED - This incident has been resolved.")
-        );
-        assert_eq!(parsed.incidents.len(), 2);
-        assert_eq!(parsed.incidents[0].name, "Degraded website login");
-        assert_eq!(parsed.incidents[0].status, "resolved");
-        assert_eq!(parsed.incidents[1].name, "API latency issues");
-        assert_eq!(parsed.incidents[1].status, "investigating");
-        assert_eq!(
-            parsed.incidents[1].shortlink.as_deref(),
-            Some("https://status.openrouter.ai/incidents/abc123")
         );
     }
 
@@ -1054,35 +1419,24 @@ mod tests {
     fn parses_atom_feed() {
         let xml = r#"
         <feed xmlns="http://www.w3.org/2005/Atom">
-          <title>Perplexity Status - Incident history</title>
+          <title>Azure Status - Incident history</title>
           <updated>2026-02-16T21:35:20.315+00:00</updated>
           <entry>
-            <title>Sonar API incident</title>
+            <title>Service incident</title>
             <updated>2026-02-16T21:35:20.315+00:00</updated>
-            <link rel="alternate" type="text/html" href="https://status.perplexity.com/incident/test"/>
-            <content type="html"><![CDATA[<p><strong>Investigating</strong> - We are currently investigating this incident affecting Sonar API.</p>]]></content>
-          </entry>
-          <entry>
-            <title>Search downtime</title>
-            <updated>2026-02-15T10:00:00.000+00:00</updated>
-            <link rel="alternate" type="text/html" href="https://status.perplexity.com/incident/older"/>
-            <content type="html"><![CDATA[<p><strong>Resolved</strong> - This issue has been resolved.</p>]]></content>
+            <link rel="alternate" type="text/html" href="https://azure.status.microsoft/en-us/status/incident/test"/>
+            <content type="html"><![CDATA[<p><strong>Investigating</strong> - We are currently investigating this incident.</p>]]></content>
           </entry>
         </feed>
         "#;
 
-        let parsed = parse_feed(OfficialStatusSource::Perplexity, xml).expect("atom parses");
+        let parsed = parse_feed(OfficialStatusSource::Azure, xml).expect("atom parses");
         assert_eq!(parsed.method, StatusSourceMethod::Feed);
         assert_eq!(parsed.health, ProviderHealth::Degraded);
         assert_eq!(
             parsed.official_url,
-            "https://status.perplexity.com/incident/test"
+            "https://azure.status.microsoft/en-us/status/incident/test"
         );
-        assert_eq!(parsed.incidents.len(), 2);
-        assert_eq!(parsed.incidents[0].name, "Sonar API incident");
-        assert_eq!(parsed.incidents[0].status, "investigating");
-        assert_eq!(parsed.incidents[1].name, "Search downtime");
-        assert_eq!(parsed.incidents[1].status, "resolved");
     }
 
     #[test]
@@ -1095,9 +1449,7 @@ mod tests {
             external_desc: "Vertex AI Gemini API customers experienced increased error rates"
                 .to_string(),
             modified: Some("2026-03-09T05:25:43+00:00".to_string()),
-            begin: Some("2026-02-27T10:00:00+00:00".to_string()),
             end: Some("2026-02-27T14:35:00+00:00".to_string()),
-            uri: Some("/incidents/RiFm4GRdELxBfnY7qRAG".to_string()),
             severity: "low".to_string(),
             status_impact: "SERVICE_INFORMATION".to_string(),
             affected_products: vec![GoogleAffectedProduct {
@@ -1111,153 +1463,222 @@ mod tests {
         assert!(snapshot
             .official_url
             .contains("Z0FZJAMvEB4j3NbCJs6B/history"));
-        assert_eq!(snapshot.incidents.len(), 1);
-        assert_eq!(snapshot.incidents[0].status, "resolved");
-        assert_eq!(snapshot.incidents[0].impact, "none");
-        assert_eq!(
-            snapshot.incidents[0].shortlink.as_deref(),
-            Some("https://status.cloud.google.com/incidents/RiFm4GRdELxBfnY7qRAG")
-        );
-        assert_eq!(
-            snapshot.incidents[0].created_at.as_deref(),
-            Some("2026-02-27T10:00:00+00:00")
-        );
     }
 
     #[test]
-    fn from_summary_extracts_components_and_incidents() {
-        let payload = OfficialSummaryResponse {
-            page: OfficialPage {
-                name: Some("Test Status".to_string()),
-                url: Some("https://status.test.com".to_string()),
-                updated_at: Some("2026-03-12T00:00:00Z".to_string()),
+    fn parses_better_stack_index_json() {
+        let json = r#"{
+            "data": {
+                "id": "abc123",
+                "type": "status_page",
+                "attributes": {
+                    "aggregate_state": "degraded"
+                }
             },
-            status: OfficialStatus {
-                description: "Partial System Outage".to_string(),
-                indicator: Some("major".to_string()),
-            },
-            incidents: vec![OfficialIncident {
-                name: "API errors".to_string(),
-                status: "investigating".to_string(),
-                impact: "major".to_string(),
-                shortlink: Some("https://stspg.io/abc".to_string()),
-                created_at: Some("2026-03-12T10:00:00Z".to_string()),
-                updated_at: Some("2026-03-12T10:30:00Z".to_string()),
-                incident_updates: vec![OfficialIncidentUpdate {
-                    status: "investigating".to_string(),
-                    body: "We are investigating elevated error rates.".to_string(),
-                    created_at: "2026-03-12T10:30:00Z".to_string(),
-                }],
-                components: vec![OfficialIncidentComponent {
-                    name: "API".to_string(),
-                }],
-            }],
-            components: vec![
-                OfficialComponent {
-                    id: Some("group1".to_string()),
-                    name: "Core Services".to_string(),
-                    status: "operational".to_string(),
-                    group_id: None,
-                    group: Some(true),
+            "included": [
+                {
+                    "id": "r1",
+                    "type": "status_page_resource",
+                    "attributes": {
+                        "resource_name": "API",
+                        "status": "degraded"
+                    }
                 },
-                OfficialComponent {
-                    id: Some("c1".to_string()),
-                    name: "API".to_string(),
-                    status: "major_outage".to_string(),
-                    group_id: Some("group1".to_string()),
-                    group: None,
+                {
+                    "id": "r2",
+                    "type": "status_page_resource",
+                    "attributes": {
+                        "resource_name": "Dashboard",
+                        "status": "operational"
+                    }
                 },
-                OfficialComponent {
-                    id: Some("c2".to_string()),
-                    name: "Dashboard".to_string(),
-                    status: "operational".to_string(),
-                    group_id: Some("group1".to_string()),
-                    group: None,
-                },
-            ],
-            scheduled_maintenances: vec![OfficialScheduledMaintenance {
-                name: "Database upgrade".to_string(),
-                status: "scheduled".to_string(),
-                impact: "minor".to_string(),
-                scheduled_for: Some("2026-03-15T02:00:00Z".to_string()),
-                scheduled_until: Some("2026-03-15T06:00:00Z".to_string()),
-                components: vec![OfficialIncidentComponent {
-                    name: "API".to_string(),
-                }],
-            }],
-        };
+                {
+                    "id": "sr1",
+                    "type": "status_report",
+                    "attributes": {
+                        "title": "API latency increase",
+                        "status_report_updates": [
+                            {"message": "Investigating elevated latency"}
+                        ]
+                    }
+                }
+            ]
+        }"#;
 
-        let snapshot = OfficialSnapshot::from_summary(OfficialStatusSource::OpenAi, payload);
-
-        // Health from indicator
-        assert_eq!(snapshot.health, ProviderHealth::Outage);
-
-        // Components: group header filtered out, 2 real components remain
+        let snapshot =
+            parse_better_stack(OfficialStatusSource::TogetherAi, json).expect("parses ok");
+        assert_eq!(snapshot.method, StatusSourceMethod::BetterStack);
+        assert_eq!(snapshot.health, ProviderHealth::Degraded);
         assert_eq!(snapshot.components.len(), 2);
         assert_eq!(snapshot.components[0].name, "API");
-        assert_eq!(snapshot.components[0].status, "major_outage");
-        assert_eq!(
-            snapshot.components[0].group_name.as_deref(),
-            Some("Core Services")
-        );
-        assert_eq!(snapshot.components[1].name, "Dashboard");
+        assert_eq!(snapshot.components[0].status, "degraded_performance");
         assert_eq!(snapshot.components[1].status, "operational");
-
-        // Incidents
         assert_eq!(snapshot.incidents.len(), 1);
-        assert_eq!(snapshot.incidents[0].name, "API errors");
-        assert_eq!(snapshot.incidents[0].status, "investigating");
-        assert_eq!(snapshot.incidents[0].impact, "major");
-        assert_eq!(
-            snapshot.incidents[0].shortlink.as_deref(),
-            Some("https://stspg.io/abc")
-        );
-        assert!(snapshot.incidents[0].latest_update.is_some());
-        assert_eq!(snapshot.incidents[0].affected_components, vec!["API"]);
-
-        // Scheduled maintenances
-        assert_eq!(snapshot.scheduled_maintenances.len(), 1);
-        assert_eq!(snapshot.scheduled_maintenances[0].name, "Database upgrade");
-        assert_eq!(snapshot.scheduled_maintenances[0].status, "scheduled");
+        assert_eq!(snapshot.incidents[0].name, "API latency increase");
     }
 
     #[test]
-    fn indicator_none_maps_to_operational() {
-        let payload = OfficialSummaryResponse {
-            page: OfficialPage {
-                name: None,
-                url: None,
-                updated_at: None,
-            },
-            status: OfficialStatus {
-                description: "All Systems Operational".to_string(),
-                indicator: Some("none".to_string()),
-            },
-            incidents: vec![],
-            components: vec![],
-            scheduled_maintenances: vec![],
-        };
-        let snapshot = OfficialSnapshot::from_summary(OfficialStatusSource::OpenAi, payload);
+    fn parses_incident_io_summary_with_incidents() {
+        let summary_json = r#"{
+            "page": {"name": "OpenAI", "url": "https://status.openai.com", "updated_at": "2026-03-12T00:00:00Z"},
+            "status": {"description": "All Systems Operational"},
+            "incidents": [],
+            "components": [
+                {"name": "API", "status": "operational"},
+                {"name": "Dashboard", "status": "operational"}
+            ],
+            "scheduled_maintenances": []
+        }"#;
+
+        let snapshot = parse_statuspage_v2_summary(OfficialStatusSource::OpenAi, summary_json)
+            .expect("parses summary");
         assert_eq!(snapshot.health, ProviderHealth::Operational);
+        assert_eq!(snapshot.components.len(), 2);
+
+        let incidents_json = r#"{
+            "incidents": [
+                {"name": "Elevated error rates", "status": "investigating", "impact": "minor"}
+            ]
+        }"#;
+
+        let incidents = parse_incidents_json(incidents_json).expect("parses incidents");
+        assert_eq!(incidents.len(), 1);
+        assert_eq!(incidents[0].name, "Elevated error rates");
+        assert_eq!(incidents[0].status, "investigating");
+        assert_eq!(incidents[0].impact, "minor");
     }
 
     #[test]
-    fn missing_indicator_falls_back_to_description() {
-        let payload = OfficialSummaryResponse {
-            page: OfficialPage {
-                name: None,
-                url: None,
-                updated_at: None,
-            },
-            status: OfficialStatus {
-                description: "Partial System Degradation".to_string(),
-                indicator: None,
-            },
-            incidents: vec![],
-            components: vec![],
-            scheduled_maintenances: vec![],
-        };
-        let snapshot = OfficialSnapshot::from_summary(OfficialStatusSource::OpenAi, payload);
+    fn parses_onlineornot_summary() {
+        let json = r#"{
+            "result": {
+                "status": "degraded",
+                "components": [
+                    {"name": "API Gateway", "status": "operational"},
+                    {"name": "Inference", "status": "degraded"}
+                ],
+                "active_incidents": [
+                    {"name": "Slow responses", "status": "investigating", "impact": "minor"}
+                ],
+                "scheduled_maintenance": []
+            }
+        }"#;
+
+        let snapshot =
+            parse_onlineornot(OfficialStatusSource::OpenRouter, json).expect("parses ok");
+        assert_eq!(snapshot.method, StatusSourceMethod::OnlineOrNot);
         assert_eq!(snapshot.health, ProviderHealth::Degraded);
+        assert_eq!(snapshot.components.len(), 2);
+        assert_eq!(snapshot.components[0].name, "API Gateway");
+        assert_eq!(snapshot.components[0].status, "operational");
+        assert_eq!(snapshot.components[1].status, "degraded_performance");
+        assert_eq!(snapshot.incidents.len(), 1);
+        assert_eq!(snapshot.incidents[0].name, "Slow responses");
+    }
+
+    #[test]
+    fn parses_status_io_response() {
+        let json = r#"{
+            "result": {
+                "status_overall": {"status_code": 300, "status": "Minor Service Outage"},
+                "status": [
+                    {
+                        "id": "g1",
+                        "name": "Infrastructure",
+                        "containers": [
+                            {"name": "Web", "status_code": 100},
+                            {"name": "API", "status_code": 300}
+                        ]
+                    }
+                ],
+                "incidents": [
+                    {"name": "API degradation"}
+                ],
+                "maintenance": {
+                    "active": [{"name": "DB migration"}],
+                    "upcoming": [{"name": "Network upgrade"}]
+                }
+            }
+        }"#;
+
+        let snapshot = parse_status_io(OfficialStatusSource::GitLab, json).expect("parses ok");
+        assert_eq!(snapshot.method, StatusSourceMethod::StatusIo);
+        assert_eq!(snapshot.health, ProviderHealth::Degraded);
+        assert_eq!(snapshot.components.len(), 2);
+        assert_eq!(snapshot.components[0].name, "Web");
+        assert_eq!(snapshot.components[0].status, "operational");
+        assert_eq!(snapshot.components[1].name, "API");
+        assert_eq!(snapshot.components[1].status, "degraded_performance");
+        assert_eq!(snapshot.incidents.len(), 1);
+        assert_eq!(snapshot.incidents[0].name, "API degradation");
+        assert_eq!(snapshot.maintenance.len(), 2);
+        assert_eq!(snapshot.maintenance[0].name, "DB migration");
+        assert_eq!(snapshot.maintenance[0].status, "active");
+        assert_eq!(snapshot.maintenance[1].name, "Network upgrade");
+        assert_eq!(snapshot.maintenance[1].status, "upcoming");
+    }
+
+    #[test]
+    fn parses_instatus_summary() {
+        let summary_json = r#"{
+            "page": {"status": "HASISSUES"},
+            "activeIncidents": [
+                {"name": "Search degraded", "status": "INVESTIGATING", "impact": "minor"}
+            ],
+            "scheduledMaintenances": [
+                {"name": "Planned reboot", "status": "SCHEDULED"}
+            ]
+        }"#;
+
+        let snapshot = parse_instatus_summary(OfficialStatusSource::Perplexity, summary_json)
+            .expect("parses ok");
+        assert_eq!(snapshot.method, StatusSourceMethod::Instatus);
+        assert_eq!(snapshot.health, ProviderHealth::Degraded);
+        assert_eq!(snapshot.incidents.len(), 1);
+        assert_eq!(snapshot.incidents[0].name, "Search degraded");
+        assert_eq!(snapshot.maintenance.len(), 1);
+        assert_eq!(snapshot.maintenance[0].name, "Planned reboot");
+
+        let components_json = r#"[
+            {"name": "API", "status": "OPERATIONAL"},
+            {"name": "Search", "status": "DEGRADEDPERFORMANCE"},
+            {"name": "Backend", "status": "MAJOROUTAGE"}
+        ]"#;
+
+        let components = parse_instatus_components(components_json).expect("parses ok");
+        assert_eq!(components.len(), 3);
+        assert_eq!(components[0].status, "operational");
+        assert_eq!(components[1].status, "degraded_performance");
+        assert_eq!(components[2].status, "major_outage");
+    }
+
+    #[test]
+    fn normalize_component_status_maps_all_platforms() {
+        // Better Stack
+        assert_eq!(
+            normalize_component_status("degraded"),
+            "degraded_performance"
+        );
+        assert_eq!(normalize_component_status("downtime"), "major_outage");
+        // OnlineOrNot
+        assert_eq!(normalize_component_status("outage"), "major_outage");
+        // Instatus
+        assert_eq!(normalize_component_status("OPERATIONAL"), "operational");
+        assert_eq!(
+            normalize_component_status("DEGRADEDPERFORMANCE"),
+            "degraded_performance"
+        );
+        assert_eq!(
+            normalize_component_status("UNDERMAINTENANCE"),
+            "under_maintenance"
+        );
+        assert_eq!(normalize_component_status("MAJOROUTAGE"), "major_outage");
+        assert_eq!(
+            normalize_component_status("PARTIALOUTAGE"),
+            "partial_outage"
+        );
+        // Already normalized
+        assert_eq!(normalize_component_status("operational"), "operational");
+        assert_eq!(normalize_component_status("major_outage"), "major_outage");
     }
 }
