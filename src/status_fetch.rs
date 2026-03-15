@@ -37,8 +37,6 @@ impl StatusFetcher {
     }
 
     pub async fn fetch(&self, seeds: &[StatusProviderSeed]) -> StatusFetchResult {
-        let mut last_error: Option<String> = None;
-
         let needs_google = seeds.iter().any(|seed| {
             matches!(
                 seed.strategy,
@@ -50,42 +48,51 @@ impl StatusFetcher {
         });
 
         let google_products: Option<Arc<GoogleProductsResponse>> = if needs_google {
-            match fetch_google_products(&self.client).await {
-                Ok(p) => Some(Arc::new(p)),
-                Err(err) => {
-                    last_error = Some(err);
-                    None
-                }
+            match timeout(Duration::from_secs(5), fetch_google_products(&self.client)).await {
+                Ok(Ok(products)) => Some(Arc::new(products)),
+                _ => None,
             }
         } else {
             None
         };
 
-        let mut entries = Vec::with_capacity(seeds.len());
-        let mut successes = 0usize;
+        let mut set = tokio::task::JoinSet::new();
+        let mut results: Vec<(usize, ProviderStatus)> = Vec::with_capacity(seeds.len());
 
-        for seed in seeds {
-            let resolved =
-                fetch_single(self.client.clone(), seed.clone(), google_products.clone()).await;
-            if resolved.health != ProviderHealth::Unknown
-                || resolved.provenance != StatusProvenance::Unavailable
-            {
-                successes += 1;
+        for (i, seed) in seeds.iter().enumerate() {
+            // True bounded concurrency: drain a slot if 10 in-flight
+            while set.len() >= 10 {
+                if let Some(res) = set.join_next().await {
+                    match res {
+                        Ok(result) => results.push(result),
+                        Err(_join_err) => { /* panicked task, skip */ }
+                    }
+                }
             }
-            entries.push(resolved);
+            let client = self.client.clone();
+            let seed = seed.clone();
+            let google = google_products.clone();
+            set.spawn(async move { (i, fetch_single(client, seed, google).await) });
+        }
+        // Drain remaining
+        while let Some(res) = set.join_next().await {
+            match res {
+                Ok(result) => results.push(result),
+                Err(_join_err) => { /* panicked task, skip */ }
+            }
         }
 
-        entries.sort_by(|a, b| {
-            a.health
+        results.sort_by(|a, b| {
+            a.1.health
                 .sort_rank()
-                .cmp(&b.health.sort_rank())
-                .then_with(|| a.display_name.cmp(&b.display_name))
+                .cmp(&b.1.health.sort_rank())
+                .then_with(|| a.1.display_name.cmp(&b.1.display_name))
         });
 
-        if successes == 0 && last_error.is_some() {
-            return StatusFetchResult::Error(
-                last_error.unwrap_or_else(|| "Failed to fetch provider statuses".to_string()),
-            );
+        let entries: Vec<ProviderStatus> = results.into_iter().map(|(_, s)| s).collect();
+
+        if entries.iter().all(|e| e.health == ProviderHealth::Unknown) {
+            return StatusFetchResult::Error("Failed to fetch provider statuses".to_string());
         }
 
         StatusFetchResult::Fresh(entries)
@@ -133,12 +140,18 @@ async fn fetch_official(
             let body = fetch_text(client, source.endpoint_url()).await?;
             let mut snapshot = parse_statuspage_v2_summary(source, &body)?;
             let incidents_url = format!("{}/api/v2/incidents.json", source.page_url());
-            if let Ok(resp) = client.get(&incidents_url).send().await {
-                if let Ok(text) = resp.text().await {
-                    if let Ok(incidents) = parse_incidents_json(&text) {
-                        snapshot.incidents = incidents;
-                    }
-                }
+            if let Ok(Ok(incidents)) = timeout(Duration::from_secs(3), async {
+                let resp = client
+                    .get(&incidents_url)
+                    .send()
+                    .await
+                    .map_err(|e| e.to_string())?;
+                let text = resp.text().await.map_err(|e| e.to_string())?;
+                parse_incidents_json(&text)
+            })
+            .await
+            {
+                snapshot.incidents = incidents;
             }
             Ok(snapshot)
         }
@@ -158,12 +171,18 @@ async fn fetch_official(
             let body = fetch_text(client, source.endpoint_url()).await?;
             let mut snapshot = parse_instatus_summary(source, &body)?;
             let components_url = format!("{}/v2/components.json", source.page_url());
-            if let Ok(resp) = client.get(&components_url).send().await {
-                if let Ok(text) = resp.text().await {
-                    if let Ok(components) = parse_instatus_components(&text) {
-                        snapshot.components = components;
-                    }
-                }
+            if let Ok(Ok(components)) = timeout(Duration::from_secs(3), async {
+                let resp = client
+                    .get(&components_url)
+                    .send()
+                    .await
+                    .map_err(|e| e.to_string())?;
+                let text = resp.text().await.map_err(|e| e.to_string())?;
+                parse_instatus_components(&text)
+            })
+            .await
+            {
+                snapshot.components = components;
             }
             Ok(snapshot)
         }

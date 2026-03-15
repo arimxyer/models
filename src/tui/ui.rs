@@ -328,6 +328,19 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
             ));
         }
 
+        // ── Error (if fetch failed) ────────────────────────────────────────
+        if let Some(ref err) = entry.error {
+            lines.push(gutter_line(
+                "Error",
+                vec![Span::styled(
+                    err.clone(),
+                    Style::default()
+                        .fg(Color::Red)
+                        .add_modifier(Modifier::ITALIC),
+                )],
+            ));
+        }
+
         // ── COMP section ───────────────────────────────────────────────────
         let components: &[crate::status::ComponentStatus] = &entry.components;
         if components.is_empty() {
