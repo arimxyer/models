@@ -1278,12 +1278,12 @@ struct OfficialScheduledMaintenance {
     components: Vec<OfficialComponentRef>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct GoogleProductsResponse {
     products: Vec<GoogleProduct>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct GoogleProduct {
     id: String,
     title: String,

@@ -599,6 +599,7 @@ pub struct ProviderStatus {
     pub components: Vec<ComponentStatus>,
     pub incidents: Vec<ActiveIncident>,
     pub scheduled_maintenances: Vec<ScheduledMaintenance>,
+    pub error: Option<String>,
 }
 
 impl ProviderStatus {
@@ -618,6 +619,7 @@ impl ProviderStatus {
             components: Vec::new(),
             incidents: Vec::new(),
             scheduled_maintenances: Vec::new(),
+            error: None,
         }
     }
 
@@ -765,6 +767,7 @@ mod tests {
             components: Vec::new(),
             incidents: Vec::new(),
             scheduled_maintenances: Vec::new(),
+            error: None,
         };
 
         assert_eq!(status.best_open_url(), Some("https://status.openai.com"));

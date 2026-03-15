@@ -271,6 +271,7 @@ pub struct App {
     /// Store indices of selected models for comparison (shared between tabs)
     pub selections: Vec<usize>,
     pub pending_status_refresh: bool,
+    pub force_status_refresh: bool,
 }
 
 impl App {
@@ -326,6 +327,7 @@ impl App {
             last_detail_height: 0,
             selections: Vec::new(),
             pending_status_refresh: false,
+            force_status_refresh: false,
         };
 
         app.update_provider_list();
@@ -786,6 +788,7 @@ impl App {
                     status_app.loading = true;
                     status_app.last_error = None;
                     self.pending_status_refresh = true;
+                    self.force_status_refresh = true;
                 }
             }
             Message::OpenStatusPage => {

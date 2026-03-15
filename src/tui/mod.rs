@@ -6,6 +6,7 @@ use crossterm::{
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
+use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 
 pub mod agents_app;
@@ -51,8 +52,12 @@ pub enum FetchResult {
 }
 
 struct StatusRuntime {
-    rx: mpsc::Receiver<StatusFetchResult>,
-    tx: mpsc::Sender<StatusFetchResult>,
+    rx: mpsc::Receiver<(u64, StatusFetchResult)>,
+    tx: mpsc::Sender<(u64, StatusFetchResult)>,
+    #[allow(dead_code)]
+    client: reqwest::Client,
+    last_fetch_time: Option<Instant>,
+    fetch_generation: u64,
 }
 
 struct RuntimeHandles {
@@ -168,14 +173,22 @@ pub async fn run(providers: ProvidersMap) -> Result<()> {
         tokio::spawn(async move {
             let fetcher = StatusFetcher::new();
             let result = fetcher.fetch(&seeds).await;
-            let _ = tx.send(result).await;
+            let _ = tx.send((0, result)).await;
         });
     }
 
     // Main loop - pass client and sender for dynamic fetches
+    let status_client = reqwest::Client::builder()
+        .user_agent("models-tui")
+        .connect_timeout(Duration::from_secs(5))
+        .build()
+        .expect("Failed to build HTTP client");
     let status_runtime = StatusRuntime {
         rx: status_rx,
         tx: status_tx,
+        client: status_client,
+        last_fetch_time: None,
+        fetch_generation: 0,
     };
     let runtime_handles = RuntimeHandles {
         github_rx: rx,
@@ -286,24 +299,41 @@ fn run_app(
 
         if app.pending_status_refresh {
             app.pending_status_refresh = false;
-            if let Some(ref status_app) = app.status_app {
-                let seeds = status_app.fetch_seeds();
-                let tx = runtime.status.tx.clone();
-                tokio::spawn(async move {
-                    let fetcher = StatusFetcher::new();
-                    let result = fetcher.fetch(&seeds).await;
-                    let _ = tx.send(result).await;
-                });
+            let force = app.force_status_refresh;
+            app.force_status_refresh = false;
+            let stale = runtime
+                .status
+                .last_fetch_time
+                .is_none_or(|t| t.elapsed() > Duration::from_secs(60));
+            let recent = runtime
+                .status
+                .last_fetch_time
+                .is_some_and(|t| t.elapsed() < Duration::from_secs(2));
+            if (force || stale) && !recent {
+                if let Some(ref status_app) = app.status_app {
+                    runtime.status.fetch_generation += 1;
+                    let gen = runtime.status.fetch_generation;
+                    runtime.status.last_fetch_time = Some(Instant::now());
+                    let seeds = status_app.fetch_seeds();
+                    let tx = runtime.status.tx.clone();
+                    tokio::spawn(async move {
+                        let fetcher = StatusFetcher::new();
+                        let result = fetcher.fetch(&seeds).await;
+                        let _ = tx.send((gen, result)).await;
+                    });
+                }
             }
         }
 
-        if let Ok(result) = runtime.status.rx.try_recv() {
-            match result {
-                StatusFetchResult::Fresh(entries) => {
-                    app.update(app::Message::StatusDataReceived(entries));
-                }
-                StatusFetchResult::Error(error) => {
-                    app.update(app::Message::StatusFetchFailed(error));
+        if let Ok((gen, result)) = runtime.status.rx.try_recv() {
+            if gen >= runtime.status.fetch_generation {
+                match result {
+                    StatusFetchResult::Fresh(entries) => {
+                        app.update(app::Message::StatusDataReceived(entries));
+                    }
+                    StatusFetchResult::Error(error) => {
+                        app.update(app::Message::StatusFetchFailed(error));
+                    }
                 }
             }
         }

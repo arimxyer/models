@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::time::Instant;
 
 use ratatui::widgets::ListState;
 
@@ -27,6 +28,7 @@ pub struct StatusApp {
     pub search_query: String,
     pub detail_scroll: u16,
     pub loading: bool,
+    pub last_refreshed: Option<Instant>,
     pub last_error: Option<String>,
     pub related_agents: HashMap<String, Vec<String>>,
 }
@@ -75,6 +77,7 @@ impl StatusApp {
             search_query: String::new(),
             detail_scroll: 0,
             loading: true,
+            last_refreshed: None,
             last_error: None,
             related_agents,
         };
@@ -98,6 +101,7 @@ impl StatusApp {
         });
         self.entries = entries;
         self.loading = false;
+        self.last_refreshed = Some(Instant::now());
         self.last_error = None;
         self.update_filtered();
     }

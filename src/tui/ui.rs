@@ -223,7 +223,12 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
         Style::default().fg(Color::DarkGray)
     };
 
-    let title = if status_app.search_query.is_empty() {
+    let title = if status_app.loading {
+        format!(
+            " Status ({}) refreshing... ",
+            status_app.filtered_entries.len()
+        )
+    } else if status_app.search_query.is_empty() {
         format!(" Status ({}) ", status_app.filtered_entries.len())
     } else {
         format!(
@@ -309,6 +314,19 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
             Span::styled(entry.health.label(), status_health_style(entry.health)),
         ]));
         lines.push(Line::from(""));
+
+        if let Some(refreshed_at) = status_app.last_refreshed {
+            let secs = refreshed_at.elapsed().as_secs();
+            let ago = if secs < 60 {
+                format!("{}s ago", secs)
+            } else {
+                format!("{}m ago", secs / 60)
+            };
+            lines.push(gutter_line(
+                "Fresh",
+                vec![Span::styled(ago, Style::default().fg(Color::DarkGray))],
+            ));
+        }
 
         // ── COMP section ───────────────────────────────────────────────────
         let components: &[crate::status::ComponentStatus] = &entry.components;
