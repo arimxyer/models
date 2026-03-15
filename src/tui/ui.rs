@@ -177,7 +177,7 @@ fn format_relative_time_from_str(ts: &str) -> String {
 }
 
 fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
-    use super::status_app::StatusFocus;
+    use super::status_app::{CompView, StatusFocus};
 
     let Some(status_app) = app.status_app.as_mut() else {
         let msg = Paragraph::new("Failed to load status data")
@@ -291,6 +291,8 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
     );
     f.render_stateful_widget(list, left_chunks[1], &mut status_app.list_state);
 
+    let comp_view = status_app.comp_view;
+
     let detail_lines = if let Some(entry) = status_app.current_entry() {
         let entry_slug = entry.slug.clone();
         let related_agents = status_app.related_agents_for(&entry_slug).to_vec();
@@ -341,7 +343,7 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
             ));
         }
 
-        // ── COMP section (summary-first) ─────────────────────────────────
+        // ── COMP section (view-dispatched) ──────────────────────────────
         let components: &[crate::status::ComponentStatus] = &entry.components;
         if !components.is_empty() {
             // Count by health bucket
@@ -361,7 +363,7 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
             let total = components.len() as u32;
             let non_op = total - op;
 
-            // Summary line — always shown
+            // Summary spans — shared across views
             let mut summary_spans: Vec<Span> = Vec::new();
             if op > 0 {
                 summary_spans.push(Span::styled("●", Style::default().fg(Color::Green)));
@@ -399,115 +401,330 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     Style::default().fg(Color::DarkGray),
                 ));
             }
-            lines.push(gutter_line("COMP", summary_spans));
 
-            // Expansion: only non-operational components
-            if non_op > 0 {
-                // Group by group_name
-                let mut groups: std::collections::BTreeMap<
-                    String,
-                    Vec<&crate::status::ComponentStatus>,
-                > = std::collections::BTreeMap::new();
-                for comp in components {
-                    if component_status_icon(&comp.status) != "●" {
+            match comp_view {
+                CompView::Summary => {
+                    lines.push(gutter_line("COMP", summary_spans));
+
+                    // Expansion: only non-operational components
+                    if non_op > 0 {
+                        // Group by group_name
+                        let mut groups: std::collections::BTreeMap<
+                            String,
+                            Vec<&crate::status::ComponentStatus>,
+                        > = std::collections::BTreeMap::new();
+                        for comp in components {
+                            if component_status_icon(&comp.status) != "●" {
+                                let key = comp
+                                    .group_name
+                                    .clone()
+                                    .unwrap_or_else(|| "__ungrouped__".to_string());
+                                groups.entry(key).or_default().push(comp);
+                            }
+                        }
+
+                        for (group_key, group_comps) in &groups {
+                            if group_key == "__ungrouped__" {
+                                for comp in group_comps {
+                                    let display_name = translate_component_name(&comp.name);
+                                    lines.push(gutter_line(
+                                        "",
+                                        vec![
+                                            Span::styled(
+                                                component_status_icon(&comp.status),
+                                                component_status_style(&comp.status),
+                                            ),
+                                            Span::raw(" "),
+                                            Span::raw(display_name),
+                                            Span::raw("  "),
+                                            Span::styled(
+                                                comp.status.clone(),
+                                                component_status_style(&comp.status),
+                                            ),
+                                        ],
+                                    ));
+                                }
+                            } else {
+                                let group_total = components
+                                    .iter()
+                                    .filter(|c| c.group_name.as_deref() == Some(group_key))
+                                    .count();
+                                let worst_icon = group_comps
+                                    .iter()
+                                    .map(|c| component_status_icon(&c.status))
+                                    .min_by_key(|icon| match *icon {
+                                        "✕" => 0,
+                                        "◐" => 1,
+                                        "◆" => 2,
+                                        _ => 3,
+                                    })
+                                    .unwrap_or("?");
+                                let worst_style = component_status_style(
+                                    group_comps
+                                        .iter()
+                                        .map(|c| c.status.as_str())
+                                        .min_by_key(|s| match component_status_icon(s) {
+                                            "✕" => 0,
+                                            "◐" => 1,
+                                            "◆" => 2,
+                                            _ => 3,
+                                        })
+                                        .unwrap_or("unknown"),
+                                );
+                                lines.push(gutter_line(
+                                    "",
+                                    vec![
+                                        Span::styled(worst_icon, worst_style),
+                                        Span::raw(" "),
+                                        Span::styled(
+                                            group_key.clone(),
+                                            Style::default().add_modifier(Modifier::BOLD),
+                                        ),
+                                        Span::styled(
+                                            format!("  ({} of {})", group_comps.len(), group_total),
+                                            Style::default().fg(Color::DarkGray),
+                                        ),
+                                    ],
+                                ));
+
+                                for comp in group_comps {
+                                    let display_name = translate_component_name(&comp.name);
+                                    lines.push(gutter_line(
+                                        "",
+                                        vec![
+                                            Span::raw("  "),
+                                            Span::styled(
+                                                component_status_icon(&comp.status),
+                                                component_status_style(&comp.status),
+                                            ),
+                                            Span::raw(" "),
+                                            Span::raw(display_name),
+                                            Span::raw("  "),
+                                            Span::styled(
+                                                comp.status.clone(),
+                                                component_status_style(&comp.status),
+                                            ),
+                                        ],
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
+                CompView::DotGrid => {
+                    lines.push(gutter_line("COMP", summary_spans));
+
+                    // Sort by severity: operational first, issues last
+                    let mut sorted: Vec<&crate::status::ComponentStatus> =
+                        components.iter().collect();
+                    sorted.sort_by_key(|c| match component_status_icon(&c.status) {
+                        "●" => 0,
+                        "◆" => 1,
+                        "◐" => 2,
+                        "✕" => 3,
+                        _ => 4,
+                    });
+
+                    // 10 dots per row, spaced
+                    for chunk in sorted.chunks(10) {
+                        let mut spans: Vec<Span> = Vec::new();
+                        for (i, comp) in chunk.iter().enumerate() {
+                            if i > 0 {
+                                spans.push(Span::raw(" "));
+                            }
+                            spans.push(Span::styled(
+                                component_status_icon(&comp.status),
+                                component_status_style(&comp.status),
+                            ));
+                        }
+                        lines.push(gutter_line("", spans));
+                    }
+                }
+                CompView::Donut => {
+                    // Map proportions to 20 arc positions
+                    let positions = 20u32;
+                    let r_slots = if out > 0 {
+                        (out * positions).div_ceil(total).max(1)
+                    } else {
+                        0
+                    };
+                    let y_slots = if deg > 0 {
+                        (deg * positions).div_ceil(total).max(1)
+                    } else {
+                        0
+                    };
+                    let c_slots = if maint > 0 {
+                        (maint * positions).div_ceil(total).max(1)
+                    } else {
+                        0
+                    };
+                    let g_slots = positions.saturating_sub(r_slots + y_slots + c_slots);
+
+                    // Color array: green first (clockwise from top-left), then yellow, red, cyan
+                    let mut arc: Vec<Color> = Vec::with_capacity(20);
+                    for _ in 0..g_slots {
+                        arc.push(Color::Green);
+                    }
+                    for _ in 0..y_slots {
+                        arc.push(Color::Yellow);
+                    }
+                    for _ in 0..r_slots {
+                        arc.push(Color::Red);
+                    }
+                    for _ in 0..c_slots {
+                        arc.push(Color::Cyan);
+                    }
+                    while arc.len() < 20 {
+                        arc.push(Color::Green);
+                    }
+
+                    // Center text (7 chars wide, shown in row 2)
+                    let center_text = if non_op == 0 {
+                        format!("{:^7}", format!("{}●", total))
+                    } else {
+                        format!("{:^7}", total)
+                    };
+
+                    // Row 0: " " + 7x▄ + " " + summary
+                    let mut r0: Vec<Span> = vec![Span::raw(" ")];
+                    for color in arc.iter().take(7) {
+                        r0.push(Span::styled("▄", Style::default().fg(*color)));
+                    }
+                    r0.push(Span::raw("   "));
+                    r0.extend(summary_spans);
+                    lines.push(gutter_line("COMP", r0));
+
+                    // Row 1: left wall (pos 19) + 7 spaces + right wall (pos 7)
+                    lines.push(gutter_line(
+                        "",
+                        vec![
+                            Span::styled("█", Style::default().fg(arc[19])),
+                            Span::raw("       "),
+                            Span::styled("█", Style::default().fg(arc[7])),
+                        ],
+                    ));
+
+                    // Row 2: left wall (pos 18) + center text + right wall (pos 8)
+                    lines.push(gutter_line(
+                        "",
+                        vec![
+                            Span::styled("█", Style::default().fg(arc[18])),
+                            Span::styled(
+                                center_text,
+                                Style::default()
+                                    .fg(Color::White)
+                                    .add_modifier(Modifier::BOLD),
+                            ),
+                            Span::styled("█", Style::default().fg(arc[8])),
+                        ],
+                    ));
+
+                    // Row 3: left wall (pos 17) + 7 spaces + right wall (pos 9)
+                    lines.push(gutter_line(
+                        "",
+                        vec![
+                            Span::styled("█", Style::default().fg(arc[17])),
+                            Span::raw("       "),
+                            Span::styled("█", Style::default().fg(arc[9])),
+                        ],
+                    ));
+
+                    // Row 4: " " + 7x▀ (bottom arc, reversed: pos 16 down to 10)
+                    let mut r4: Vec<Span> = vec![Span::raw(" ")];
+                    for i in (10..17).rev() {
+                        r4.push(Span::styled("▀", Style::default().fg(arc[i])));
+                    }
+                    lines.push(gutter_line("", r4));
+                }
+                CompView::Heatmap => {
+                    lines.push(gutter_line("COMP", summary_spans));
+
+                    // Group ALL components by group_name
+                    let mut groups: std::collections::BTreeMap<
+                        String,
+                        Vec<&crate::status::ComponentStatus>,
+                    > = std::collections::BTreeMap::new();
+                    for comp in components {
                         let key = comp
                             .group_name
                             .clone()
                             .unwrap_or_else(|| "__ungrouped__".to_string());
                         groups.entry(key).or_default().push(comp);
                     }
-                }
 
-                for (group_key, group_comps) in &groups {
-                    if group_key == "__ungrouped__" {
-                        // List ungrouped non-op components directly
-                        for comp in group_comps {
-                            let display_name = translate_component_name(&comp.name);
-                            lines.push(gutter_line(
-                                "",
-                                vec![
-                                    Span::styled(
-                                        component_status_icon(&comp.status),
-                                        component_status_style(&comp.status),
-                                    ),
-                                    Span::raw(" "),
-                                    Span::raw(display_name),
-                                    Span::raw("  "),
-                                    Span::styled(
-                                        comp.status.clone(),
-                                        component_status_style(&comp.status),
-                                    ),
-                                ],
+                    let max_label = groups
+                        .keys()
+                        .filter(|k| *k != "__ungrouped__")
+                        .map(|k| k.len())
+                        .max()
+                        .unwrap_or(0)
+                        .min(8);
+
+                    for (key, comps) in &groups {
+                        let mut spans: Vec<Span> = Vec::new();
+                        if key != "__ungrouped__" {
+                            let label = if key.len() > max_label {
+                                &key[..max_label]
+                            } else {
+                                key.as_str()
+                            };
+                            spans.push(Span::styled(
+                                format!("{:<width$}╎", label, width = max_label),
+                                Style::default().fg(Color::DarkGray),
                             ));
                         }
-                    } else {
-                        // Group header with breakdown
-                        let group_total = components
-                            .iter()
-                            .filter(|c| c.group_name.as_deref() == Some(group_key))
-                            .count();
-                        let worst_icon = group_comps
-                            .iter()
-                            .map(|c| component_status_icon(&c.status))
-                            .min_by_key(|icon| match *icon {
-                                "✕" => 0,
-                                "◐" => 1,
-                                "◆" => 2,
-                                _ => 3,
-                            })
-                            .unwrap_or("?");
-                        let worst_style = component_status_style(
-                            group_comps
-                                .iter()
-                                .map(|c| c.status.as_str())
-                                .min_by_key(|s| match component_status_icon(s) {
-                                    "✕" => 0,
-                                    "◐" => 1,
-                                    "◆" => 2,
-                                    _ => 3,
-                                })
-                                .unwrap_or("unknown"),
-                        );
-                        lines.push(gutter_line(
-                            "",
-                            vec![
-                                Span::styled(worst_icon, worst_style),
-                                Span::raw(" "),
-                                Span::styled(
-                                    group_key.clone(),
-                                    Style::default().add_modifier(Modifier::BOLD),
-                                ),
-                                Span::styled(
-                                    format!("  ({} of {})", group_comps.len(), group_total),
-                                    Style::default().fg(Color::DarkGray),
-                                ),
-                            ],
-                        ));
-
-                        // Nested non-op components within this group
-                        for comp in group_comps {
-                            let display_name = translate_component_name(&comp.name);
-                            lines.push(gutter_line(
-                                "",
-                                vec![
-                                    Span::raw("  "),
-                                    Span::styled(
-                                        component_status_icon(&comp.status),
-                                        component_status_style(&comp.status),
-                                    ),
-                                    Span::raw(" "),
-                                    Span::raw(display_name),
-                                    Span::raw("  "),
-                                    Span::styled(
-                                        comp.status.clone(),
-                                        component_status_style(&comp.status),
-                                    ),
-                                ],
-                            ));
+                        for comp in comps {
+                            spans.push(Span::styled("█", component_status_style(&comp.status)));
                         }
+                        lines.push(gutter_line("", spans));
                     }
                 }
+                CompView::Isotype => {
+                    let multiplier = ((total as f64) / 20.0).ceil().max(1.0) as u32;
+                    let g_s = op.div_ceil(multiplier);
+                    let y_s = if deg > 0 { deg.div_ceil(multiplier) } else { 0 };
+                    let r_s = if out > 0 { out.div_ceil(multiplier) } else { 0 };
+                    let c_s = if maint > 0 {
+                        maint.div_ceil(multiplier)
+                    } else {
+                        0
+                    };
+
+                    let mut iso_summary = summary_spans;
+                    if multiplier > 1 {
+                        iso_summary.push(Span::styled(
+                            format!("  (\u{00d7}{})", multiplier),
+                            Style::default().fg(Color::DarkGray),
+                        ));
+                    }
+                    lines.push(gutter_line("COMP", iso_summary));
+
+                    let mut glyphs: Vec<Span> = Vec::new();
+                    for _ in 0..g_s {
+                        glyphs.push(Span::styled("●", Style::default().fg(Color::Green)));
+                    }
+                    for _ in 0..y_s {
+                        glyphs.push(Span::styled("◐", Style::default().fg(Color::Yellow)));
+                    }
+                    for _ in 0..r_s {
+                        glyphs.push(Span::styled("✕", Style::default().fg(Color::Red)));
+                    }
+                    for _ in 0..c_s {
+                        glyphs.push(Span::styled("◆", Style::default().fg(Color::Cyan)));
+                    }
+
+                    lines.push(gutter_line("", glyphs));
+                }
             }
+
+            // View indicator hint
+            lines.push(gutter_line(
+                "",
+                vec![Span::styled(
+                    format!("[c] {}", comp_view.label()),
+                    Style::default().fg(Color::DarkGray),
+                )],
+            ));
         }
         lines.push(Line::from(""));
 

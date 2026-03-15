@@ -409,6 +409,7 @@ fn handle_status_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Opti
         KeyCode::Esc => Some(Message::ClearSearch),
         KeyCode::Char('o') => Some(Message::OpenStatusPage),
         KeyCode::Char('r') => Some(Message::RefreshStatus),
+        KeyCode::Char('c') => Some(Message::CycleCompView),
         _ => None,
     }
 }
