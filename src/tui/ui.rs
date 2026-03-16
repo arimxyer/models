@@ -459,22 +459,17 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                         Color::DarkGray,
                     ));
                 }
-                // Single-slice pie renders as a line in tui-piechart — split
-                // into two equal slices with same color for full circle
-                if slices.len() == 1 {
+                // tui-piechart renders a single slice as a line, not a full
+                // circle. Split into two same-color halves to force full
+                // rendering, and hide legend (redundant when all one color —
+                // the summary panel on the right already shows the breakdown).
+                let single_slice = slices.len() == 1;
+                if single_slice {
                     let value = slices[0].value();
                     let color = slices[0].color();
-                    // Determine the static label from the color
-                    let label: &'static str = match color {
-                        Color::Green => "Operational",
-                        Color::Yellow => "Degraded",
-                        Color::Red => "Outage",
-                        Color::Cyan => "Maintenance",
-                        _ => "Unknown",
-                    };
                     slices.clear();
-                    slices.push(PieSlice::new(label, value / 2.0, color));
-                    slices.push(PieSlice::new(label, value / 2.0, color));
+                    slices.push(PieSlice::new("", value / 2.0, color));
+                    slices.push(PieSlice::new("", value / 2.0, color));
                 }
                 let pie = PieChart::new(slices)
                     .block(
@@ -482,8 +477,8 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                             .borders(Borders::ALL)
                             .border_style(detail_border),
                     )
-                    .show_legend(true)
-                    .show_percentages(true)
+                    .show_legend(!single_slice)
+                    .show_percentages(!single_slice)
                     .resolution(Resolution::Braille);
                 f.render_widget(pie, dash_halves[0]);
             } else {
