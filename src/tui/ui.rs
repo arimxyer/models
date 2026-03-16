@@ -12,6 +12,7 @@ use super::app::{App, Filters, Focus, Mode, ProviderListItem, SortOrder, Tab};
 use crate::agents::{format_stars, FetchStatus};
 use crate::provider_category::{provider_category, ProviderCategory};
 use crate::status::ProviderHealth;
+use tui_piechart::{PieChart, PieSlice, Resolution};
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
@@ -392,10 +393,14 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
         ]);
         let header_height = header_lines.len() as u16 + 1; // +1 for footer hints
 
-        // ── Layout: header on top, 3 columns below ─────────────────────
+        // ── Layout: header + dashboard + table ──────────────────────────
         let vert_chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Length(header_height), Constraint::Min(0)])
+            .constraints([
+                Constraint::Length(header_height),
+                Constraint::Length(12),
+                Constraint::Min(0),
+            ])
             .split(detail_area);
 
         // Render header
@@ -408,9 +413,167 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
         );
         f.render_widget(header_para, vert_chunks[0]);
 
+        // ── Dashboard panel ──────────────────────────────────────────
+        {
+            let dash_halves = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
+                .split(vert_chunks[1]);
+
+            // Count component statuses for the pie chart
+            let mut comp_op = 0usize;
+            let mut comp_deg = 0usize;
+            let mut comp_out = 0usize;
+            let mut comp_maint = 0usize;
+            let mut comp_unknown = 0usize;
+            for comp in &components {
+                match component_status_icon(&comp.status) {
+                    "●" => comp_op += 1,
+                    "◐" => comp_deg += 1,
+                    "✕" => comp_out += 1,
+                    "◆" => comp_maint += 1,
+                    _ => comp_unknown += 1,
+                }
+            }
+            let comp_total = components.len();
+
+            // Left half: PieChart
+            if comp_total > 0 {
+                let mut slices = Vec::new();
+                if comp_op > 0 {
+                    slices.push(PieSlice::new("Operational", comp_op as f64, Color::Green));
+                }
+                if comp_deg > 0 {
+                    slices.push(PieSlice::new("Degraded", comp_deg as f64, Color::Yellow));
+                }
+                if comp_out > 0 {
+                    slices.push(PieSlice::new("Outage", comp_out as f64, Color::Red));
+                }
+                if comp_maint > 0 {
+                    slices.push(PieSlice::new("Maintenance", comp_maint as f64, Color::Cyan));
+                }
+                if comp_unknown > 0 {
+                    slices.push(PieSlice::new(
+                        "Unknown",
+                        comp_unknown as f64,
+                        Color::DarkGray,
+                    ));
+                }
+                let pie = PieChart::new(slices)
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .border_style(detail_border),
+                    )
+                    .show_legend(true)
+                    .show_percentages(true)
+                    .resolution(Resolution::Braille);
+                f.render_widget(pie, dash_halves[0]);
+            } else {
+                let no_data = Paragraph::new(Span::styled(
+                    "No component data",
+                    Style::default().fg(Color::DarkGray),
+                ))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .border_style(detail_border),
+                );
+                f.render_widget(no_data, dash_halves[0]);
+            }
+
+            // Right half: Summary stats + active incidents
+            let mut dash_lines: Vec<Line> = Vec::new();
+
+            // Component summary line
+            let mut summary_spans: Vec<Span> = vec![
+                Span::styled("●", Style::default().fg(Color::Green)),
+                Span::raw(format!(" {}  ", comp_op)),
+                Span::styled("◐", Style::default().fg(Color::Yellow)),
+                Span::raw(format!(" {}  ", comp_deg)),
+                Span::styled("✕", Style::default().fg(Color::Red)),
+                Span::raw(format!(" {}  ", comp_out)),
+            ];
+            if comp_maint > 0 {
+                summary_spans.push(Span::styled("◆", Style::default().fg(Color::Cyan)));
+                summary_spans.push(Span::raw(format!(" {}  ", comp_maint)));
+            }
+            summary_spans.push(Span::styled(
+                format!("of {}", comp_total),
+                Style::default().fg(Color::DarkGray),
+            ));
+            dash_lines.push(Line::from(summary_spans));
+            dash_lines.push(Line::from(""));
+
+            // Active incidents
+            let dash_active: Vec<_> = incidents
+                .iter()
+                .filter(|i| {
+                    let s = i.status.to_lowercase();
+                    !s.contains("resolved") && !s.contains("postmortem") && !s.contains("completed")
+                })
+                .take(4)
+                .collect();
+
+            if dash_active.is_empty() {
+                dash_lines.push(Line::from(Span::styled(
+                    "No active incidents",
+                    Style::default().fg(Color::DarkGray),
+                )));
+            } else {
+                dash_lines.push(Line::from(Span::styled(
+                    "Active incidents:",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                )));
+                for inc in &dash_active {
+                    let phase_color = if inc.status.to_lowercase().contains("monitoring") {
+                        Color::Cyan
+                    } else {
+                        Color::Yellow
+                    };
+                    let ts = inc
+                        .updated_at
+                        .as_deref()
+                        .or(inc.created_at.as_deref())
+                        .map(format_relative_time_from_str)
+                        .unwrap_or_default();
+                    dash_lines.push(Line::from(vec![
+                        Span::styled("◉ ", Style::default().fg(phase_color)),
+                        Span::styled(&inc.status, Style::default().fg(phase_color)),
+                        Span::raw("  "),
+                        Span::raw(&inc.name),
+                    ]));
+                    if !ts.is_empty() {
+                        dash_lines.push(Line::from(vec![
+                            Span::raw("  "),
+                            Span::styled(ts, Style::default().fg(Color::DarkGray)),
+                        ]));
+                    }
+                }
+            }
+
+            // Related agents
+            if !related_agents.is_empty() {
+                dash_lines.push(Line::from(""));
+                dash_lines.push(Line::from(vec![
+                    Span::styled("agents: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(related_agents.join(", ")),
+                ]));
+            }
+
+            let dash_para = Paragraph::new(dash_lines).block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(detail_border),
+            );
+            f.render_widget(dash_para, dash_halves[1]);
+        }
+
         // ── Component table ──────────────────────────────────────────
         // Pre-compute column widths for text wrapping (table has borders + col_spacing=1)
-        let table_inner_width = vert_chunks[1].width.saturating_sub(2) as usize; // minus borders
+        let table_inner_width = vert_chunks[2].width.saturating_sub(2) as usize; // minus borders
                                                                                  // 3 columns at 30%/30%/40% with 2 spacing gaps between them
         let col1_width = (table_inner_width as f64 * 0.30) as usize;
         let col2_width = (table_inner_width as f64 * 0.30) as usize;
@@ -885,7 +1048,7 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                 .border_style(detail_border),
         )
         .column_spacing(1);
-        f.render_widget(table, vert_chunks[1]);
+        f.render_widget(table, vert_chunks[2]);
     } else {
         let paragraph = Paragraph::new(vec![Line::from(Span::styled(
             "Select a provider to view details",
