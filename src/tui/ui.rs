@@ -401,343 +401,205 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
         );
         f.render_widget(header_para, vert_chunks[0]);
 
-        // ── 3-column split ──────────────────────────────────────────────
-        let col_chunks = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Percentage(33),
-                Constraint::Percentage(34),
-                Constraint::Percentage(33),
-            ])
-            .split(vert_chunks[1]);
-
-        // ── Col 1: Components ───────────────────────────────────────────
-        let mut col1_lines: Vec<Line> = Vec::new();
-
-        if components.is_empty() {
-            col1_lines.push(Line::from(Span::styled(
-                "No components",
-                Style::default().fg(Color::DarkGray),
-            )));
-        } else {
-            // Group components by status type for exception-prominence display
-            let mut outage_comps: Vec<&crate::status::ComponentStatus> = Vec::new();
-            let mut degraded_comps: Vec<&crate::status::ComponentStatus> = Vec::new();
-            let mut maint_comps: Vec<&crate::status::ComponentStatus> = Vec::new();
-            let mut op_comps: Vec<&crate::status::ComponentStatus> = Vec::new();
-            for comp in &components {
-                match component_status_icon(&comp.status) {
-                    "✕" => outage_comps.push(comp),
-                    "◐" => degraded_comps.push(comp),
-                    "◆" => maint_comps.push(comp),
-                    _ => op_comps.push(comp),
-                }
+        // ── Component table ──────────────────────────────────────────
+        // Build a lookup: component name -> (incident name, latest update body)
+        let mut comp_incident_map: std::collections::HashMap<String, (String, String)> =
+            std::collections::HashMap::new();
+        for incident in &incidents {
+            let note = incident
+                .latest_update
+                .as_ref()
+                .map(|u| u.body.clone())
+                .unwrap_or_else(|| "\u{2014}".to_string());
+            for comp_name in &incident.affected_components {
+                comp_incident_map
+                    .entry(comp_name.clone())
+                    .or_insert_with(|| (incident.name.clone(), note.clone()));
             }
-            let op = op_comps.len() as u32;
-
-            // Render exception-prominence sections (non-operational expanded)
-            for (icon, style, label, comps) in [
-                (
-                    "✕",
-                    Style::default().fg(Color::Red),
-                    "OUTAGE",
-                    &outage_comps,
-                ),
-                (
-                    "◐",
-                    Style::default().fg(Color::Yellow),
-                    "DEGRADED",
-                    &degraded_comps,
-                ),
-                (
-                    "◆",
-                    Style::default().fg(Color::Cyan),
-                    "MAINTENANCE",
-                    &maint_comps,
-                ),
-            ] {
-                if !comps.is_empty() {
-                    col1_lines.push(Line::from(vec![
-                        Span::styled(icon, style),
-                        Span::raw(" "),
-                        Span::styled(label, style.add_modifier(Modifier::BOLD)),
-                    ]));
-                    for comp in comps {
-                        let name = translate_component_name(&comp.name);
-                        col1_lines.push(Line::from(vec![
-                            Span::raw("  "),
-                            Span::styled(
-                                component_status_icon(&comp.status),
-                                component_status_style(&comp.status),
-                            ),
-                            Span::raw(" "),
-                            Span::raw(name),
-                        ]));
-                    }
-                }
-            }
-
-            // Operational: collapsed unless CompView is expanded via `c`
-            match comp_view {
-                CompView::Summary | CompView::Donut => {
-                    // TODO: CompView::Donut will render a donut chart here later
-                    col1_lines.push(Line::from(vec![
-                        Span::styled("●", Style::default().fg(Color::Green)),
-                        Span::raw(format!(" {} operational", op)),
-                    ]));
-                }
-            }
-
-            if !related_agents.is_empty() {
-                col1_lines.push(Line::from(""));
-                col1_lines.push(Line::from(vec![
-                    Span::styled("agents: ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(related_agents.join(", ")),
-                ]));
-            }
-
-            col1_lines.push(Line::from(""));
-            col1_lines.push(Line::from(Span::styled(
-                format!("[c] {}", comp_view.label()),
-                Style::default().fg(Color::DarkGray),
-            )));
         }
 
-        let col1 = Paragraph::new(col1_lines)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(detail_border)
-                    .title(" Components "),
-            )
-            .wrap(Wrap { trim: false })
-            .scroll((detail_scroll, 0));
-        f.render_widget(col1, col_chunks[0]);
+        let mut all_rows: Vec<Row> = Vec::new();
 
-        // ── Col 2: Incidents + Maintenance ──────────────────────────────
-        let mut col2_lines: Vec<Line> = Vec::new();
-
-        if incidents.is_empty() && maintenances.is_empty() {
-            col2_lines.push(Line::from(Span::styled(
-                "\u{2014}",
-                Style::default().fg(Color::DarkGray),
-            )));
+        if components.is_empty() {
+            all_rows.push(Row::new(vec![
+                Cell::from(Span::styled(
+                    "No components",
+                    Style::default().fg(Color::DarkGray),
+                )),
+                Cell::from(Span::styled(
+                    "\u{2014}",
+                    Style::default().fg(Color::DarkGray),
+                )),
+                Cell::from(Span::styled(
+                    "\u{2014}",
+                    Style::default().fg(Color::DarkGray),
+                )),
+            ]));
         } else {
-            // Incidents
-            for (i, incident) in incidents.iter().take(5).enumerate() {
-                let phase_order = ["investigating", "identified", "monitoring", "resolved"];
-                let current_phase = incident.status.to_lowercase();
-                let current_idx = phase_order
-                    .iter()
-                    .position(|&p| current_phase.contains(p))
-                    .unwrap_or(0);
+            // Sort components by severity
+            let mut sorted_comps: Vec<&crate::status::ComponentStatus> =
+                components.iter().collect();
+            sorted_comps.sort_by_key(|comp| {
+                let icon = component_status_icon(&comp.status);
+                match icon {
+                    "✕" => 0u8, // outage
+                    "◐" => 1,   // degraded
+                    "◆" => 2,   // maintenance
+                    "●" => 3,   // operational
+                    _ => 4,     // unknown
+                }
+            });
 
-                // Status icon based on phase
-                let phase_icon = match phase_order.get(current_idx) {
-                    Some(&"investigating") | Some(&"identified") => {
-                        Span::styled("◉", Style::default().fg(Color::Yellow))
-                    }
-                    Some(&"monitoring") => Span::styled("◉", Style::default().fg(Color::Cyan)),
-                    Some(&"resolved") => Span::styled("●", Style::default().fg(Color::Green)),
-                    _ => Span::styled("◉", Style::default().fg(Color::Yellow)),
-                };
+            let mut op_count = 0usize;
+            for comp in &sorted_comps {
+                let icon = component_status_icon(&comp.status);
+                let is_operational = icon == "●";
 
-                let ts_label = incident
-                    .updated_at
-                    .as_deref()
-                    .or(incident.created_at.as_deref())
-                    .map(format_relative_time_from_str)
-                    .unwrap_or_default();
+                // In Summary mode, skip operational components (count them)
+                if is_operational && comp_view == CompView::Summary {
+                    op_count += 1;
+                    continue;
+                }
 
-                col2_lines.push(Line::from(vec![
-                    phase_icon,
+                let name = translate_component_name(&comp.name);
+                let col1_cell = Cell::from(Line::from(vec![
+                    Span::styled(icon, component_status_style(&comp.status)),
                     Span::raw(" "),
-                    Span::styled(
-                        incident.name.clone(),
-                        Style::default().add_modifier(Modifier::BOLD),
-                    ),
+                    Span::raw(name.clone()),
                 ]));
-                if !ts_label.is_empty() {
-                    col2_lines.push(Line::from(vec![
-                        Span::raw("  "),
-                        Span::styled(
-                            format!("{} \u{2014} {}", incident.status.clone(), ts_label),
-                            Style::default().fg(Color::DarkGray),
-                        ),
-                    ]));
-                }
 
-                if i < incidents.len().min(5) - 1 {
-                    col2_lines.push(Line::from(""));
-                }
+                let (col2_cell, col3_cell) =
+                    if let Some((inc_name, note)) = comp_incident_map.get(&comp.name) {
+                        (
+                            Cell::from(Span::raw(inc_name.clone())),
+                            Cell::from(Span::raw(note.clone())),
+                        )
+                    } else {
+                        (
+                            Cell::from(Span::styled(
+                                "\u{2014}",
+                                Style::default().fg(Color::DarkGray),
+                            )),
+                            Cell::from(Span::styled(
+                                "\u{2014}",
+                                Style::default().fg(Color::DarkGray),
+                            )),
+                        )
+                    };
+
+                all_rows.push(Row::new(vec![col1_cell, col2_cell, col3_cell]));
             }
 
-            if incidents.len() > 5 {
-                col2_lines.push(Line::from(Span::styled(
-                    format!("+{} more", incidents.len() - 5),
-                    Style::default().fg(Color::DarkGray),
-                )));
+            // Collapsed operational count row in Summary mode
+            if comp_view == CompView::Summary && op_count > 0 {
+                all_rows.push(Row::new(vec![
+                    Cell::from(Line::from(vec![
+                        Span::styled("●", Style::default().fg(Color::Green)),
+                        Span::raw(format!(" {} operational", op_count)),
+                    ])),
+                    Cell::from(Span::styled(
+                        "\u{2014}",
+                        Style::default().fg(Color::DarkGray),
+                    )),
+                    Cell::from(Span::styled(
+                        "\u{2014}",
+                        Style::default().fg(Color::DarkGray),
+                    )),
+                ]));
+            }
+        }
+
+        // Append standalone maintenance rows
+        for maint in &maintenances {
+            // Skip if all affected components already shown
+            let has_comp_link = maint
+                .affected_components
+                .iter()
+                .any(|c| components.iter().any(|comp| comp.name == *c));
+            if has_comp_link {
+                continue;
             }
 
-            // Separator between incidents and maintenance
-            if !incidents.is_empty() && !maintenances.is_empty() {
-                col2_lines.push(Line::from(""));
-                col2_lines.push(Line::from(Span::styled(
-                    "\u{2500}\u{2500}\u{2500}",
-                    Style::default().fg(Color::DarkGray),
-                )));
-                col2_lines.push(Line::from(""));
-            }
+            let time_info = if let (Some(start_str), Some(end_str)) = (
+                maint.scheduled_for.as_deref(),
+                maint.scheduled_until.as_deref(),
+            ) {
+                format!(
+                    "{} \u{2014} {}",
+                    format_relative_time_from_str(start_str),
+                    format_relative_time_from_str(end_str),
+                )
+            } else if !maint.affected_components.is_empty() {
+                maint.affected_components.join(", ")
+            } else {
+                "\u{2014}".to_string()
+            };
 
-            // Maintenance
-            for (i, maint) in maintenances.iter().enumerate() {
-                col2_lines.push(Line::from(vec![
+            all_rows.push(Row::new(vec![
+                Cell::from(Line::from(vec![
                     Span::styled("◆", Style::default().fg(Color::Cyan)),
                     Span::raw(" "),
                     Span::styled(
                         maint.name.clone(),
                         Style::default().add_modifier(Modifier::BOLD),
                     ),
-                ]));
-                col2_lines.push(Line::from(vec![
-                    Span::raw("  "),
-                    Span::styled(maint.status.clone(), Style::default().fg(Color::DarkGray)),
-                ]));
-
-                // Time progress bar
-                if let (Some(start_str), Some(end_str)) = (
-                    maint.scheduled_for.as_deref(),
-                    maint.scheduled_until.as_deref(),
-                ) {
-                    if let (Some(start), Some(end)) = (
-                        crate::agents::helpers::parse_date(start_str),
-                        crate::agents::helpers::parse_date(end_str),
-                    ) {
-                        let bar_width = 16usize;
-                        let now = chrono::Utc::now();
-                        let total_secs = (end - start).num_seconds().max(1);
-                        let elapsed_secs = (now - start).num_seconds().clamp(0, total_secs);
-                        let pct = (elapsed_secs * 100 / total_secs) as usize;
-                        let filled = (elapsed_secs * bar_width as i64 / total_secs) as usize;
-                        let empty = bar_width.saturating_sub(filled);
-
-                        col2_lines.push(Line::from(vec![
-                            Span::raw("  "),
-                            Span::styled(
-                                "\u{2501}".repeat(filled),
-                                Style::default().fg(Color::Cyan),
-                            ),
-                            Span::styled(
-                                "\u{2591}".repeat(empty),
-                                Style::default().fg(Color::DarkGray),
-                            ),
-                            Span::raw(format!(" {}%", pct)),
-                        ]));
-                    }
-                }
-
-                if i < maintenances.len() - 1 {
-                    col2_lines.push(Line::from(""));
-                }
-            }
-        }
-
-        let col2 = Paragraph::new(col2_lines)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(detail_border)
-                    .title(" Incidents "),
-            )
-            .wrap(Wrap { trim: false });
-        f.render_widget(col2, col_chunks[1]);
-
-        // ── Col 3: Notes (detail for first incident or maintenance) ─────
-        let mut col3_lines: Vec<Line> = Vec::new();
-
-        if let Some(incident) = incidents.first() {
-            col3_lines.push(Line::from(Span::styled(
-                incident.name.clone(),
-                Style::default().add_modifier(Modifier::BOLD),
-            )));
-            col3_lines.push(Line::from(""));
-
-            if let Some(update) = &incident.latest_update {
-                col3_lines.push(Line::from(Span::raw(update.body.clone())));
-                col3_lines.push(Line::from(""));
-            }
-
-            if !incident.affected_components.is_empty() {
-                col3_lines.push(Line::from(vec![
-                    Span::styled("Affects: ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(incident.affected_components.join(", ")),
-                ]));
-            }
-
-            if let Some(ts) = incident
-                .updated_at
-                .as_deref()
-                .or(incident.created_at.as_deref())
-            {
-                col3_lines.push(Line::from(vec![
-                    Span::styled("Updated: ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(format_relative_time_from_str(ts)),
-                ]));
-            }
-
-            // Impact badge
-            let (impact_text, impact_color) = match incident.impact.to_lowercase().as_str() {
-                s if s.contains("major") || s.contains("critical") => ("major", Color::Red),
-                s if s.contains("minor") => ("minor", Color::Yellow),
-                _ => ("none", Color::DarkGray),
-            };
-            col3_lines.push(Line::from(vec![
-                Span::styled("Impact: ", Style::default().fg(Color::DarkGray)),
-                Span::styled(impact_text, Style::default().fg(impact_color)),
+                ])),
+                Cell::from(Span::raw(maint.status.clone())),
+                Cell::from(Span::raw(time_info)),
             ]));
-        } else if let Some(maint) = maintenances.first() {
-            col3_lines.push(Line::from(Span::styled(
-                maint.name.clone(),
-                Style::default().add_modifier(Modifier::BOLD),
-            )));
-            col3_lines.push(Line::from(""));
-
-            if let (Some(start_str), Some(end_str)) = (
-                maint.scheduled_for.as_deref(),
-                maint.scheduled_until.as_deref(),
-            ) {
-                col3_lines.push(Line::from(vec![
-                    Span::styled("From: ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(format_relative_time_from_str(start_str)),
-                ]));
-                col3_lines.push(Line::from(vec![
-                    Span::styled("Until: ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(format_relative_time_from_str(end_str)),
-                ]));
-            }
-
-            if !maint.affected_components.is_empty() {
-                col3_lines.push(Line::from(vec![
-                    Span::styled("Affects: ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(maint.affected_components.join(", ")),
-                ]));
-            }
-        } else {
-            col3_lines.push(Line::from(Span::styled(
-                "\u{2014}",
-                Style::default().fg(Color::DarkGray),
-            )));
         }
 
-        let col3 = Paragraph::new(col3_lines)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(detail_border)
-                    .title(" Notes "),
-            )
-            .wrap(Wrap { trim: false });
-        f.render_widget(col3, col_chunks[2]);
+        // Related agents + view hint as info rows
+        if !related_agents.is_empty() {
+            all_rows.push(Row::new(vec![
+                Cell::from(Line::from(vec![
+                    Span::styled("agents: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(related_agents.join(", ")),
+                ])),
+                Cell::from(""),
+                Cell::from(""),
+            ]));
+        }
+        all_rows.push(Row::new(vec![
+            Cell::from(Span::styled(
+                format!("[c] {}", comp_view.label()),
+                Style::default().fg(Color::DarkGray),
+            )),
+            Cell::from(""),
+            Cell::from(""),
+        ]));
+
+        // Apply scroll by skipping rows
+        let visible_rows: Vec<Row> = all_rows.into_iter().skip(detail_scroll as usize).collect();
+
+        let table_header = Row::new(vec![
+            Cell::from(Span::styled(
+                "Component",
+                Style::default().fg(Color::DarkGray),
+            )),
+            Cell::from(Span::styled(
+                "Incident",
+                Style::default().fg(Color::DarkGray),
+            )),
+            Cell::from(Span::styled("Notes", Style::default().fg(Color::DarkGray))),
+        ]);
+
+        let table = Table::new(
+            visible_rows,
+            [
+                Constraint::Percentage(30),
+                Constraint::Percentage(30),
+                Constraint::Percentage(40),
+            ],
+        )
+        .header(table_header)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(detail_border),
+        )
+        .column_spacing(1);
+        f.render_widget(table, vert_chunks[1]);
     } else {
         let paragraph = Paragraph::new(vec![Line::from(Span::styled(
             "Select a provider to view details",

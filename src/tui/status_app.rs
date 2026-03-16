@@ -23,14 +23,14 @@ pub enum StatusFocus {
 pub enum CompView {
     #[default]
     Summary,
-    Donut,
+    Expanded,
 }
 
 impl CompView {
     pub fn next(self) -> Self {
         match self {
-            Self::Summary => Self::Donut,
-            Self::Donut => Self::Summary,
+            Self::Summary => Self::Expanded,
+            Self::Expanded => Self::Summary,
         }
     }
 
@@ -38,7 +38,7 @@ impl CompView {
     pub fn label(self) -> &'static str {
         match self {
             Self::Summary => "summary",
-            Self::Donut => "donut",
+            Self::Expanded => "expanded",
         }
     }
 }
