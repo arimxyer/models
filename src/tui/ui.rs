@@ -459,12 +459,22 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                         Color::DarkGray,
                     ));
                 }
-                // Single-slice pie renders as a line — add a tiny same-color
-                // slice to force full circle rendering, and hide legend to
-                // avoid showing the dummy 0.0% entry
-                let single_slice = slices.len() == 1;
-                if single_slice {
-                    slices.push(PieSlice::new("", 0.001, slices[0].color()));
+                // Single-slice pie renders as a line in tui-piechart — split
+                // into two equal slices with same color for full circle
+                if slices.len() == 1 {
+                    let value = slices[0].value();
+                    let color = slices[0].color();
+                    // Determine the static label from the color
+                    let label: &'static str = match color {
+                        Color::Green => "Operational",
+                        Color::Yellow => "Degraded",
+                        Color::Red => "Outage",
+                        Color::Cyan => "Maintenance",
+                        _ => "Unknown",
+                    };
+                    slices.clear();
+                    slices.push(PieSlice::new(label, value / 2.0, color));
+                    slices.push(PieSlice::new(label, value / 2.0, color));
                 }
                 let pie = PieChart::new(slices)
                     .block(
@@ -472,8 +482,8 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                             .borders(Borders::ALL)
                             .border_style(detail_border),
                     )
-                    .show_legend(!single_slice)
-                    .show_percentages(!single_slice)
+                    .show_legend(true)
+                    .show_percentages(true)
                     .resolution(Resolution::Braille);
                 f.render_widget(pie, dash_halves[0]);
             } else {
