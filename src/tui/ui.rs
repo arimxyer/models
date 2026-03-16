@@ -405,25 +405,24 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
         // Pre-compute column widths for text wrapping (table has borders + col_spacing=1)
         let table_inner_width = vert_chunks[1].width.saturating_sub(2) as usize; // minus borders
                                                                                  // 3 columns at 30%/30%/40% with 2 spacing gaps between them
+        let col1_width = (table_inner_width as f64 * 0.30) as usize;
         let col2_width = (table_inner_width as f64 * 0.30) as usize;
         let col3_width = (table_inner_width as f64 * 0.40) as usize;
         // Subtract column spacing and a small padding to avoid edge clipping
+        let col1_wrap = col1_width.saturating_sub(4); // icon + space prefix
         let col2_wrap = col2_width.saturating_sub(3);
         let col3_wrap = col3_width.saturating_sub(3);
 
-        // Build a lookup: component name -> (incident name, latest update body)
-        let mut comp_incident_map: std::collections::HashMap<String, (String, String)> =
-            std::collections::HashMap::new();
+        // Build a lookup: component name -> full incident reference
+        let mut comp_incident_map: std::collections::HashMap<
+            String,
+            &crate::status::ActiveIncident,
+        > = std::collections::HashMap::new();
         for incident in &incidents {
-            let note = incident
-                .latest_update
-                .as_ref()
-                .map(|u| u.body.clone())
-                .unwrap_or_else(|| "\u{2014}".to_string());
             for comp_name in &incident.affected_components {
                 comp_incident_map
                     .entry(comp_name.clone())
-                    .or_insert_with(|| (incident.name.clone(), note.clone()));
+                    .or_insert(incident);
             }
         }
 
@@ -489,12 +488,12 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     // Within same severity, group by incident/maintenance name
                     let inc_a = comp_incident_map
                         .get(&a.name)
-                        .map(|(n, _)| n.as_str())
+                        .map(|inc| inc.name.as_str())
                         .or_else(|| comp_maint_map.get(&a.name).map(|(n, _)| n.as_str()))
                         .unwrap_or("");
                     let inc_b = comp_incident_map
                         .get(&b.name)
-                        .map(|(n, _)| n.as_str())
+                        .map(|inc| inc.name.as_str())
                         .or_else(|| comp_maint_map.get(&b.name).map(|(n, _)| n.as_str()))
                         .unwrap_or("");
                     inc_a.cmp(inc_b)
@@ -514,37 +513,120 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                 }
 
                 let name = translate_component_name(&comp.name);
-                let col1_cell = Cell::from(Line::from(vec![
-                    Span::styled(icon, component_status_style(&comp.status)),
-                    Span::raw(" "),
-                    Span::raw(name.clone()),
-                ]));
+
+                // Wrap component name; icon on first line only, indent subsequent
+                let comp_wrapped = textwrap::wrap(&name, col1_wrap);
+                let col1_lines: Vec<Line> = comp_wrapped
+                    .iter()
+                    .enumerate()
+                    .map(|(i, l)| {
+                        if i == 0 {
+                            Line::from(vec![
+                                Span::styled(icon, component_status_style(&comp.status)),
+                                Span::raw(" "),
+                                Span::raw(l.to_string()),
+                            ])
+                        } else {
+                            Line::from(format!("  {l}"))
+                        }
+                    })
+                    .collect();
+                let col1_height = col1_lines.len();
+                let col1_cell = Cell::from(Text::from(col1_lines));
 
                 // Returns (col2_cell, col3_cell, row_height)
-                let (col2_cell, col3_cell, row_height) =
-                    if let Some((inc_name, note)) = comp_incident_map.get(&comp.name) {
+                let (col2_cell, col3_cell, col23_height) =
+                    if let Some(incident) = comp_incident_map.get(&comp.name) {
                         // Merge cells: if same incident as previous row, show empty
-                        let same_as_prev = last_incident.as_ref() == Some(inc_name);
-                        last_incident = Some(inc_name.clone());
+                        let same_as_prev = last_incident.as_ref() == Some(&incident.name);
+                        last_incident = Some(incident.name.clone());
                         if same_as_prev {
-                            (Cell::from(""), Cell::from(""), 1u16)
+                            (Cell::from(""), Cell::from(""), 1usize)
                         } else {
-                            let inc_wrapped = textwrap::wrap(inc_name, col2_wrap);
-                            let note_wrapped = textwrap::wrap(note, col3_wrap);
-                            let height = inc_wrapped.len().max(note_wrapped.len()).max(1) as u16;
-                            let inc_cell = Cell::from(Text::from(
-                                inc_wrapped
-                                    .iter()
-                                    .map(|l| Line::from(l.to_string()))
-                                    .collect::<Vec<_>>(),
-                            ));
-                            let note_cell = Cell::from(Text::from(
-                                note_wrapped
-                                    .iter()
-                                    .map(|l| Line::from(l.to_string()))
-                                    .collect::<Vec<_>>(),
-                            ));
-                            (inc_cell, note_cell, height)
+                            // -- Col 2: incident name (bold, wrapped) + phase/impact/time
+                            let mut inc_lines: Vec<Line> = Vec::new();
+                            let name_wrapped = textwrap::wrap(&incident.name, col2_wrap);
+                            for (i, l) in name_wrapped.iter().enumerate() {
+                                if i == 0 {
+                                    inc_lines.push(Line::from(vec![Span::styled(
+                                        l.to_string(),
+                                        Style::default().add_modifier(Modifier::BOLD),
+                                    )]));
+                                } else {
+                                    inc_lines.push(Line::from(l.to_string()));
+                                }
+                            }
+                            // Phase + impact + timestamp on one line
+                            let phase = incident
+                                .latest_update
+                                .as_ref()
+                                .map(|u| u.status.as_str())
+                                .unwrap_or(&incident.status);
+                            let phase_color = match phase {
+                                "monitoring" => Color::Cyan,
+                                "resolved" | "postmortem" => Color::Green,
+                                _ => Color::Yellow, // investigating, identified, update
+                            };
+                            let impact_label = format!("[{}]", incident.impact);
+                            let ts_label = incident
+                                .updated_at
+                                .as_deref()
+                                .or(incident.created_at.as_deref())
+                                .map(format_relative_time_from_str)
+                                .unwrap_or_default();
+                            inc_lines.push(Line::from(vec![
+                                Span::styled("◉ ", Style::default().fg(phase_color)),
+                                Span::styled(phase.to_string(), Style::default().fg(phase_color)),
+                                Span::raw("  "),
+                                Span::styled(impact_label, Style::default().fg(Color::DarkGray)),
+                                Span::raw("  "),
+                                Span::styled(ts_label, Style::default().fg(Color::DarkGray)),
+                            ]));
+
+                            // -- Col 3: update status + body + affected components
+                            let mut note_lines: Vec<Line> = Vec::new();
+                            if let Some(update) = &incident.latest_update {
+                                let status_color = match update.status.as_str() {
+                                    "monitoring" => Color::Cyan,
+                                    "resolved" | "postmortem" => Color::Green,
+                                    _ => Color::Yellow,
+                                };
+                                note_lines.push(Line::from(Span::styled(
+                                    &update.status,
+                                    Style::default().fg(status_color),
+                                )));
+                                for l in textwrap::wrap(&update.body, col3_wrap) {
+                                    note_lines.push(Line::from(l.to_string()));
+                                }
+                            } else {
+                                note_lines.push(Line::from(Span::styled(
+                                    "\u{2014}",
+                                    Style::default().fg(Color::DarkGray),
+                                )));
+                            }
+                            if !incident.affected_components.is_empty() {
+                                let comps_text = incident.affected_components.join(", ");
+                                let comps_wrapped =
+                                    textwrap::wrap(&comps_text, col3_wrap.saturating_sub(2));
+                                for (i, l) in comps_wrapped.iter().enumerate() {
+                                    if i == 0 {
+                                        note_lines.push(Line::from(vec![
+                                            Span::styled(
+                                                "\u{2192} ",
+                                                Style::default().fg(Color::DarkGray),
+                                            ),
+                                            Span::raw(l.to_string()),
+                                        ]));
+                                    } else {
+                                        note_lines.push(Line::from(format!("  {l}")));
+                                    }
+                                }
+                            }
+
+                            let h = inc_lines.len().max(note_lines.len()).max(1);
+                            let inc_cell = Cell::from(Text::from(inc_lines));
+                            let note_cell = Cell::from(Text::from(note_lines));
+                            (inc_cell, note_cell, h)
                         }
                     } else if let Some((maint_name, maint_info)) = comp_maint_map.get(&comp.name) {
                         // Maintenance in col 2/3
@@ -554,11 +636,11 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                             .unwrap_or(false);
                         last_incident = Some(maint_name.clone());
                         if same_as_prev {
-                            (Cell::from(""), Cell::from(""), 1u16)
+                            (Cell::from(""), Cell::from(""), 1usize)
                         } else {
                             let maint_wrapped = textwrap::wrap(maint_name, col2_wrap);
                             let info_wrapped = textwrap::wrap(maint_info, col3_wrap);
-                            let height = maint_wrapped.len().max(info_wrapped.len()).max(1) as u16;
+                            let height = maint_wrapped.len().max(info_wrapped.len()).max(1);
                             let maint_cell = Cell::from(Text::from(
                                 std::iter::once(Line::from(vec![
                                     Span::styled("\u{25c6} ", Style::default().fg(Color::Cyan)),
@@ -597,10 +679,11 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                                 "\u{2014}",
                                 Style::default().fg(Color::DarkGray),
                             )),
-                            1u16,
+                            1usize,
                         )
                     };
 
+                let row_height = col1_height.max(col23_height).max(1) as u16;
                 all_rows.push(Row::new(vec![col1_cell, col2_cell, col3_cell]).height(row_height));
             }
 
