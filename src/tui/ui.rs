@@ -418,6 +418,30 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
             }
         }
 
+        // Build maintenance lookup: component name -> (maint name, status + time)
+        let mut comp_maint_map: std::collections::HashMap<String, (String, String)> =
+            std::collections::HashMap::new();
+        for maint in &maintenances {
+            let time_info = if let (Some(start_str), Some(end_str)) = (
+                maint.scheduled_for.as_deref(),
+                maint.scheduled_until.as_deref(),
+            ) {
+                format!(
+                    "{} \u{2014} {} \u{2014} {}",
+                    maint.status,
+                    format_relative_time_from_str(start_str),
+                    format_relative_time_from_str(end_str),
+                )
+            } else {
+                maint.status.clone()
+            };
+            for comp_name in &maint.affected_components {
+                comp_maint_map
+                    .entry(comp_name.clone())
+                    .or_insert_with(|| (maint.name.clone(), time_info.clone()));
+            }
+        }
+
         let mut all_rows: Vec<Row> = Vec::new();
 
         if components.is_empty() {
@@ -436,21 +460,40 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                 )),
             ]));
         } else {
-            // Sort components by severity
+            // Sort components by severity, then group by incident within each tier
             let mut sorted_comps: Vec<&crate::status::ComponentStatus> =
                 components.iter().collect();
-            sorted_comps.sort_by_key(|comp| {
-                let icon = component_status_icon(&comp.status);
-                match icon {
-                    "✕" => 0u8, // outage
-                    "◐" => 1,   // degraded
-                    "◆" => 2,   // maintenance
-                    "●" => 3,   // operational
-                    _ => 4,     // unknown
-                }
+            sorted_comps.sort_by(|a, b| {
+                let severity = |comp: &crate::status::ComponentStatus| -> u8 {
+                    let icon = component_status_icon(&comp.status);
+                    match icon {
+                        "✕" => 0, // outage
+                        "◐" => 1, // degraded
+                        "◆" => 2, // maintenance
+                        "●" => 3, // operational
+                        _ => 4,   // unknown
+                    }
+                };
+                let sa = severity(a);
+                let sb = severity(b);
+                sa.cmp(&sb).then_with(|| {
+                    // Within same severity, group by incident/maintenance name
+                    let inc_a = comp_incident_map
+                        .get(&a.name)
+                        .map(|(n, _)| n.as_str())
+                        .or_else(|| comp_maint_map.get(&a.name).map(|(n, _)| n.as_str()))
+                        .unwrap_or("");
+                    let inc_b = comp_incident_map
+                        .get(&b.name)
+                        .map(|(n, _)| n.as_str())
+                        .or_else(|| comp_maint_map.get(&b.name).map(|(n, _)| n.as_str()))
+                        .unwrap_or("");
+                    inc_a.cmp(inc_b)
+                })
             });
 
             let mut op_count = 0usize;
+            let mut last_incident: Option<String> = None;
             for comp in &sorted_comps {
                 let icon = component_status_icon(&comp.status);
                 let is_operational = icon == "●";
@@ -470,11 +513,38 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
 
                 let (col2_cell, col3_cell) =
                     if let Some((inc_name, note)) = comp_incident_map.get(&comp.name) {
-                        (
-                            Cell::from(Span::raw(inc_name.clone())),
-                            Cell::from(Span::raw(note.clone())),
-                        )
+                        // Merge cells: if same incident as previous row, show empty
+                        let same_as_prev = last_incident.as_ref() == Some(inc_name);
+                        last_incident = Some(inc_name.clone());
+                        if same_as_prev {
+                            (Cell::from(""), Cell::from(""))
+                        } else {
+                            (
+                                Cell::from(Span::raw(truncate_unicode(inc_name, 40))),
+                                Cell::from(Span::raw(truncate_unicode(note, 60))),
+                            )
+                        }
+                    } else if let Some((maint_name, maint_info)) = comp_maint_map.get(&comp.name) {
+                        // Maintenance in col 2/3
+                        let same_as_prev = last_incident
+                            .as_ref()
+                            .map(|l| l == maint_name)
+                            .unwrap_or(false);
+                        last_incident = Some(maint_name.clone());
+                        if same_as_prev {
+                            (Cell::from(""), Cell::from(""))
+                        } else {
+                            (
+                                Cell::from(Line::from(vec![
+                                    Span::styled("\u{25c6} ", Style::default().fg(Color::Cyan)),
+                                    Span::raw(truncate_unicode(maint_name, 38)),
+                                ])),
+                                Cell::from(Span::raw(truncate_unicode(maint_info, 60))),
+                            )
+                        }
                     } else {
+                        // No incident, no maintenance — reset merge tracking
+                        last_incident = None;
                         (
                             Cell::from(Span::styled(
                                 "\u{2014}",
@@ -509,9 +579,8 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
             }
         }
 
-        // Append standalone maintenance rows
+        // Append standalone maintenance rows (not tied to any component)
         for maint in &maintenances {
-            // Skip if all affected components already shown
             let has_comp_link = maint
                 .affected_components
                 .iter()
@@ -540,12 +609,12 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     Span::styled("◆", Style::default().fg(Color::Cyan)),
                     Span::raw(" "),
                     Span::styled(
-                        maint.name.clone(),
+                        truncate_unicode(&maint.name, 30),
                         Style::default().add_modifier(Modifier::BOLD),
                     ),
                 ])),
-                Cell::from(Span::raw(maint.status.clone())),
-                Cell::from(Span::raw(time_info)),
+                Cell::from(Span::raw(truncate_unicode(&maint.status, 40))),
+                Cell::from(Span::raw(truncate_unicode(&time_info, 60))),
             ]));
         }
 
@@ -3262,6 +3331,17 @@ fn truncate(s: &str, max_len: usize) -> String {
         s.to_string()
     } else {
         format!("{}...", &s[..max_len.saturating_sub(3)])
+    }
+}
+
+/// Unicode-safe truncation with ellipsis for table cells.
+fn truncate_unicode(s: &str, max_chars: usize) -> String {
+    let count = s.chars().count();
+    if count <= max_chars {
+        s.to_string()
+    } else {
+        let truncated: String = s.chars().take(max_chars.saturating_sub(1)).collect();
+        format!("{truncated}\u{2026}")
     }
 }
 
