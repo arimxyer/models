@@ -771,15 +771,58 @@ impl ProviderStatus {
             .or(self.fallback_url.as_deref())
     }
 
+    pub fn active_incidents(&self) -> Vec<&ActiveIncident> {
+        self.incidents
+            .iter()
+            .filter(|incident| incident.is_active())
+            .collect()
+    }
+
+    pub fn user_visible_affected_items(&self) -> Vec<String> {
+        let assessment = self.assessment();
+        if !assessment.affected_surfaces.is_empty() {
+            return assessment
+                .affected_surfaces
+                .iter()
+                .map(|surface| surface.label().to_string())
+                .collect();
+        }
+
+        self.active_incidents()
+            .into_iter()
+            .flat_map(|incident| incident.affected_components.iter().cloned())
+            .chain(
+                self.scheduled_maintenances
+                    .iter()
+                    .flat_map(|maint| maint.affected_components.iter().cloned()),
+            )
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect()
+    }
+
+    pub fn user_visible_caveat(&self) -> Option<&'static str> {
+        let assessment = self.assessment();
+        if self.provenance == StatusProvenance::Unavailable {
+            Some("Status unavailable")
+        } else if self.error.is_some() || self.provenance == StatusProvenance::Fallback {
+            Some("Limited detail available")
+        } else if assessment
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("stale") || warning.contains("reliable freshness"))
+        {
+            Some("Verify details on the official status page")
+        } else {
+            None
+        }
+    }
+
     #[allow(dead_code)]
     pub fn assessment(&self) -> ProviderAssessment {
         let coverage = self.coverage();
         let freshness = self.freshness();
-        let active_incidents: Vec<&ActiveIncident> = self
-            .incidents
-            .iter()
-            .filter(|incident| incident.is_active())
-            .collect();
+        let active_incidents = self.active_incidents();
         let contradictions = self.contradictions(coverage, freshness, active_incidents.len());
         let confidence = self.confidence(coverage, freshness, &contradictions);
         let affected_surfaces = self.affected_surfaces();
@@ -1382,6 +1425,50 @@ mod tests {
             .contradictions
             .iter()
             .any(|entry| { entry.summary == "Fallback operational snapshot is low-trust" }));
+    }
+
+    #[test]
+    fn user_visible_caveat_prefers_simple_messages() {
+        let mut fallback = sample_status();
+        fallback.provenance = StatusProvenance::Fallback;
+        assert_eq!(
+            fallback.user_visible_caveat(),
+            Some("Limited detail available")
+        );
+
+        let unavailable =
+            ProviderStatus::placeholder(&status_seed_for_provider("some-unknown-provider"));
+        assert_eq!(
+            unavailable.user_visible_caveat(),
+            Some("Status unavailable")
+        );
+
+        let mut stale = sample_status();
+        stale.last_checked = Some((Utc::now() - Duration::hours(30)).to_rfc3339());
+        assert_eq!(
+            stale.user_visible_caveat(),
+            Some("Verify details on the official status page")
+        );
+    }
+
+    #[test]
+    fn user_visible_affected_items_prefers_surface_labels() {
+        let mut status = sample_status();
+        status.incidents.push(ActiveIncident {
+            name: "API elevated errors".to_string(),
+            status: "investigating".to_string(),
+            impact: "minor".to_string(),
+            shortlink: None,
+            created_at: None,
+            updated_at: None,
+            latest_update: None,
+            affected_components: vec!["API".to_string(), "Auth".to_string()],
+        });
+
+        assert_eq!(
+            status.user_visible_affected_items(),
+            vec!["API".to_string(), "Auth".to_string()]
+        );
     }
 
     #[test]

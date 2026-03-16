@@ -195,11 +195,6 @@ fn format_relative_time_from_str(ts: &str) -> String {
         .unwrap_or_else(|| ts.to_string())
 }
 
-fn is_active_status_incident(incident: &crate::status::ActiveIncident) -> bool {
-    let status = incident.status.to_lowercase();
-    !status.contains("resolved") && !status.contains("postmortem") && !status.contains("completed")
-}
-
 fn provider_last_meaningful_update(entry: &crate::status::ProviderStatus) -> Option<String> {
     let latest = entry
         .incidents
@@ -237,28 +232,11 @@ fn status_affected_summary(
     assessment: &crate::status::ProviderAssessment,
 ) -> Option<String> {
     if !assessment.affected_surfaces.is_empty() {
-        return Some(
-            assessment
-                .affected_surfaces
-                .iter()
-                .map(|surface| surface.label())
-                .collect::<Vec<_>>()
-                .join(", "),
-        );
+        return Some(entry.user_visible_affected_items().join(", "));
     }
 
-    let affected_components: BTreeSet<String> = entry
-        .incidents
-        .iter()
-        .filter(|incident| is_active_status_incident(incident))
-        .flat_map(|incident| incident.affected_components.iter().cloned())
-        .chain(
-            entry
-                .scheduled_maintenances
-                .iter()
-                .flat_map(|maint| maint.affected_components.iter().cloned()),
-        )
-        .collect();
+    let affected_components: BTreeSet<String> =
+        entry.user_visible_affected_items().into_iter().collect();
 
     if affected_components.is_empty() {
         None
@@ -269,25 +247,6 @@ fn status_affected_summary(
                 .collect::<Vec<_>>()
                 .join(", "),
         )
-    }
-}
-
-fn status_detail_caveat(
-    entry: &crate::status::ProviderStatus,
-    assessment: &crate::status::ProviderAssessment,
-) -> Option<&'static str> {
-    if entry.provenance == StatusProvenance::Unavailable {
-        Some("Status unavailable")
-    } else if entry.error.is_some() || entry.provenance == StatusProvenance::Fallback {
-        Some("Limited detail available")
-    } else if assessment
-        .warnings
-        .iter()
-        .any(|warning| warning.contains("stale") || warning.contains("reliable freshness"))
-    {
-        Some("Verify details on the official status page")
-    } else {
-        None
     }
 }
 
@@ -463,15 +422,12 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
         });
         let detail_scroll = status_app.detail_scroll;
         let assessment = entry.assessment();
-        let active_incidents: Vec<_> = incidents
-            .iter()
-            .filter(|incident| is_active_status_incident(incident))
-            .collect();
+        let active_incidents = entry.active_incidents();
         let active_incident_count = active_incidents.len();
         let affected_summary = status_affected_summary(entry, &assessment);
         let last_meaningful_update =
             provider_last_meaningful_update(entry).unwrap_or_else(|| last_checked_display.clone());
-        let caveat = status_detail_caveat(entry, &assessment);
+        let caveat = entry.user_visible_caveat();
         let detail_summary = entry
             .summary
             .clone()
@@ -826,7 +782,7 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
         // Unlinked incidents (no affected_components) — show at the top
         let active_incidents: Vec<_> = incidents
             .iter()
-            .filter(|incident| is_active_status_incident(incident))
+            .filter(|incident| incident.is_active())
             .collect();
         for incident in &active_incidents {
             if incident.affected_components.is_empty() {
