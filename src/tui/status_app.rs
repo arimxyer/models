@@ -78,13 +78,13 @@ impl StatusApp {
         for agent in agents_file.agents.values() {
             for slug in &agent.supported_providers {
                 let canonical = canonical_status_slug(slug).to_string();
-                by_slug
-                    .entry(canonical.clone())
-                    .or_insert_with(|| status_seed_for_provider(slug));
-                related_agents
-                    .entry(canonical)
-                    .or_default()
-                    .push(agent.name.clone());
+                // Only link agents to providers that exist in the registry
+                if by_slug.contains_key(&canonical) {
+                    related_agents
+                        .entry(canonical)
+                        .or_default()
+                        .push(agent.name.clone());
+                }
             }
         }
 

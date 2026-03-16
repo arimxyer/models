@@ -264,7 +264,14 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     },
                 ),
             ];
-            let incident_count = entry.incidents.len();
+            let incident_count = entry
+                .incidents
+                .iter()
+                .filter(|i| {
+                    let s = i.status.to_lowercase();
+                    !s.contains("resolved") && !s.contains("postmortem") && !s.contains("completed")
+                })
+                .count();
             if incident_count > 0 {
                 spans.push(Span::styled(
                     format!(" {incident_count}!"),
