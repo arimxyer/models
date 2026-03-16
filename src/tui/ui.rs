@@ -16,10 +16,9 @@ use crate::agents::{format_stars, FetchStatus};
 use crate::provider_category::{provider_category, ProviderCategory};
 use crate::status::ProviderHealth;
 
-/// Data for the Canvas-rendered treemap.
-struct HeatmapGroup {
-    label: String,
-    total: u32,
+/// Data for the Canvas-rendered treemap: one cell per component.
+struct HeatmapCell {
+    group_label: String,
     color: Color,
 }
 
@@ -341,8 +340,8 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
 
     // Pie chart slice data extracted from the Donut view arm
     let mut pie_chart_data: Option<Vec<PieSlice<'static>>> = None;
-    // Heatmap group data for the treemap visualization
-    let mut heatmap_data: Option<Vec<HeatmapGroup>> = None;
+    // Heatmap cell data for the per-component treemap visualization
+    let mut heatmap_data: Option<Vec<HeatmapCell>> = None;
 
     let detail_lines = if let Some(entry) = status_app.current_entry() {
         let entry_slug = entry.slug.clone();
@@ -613,7 +612,7 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                 CompView::Heatmap => {
                     lines.push(gutter_line("COMP", summary_spans));
 
-                    // Group ALL components by group_name and determine worst status
+                    // Group components by group_name
                     let mut groups: std::collections::BTreeMap<
                         String,
                         Vec<&crate::status::ComponentStatus>,
@@ -626,35 +625,43 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                         groups.entry(key).or_default().push(comp);
                     }
 
-                    let mut hm_groups: Vec<HeatmapGroup> = Vec::new();
-                    for (key, comps) in &groups {
-                        let mut has_outage = false;
-                        let mut has_degraded = false;
-                        let mut has_maint = false;
-                        for comp in comps {
-                            match component_status_icon(&comp.status) {
-                                "✕" => has_outage = true,
-                                "◐" => has_degraded = true,
-                                "◆" => has_maint = true,
-                                _ => {}
-                            }
-                        }
-                        let color = if has_outage {
-                            Color::Red
-                        } else if has_degraded {
-                            Color::Yellow
-                        } else if has_maint {
-                            Color::Cyan
-                        } else {
-                            Color::Green
-                        };
-                        hm_groups.push(HeatmapGroup {
-                            label: key.clone(),
-                            total: comps.len() as u32,
-                            color,
+                    // Sort groups by worst health (outage first, then degraded, then operational)
+                    let mut sorted_groups: Vec<(String, Vec<&crate::status::ComponentStatus>)> =
+                        groups.into_iter().collect();
+                    sorted_groups.sort_by_key(|(_, comps)| {
+                        comps
+                            .iter()
+                            .map(|c| match component_status_icon(&c.status) {
+                                "✕" => 0,
+                                "◐" => 1,
+                                "◆" => 2,
+                                "●" => 3,
+                                _ => 4,
+                            })
+                            .min()
+                            .unwrap_or(4)
+                    });
+
+                    // Build one cell per component; within each group sort issues first
+                    let mut cells: Vec<HeatmapCell> = Vec::new();
+                    for (group_label, mut comps) in sorted_groups {
+                        comps.sort_by_key(|c| match component_status_icon(&c.status) {
+                            "✕" => 0,
+                            "◐" => 1,
+                            "◆" => 2,
+                            "●" => 3,
+                            _ => 4,
                         });
+                        for comp in comps {
+                            cells.push(HeatmapCell {
+                                group_label: group_label.clone(),
+                                color: component_status_style(&comp.status)
+                                    .fg
+                                    .unwrap_or(Color::DarkGray),
+                            });
+                        }
                     }
-                    heatmap_data = Some(hm_groups);
+                    heatmap_data = Some(cells);
                 }
                 CompView::Isotype => {
                     let multiplier = ((total as f64) / 20.0).ceil().max(1.0) as u32;
@@ -1030,7 +1037,7 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
             .wrap(Wrap { trim: false })
             .scroll((status_app.detail_scroll, 0));
         f.render_widget(paragraph, detail_chunks[1]);
-    } else if let Some(groups) = heatmap_data {
+    } else if let Some(cells) = heatmap_data {
         // Split detail area: top for treemap chart, bottom for scrollable Paragraph
         let detail_chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -1044,51 +1051,58 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
         let chart_inner = chart_block.inner(detail_chunks[0]);
         f.render_widget(chart_block, detail_chunks[0]);
 
-        // Render squarified treemap via Canvas
-        if !groups.is_empty() && chart_inner.width > 0 && chart_inner.height > 0 {
-            // Build treemap items: size = component count, preserve index for color/label lookup
-            let mut items: Vec<treemap::MapItem> = groups
+        // Render per-component squarified treemap via Canvas
+        if !cells.is_empty() && chart_inner.width > 0 && chart_inner.height > 0 {
+            // All cells have equal weight (1.0) — layout_items sorts descending internally
+            // but equal sizes preserve the input order (groups pre-sorted by severity)
+            let mut items: Vec<treemap::MapItem> = cells
                 .iter()
-                .map(|g| treemap::MapItem::with_size(f64::from(g.total).max(1.0)))
+                .map(|_| treemap::MapItem::with_size(1.0))
                 .collect();
 
-            // layout_items sorts descending internally — track original order via size matching
-            // Instead, build a parallel vec of (label, color, size) and sort the same way
-            let mut meta: Vec<(String, Color, f64)> = groups
-                .iter()
-                .map(|g| (g.label.clone(), g.color, f64::from(g.total).max(1.0)))
-                .collect();
-            meta.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
-
-            let bounds = treemap::Rect::from_points(
-                0.0,
-                0.0,
-                chart_inner.width as f64,
-                chart_inner.height as f64,
-            );
-            treemap::TreemapLayout::new().layout_items(&mut items, bounds);
-
-            // Canvas coordinate system: x goes right, y goes UP (bottom-left origin).
-            // Treemap rects have y going DOWN, so flip: canvas_y = height - treemap_y - treemap_h
             let canvas_w = chart_inner.width as f64;
             let canvas_h = chart_inner.height as f64;
+
+            let bounds = treemap::Rect::from_points(0.0, 0.0, canvas_w, canvas_h);
+            treemap::TreemapLayout::new().layout_items(&mut items, bounds);
+
+            // Collect per-cell rects (flipped y) alongside metadata for group label computation
+            let gap = 0.15;
+            let cell_rects: Vec<(f64, f64, f64, f64, Color, &str)> = items
+                .iter()
+                .enumerate()
+                .map(|(i, item)| {
+                    let r = item.bounds();
+                    let rx = r.x + gap;
+                    let ry = canvas_h - r.y - r.h + gap;
+                    let rw = (r.w - 2.0 * gap).max(0.0);
+                    let rh = (r.h - 2.0 * gap).max(0.0);
+                    let color = cells[i].color;
+                    let label = cells[i].group_label.as_str();
+                    (rx, ry, rw, rh, color, label)
+                })
+                .collect();
+
+            // Compute group bounding boxes for labels
+            let mut group_bounds: std::collections::BTreeMap<&str, (f64, f64, f64, f64)> =
+                std::collections::BTreeMap::new();
+            for &(rx, ry, rw, rh, _, label) in &cell_rects {
+                let entry = group_bounds
+                    .entry(label)
+                    .or_insert((rx, ry, rx + rw, ry + rh));
+                entry.0 = entry.0.min(rx);
+                entry.1 = entry.1.min(ry);
+                entry.2 = entry.2.max(rx + rw);
+                entry.3 = entry.3.max(ry + rh);
+            }
 
             let canvas_widget = Canvas::default()
                 .x_bounds([0.0, canvas_w])
                 .y_bounds([0.0, canvas_h])
                 .marker(ratatui::symbols::Marker::HalfBlock)
                 .paint(|ctx: &mut CanvasContext<'_>| {
-                    for (i, item) in items.iter().enumerate() {
-                        let r = item.bounds();
-                        let color = meta.get(i).map(|m| m.1).unwrap_or(Color::DarkGray);
-
-                        // Flip y axis and add small gap between rectangles
-                        let gap = 0.15;
-                        let rx = r.x + gap;
-                        let ry = canvas_h - r.y - r.h + gap;
-                        let rw = (r.w - 2.0 * gap).max(0.0);
-                        let rh = (r.h - 2.0 * gap).max(0.0);
-
+                    // Draw each component cell
+                    for &(rx, ry, rw, rh, color, _) in &cell_rects {
                         ctx.draw(&FilledRect {
                             x: rx,
                             y: ry,
@@ -1096,13 +1110,16 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                             height: rh,
                             color,
                         });
+                    }
 
-                        // Print label if rectangle is wide enough
-                        let label = &meta.get(i).map(|m| m.0.as_str()).unwrap_or("");
-                        if rw >= label.len() as f64 && rh >= 1.0 {
-                            let text_x = rx + rw / 2.0;
-                            let text_y = ry + rh / 2.0;
-                            ctx.print(text_x, text_y, label.to_string());
+                    // Draw group labels at centroids (only if enough area)
+                    for (label, &(x_min, y_min, x_max, y_max)) in &group_bounds {
+                        let gw = x_max - x_min;
+                        let gh = y_max - y_min;
+                        if gw >= label.len() as f64 && gh >= 1.0 {
+                            let cx = (x_min + x_max) / 2.0;
+                            let cy = (y_min + y_max) / 2.0;
+                            ctx.print(cx, cy, label.to_string());
                         }
                     }
                 });
