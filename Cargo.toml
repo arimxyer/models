@@ -62,6 +62,9 @@ dirs = "6"
 # Config file parsing
 toml = "0.8"
 
+# Text wrapping
+textwrap = "0.16"
+
 # Markdown rendering (CLI mode)
 termimad = "0.30"
 

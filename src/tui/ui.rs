@@ -1,7 +1,7 @@
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    text::{Line, Span},
+    text::{Line, Span, Text},
     widgets::{
         Block, Borders, Cell, Clear, List, ListItem, ListState, Paragraph, Row, Table, Wrap,
     },
@@ -402,6 +402,15 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
         f.render_widget(header_para, vert_chunks[0]);
 
         // ── Component table ──────────────────────────────────────────
+        // Pre-compute column widths for text wrapping (table has borders + col_spacing=1)
+        let table_inner_width = vert_chunks[1].width.saturating_sub(2) as usize; // minus borders
+                                                                                 // 3 columns at 30%/30%/40% with 2 spacing gaps between them
+        let col2_width = (table_inner_width as f64 * 0.30) as usize;
+        let col3_width = (table_inner_width as f64 * 0.40) as usize;
+        // Subtract column spacing and a small padding to avoid edge clipping
+        let col2_wrap = col2_width.saturating_sub(3);
+        let col3_wrap = col3_width.saturating_sub(3);
+
         // Build a lookup: component name -> (incident name, latest update body)
         let mut comp_incident_map: std::collections::HashMap<String, (String, String)> =
             std::collections::HashMap::new();
@@ -511,18 +520,31 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     Span::raw(name.clone()),
                 ]));
 
-                let (col2_cell, col3_cell) =
+                // Returns (col2_cell, col3_cell, row_height)
+                let (col2_cell, col3_cell, row_height) =
                     if let Some((inc_name, note)) = comp_incident_map.get(&comp.name) {
                         // Merge cells: if same incident as previous row, show empty
                         let same_as_prev = last_incident.as_ref() == Some(inc_name);
                         last_incident = Some(inc_name.clone());
                         if same_as_prev {
-                            (Cell::from(""), Cell::from(""))
+                            (Cell::from(""), Cell::from(""), 1u16)
                         } else {
-                            (
-                                Cell::from(Span::raw(truncate_unicode(inc_name, 40))),
-                                Cell::from(Span::raw(truncate_unicode(note, 60))),
-                            )
+                            let inc_wrapped = textwrap::wrap(inc_name, col2_wrap);
+                            let note_wrapped = textwrap::wrap(note, col3_wrap);
+                            let height = inc_wrapped.len().max(note_wrapped.len()).max(1) as u16;
+                            let inc_cell = Cell::from(Text::from(
+                                inc_wrapped
+                                    .iter()
+                                    .map(|l| Line::from(l.to_string()))
+                                    .collect::<Vec<_>>(),
+                            ));
+                            let note_cell = Cell::from(Text::from(
+                                note_wrapped
+                                    .iter()
+                                    .map(|l| Line::from(l.to_string()))
+                                    .collect::<Vec<_>>(),
+                            ));
+                            (inc_cell, note_cell, height)
                         }
                     } else if let Some((maint_name, maint_info)) = comp_maint_map.get(&comp.name) {
                         // Maintenance in col 2/3
@@ -532,15 +554,36 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                             .unwrap_or(false);
                         last_incident = Some(maint_name.clone());
                         if same_as_prev {
-                            (Cell::from(""), Cell::from(""))
+                            (Cell::from(""), Cell::from(""), 1u16)
                         } else {
-                            (
-                                Cell::from(Line::from(vec![
+                            let maint_wrapped = textwrap::wrap(maint_name, col2_wrap);
+                            let info_wrapped = textwrap::wrap(maint_info, col3_wrap);
+                            let height = maint_wrapped.len().max(info_wrapped.len()).max(1) as u16;
+                            let maint_cell = Cell::from(Text::from(
+                                std::iter::once(Line::from(vec![
                                     Span::styled("\u{25c6} ", Style::default().fg(Color::Cyan)),
-                                    Span::raw(truncate_unicode(maint_name, 38)),
-                                ])),
-                                Cell::from(Span::raw(truncate_unicode(maint_info, 60))),
-                            )
+                                    Span::raw(
+                                        maint_wrapped
+                                            .first()
+                                            .map(|l| l.to_string())
+                                            .unwrap_or_default(),
+                                    ),
+                                ]))
+                                .chain(
+                                    maint_wrapped
+                                        .iter()
+                                        .skip(1)
+                                        .map(|l| Line::from(l.to_string())),
+                                )
+                                .collect::<Vec<_>>(),
+                            ));
+                            let info_cell = Cell::from(Text::from(
+                                info_wrapped
+                                    .iter()
+                                    .map(|l| Line::from(l.to_string()))
+                                    .collect::<Vec<_>>(),
+                            ));
+                            (maint_cell, info_cell, height)
                         }
                     } else {
                         // No incident, no maintenance — reset merge tracking
@@ -554,10 +597,11 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                                 "\u{2014}",
                                 Style::default().fg(Color::DarkGray),
                             )),
+                            1u16,
                         )
                     };
 
-                all_rows.push(Row::new(vec![col1_cell, col2_cell, col3_cell]));
+                all_rows.push(Row::new(vec![col1_cell, col2_cell, col3_cell]).height(row_height));
             }
 
             // Collapsed operational count row in Summary mode
@@ -604,18 +648,34 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                 "\u{2014}".to_string()
             };
 
-            all_rows.push(Row::new(vec![
-                Cell::from(Line::from(vec![
-                    Span::styled("◆", Style::default().fg(Color::Cyan)),
-                    Span::raw(" "),
-                    Span::styled(
-                        truncate_unicode(&maint.name, 30),
-                        Style::default().add_modifier(Modifier::BOLD),
-                    ),
-                ])),
-                Cell::from(Span::raw(truncate_unicode(&maint.status, 40))),
-                Cell::from(Span::raw(truncate_unicode(&time_info, 60))),
-            ]));
+            let status_wrapped = textwrap::wrap(&maint.status, col2_wrap);
+            let time_wrapped = textwrap::wrap(&time_info, col3_wrap);
+            let sa_height = status_wrapped.len().max(time_wrapped.len()).max(1) as u16;
+            all_rows.push(
+                Row::new(vec![
+                    Cell::from(Line::from(vec![
+                        Span::styled("◆", Style::default().fg(Color::Cyan)),
+                        Span::raw(" "),
+                        Span::styled(
+                            maint.name.clone(),
+                            Style::default().add_modifier(Modifier::BOLD),
+                        ),
+                    ])),
+                    Cell::from(Text::from(
+                        status_wrapped
+                            .iter()
+                            .map(|l| Line::from(l.to_string()))
+                            .collect::<Vec<_>>(),
+                    )),
+                    Cell::from(Text::from(
+                        time_wrapped
+                            .iter()
+                            .map(|l| Line::from(l.to_string()))
+                            .collect::<Vec<_>>(),
+                    )),
+                ])
+                .height(sa_height),
+            );
         }
 
         // Related agents + view hint as info rows
@@ -3335,16 +3395,6 @@ fn truncate(s: &str, max_len: usize) -> String {
 }
 
 /// Unicode-safe truncation with ellipsis for table cells.
-fn truncate_unicode(s: &str, max_chars: usize) -> String {
-    let count = s.chars().count();
-    if count <= max_chars {
-        s.to_string()
-    } else {
-        let truncated: String = s.chars().take(max_chars.saturating_sub(1)).collect();
-        format!("{truncated}\u{2026}")
-    }
-}
-
 fn format_filters(filters: &Filters, category: ProviderCategory) -> String {
     let mut active = Vec::new();
     if filters.reasoning {
