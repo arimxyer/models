@@ -358,3 +358,10 @@ Lots of gratitude and couldn't have made this application without these workhors
 ## License
 
 MIT
+
+
+## Usage
+
+```python
+# Usage examples
+```
