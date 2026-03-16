@@ -649,17 +649,19 @@ fn parse_onlineornot(source: OfficialStatusSource, body: &str) -> Result<Officia
 
     let result = v.get("result").ok_or("missing result field")?;
 
+    // status may be a string ("operational") or an object ({"description": "All Systems Operational"})
     let status_str = result
         .get("status")
-        .and_then(|v| v.as_str())
-        .unwrap_or("unknown");
+        .and_then(|v| {
+            v.as_str().map(String::from).or_else(|| {
+                v.get("description")
+                    .and_then(|d| d.as_str())
+                    .map(String::from)
+            })
+        })
+        .unwrap_or_else(|| "unknown".to_string());
 
-    let health = match status_str {
-        "operational" | "up" => ProviderHealth::Operational,
-        "degraded" => ProviderHealth::Degraded,
-        "outage" | "down" => ProviderHealth::Outage,
-        _ => ProviderHealth::Unknown,
-    };
+    let health = ProviderHealth::from_api_status(&status_str);
 
     let components = result
         .get("components")
