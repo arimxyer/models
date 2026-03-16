@@ -425,60 +425,36 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
             let mut comp_deg = 0usize;
             let mut comp_out = 0usize;
             let mut comp_maint = 0usize;
-            let mut comp_unknown = 0usize;
             for comp in &components {
                 match component_status_icon(&comp.status) {
                     "●" => comp_op += 1,
                     "◐" => comp_deg += 1,
                     "✕" => comp_out += 1,
                     "◆" => comp_maint += 1,
-                    _ => comp_unknown += 1,
+                    _ => {}
                 }
             }
             let comp_total = components.len();
 
             // Left half: PieChart
             if comp_total > 0 {
-                let mut slices = Vec::new();
-                if comp_op > 0 {
-                    slices.push(PieSlice::new("Operational", comp_op as f64, Color::Green));
-                }
-                if comp_deg > 0 {
-                    slices.push(PieSlice::new("Degraded", comp_deg as f64, Color::Yellow));
-                }
-                if comp_out > 0 {
-                    slices.push(PieSlice::new("Outage", comp_out as f64, Color::Red));
-                }
-                if comp_maint > 0 {
-                    slices.push(PieSlice::new("Maintenance", comp_maint as f64, Color::Cyan));
-                }
-                if comp_unknown > 0 {
-                    slices.push(PieSlice::new(
-                        "Unknown",
-                        comp_unknown as f64,
-                        Color::DarkGray,
-                    ));
-                }
-                // tui-piechart renders a single slice as a line, not a full
-                // circle. Split into two same-color halves to force full
-                // rendering, and hide legend (redundant when all one color —
-                // the summary panel on the right already shows the breakdown).
-                let single_slice = slices.len() == 1;
-                if single_slice {
-                    let value = slices[0].value();
-                    let color = slices[0].color();
-                    slices.clear();
-                    slices.push(PieSlice::new("", value / 2.0, color));
-                    slices.push(PieSlice::new("", value / 2.0, color));
-                }
+                // Always include all status slices (even at 0) so the legend
+                // is complete and tui-piechart always has multiple slices
+                // (avoids single-slice rendering bug where it shows a line)
+                let slices = vec![
+                    PieSlice::new("Operational", comp_op as f64, Color::Green),
+                    PieSlice::new("Degraded", comp_deg as f64, Color::Yellow),
+                    PieSlice::new("Outage", comp_out as f64, Color::Red),
+                    PieSlice::new("Maintenance", comp_maint as f64, Color::Cyan),
+                ];
                 let pie = PieChart::new(slices)
                     .block(
                         Block::default()
                             .borders(Borders::ALL)
                             .border_style(detail_border),
                     )
-                    .show_legend(!single_slice)
-                    .show_percentages(!single_slice)
+                    .show_legend(true)
+                    .show_percentages(true)
                     .resolution(Resolution::Braille);
                 f.render_widget(pie, dash_halves[0]);
             } else {
