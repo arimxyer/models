@@ -438,23 +438,45 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
 
             // Left half: PieChart
             if comp_total > 0 {
-                // Always include all status slices so the legend is complete.
-                // Use tiny non-zero values (0.001) for empty slices — true 0.0
-                // values don't help tui-piechart's single-segment rendering bug.
+                // Build slices: only include statuses with actual counts for
+                // the legend, but pad with tiny invisible slices to avoid
+                // tui-piechart's single-segment rendering bug.
                 let tiny = 0.001;
-                let slices = vec![
-                    PieSlice::new("Operational", (comp_op as f64).max(tiny), Color::Green),
-                    PieSlice::new("Degraded", (comp_deg as f64).max(tiny), Color::Yellow),
-                    PieSlice::new("Outage", (comp_out as f64).max(tiny), Color::Red),
-                    PieSlice::new("Maintenance", (comp_maint as f64).max(tiny), Color::Cyan),
-                ];
+                let mut slices = Vec::new();
+                let mut real_count = 0u8;
+                if comp_op > 0 {
+                    slices.push(PieSlice::new("Operational", comp_op as f64, Color::Green));
+                    real_count += 1;
+                }
+                if comp_deg > 0 {
+                    slices.push(PieSlice::new("Degraded", comp_deg as f64, Color::Yellow));
+                    real_count += 1;
+                }
+                if comp_out > 0 {
+                    slices.push(PieSlice::new("Outage", comp_out as f64, Color::Red));
+                    real_count += 1;
+                }
+                if comp_maint > 0 {
+                    slices.push(PieSlice::new("Maintenance", comp_maint as f64, Color::Cyan));
+                    real_count += 1;
+                }
+                // If only one real slice, add invisible padding slices to
+                // force full circle rendering (tui-piechart bug workaround)
+                if real_count <= 1 {
+                    if comp_op == 0 {
+                        slices.push(PieSlice::new("", tiny, Color::Green));
+                    }
+                    if comp_deg == 0 {
+                        slices.push(PieSlice::new("", tiny, Color::Yellow));
+                    }
+                }
                 let pie = PieChart::new(slices)
                     .block(
                         Block::default()
                             .borders(Borders::ALL)
                             .border_style(detail_border),
                     )
-                    .show_legend(true)
+                    .show_legend(real_count > 1)
                     .show_percentages(true)
                     .resolution(Resolution::Braille);
                 f.render_widget(pie, dash_halves[0]);
