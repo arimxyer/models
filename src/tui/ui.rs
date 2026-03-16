@@ -460,8 +460,10 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     ));
                 }
                 // Single-slice pie renders as a line — add a tiny same-color
-                // slice to force full circle rendering
-                if slices.len() == 1 {
+                // slice to force full circle rendering, and hide legend to
+                // avoid showing the dummy 0.0% entry
+                let single_slice = slices.len() == 1;
+                if single_slice {
                     slices.push(PieSlice::new("", 0.001, slices[0].color()));
                 }
                 let pie = PieChart::new(slices)
@@ -470,8 +472,8 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                             .borders(Borders::ALL)
                             .border_style(detail_border),
                     )
-                    .show_legend(true)
-                    .show_percentages(true)
+                    .show_legend(!single_slice)
+                    .show_percentages(!single_slice)
                     .resolution(Resolution::Braille);
                 f.render_widget(pie, dash_halves[0]);
             } else {
