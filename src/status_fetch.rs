@@ -1017,6 +1017,34 @@ fn resolve_provider_status(
         status.components = official.components;
         status.incidents = official.incidents;
         status.scheduled_maintenances = official.maintenance;
+
+        // Reconcile health: cross-check API-declared status against
+        // actual incidents and component statuses. Take the worst.
+        let mut reconciled = status.health;
+
+        // Active (unresolved) incidents imply at least Degraded
+        let has_active_incident = status.incidents.iter().any(|i| {
+            let s = i.status.to_lowercase();
+            !s.contains("resolved") && !s.contains("postmortem") && !s.contains("completed")
+        });
+        if has_active_incident && reconciled == ProviderHealth::Operational {
+            reconciled = ProviderHealth::Degraded;
+        }
+
+        // Worst component status overrides if worse than current
+        for comp in &status.components {
+            let comp_health = match comp.status.as_str() {
+                "major_outage" => ProviderHealth::Outage,
+                "partial_outage" | "degraded_performance" => ProviderHealth::Degraded,
+                "under_maintenance" => ProviderHealth::Maintenance,
+                _ => ProviderHealth::Operational,
+            };
+            if comp_health.sort_rank() < reconciled.sort_rank() {
+                reconciled = comp_health;
+            }
+        }
+
+        status.health = reconciled;
         return status;
     }
 
