@@ -438,14 +438,15 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
 
             // Left half: PieChart
             if comp_total > 0 {
-                // Always include all status slices (even at 0) so the legend
-                // is complete and tui-piechart always has multiple slices
-                // (avoids single-slice rendering bug where it shows a line)
+                // Always include all status slices so the legend is complete.
+                // Use tiny non-zero values (0.001) for empty slices — true 0.0
+                // values don't help tui-piechart's single-segment rendering bug.
+                let tiny = 0.001;
                 let slices = vec![
-                    PieSlice::new("Operational", comp_op as f64, Color::Green),
-                    PieSlice::new("Degraded", comp_deg as f64, Color::Yellow),
-                    PieSlice::new("Outage", comp_out as f64, Color::Red),
-                    PieSlice::new("Maintenance", comp_maint as f64, Color::Cyan),
+                    PieSlice::new("Operational", (comp_op as f64).max(tiny), Color::Green),
+                    PieSlice::new("Degraded", (comp_deg as f64).max(tiny), Color::Yellow),
+                    PieSlice::new("Outage", (comp_out as f64).max(tiny), Color::Red),
+                    PieSlice::new("Maintenance", (comp_maint as f64).max(tiny), Color::Cyan),
                 ];
                 let pie = PieChart::new(slices)
                     .block(
