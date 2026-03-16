@@ -40,7 +40,6 @@ crossterm = "0.29"
 
 # Charts / visualization
 tui-piechart = "0.3"
-treemap = "0.3"
 
 # Error handling
 anyhow = "1"

@@ -23,20 +23,14 @@ pub enum StatusFocus {
 pub enum CompView {
     #[default]
     Summary,
-    DotGrid,
     Donut,
-    Heatmap,
-    Isotype,
 }
 
 impl CompView {
     pub fn next(self) -> Self {
         match self {
-            Self::Summary => Self::DotGrid,
-            Self::DotGrid => Self::Donut,
-            Self::Donut => Self::Heatmap,
-            Self::Heatmap => Self::Isotype,
-            Self::Isotype => Self::Summary,
+            Self::Summary => Self::Donut,
+            Self::Donut => Self::Summary,
         }
     }
 
@@ -44,10 +38,7 @@ impl CompView {
     pub fn label(self) -> &'static str {
         match self {
             Self::Summary => "summary",
-            Self::DotGrid => "grid",
             Self::Donut => "donut",
-            Self::Heatmap => "heatmap",
-            Self::Isotype => "isotype",
         }
     }
 }

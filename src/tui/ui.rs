@@ -1,4 +1,3 @@
-use ratatui::widgets::canvas::{Canvas, Context as CanvasContext, Painter, Shape};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -8,55 +7,12 @@ use ratatui::{
     },
     Frame,
 };
-use treemap::Mappable;
 use tui_piechart::{PieChart, PieSlice};
 
 use super::app::{App, Filters, Focus, Mode, ProviderListItem, SortOrder, Tab};
 use crate::agents::{format_stars, FetchStatus};
 use crate::provider_category::{provider_category, ProviderCategory};
 use crate::status::ProviderHealth;
-
-/// Data for the Canvas-rendered treemap: one cell per component.
-struct HeatmapCell {
-    group_label: String,
-    color: Color,
-}
-
-/// A filled rectangle shape for ratatui Canvas (the built-in Rectangle only draws outlines).
-struct FilledRect {
-    x: f64,
-    y: f64,
-    width: f64,
-    height: f64,
-    color: Color,
-}
-
-impl Shape for FilledRect {
-    fn draw(&self, painter: &mut Painter) {
-        let (&[x_min, x_max], &[y_min, y_max]) = painter.bounds();
-        let x_range = x_max - x_min;
-        let y_range = y_max - y_min;
-        if x_range <= 0.0 || y_range <= 0.0 {
-            return;
-        }
-        // Step size derived from the coordinate range. 200 steps across the full
-        // range is enough for any typical terminal width (up to ~200 cols) with
-        // 2x oversampling for HalfBlock marker.
-        let step_x = x_range / 200.0;
-        let step_y = y_range / 100.0;
-        let mut x = self.x;
-        while x <= self.x + self.width {
-            let mut y = self.y;
-            while y <= self.y + self.height {
-                if let Some((px, py)) = painter.get_point(x, y) {
-                    painter.paint(px, py, self.color);
-                }
-                y += step_y;
-            }
-            x += step_x;
-        }
-    }
-}
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
@@ -340,8 +296,6 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
 
     // Pie chart slice data extracted from the Donut view arm
     let mut pie_chart_data: Option<Vec<PieSlice<'static>>> = None;
-    // Heatmap cell data for the per-component treemap visualization
-    let mut heatmap_data: Option<Vec<HeatmapCell>> = None;
 
     let detail_lines = if let Some(entry) = status_app.current_entry() {
         let entry_slug = entry.slug.clone();
@@ -561,35 +515,6 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                         }
                     }
                 }
-                CompView::DotGrid => {
-                    lines.push(gutter_line("COMP", summary_spans));
-
-                    // Sort by severity: operational first, issues last
-                    let mut sorted: Vec<&crate::status::ComponentStatus> =
-                        components.iter().collect();
-                    sorted.sort_by_key(|c| match component_status_icon(&c.status) {
-                        "●" => 0,
-                        "◆" => 1,
-                        "◐" => 2,
-                        "✕" => 3,
-                        _ => 4,
-                    });
-
-                    // 10 dots per row, spaced
-                    for chunk in sorted.chunks(10) {
-                        let mut spans: Vec<Span> = Vec::new();
-                        for (i, comp) in chunk.iter().enumerate() {
-                            if i > 0 {
-                                spans.push(Span::raw(" "));
-                            }
-                            spans.push(Span::styled(
-                                component_status_icon(&comp.status),
-                                component_status_style(&comp.status),
-                            ));
-                        }
-                        lines.push(gutter_line("", spans));
-                    }
-                }
                 CompView::Donut => {
                     lines.push(gutter_line("COMP", summary_spans));
 
@@ -608,96 +533,6 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                         slices.push(PieSlice::new("Maintenance", f64::from(maint), Color::Cyan));
                     }
                     pie_chart_data = Some(slices);
-                }
-                CompView::Heatmap => {
-                    lines.push(gutter_line("COMP", summary_spans));
-
-                    // Group components by group_name
-                    let mut groups: std::collections::BTreeMap<
-                        String,
-                        Vec<&crate::status::ComponentStatus>,
-                    > = std::collections::BTreeMap::new();
-                    for comp in components {
-                        let key = comp
-                            .group_name
-                            .clone()
-                            .unwrap_or_else(|| "Other".to_string());
-                        groups.entry(key).or_default().push(comp);
-                    }
-
-                    // Sort groups by worst health (outage first, then degraded, then operational)
-                    let mut sorted_groups: Vec<(String, Vec<&crate::status::ComponentStatus>)> =
-                        groups.into_iter().collect();
-                    sorted_groups.sort_by_key(|(_, comps)| {
-                        comps
-                            .iter()
-                            .map(|c| match component_status_icon(&c.status) {
-                                "✕" => 0,
-                                "◐" => 1,
-                                "◆" => 2,
-                                "●" => 3,
-                                _ => 4,
-                            })
-                            .min()
-                            .unwrap_or(4)
-                    });
-
-                    // Build one cell per component; within each group sort issues first
-                    let mut cells: Vec<HeatmapCell> = Vec::new();
-                    for (group_label, mut comps) in sorted_groups {
-                        comps.sort_by_key(|c| match component_status_icon(&c.status) {
-                            "✕" => 0,
-                            "◐" => 1,
-                            "◆" => 2,
-                            "●" => 3,
-                            _ => 4,
-                        });
-                        for comp in comps {
-                            cells.push(HeatmapCell {
-                                group_label: group_label.clone(),
-                                color: component_status_style(&comp.status)
-                                    .fg
-                                    .unwrap_or(Color::DarkGray),
-                            });
-                        }
-                    }
-                    heatmap_data = Some(cells);
-                }
-                CompView::Isotype => {
-                    let multiplier = ((total as f64) / 20.0).ceil().max(1.0) as u32;
-                    let g_s = op.div_ceil(multiplier);
-                    let y_s = if deg > 0 { deg.div_ceil(multiplier) } else { 0 };
-                    let r_s = if out > 0 { out.div_ceil(multiplier) } else { 0 };
-                    let c_s = if maint > 0 {
-                        maint.div_ceil(multiplier)
-                    } else {
-                        0
-                    };
-
-                    let mut iso_summary = summary_spans;
-                    if multiplier > 1 {
-                        iso_summary.push(Span::styled(
-                            format!("  (\u{00d7}{})", multiplier),
-                            Style::default().fg(Color::DarkGray),
-                        ));
-                    }
-                    lines.push(gutter_line("COMP", iso_summary));
-
-                    let mut glyphs: Vec<Span> = Vec::new();
-                    for _ in 0..g_s {
-                        glyphs.push(Span::styled("●", Style::default().fg(Color::Green)));
-                    }
-                    for _ in 0..y_s {
-                        glyphs.push(Span::styled("◐", Style::default().fg(Color::Yellow)));
-                    }
-                    for _ in 0..r_s {
-                        glyphs.push(Span::styled("✕", Style::default().fg(Color::Red)));
-                    }
-                    for _ in 0..c_s {
-                        glyphs.push(Span::styled("◆", Style::default().fg(Color::Cyan)));
-                    }
-
-                    lines.push(gutter_line("", glyphs));
                 }
             }
 
@@ -1027,104 +862,6 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
             .show_percentages(true)
             .legend_position(tui_piechart::LegendPosition::Right);
         f.render_widget(pie, detail_chunks[0]);
-
-        let paragraph = Paragraph::new(detail_lines)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(detail_border),
-            )
-            .wrap(Wrap { trim: false })
-            .scroll((status_app.detail_scroll, 0));
-        f.render_widget(paragraph, detail_chunks[1]);
-    } else if let Some(cells) = heatmap_data {
-        // Split detail area: top for treemap chart, bottom for scrollable Paragraph
-        let detail_chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Length(12), Constraint::Min(0)])
-            .split(detail_area);
-
-        let chart_block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(detail_border)
-            .title(" Details ");
-        let chart_inner = chart_block.inner(detail_chunks[0]);
-        f.render_widget(chart_block, detail_chunks[0]);
-
-        // Render per-component squarified treemap via Canvas
-        if !cells.is_empty() && chart_inner.width > 0 && chart_inner.height > 0 {
-            // All cells have equal weight (1.0) — layout_items sorts descending internally
-            // but equal sizes preserve the input order (groups pre-sorted by severity)
-            let mut items: Vec<treemap::MapItem> = cells
-                .iter()
-                .map(|_| treemap::MapItem::with_size(1.0))
-                .collect();
-
-            let canvas_w = chart_inner.width as f64;
-            let canvas_h = chart_inner.height as f64;
-
-            let bounds = treemap::Rect::from_points(0.0, 0.0, canvas_w, canvas_h);
-            treemap::TreemapLayout::new().layout_items(&mut items, bounds);
-
-            // Collect per-cell rects (flipped y) alongside metadata for group label computation
-            let gap = 0.15;
-            let cell_rects: Vec<(f64, f64, f64, f64, Color, &str)> = items
-                .iter()
-                .enumerate()
-                .map(|(i, item)| {
-                    let r = item.bounds();
-                    let rx = r.x + gap;
-                    let ry = canvas_h - r.y - r.h + gap;
-                    let rw = (r.w - 2.0 * gap).max(0.0);
-                    let rh = (r.h - 2.0 * gap).max(0.0);
-                    let color = cells[i].color;
-                    let label = cells[i].group_label.as_str();
-                    (rx, ry, rw, rh, color, label)
-                })
-                .collect();
-
-            // Compute group bounding boxes for labels
-            let mut group_bounds: std::collections::BTreeMap<&str, (f64, f64, f64, f64)> =
-                std::collections::BTreeMap::new();
-            for &(rx, ry, rw, rh, _, label) in &cell_rects {
-                let entry = group_bounds
-                    .entry(label)
-                    .or_insert((rx, ry, rx + rw, ry + rh));
-                entry.0 = entry.0.min(rx);
-                entry.1 = entry.1.min(ry);
-                entry.2 = entry.2.max(rx + rw);
-                entry.3 = entry.3.max(ry + rh);
-            }
-
-            let canvas_widget = Canvas::default()
-                .x_bounds([0.0, canvas_w])
-                .y_bounds([0.0, canvas_h])
-                .marker(ratatui::symbols::Marker::HalfBlock)
-                .paint(|ctx: &mut CanvasContext<'_>| {
-                    // Draw each component cell
-                    for &(rx, ry, rw, rh, color, _) in &cell_rects {
-                        ctx.draw(&FilledRect {
-                            x: rx,
-                            y: ry,
-                            width: rw,
-                            height: rh,
-                            color,
-                        });
-                    }
-
-                    // Draw group labels at centroids (only if enough area)
-                    for (label, &(x_min, y_min, x_max, y_max)) in &group_bounds {
-                        let gw = x_max - x_min;
-                        let gh = y_max - y_min;
-                        if gw >= label.len() as f64 && gh >= 1.0 {
-                            let cx = (x_min + x_max) / 2.0;
-                            let cy = (y_min + y_max) / 2.0;
-                            ctx.print(cx, cy, label.to_string());
-                        }
-                    }
-                });
-            f.render_widget(canvas_widget, chart_inner);
-        }
 
         let paragraph = Paragraph::new(detail_lines)
             .block(

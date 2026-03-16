@@ -1595,7 +1595,6 @@ dependencies = [
  "termimad",
  "tokio",
  "toml",
- "treemap",
  "tui-piechart",
 ]
 
@@ -3035,12 +3034,6 @@ checksum = "db97caf9d906fbde555dd62fa95ddba9eecfd14cb388e4f491a66d74cd5fb79a"
 dependencies = [
  "once_cell",
 ]
-
-[[package]]
-name = "treemap"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1571f89da27a5e1aa83304ee1ab9519ea8c6432b4c8903aaaa6c9a9eecb6f36"
 
 [[package]]
 name = "try-lock"
