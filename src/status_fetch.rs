@@ -1,7 +1,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use regex::Regex;
 use serde::Deserialize;
 use serde_json::Value;
 use tokio::time::timeout;
@@ -181,10 +180,7 @@ async fn fetch_official(
             }
             Ok(snapshot)
         }
-        StatusSourceMethod::Feed => {
-            let body = fetch_text(client, source.endpoint_url()).await?;
-            parse_feed(source, &body)
-        }
+        StatusSourceMethod::Feed => Err("Feed parsing not supported".to_string()),
         StatusSourceMethod::GoogleCloudJson => {
             let products =
                 google_products.ok_or_else(|| "missing google products catalog".to_string())?;
@@ -1000,185 +996,8 @@ fn parse_instatus_components(body: &str) -> Result<Vec<ComponentStatus>, String>
 }
 
 // ---------------------------------------------------------------------------
-// RSS / Atom feed parsers
-// ---------------------------------------------------------------------------
-
-fn parse_feed(source: OfficialStatusSource, xml: &str) -> Result<OfficialSnapshot, String> {
-    parse_atom_feed(source, xml).or_else(|_| parse_rss_feed(source, xml))
-}
-
-fn parse_rss_feed(source: OfficialStatusSource, xml: &str) -> Result<OfficialSnapshot, String> {
-    let title_re =
-        Regex::new(r"(?s)<channel>.*?<title>(.*?)</title>").map_err(|err| err.to_string())?;
-    let build_re =
-        Regex::new(r"(?s)<lastBuildDate>(.*?)</lastBuildDate>").map_err(|err| err.to_string())?;
-    let item_re = Regex::new(r"(?s)<item>(.*?)</item>").map_err(|err| err.to_string())?;
-    let item_title_re = Regex::new(r"(?s)<title>(.*?)</title>").map_err(|err| err.to_string())?;
-    let item_description_re =
-        Regex::new(r"(?s)<description>(.*?)</description>").map_err(|err| err.to_string())?;
-    let channel_title = title_re
-        .captures(xml)
-        .and_then(|caps| caps.get(1))
-        .map(|m| decode_xml(m.as_str()).trim().to_string())
-        .unwrap_or_else(|| source.label().to_string());
-    let last_checked = build_re
-        .captures(xml)
-        .and_then(|caps| caps.get(1))
-        .map(|m| decode_xml(m.as_str()).trim().to_string());
-    let item = item_re
-        .captures(xml)
-        .and_then(|caps| caps.get(1))
-        .map(|m| m.as_str());
-
-    let official_url = source.page_url().to_string();
-
-    let (health, summary) = if let Some(item_block) = item {
-        let title = item_title_re
-            .captures(item_block)
-            .and_then(|caps| caps.get(1))
-            .map(|m| strip_markup(&decode_xml(m.as_str())))
-            .unwrap_or_default();
-        let description = item_description_re
-            .captures(item_block)
-            .and_then(|caps| caps.get(1))
-            .map(|m| strip_markup(&decode_xml(m.as_str())))
-            .unwrap_or_default();
-        let combined = format!("{title} {description}");
-        (
-            health_from_feed_text(&combined),
-            Some(prefer_summary(&title, &description)),
-        )
-    } else {
-        (
-            ProviderHealth::Operational,
-            Some("No incidents recorded".to_string()),
-        )
-    };
-
-    Ok(OfficialSnapshot {
-        label: channel_title,
-        method: StatusSourceMethod::Feed,
-        health,
-        official_url,
-        last_checked,
-        summary,
-        components: Vec::new(),
-        incidents: Vec::new(),
-        maintenance: Vec::new(),
-    })
-}
-
-fn parse_atom_feed(source: OfficialStatusSource, xml: &str) -> Result<OfficialSnapshot, String> {
-    if !xml.contains("<feed") {
-        return Err("not an atom feed".to_string());
-    }
-
-    let title_re =
-        Regex::new(r"(?s)<feed[^>]*>.*?<title>(.*?)</title>").map_err(|err| err.to_string())?;
-    let updated_re = Regex::new(r"(?s)<updated>(.*?)</updated>").map_err(|err| err.to_string())?;
-    let entry_re = Regex::new(r"(?s)<entry>(.*?)</entry>").map_err(|err| err.to_string())?;
-    let entry_title_re = Regex::new(r"(?s)<title>(.*?)</title>").map_err(|err| err.to_string())?;
-    let entry_body_re = Regex::new(r"(?s)<(?:content|summary)[^>]*>(.*?)</(?:content|summary)>")
-        .map_err(|err| err.to_string())?;
-    let entry_link_re =
-        Regex::new(r#"(?s)<link[^>]*href="(.*?)"[^>]*/?>"#).map_err(|err| err.to_string())?;
-
-    let feed_title = title_re
-        .captures(xml)
-        .and_then(|caps| caps.get(1))
-        .map(|m| decode_xml(m.as_str()).trim().to_string())
-        .unwrap_or_else(|| source.label().to_string());
-    let last_checked = updated_re
-        .captures(xml)
-        .and_then(|caps| caps.get(1))
-        .map(|m| decode_xml(m.as_str()).trim().to_string());
-    let entry_block = entry_re
-        .captures(xml)
-        .and_then(|caps| caps.get(1))
-        .map(|m| m.as_str())
-        .ok_or_else(|| "atom feed entry missing".to_string())?;
-
-    let title = entry_title_re
-        .captures(entry_block)
-        .and_then(|caps| caps.get(1))
-        .map(|m| strip_markup(&decode_xml(m.as_str())))
-        .unwrap_or_default();
-    let body = entry_body_re
-        .captures(entry_block)
-        .and_then(|caps| caps.get(1))
-        .map(|m| strip_markup(&decode_xml(m.as_str())))
-        .unwrap_or_default();
-    let official_url = entry_link_re
-        .captures(entry_block)
-        .and_then(|caps| caps.get(1))
-        .map(|m| decode_xml(m.as_str()).trim().to_string())
-        .unwrap_or_else(|| source.page_url().to_string());
-    let combined = format!("{title} {body}");
-
-    Ok(OfficialSnapshot {
-        label: feed_title,
-        method: StatusSourceMethod::Feed,
-        health: health_from_feed_text(&combined),
-        official_url,
-        last_checked,
-        summary: Some(prefer_summary(&title, &body)),
-        components: Vec::new(),
-        incidents: Vec::new(),
-        maintenance: Vec::new(),
-    })
-}
-
-// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-fn health_from_feed_text(text: &str) -> ProviderHealth {
-    let upper = text.to_uppercase();
-    if upper.contains("RECOVERED")
-        || upper.contains("RESOLVED")
-        || upper.contains("OPERATIONAL AGAIN")
-        || upper.contains("ALL SYSTEMS OPERATIONAL")
-    {
-        ProviderHealth::Operational
-    } else if upper.contains("OUTAGE") || upper.contains("WENT DOWN") || upper.contains("DOWN") {
-        ProviderHealth::Outage
-    } else if upper.contains("INVESTIGATING")
-        || upper.contains("IDENTIFIED")
-        || upper.contains("DEGRADED")
-        || upper.contains("PARTIAL")
-        || upper.contains("MINOR")
-    {
-        ProviderHealth::Degraded
-    } else {
-        ProviderHealth::Unknown
-    }
-}
-
-fn prefer_summary(title: &str, body: &str) -> String {
-    if body.is_empty() || body == title {
-        title.to_string()
-    } else if title.is_empty() {
-        body.to_string()
-    } else {
-        format!("{title} — {body}")
-    }
-}
-
-fn decode_xml(text: &str) -> String {
-    text.replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&amp;", "&")
-        .replace("&quot;", "\"")
-        .replace("&apos;", "'")
-}
-
-fn strip_markup(text: &str) -> String {
-    let without_cdata = text.replace("<![CDATA[", "").replace("]]>", "");
-    let no_tags = Regex::new(r"(?s)<[^>]+>")
-        .expect("valid regex")
-        .replace_all(&without_cdata, " ");
-    no_tags.split_whitespace().collect::<Vec<_>>().join(" ")
-}
 
 fn resolve_provider_status(
     seed: &StatusProviderSeed,
@@ -1443,57 +1262,6 @@ mod tests {
             .as_deref()
             .unwrap_or_default()
             .contains("added for this provider yet"));
-    }
-
-    #[test]
-    fn parses_xai_rss_feed() {
-        let xml = r#"
-        <rss version="2.0">
-          <channel>
-            <title>xAI Status - Incident History</title>
-            <link>https://status.x.ai</link>
-            <lastBuildDate>Thu, 12 Mar 2026 00:43:25 GMT</lastBuildDate>
-            <item>
-              <title>Degraded website login</title>
-              <description><![CDATA[<strong>RESOLVED</strong> - <p>This incident has been resolved.</p>]]></description>
-              <pubDate>Thu, 19 Feb 2026 16:38:24 GMT</pubDate>
-              <link>https://status.x.ai/incidents/lrkj1G0wmMoe</link>
-            </item>
-          </channel>
-        </rss>
-        "#;
-
-        let parsed = parse_feed(OfficialStatusSource::Xai, xml).expect("rss parses");
-        assert_eq!(parsed.method, StatusSourceMethod::Feed);
-        assert_eq!(parsed.health, ProviderHealth::Operational);
-        assert_eq!(
-            parsed.summary.as_deref(),
-            Some("Degraded website login — RESOLVED - This incident has been resolved.")
-        );
-    }
-
-    #[test]
-    fn parses_atom_feed() {
-        let xml = r#"
-        <feed xmlns="http://www.w3.org/2005/Atom">
-          <title>Azure Status - Incident history</title>
-          <updated>2026-02-16T21:35:20.315+00:00</updated>
-          <entry>
-            <title>Service incident</title>
-            <updated>2026-02-16T21:35:20.315+00:00</updated>
-            <link rel="alternate" type="text/html" href="https://azure.status.microsoft/en-us/status/incident/test"/>
-            <content type="html"><![CDATA[<p><strong>Investigating</strong> - We are currently investigating this incident.</p>]]></content>
-          </entry>
-        </feed>
-        "#;
-
-        let parsed = parse_feed(OfficialStatusSource::Azure, xml).expect("atom parses");
-        assert_eq!(parsed.method, StatusSourceMethod::Feed);
-        assert_eq!(parsed.health, ProviderHealth::Degraded);
-        assert_eq!(
-            parsed.official_url,
-            "https://azure.status.microsoft/en-us/status/incident/test"
-        );
     }
 
     #[test]

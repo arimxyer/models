@@ -121,7 +121,6 @@ pub enum OfficialStatusSource {
     OpenRouter,
     GoogleGeminiJson,
     Moonshot,
-    Xai,
     GitLab,
     Poe,
     NanoGpt,
@@ -132,8 +131,6 @@ pub enum OfficialStatusSource {
     Cohere,
     Cerebras,
     Cloudflare,
-    Aws,
-    Azure,
     Cursor,
     GitHub,
     DeepSeek,
@@ -150,7 +147,6 @@ impl OfficialStatusSource {
             Self::OpenRouter => "OpenRouter Status",
             Self::GoogleGeminiJson => "Google Cloud Service Health",
             Self::Moonshot => "Moonshot AI Status",
-            Self::Xai => "xAI Status",
             Self::GitLab => "GitLab Status",
             Self::Poe => "Poe Status",
             Self::NanoGpt => "NanoGPT Status",
@@ -161,8 +157,6 @@ impl OfficialStatusSource {
             Self::Cohere => "Cohere Status",
             Self::Cerebras => "Cerebras Status",
             Self::Cloudflare => "Cloudflare Status",
-            Self::Aws => "AWS Service Health",
-            Self::Azure => "Azure Status",
             Self::Cursor => "Cursor Status",
             Self::GitHub => "GitHub Status",
             Self::DeepSeek => "DeepSeek Status",
@@ -179,7 +173,6 @@ impl OfficialStatusSource {
             Self::OpenRouter => "https://api.onlineornot.com/v1/status_pages/openrouter/summary",
             Self::GoogleGeminiJson => "https://status.cloud.google.com/incidents.json",
             Self::Moonshot => "https://status.moonshot.cn/api/v2/summary.json",
-            Self::Xai => "https://status.x.ai/feed.xml",
             Self::GitLab => "https://api.status.io/1.0/status/5b36dc6502d06804c08349f7",
             Self::Poe => "https://status.poe.com/api/v2/summary.json",
             Self::NanoGpt => "https://status.nano-gpt.com/index.json",
@@ -190,8 +183,6 @@ impl OfficialStatusSource {
             Self::Cohere => "https://status.cohere.com/api/v2/summary.json",
             Self::Cerebras => "https://status.cerebras.ai/api/v2/summary.json",
             Self::Cloudflare => "https://www.cloudflarestatus.com/api/v2/summary.json",
-            Self::Aws => "https://status.aws.amazon.com/rss/all.rss",
-            Self::Azure => "https://azure.status.microsoft/en-us/status/feed/",
             Self::Cursor => "https://status.cursor.com/api/v2/summary.json",
             Self::GitHub => "https://www.githubstatus.com/api/v2/summary.json",
             Self::DeepSeek => "https://status.deepseek.com/api/v2/summary.json",
@@ -210,7 +201,6 @@ impl OfficialStatusSource {
                 "https://status.cloud.google.com/products/Z0FZJAMvEB4j3NbCJs6B/history"
             }
             Self::Moonshot => "https://status.moonshot.cn",
-            Self::Xai => "https://status.x.ai",
             Self::GitLab => "https://status.gitlab.com",
             Self::Poe => "https://status.poe.com",
             Self::NanoGpt => "https://status.nano-gpt.com",
@@ -221,8 +211,6 @@ impl OfficialStatusSource {
             Self::Cohere => "https://status.cohere.com",
             Self::Cerebras => "https://status.cerebras.ai",
             Self::Cloudflare => "https://www.cloudflarestatus.com",
-            Self::Aws => "https://status.aws.amazon.com",
-            Self::Azure => "https://azure.status.microsoft/en-us/status",
             Self::Cursor => "https://status.cursor.com",
             Self::GitHub => "https://www.githubstatus.com",
             Self::DeepSeek => "https://status.deepseek.com",
@@ -260,8 +248,6 @@ impl OfficialStatusSource {
             Self::Perplexity => StatusSourceMethod::Instatus,
 
             Self::GoogleGeminiJson => StatusSourceMethod::GoogleCloudJson,
-
-            Self::Xai | Self::Aws | Self::Azure => StatusSourceMethod::Feed,
         }
     }
 }
@@ -290,8 +276,6 @@ pub const STATUS_SOURCE_ALIASES: &[(&str, &str)] = &[
     ("google-vertex", "google"),
     ("google-vertex-anthropic", "google"),
     ("perplexity-agent", "perplexity"),
-    ("amazon-bedrock", "aws"),
-    ("azure-cognitive-services", "azure"),
     ("cloudflare-ai-gateway", "cloudflare"),
     ("cloudflare-workers-ai", "cloudflare"),
 ];
@@ -384,16 +368,6 @@ pub const STATUS_REGISTRY: &[StatusRegistryEntry] = &[
         strategy: StatusStrategy::OfficialFirst {
             official: OfficialStatusSource::DeepSeek,
             fallback_source_slug: Some("deepseek"),
-        },
-        support_tier: StatusSupportTier::Curated,
-    },
-    StatusRegistryEntry {
-        slug: "xai",
-        display_name: "xAI",
-        source_slug: "xai",
-        strategy: StatusStrategy::OfficialFirst {
-            official: OfficialStatusSource::Xai,
-            fallback_source_slug: None,
         },
         support_tier: StatusSupportTier::Curated,
     },
@@ -493,26 +467,6 @@ pub const STATUS_REGISTRY: &[StatusRegistryEntry] = &[
         source_slug: "cloudflare",
         strategy: StatusStrategy::OfficialFirst {
             official: OfficialStatusSource::Cloudflare,
-            fallback_source_slug: None,
-        },
-        support_tier: StatusSupportTier::Curated,
-    },
-    StatusRegistryEntry {
-        slug: "aws",
-        display_name: "AWS",
-        source_slug: "aws",
-        strategy: StatusStrategy::OfficialFirst {
-            official: OfficialStatusSource::Aws,
-            fallback_source_slug: None,
-        },
-        support_tier: StatusSupportTier::Curated,
-    },
-    StatusRegistryEntry {
-        slug: "azure",
-        display_name: "Azure",
-        source_slug: "azure",
-        strategy: StatusStrategy::OfficialFirst {
-            official: OfficialStatusSource::Azure,
             fallback_source_slug: None,
         },
         support_tier: StatusSupportTier::Curated,
@@ -729,10 +683,6 @@ mod tests {
             StatusStrategy::OfficialFirst { .. }
         ));
         assert!(matches!(
-            strategy_for_provider("xai"),
-            StatusStrategy::OfficialFirst { .. }
-        ));
-        assert!(matches!(
             strategy_for_provider("gitlab"),
             StatusStrategy::OfficialFirst { .. }
         ));
@@ -779,7 +729,6 @@ mod tests {
         assert!(status_registry_entry("cursor").is_some());
         assert!(status_registry_entry("perplexity").is_some());
         assert!(status_registry_entry("deepseek").is_some());
-        assert!(status_registry_entry("xai").is_some());
         assert!(status_registry_entry("gitlab").is_some());
         assert!(status_registry_entry("poe").is_some());
         assert!(status_registry_entry("nano-gpt").is_some());
@@ -790,8 +739,6 @@ mod tests {
         assert!(status_registry_entry("cohere").is_some());
         assert!(status_registry_entry("cerebras").is_some());
         assert!(status_registry_entry("cloudflare").is_some());
-        assert!(status_registry_entry("aws").is_some());
-        assert!(status_registry_entry("azure").is_some());
         assert!(status_registry_entry("together-ai").is_some());
         assert!(status_registry_entry("huggingface").is_some());
     }
@@ -801,8 +748,6 @@ mod tests {
         assert_eq!(canonical_status_slug("github-copilot"), "github");
         assert_eq!(canonical_status_slug("github-models"), "github");
         assert_eq!(canonical_status_slug("moonshotai"), "moonshot");
-        assert_eq!(canonical_status_slug("amazon-bedrock"), "aws");
-        assert_eq!(canonical_status_slug("azure-cognitive-services"), "azure");
         assert_eq!(canonical_status_slug("cloudflare-workers-ai"), "cloudflare");
     }
 }
