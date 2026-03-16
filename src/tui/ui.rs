@@ -459,6 +459,73 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
 
         let mut all_rows: Vec<Row> = Vec::new();
 
+        // Unlinked incidents (no affected_components) — show at the top
+        let active_incidents: Vec<_> = incidents
+            .iter()
+            .filter(|i| {
+                let s = i.status.to_lowercase();
+                !s.contains("resolved") && !s.contains("postmortem") && !s.contains("completed")
+            })
+            .collect();
+        for incident in &active_incidents {
+            if incident.affected_components.is_empty() {
+                let mut inc_lines: Vec<Line> = Vec::new();
+                for (j, l) in textwrap::wrap(&incident.name, col2_wrap).iter().enumerate() {
+                    if j == 0 {
+                        inc_lines.push(Line::from(Span::styled(
+                            l.to_string(),
+                            Style::default().add_modifier(Modifier::BOLD),
+                        )));
+                    } else {
+                        inc_lines.push(Line::from(l.to_string()));
+                    }
+                }
+                let phase = incident.status.to_lowercase();
+                let phase_color = if phase.contains("investigating") || phase.contains("identified")
+                {
+                    Color::Yellow
+                } else if phase.contains("monitoring") {
+                    Color::Cyan
+                } else {
+                    Color::Yellow
+                };
+                inc_lines.push(Line::from(vec![
+                    Span::styled("◉ ", Style::default().fg(phase_color)),
+                    Span::styled(incident.status.clone(), Style::default().fg(phase_color)),
+                ]));
+                if let Some(ts) = incident
+                    .updated_at
+                    .as_deref()
+                    .or(incident.created_at.as_deref())
+                {
+                    inc_lines.push(Line::from(Span::styled(
+                        format_relative_time_from_str(ts),
+                        Style::default().fg(Color::DarkGray),
+                    )));
+                }
+
+                let mut note_lines: Vec<Line> = Vec::new();
+                if let Some(update) = &incident.latest_update {
+                    for l in textwrap::wrap(&update.body, col3_wrap) {
+                        note_lines.push(Line::from(l.to_string()));
+                    }
+                }
+
+                let h = inc_lines.len().max(note_lines.len()).max(1) as u16;
+                all_rows.push(
+                    Row::new(vec![
+                        Cell::from(Line::from(vec![
+                            Span::styled("⚠ ", Style::default().fg(Color::Yellow)),
+                            Span::styled("incident", Style::default().fg(Color::Yellow)),
+                        ])),
+                        Cell::from(Text::from(inc_lines)),
+                        Cell::from(Text::from(note_lines)),
+                    ])
+                    .height(h),
+                );
+            }
+        }
+
         if components.is_empty() {
             all_rows.push(Row::new(vec![
                 Cell::from(Span::styled(
