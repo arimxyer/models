@@ -8,6 +8,7 @@ use ratatui::{
     },
     Frame,
 };
+use treemap::Mappable;
 use tui_piechart::{PieChart, PieSlice};
 
 use super::app::{App, Filters, Focus, Mode, ProviderListItem, SortOrder, Tab};
@@ -15,13 +16,11 @@ use crate::agents::{format_stars, FetchStatus};
 use crate::provider_category::{provider_category, ProviderCategory};
 use crate::status::ProviderHealth;
 
-/// Data for the Canvas-rendered heatmap stacked bar chart.
+/// Data for the Canvas-rendered treemap.
 struct HeatmapGroup {
     label: String,
-    op: u32,
-    deg: u32,
-    out: u32,
-    maint: u32,
+    total: u32,
+    color: Color,
 }
 
 /// A filled rectangle shape for ratatui Canvas (the built-in Rectangle only draws outlines).
@@ -342,7 +341,7 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
 
     // Pie chart slice data extracted from the Donut view arm
     let mut pie_chart_data: Option<Vec<PieSlice<'static>>> = None;
-    // Heatmap group data for the plotters-rendered stacked bar chart
+    // Heatmap group data for the treemap visualization
     let mut heatmap_data: Option<Vec<HeatmapGroup>> = None;
 
     let detail_lines = if let Some(entry) = status_app.current_entry() {
@@ -614,7 +613,7 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                 CompView::Heatmap => {
                     lines.push(gutter_line("COMP", summary_spans));
 
-                    // Group ALL components by group_name and count statuses
+                    // Group ALL components by group_name and determine worst status
                     let mut groups: std::collections::BTreeMap<
                         String,
                         Vec<&crate::status::ComponentStatus>,
@@ -629,25 +628,30 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
 
                     let mut hm_groups: Vec<HeatmapGroup> = Vec::new();
                     for (key, comps) in &groups {
-                        let mut g_op = 0u32;
-                        let mut g_deg = 0u32;
-                        let mut g_out = 0u32;
-                        let mut g_maint = 0u32;
+                        let mut has_outage = false;
+                        let mut has_degraded = false;
+                        let mut has_maint = false;
                         for comp in comps {
                             match component_status_icon(&comp.status) {
-                                "●" => g_op += 1,
-                                "◐" => g_deg += 1,
-                                "✕" => g_out += 1,
-                                "◆" => g_maint += 1,
+                                "✕" => has_outage = true,
+                                "◐" => has_degraded = true,
+                                "◆" => has_maint = true,
                                 _ => {}
                             }
                         }
+                        let color = if has_outage {
+                            Color::Red
+                        } else if has_degraded {
+                            Color::Yellow
+                        } else if has_maint {
+                            Color::Cyan
+                        } else {
+                            Color::Green
+                        };
                         hm_groups.push(HeatmapGroup {
                             label: key.clone(),
-                            op: g_op,
-                            deg: g_deg,
-                            out: g_out,
-                            maint: g_maint,
+                            total: comps.len() as u32,
+                            color,
                         });
                     }
                     heatmap_data = Some(hm_groups);
@@ -1027,11 +1031,10 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
             .scroll((status_app.detail_scroll, 0));
         f.render_widget(paragraph, detail_chunks[1]);
     } else if let Some(groups) = heatmap_data {
-        // Split detail area: top for heatmap chart, bottom for scrollable Paragraph
-        let chart_height = (groups.len() as u16).clamp(3, 10) + 3; // rows + border
+        // Split detail area: top for treemap chart, bottom for scrollable Paragraph
         let detail_chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Length(chart_height), Constraint::Min(0)])
+            .constraints([Constraint::Length(12), Constraint::Min(0)])
             .split(detail_area);
 
         let chart_block = Block::default()
@@ -1041,113 +1044,69 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
         let chart_inner = chart_block.inner(detail_chunks[0]);
         f.render_widget(chart_block, detail_chunks[0]);
 
-        // Render stacked horizontal bar chart via Canvas
-        let num_groups = groups.len();
-        if num_groups > 0 {
-            let max_label_len = groups
+        // Render squarified treemap via Canvas
+        if !groups.is_empty() && chart_inner.width > 0 && chart_inner.height > 0 {
+            // Build treemap items: size = component count, preserve index for color/label lookup
+            let mut items: Vec<treemap::MapItem> = groups
                 .iter()
-                .map(|g| g.label.len())
-                .max()
-                .unwrap_or(0)
-                .min(12);
-            // Reserve label columns + 1 separator on the left
-            let label_cols = (max_label_len + 1) as u16;
-            let bar_cols = chart_inner.width.saturating_sub(label_cols);
+                .map(|g| treemap::MapItem::with_size(f64::from(g.total).max(1.0)))
+                .collect();
 
-            if bar_cols > 0 {
-                let label_area = Rect {
-                    x: chart_inner.x,
-                    y: chart_inner.y,
-                    width: label_cols,
-                    height: chart_inner.height,
-                };
-                let bar_area = Rect {
-                    x: chart_inner.x + label_cols,
-                    y: chart_inner.y,
-                    width: bar_cols,
-                    height: chart_inner.height,
-                };
+            // layout_items sorts descending internally — track original order via size matching
+            // Instead, build a parallel vec of (label, color, size) and sort the same way
+            let mut meta: Vec<(String, Color, f64)> = groups
+                .iter()
+                .map(|g| (g.label.clone(), g.color, f64::from(g.total).max(1.0)))
+                .collect();
+            meta.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
 
-                // Draw group labels as text lines
-                let row_height = chart_inner.height as f64 / num_groups as f64;
-                let mut label_lines: Vec<Line> = Vec::new();
-                for group in &groups {
-                    let label = if group.label.len() > max_label_len {
-                        format!("{:>w$}╎", &group.label[..max_label_len], w = max_label_len)
-                    } else {
-                        format!("{:>w$}╎", group.label, w = max_label_len)
-                    };
-                    // If each row spans multiple terminal lines, pad with blanks
-                    let row_lines = row_height.floor().max(1.0) as usize;
-                    let mid = row_lines / 2;
-                    for li in 0..row_lines {
-                        if li == mid {
-                            label_lines.push(Line::from(Span::styled(
-                                label.clone(),
-                                Style::default().fg(Color::DarkGray),
-                            )));
-                        } else {
-                            label_lines.push(Line::from(""));
+            let bounds = treemap::Rect::from_points(
+                0.0,
+                0.0,
+                chart_inner.width as f64,
+                chart_inner.height as f64,
+            );
+            treemap::TreemapLayout::new().layout_items(&mut items, bounds);
+
+            // Canvas coordinate system: x goes right, y goes UP (bottom-left origin).
+            // Treemap rects have y going DOWN, so flip: canvas_y = height - treemap_y - treemap_h
+            let canvas_w = chart_inner.width as f64;
+            let canvas_h = chart_inner.height as f64;
+
+            let canvas_widget = Canvas::default()
+                .x_bounds([0.0, canvas_w])
+                .y_bounds([0.0, canvas_h])
+                .marker(ratatui::symbols::Marker::HalfBlock)
+                .paint(|ctx: &mut CanvasContext<'_>| {
+                    for (i, item) in items.iter().enumerate() {
+                        let r = item.bounds();
+                        let color = meta.get(i).map(|m| m.1).unwrap_or(Color::DarkGray);
+
+                        // Flip y axis and add small gap between rectangles
+                        let gap = 0.15;
+                        let rx = r.x + gap;
+                        let ry = canvas_h - r.y - r.h + gap;
+                        let rw = (r.w - 2.0 * gap).max(0.0);
+                        let rh = (r.h - 2.0 * gap).max(0.0);
+
+                        ctx.draw(&FilledRect {
+                            x: rx,
+                            y: ry,
+                            width: rw,
+                            height: rh,
+                            color,
+                        });
+
+                        // Print label if rectangle is wide enough
+                        let label = &meta.get(i).map(|m| m.0.as_str()).unwrap_or("");
+                        if rw >= label.len() as f64 && rh >= 1.0 {
+                            let text_x = rx + rw / 2.0;
+                            let text_y = ry + rh / 2.0;
+                            ctx.print(text_x, text_y, label.to_string());
                         }
                     }
-                }
-                let label_para = Paragraph::new(label_lines);
-                f.render_widget(label_para, label_area);
-
-                // Find max total for proportional scaling
-                let max_total = groups
-                    .iter()
-                    .map(|g| g.op + g.deg + g.out + g.maint)
-                    .max()
-                    .unwrap_or(1)
-                    .max(1) as f64;
-
-                // Canvas coordinate system: x in [0, max_total], y in [0, num_groups]
-                let canvas_widget = Canvas::default()
-                    .x_bounds([0.0, max_total])
-                    .y_bounds([0.0, num_groups as f64])
-                    .marker(ratatui::symbols::Marker::HalfBlock)
-                    .paint(|ctx: &mut CanvasContext<'_>| {
-                        let gap = 0.15; // gap between rows
-                        for (i, group) in groups.iter().enumerate() {
-                            let group_total = group.op + group.deg + group.out + group.maint;
-                            if group_total == 0 {
-                                continue;
-                            }
-
-                            // y increases upward in canvas, so row 0 is at the top
-                            let y_base = (num_groups - 1 - i) as f64 + gap;
-                            let bar_h = 1.0 - 2.0 * gap;
-
-                            // Scale bar width proportional to max_total
-                            let scale = max_total / group_total as f64;
-
-                            let segments: [(u32, Color); 4] = [
-                                (group.op, Color::Green),
-                                (group.deg, Color::Yellow),
-                                (group.out, Color::Red),
-                                (group.maint, Color::Cyan),
-                            ];
-
-                            let mut x_cursor = 0.0_f64;
-                            for &(count, color) in &segments {
-                                if count == 0 {
-                                    continue;
-                                }
-                                let seg_w = count as f64 * scale;
-                                ctx.draw(&FilledRect {
-                                    x: x_cursor,
-                                    y: y_base,
-                                    width: seg_w,
-                                    height: bar_h,
-                                    color,
-                                });
-                                x_cursor += seg_w;
-                            }
-                        }
-                    });
-                f.render_widget(canvas_widget, bar_area);
-            }
+                });
+            f.render_widget(canvas_widget, chart_inner);
         }
 
         let paragraph = Paragraph::new(detail_lines)
