@@ -7,7 +7,6 @@ use ratatui::{
     },
     Frame,
 };
-use tui_piechart::{PieChart, PieSlice};
 
 use super::app::{App, Filters, Focus, Mode, ProviderListItem, SortOrder, Tab};
 use crate::agents::{format_stars, FetchStatus};
@@ -150,6 +149,7 @@ fn component_status_style(status: &str) -> Style {
 }
 
 /// 6-char left-aligned gutter tag (padded with spaces, DarkGray) + content spans at column 7.
+#[allow(dead_code)]
 fn gutter_line<'a>(tag: &str, spans: Vec<Span<'a>>) -> Line<'a> {
     let padded = format!("{:<6}", tag);
     let mut all = vec![Span::styled(padded, Style::default().fg(Color::DarkGray))];
@@ -294,416 +294,317 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
 
     let comp_view = status_app.comp_view;
 
-    // Pie chart slice data extracted from the Donut view arm
-    let mut pie_chart_data: Option<Vec<PieSlice<'static>>> = None;
+    // ── Extract all needed data before mutable borrows ──────────────────
+    let detail_area = chunks[1];
 
-    let detail_lines = if let Some(entry) = status_app.current_entry() {
+    if let Some(entry) = status_app.current_entry() {
+        let display_name = entry.display_name.clone();
+        let health = entry.health;
+        let error_msg = entry.error.clone();
+        let source_name = entry
+            .source_label
+            .as_deref()
+            .unwrap_or("Unavailable")
+            .to_string();
+        let method_label = entry
+            .source_method
+            .map(|m| m.label())
+            .unwrap_or("Unknown")
+            .to_string();
+        let last_checked_display = entry
+            .last_checked
+            .as_deref()
+            .map(format_relative_time_from_str)
+            .unwrap_or_else(|| "Unknown".to_string());
+        let components: Vec<crate::status::ComponentStatus> = entry.components.clone();
+        let incidents: Vec<crate::status::ActiveIncident> = entry.incidents.clone();
+        let maintenances: Vec<crate::status::ScheduledMaintenance> =
+            entry.scheduled_maintenances.clone();
         let entry_slug = entry.slug.clone();
         let related_agents = status_app.related_agents_for(&entry_slug).to_vec();
+        let freshness = status_app.last_refreshed.map(|t| {
+            let secs = t.elapsed().as_secs();
+            if secs < 60 {
+                format!("{}s ago", secs)
+            } else {
+                format!("{}m ago", secs / 60)
+            }
+        });
+        let detail_scroll = status_app.detail_scroll;
 
-        let mut lines: Vec<Line> = Vec::new();
-
-        // ── Header: health icon + name + status label ──────────────────────
-        lines.push(Line::from(vec![
-            Span::styled(
-                status_health_icon(entry.health),
-                status_health_style(entry.health),
-            ),
+        // ── Header (top 2-3 lines) ─────────────────────────────────────
+        let mut header_lines: Vec<Line> = Vec::new();
+        header_lines.push(Line::from(vec![
+            Span::styled(status_health_icon(health), status_health_style(health)),
             Span::raw(" "),
             Span::styled(
-                entry.display_name.clone(),
+                display_name,
                 Style::default()
                     .fg(Color::White)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::raw("  "),
-            Span::styled(entry.health.label(), status_health_style(entry.health)),
+            Span::styled(health.label(), status_health_style(health)),
         ]));
-        lines.push(Line::from(""));
 
-        if let Some(refreshed_at) = status_app.last_refreshed {
-            let secs = refreshed_at.elapsed().as_secs();
-            let ago = if secs < 60 {
-                format!("{}s ago", secs)
-            } else {
-                format!("{}m ago", secs / 60)
-            };
-            lines.push(gutter_line(
-                "Fresh",
-                vec![Span::styled(ago, Style::default().fg(Color::DarkGray))],
+        let mut src_spans = vec![
+            Span::raw(source_name),
+            Span::styled(
+                format!("  [{}]", method_label),
+                Style::default().fg(Color::DarkGray),
+            ),
+            Span::styled("  checked: ", Style::default().fg(Color::DarkGray)),
+            Span::raw(last_checked_display),
+        ];
+        if let Some(fresh) = freshness {
+            src_spans.push(Span::styled(
+                "  fresh: ",
+                Style::default().fg(Color::DarkGray),
             ));
+            src_spans.push(Span::raw(fresh));
+        }
+        header_lines.push(Line::from(src_spans));
+
+        if let Some(err) = error_msg {
+            header_lines.push(Line::from(vec![Span::styled(
+                err,
+                Style::default()
+                    .fg(Color::Red)
+                    .add_modifier(Modifier::ITALIC),
+            )]));
         }
 
-        // ── Error (if fetch failed) ────────────────────────────────────────
-        if let Some(ref err) = entry.error {
-            lines.push(gutter_line(
-                "Error",
-                vec![Span::styled(
-                    err.clone(),
-                    Style::default()
-                        .fg(Color::Red)
-                        .add_modifier(Modifier::ITALIC),
-                )],
-            ));
-        }
+        // Footer hints line
+        let footer_line = Line::from(vec![
+            Span::styled(" o ", Style::default().fg(Color::Yellow)),
+            Span::raw("open  "),
+            Span::styled(" r ", Style::default().fg(Color::Yellow)),
+            Span::raw("refresh  "),
+            Span::styled(" Tab ", Style::default().fg(Color::Yellow)),
+            Span::raw("focus list"),
+        ]);
+        let header_height = header_lines.len() as u16 + 1; // +1 for footer hints
 
-        // ── COMP section (view-dispatched) ──────────────────────────────
-        let components: &[crate::status::ComponentStatus] = &entry.components;
-        if !components.is_empty() {
-            // Count by health bucket
-            let mut op = 0u32;
-            let mut deg = 0u32;
-            let mut out = 0u32;
-            let mut maint = 0u32;
-            for comp in components {
-                match component_status_icon(&comp.status) {
-                    "●" => op += 1,
-                    "◐" => deg += 1,
-                    "✕" => out += 1,
-                    "◆" => maint += 1,
-                    _ => {}
-                }
-            }
-            let total = components.len() as u32;
-            let non_op = total - op;
+        // ── Layout: header on top, 3 columns below ─────────────────────
+        let vert_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(header_height), Constraint::Min(0)])
+            .split(detail_area);
 
-            // Summary spans — shared across views
-            let mut summary_spans: Vec<Span> = Vec::new();
-            if op > 0 {
-                summary_spans.push(Span::styled("●", Style::default().fg(Color::Green)));
-                summary_spans.push(Span::raw(format!(" {}", op)));
-            }
-            if deg > 0 {
-                if !summary_spans.is_empty() {
-                    summary_spans.push(Span::raw("  "));
-                }
-                summary_spans.push(Span::styled("◐", Style::default().fg(Color::Yellow)));
-                summary_spans.push(Span::raw(format!(" {}", deg)));
-            }
-            if out > 0 {
-                if !summary_spans.is_empty() {
-                    summary_spans.push(Span::raw("  "));
-                }
-                summary_spans.push(Span::styled("✕", Style::default().fg(Color::Red)));
-                summary_spans.push(Span::raw(format!(" {}", out)));
-            }
-            if maint > 0 {
-                if !summary_spans.is_empty() {
-                    summary_spans.push(Span::raw("  "));
-                }
-                summary_spans.push(Span::styled("◆", Style::default().fg(Color::Cyan)));
-                summary_spans.push(Span::raw(format!(" {}", maint)));
-            }
-            if non_op == 0 {
-                summary_spans.push(Span::styled(
-                    format!(" of {} operational", total),
-                    Style::default().fg(Color::DarkGray),
-                ));
-            } else {
-                summary_spans.push(Span::styled(
-                    format!("  of {}", total),
-                    Style::default().fg(Color::DarkGray),
-                ));
-            }
+        // Render header
+        let mut all_header = header_lines;
+        all_header.push(footer_line);
+        let header_para = Paragraph::new(all_header).block(
+            Block::default()
+                .borders(Borders::BOTTOM)
+                .border_style(detail_border),
+        );
+        f.render_widget(header_para, vert_chunks[0]);
 
-            match comp_view {
-                CompView::Summary => {
-                    lines.push(gutter_line("COMP", summary_spans));
+        // ── 3-column split ──────────────────────────────────────────────
+        let col_chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage(33),
+                Constraint::Percentage(34),
+                Constraint::Percentage(33),
+            ])
+            .split(vert_chunks[1]);
 
-                    // Expansion: only non-operational components
-                    if non_op > 0 {
-                        // Group by group_name
-                        let mut groups: std::collections::BTreeMap<
-                            String,
-                            Vec<&crate::status::ComponentStatus>,
-                        > = std::collections::BTreeMap::new();
-                        for comp in components {
-                            if component_status_icon(&comp.status) != "●" {
-                                let key = comp
-                                    .group_name
-                                    .clone()
-                                    .unwrap_or_else(|| "__ungrouped__".to_string());
-                                groups.entry(key).or_default().push(comp);
-                            }
-                        }
+        // ── Col 1: Components ───────────────────────────────────────────
+        let mut col1_lines: Vec<Line> = Vec::new();
 
-                        for (group_key, group_comps) in &groups {
-                            if group_key == "__ungrouped__" {
-                                for comp in group_comps {
-                                    let display_name = translate_component_name(&comp.name);
-                                    lines.push(gutter_line(
-                                        "",
-                                        vec![
-                                            Span::styled(
-                                                component_status_icon(&comp.status),
-                                                component_status_style(&comp.status),
-                                            ),
-                                            Span::raw(" "),
-                                            Span::raw(display_name),
-                                            Span::raw("  "),
-                                            Span::styled(
-                                                comp.status.clone(),
-                                                component_status_style(&comp.status),
-                                            ),
-                                        ],
-                                    ));
-                                }
-                            } else {
-                                let group_total = components
-                                    .iter()
-                                    .filter(|c| c.group_name.as_deref() == Some(group_key))
-                                    .count();
-                                let worst_icon = group_comps
-                                    .iter()
-                                    .map(|c| component_status_icon(&c.status))
-                                    .min_by_key(|icon| match *icon {
-                                        "✕" => 0,
-                                        "◐" => 1,
-                                        "◆" => 2,
-                                        _ => 3,
-                                    })
-                                    .unwrap_or("?");
-                                let worst_style = component_status_style(
-                                    group_comps
-                                        .iter()
-                                        .map(|c| c.status.as_str())
-                                        .min_by_key(|s| match component_status_icon(s) {
-                                            "✕" => 0,
-                                            "◐" => 1,
-                                            "◆" => 2,
-                                            _ => 3,
-                                        })
-                                        .unwrap_or("unknown"),
-                                );
-                                lines.push(gutter_line(
-                                    "",
-                                    vec![
-                                        Span::styled(worst_icon, worst_style),
-                                        Span::raw(" "),
-                                        Span::styled(
-                                            group_key.clone(),
-                                            Style::default().add_modifier(Modifier::BOLD),
-                                        ),
-                                        Span::styled(
-                                            format!("  ({} of {})", group_comps.len(), group_total),
-                                            Style::default().fg(Color::DarkGray),
-                                        ),
-                                    ],
-                                ));
-
-                                for comp in group_comps {
-                                    let display_name = translate_component_name(&comp.name);
-                                    lines.push(gutter_line(
-                                        "",
-                                        vec![
-                                            Span::raw("  "),
-                                            Span::styled(
-                                                component_status_icon(&comp.status),
-                                                component_status_style(&comp.status),
-                                            ),
-                                            Span::raw(" "),
-                                            Span::raw(display_name),
-                                            Span::raw("  "),
-                                            Span::styled(
-                                                comp.status.clone(),
-                                                component_status_style(&comp.status),
-                                            ),
-                                        ],
-                                    ));
-                                }
-                            }
-                        }
-                    }
-                }
-                CompView::Donut => {
-                    lines.push(gutter_line("COMP", summary_spans));
-
-                    // Build pie chart slices for separate widget rendering
-                    let mut slices = Vec::new();
-                    if op > 0 {
-                        slices.push(PieSlice::new("Operational", f64::from(op), Color::Green));
-                    }
-                    if deg > 0 {
-                        slices.push(PieSlice::new("Degraded", f64::from(deg), Color::Yellow));
-                    }
-                    if out > 0 {
-                        slices.push(PieSlice::new("Outage", f64::from(out), Color::Red));
-                    }
-                    if maint > 0 {
-                        slices.push(PieSlice::new("Maintenance", f64::from(maint), Color::Cyan));
-                    }
-                    pie_chart_data = Some(slices);
-                }
-            }
-
-            // View indicator hint
-            lines.push(gutter_line(
-                "",
-                vec![Span::styled(
-                    format!("[c] {}", comp_view.label()),
-                    Style::default().fg(Color::DarkGray),
-                )],
-            ));
-        }
-        lines.push(Line::from(""));
-
-        // ── INCDT section ──────────────────────────────────────────────────
-        let incidents: &[crate::status::ActiveIncident] = &entry.incidents;
-        if incidents.is_empty() {
-            lines.push(gutter_line(
-                "INCDT",
-                vec![Span::styled(
-                    "No active incidents",
-                    Style::default().fg(Color::DarkGray),
-                )],
-            ));
+        if components.is_empty() {
+            col1_lines.push(Line::from(Span::styled(
+                "No components",
+                Style::default().fg(Color::DarkGray),
+            )));
         } else {
-            let phase_order = ["investigating", "identified", "monitoring", "resolved"];
-            let shown = incidents.iter().take(5);
-            let total = incidents.len();
+            // Group components by status type for exception-prominence display
+            let mut outage_comps: Vec<&crate::status::ComponentStatus> = Vec::new();
+            let mut degraded_comps: Vec<&crate::status::ComponentStatus> = Vec::new();
+            let mut maint_comps: Vec<&crate::status::ComponentStatus> = Vec::new();
+            let mut op_comps: Vec<&crate::status::ComponentStatus> = Vec::new();
+            for comp in &components {
+                match component_status_icon(&comp.status) {
+                    "✕" => outage_comps.push(comp),
+                    "◐" => degraded_comps.push(comp),
+                    "◆" => maint_comps.push(comp),
+                    _ => op_comps.push(comp),
+                }
+            }
+            let op = op_comps.len() as u32;
 
-            for (i, incident) in shown.enumerate() {
-                let tag = if i == 0 { "INCDT" } else { "" };
+            // Render exception-prominence sections (non-operational expanded)
+            for (icon, style, label, comps) in [
+                (
+                    "✕",
+                    Style::default().fg(Color::Red),
+                    "OUTAGE",
+                    &outage_comps,
+                ),
+                (
+                    "◐",
+                    Style::default().fg(Color::Yellow),
+                    "DEGRADED",
+                    &degraded_comps,
+                ),
+                (
+                    "◆",
+                    Style::default().fg(Color::Cyan),
+                    "MAINTENANCE",
+                    &maint_comps,
+                ),
+            ] {
+                if !comps.is_empty() {
+                    col1_lines.push(Line::from(vec![
+                        Span::styled(icon, style),
+                        Span::raw(" "),
+                        Span::styled(label, style.add_modifier(Modifier::BOLD)),
+                    ]));
+                    for comp in comps {
+                        let name = translate_component_name(&comp.name);
+                        col1_lines.push(Line::from(vec![
+                            Span::raw("  "),
+                            Span::styled(
+                                component_status_icon(&comp.status),
+                                component_status_style(&comp.status),
+                            ),
+                            Span::raw(" "),
+                            Span::raw(name),
+                        ]));
+                    }
+                }
+            }
 
-                // Lifecycle ladder: ●──●──◉──○
+            // Operational: collapsed unless CompView is expanded via `c`
+            match comp_view {
+                CompView::Summary | CompView::Donut => {
+                    // TODO: CompView::Donut will render a donut chart here later
+                    col1_lines.push(Line::from(vec![
+                        Span::styled("●", Style::default().fg(Color::Green)),
+                        Span::raw(format!(" {} operational", op)),
+                    ]));
+                }
+            }
+
+            if !related_agents.is_empty() {
+                col1_lines.push(Line::from(""));
+                col1_lines.push(Line::from(vec![
+                    Span::styled("agents: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(related_agents.join(", ")),
+                ]));
+            }
+
+            col1_lines.push(Line::from(""));
+            col1_lines.push(Line::from(Span::styled(
+                format!("[c] {}", comp_view.label()),
+                Style::default().fg(Color::DarkGray),
+            )));
+        }
+
+        let col1 = Paragraph::new(col1_lines)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(detail_border)
+                    .title(" Components "),
+            )
+            .wrap(Wrap { trim: false })
+            .scroll((detail_scroll, 0));
+        f.render_widget(col1, col_chunks[0]);
+
+        // ── Col 2: Incidents + Maintenance ──────────────────────────────
+        let mut col2_lines: Vec<Line> = Vec::new();
+
+        if incidents.is_empty() && maintenances.is_empty() {
+            col2_lines.push(Line::from(Span::styled(
+                "\u{2014}",
+                Style::default().fg(Color::DarkGray),
+            )));
+        } else {
+            // Incidents
+            for (i, incident) in incidents.iter().take(5).enumerate() {
+                let phase_order = ["investigating", "identified", "monitoring", "resolved"];
                 let current_phase = incident.status.to_lowercase();
                 let current_idx = phase_order
                     .iter()
                     .position(|&p| current_phase.contains(p))
                     .unwrap_or(0);
 
-                let mut ladder_spans: Vec<Span> = Vec::new();
-                for (pi, &phase) in phase_order.iter().enumerate() {
-                    if pi > 0 {
-                        ladder_spans.push(Span::styled("──", Style::default().fg(Color::DarkGray)));
+                // Status icon based on phase
+                let phase_icon = match phase_order.get(current_idx) {
+                    Some(&"investigating") | Some(&"identified") => {
+                        Span::styled("◉", Style::default().fg(Color::Yellow))
                     }
-                    if pi < current_idx {
-                        // completed
-                        ladder_spans.push(Span::styled("●", Style::default().fg(Color::Green)));
-                    } else if pi == current_idx {
-                        // active phase
-                        let color = match phase {
-                            "investigating" | "identified" => Color::Yellow,
-                            "monitoring" => Color::Cyan,
-                            "resolved" => Color::Green,
-                            _ => Color::Yellow,
-                        };
-                        ladder_spans.push(Span::styled("◉", Style::default().fg(color)));
-                    } else {
-                        // future
-                        ladder_spans.push(Span::styled("○", Style::default().fg(Color::DarkGray)));
-                    }
-                }
-
-                // Impact badge
-                let (impact_text, impact_color) = match incident.impact.to_lowercase().as_str() {
-                    s if s.contains("major") || s.contains("critical") => ("[major]", Color::Red),
-                    s if s.contains("minor") => ("[minor]", Color::Yellow),
-                    _ => ("[none]", Color::DarkGray),
+                    Some(&"monitoring") => Span::styled("◉", Style::default().fg(Color::Cyan)),
+                    Some(&"resolved") => Span::styled("●", Style::default().fg(Color::Green)),
+                    _ => Span::styled("◉", Style::default().fg(Color::Yellow)),
                 };
 
-                let mut ladder_line_spans = ladder_spans;
-                ladder_line_spans.push(Span::raw("  "));
-                ladder_line_spans
-                    .push(Span::styled(impact_text, Style::default().fg(impact_color)));
-                lines.push(gutter_line(tag, ladder_line_spans));
-
-                // Phase labels line
-                lines.push(gutter_line(
-                    "",
-                    vec![Span::styled(
-                        "investigating  identified  monitoring  resolved",
-                        Style::default().fg(Color::DarkGray),
-                    )],
-                ));
-
-                // Incident name
-                lines.push(gutter_line(
-                    "",
-                    vec![Span::styled(
-                        incident.name.clone(),
-                        Style::default().add_modifier(Modifier::BOLD),
-                    )],
-                ));
-
-                // Latest update body (truncated to 80 chars)
-                if let Some(update) = &incident.latest_update {
-                    let body = if update.body.len() > 80 {
-                        format!("{}…", &update.body[..79])
-                    } else {
-                        update.body.clone()
-                    };
-                    lines.push(gutter_line("", vec![Span::raw(body)]));
-                }
-
-                // Affected components
-                if !incident.affected_components.is_empty() {
-                    lines.push(gutter_line(
-                        "",
-                        vec![
-                            Span::styled("Affects: ", Style::default().fg(Color::DarkGray)),
-                            Span::raw(incident.affected_components.join(", ")),
-                        ],
-                    ));
-                }
-
-                // Timestamp
-                if let Some(ts) = incident
+                let ts_label = incident
                     .updated_at
                     .as_deref()
                     .or(incident.created_at.as_deref())
-                {
-                    lines.push(gutter_line(
-                        "",
-                        vec![Span::styled(
-                            format_relative_time_from_str(ts),
+                    .map(format_relative_time_from_str)
+                    .unwrap_or_default();
+
+                col2_lines.push(Line::from(vec![
+                    phase_icon,
+                    Span::raw(" "),
+                    Span::styled(
+                        incident.name.clone(),
+                        Style::default().add_modifier(Modifier::BOLD),
+                    ),
+                ]));
+                if !ts_label.is_empty() {
+                    col2_lines.push(Line::from(vec![
+                        Span::raw("  "),
+                        Span::styled(
+                            format!("{} \u{2014} {}", incident.status.clone(), ts_label),
                             Style::default().fg(Color::DarkGray),
-                        )],
-                    ));
+                        ),
+                    ]));
                 }
 
-                if i < total.min(5) - 1 {
-                    lines.push(gutter_line("", vec![Span::raw("")]));
+                if i < incidents.len().min(5) - 1 {
+                    col2_lines.push(Line::from(""));
                 }
             }
 
-            if total > 5 {
-                lines.push(gutter_line(
-                    "",
-                    vec![Span::styled(
-                        format!("+{} more", total - 5),
-                        Style::default().fg(Color::DarkGray),
-                    )],
-                ));
-            }
-        }
-        lines.push(Line::from(""));
-
-        // ── MAINT section ──────────────────────────────────────────────────
-        let maintenances: &[crate::status::ScheduledMaintenance] = &entry.scheduled_maintenances;
-        if maintenances.is_empty() {
-            lines.push(gutter_line(
-                "MAINT",
-                vec![Span::styled(
-                    "No scheduled maintenance",
+            if incidents.len() > 5 {
+                col2_lines.push(Line::from(Span::styled(
+                    format!("+{} more", incidents.len() - 5),
                     Style::default().fg(Color::DarkGray),
-                )],
-            ));
-        } else {
-            for (i, maint) in maintenances.iter().enumerate() {
-                let tag = if i == 0 { "MAINT" } else { "" };
+                )));
+            }
 
-                // Name
-                lines.push(gutter_line(
-                    tag,
-                    vec![Span::styled(
+            // Separator between incidents and maintenance
+            if !incidents.is_empty() && !maintenances.is_empty() {
+                col2_lines.push(Line::from(""));
+                col2_lines.push(Line::from(Span::styled(
+                    "\u{2500}\u{2500}\u{2500}",
+                    Style::default().fg(Color::DarkGray),
+                )));
+                col2_lines.push(Line::from(""));
+            }
+
+            // Maintenance
+            for (i, maint) in maintenances.iter().enumerate() {
+                col2_lines.push(Line::from(vec![
+                    Span::styled("◆", Style::default().fg(Color::Cyan)),
+                    Span::raw(" "),
+                    Span::styled(
                         maint.name.clone(),
                         Style::default().add_modifier(Modifier::BOLD),
-                    )],
-                ));
+                    ),
+                ]));
+                col2_lines.push(Line::from(vec![
+                    Span::raw("  "),
+                    Span::styled(maint.status.clone(), Style::default().fg(Color::DarkGray)),
+                ]));
 
                 // Time progress bar
-                let bar_width = 20usize;
                 if let (Some(start_str), Some(end_str)) = (
                     maint.scheduled_for.as_deref(),
                     maint.scheduled_until.as_deref(),
@@ -712,6 +613,7 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                         crate::agents::helpers::parse_date(start_str),
                         crate::agents::helpers::parse_date(end_str),
                     ) {
+                        let bar_width = 16usize;
                         let now = chrono::Utc::now();
                         let total_secs = (end - start).num_seconds().max(1);
                         let elapsed_secs = (now - start).num_seconds().clamp(0, total_secs);
@@ -719,169 +621,134 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                         let filled = (elapsed_secs * bar_width as i64 / total_secs) as usize;
                         let empty = bar_width.saturating_sub(filled);
 
-                        let bar_filled = "━".repeat(filled);
-                        let bar_empty = "░".repeat(empty);
-                        let remaining_secs = total_secs - elapsed_secs;
-                        let remaining_label = if remaining_secs > 3600 {
-                            format!("{}h remaining", remaining_secs / 3600)
-                        } else if remaining_secs > 60 {
-                            format!("{}m remaining", remaining_secs / 60)
-                        } else {
-                            "finishing soon".to_string()
-                        };
-
-                        lines.push(gutter_line(
-                            "",
-                            vec![
-                                Span::styled(bar_filled, Style::default().fg(Color::Cyan)),
-                                Span::styled(bar_empty, Style::default().fg(Color::DarkGray)),
-                                Span::raw(format!("  {}% — {}", pct, remaining_label)),
-                            ],
-                        ));
-
-                        lines.push(gutter_line(
-                            "",
-                            vec![Span::styled(
-                                format!(
-                                    "{} → {}",
-                                    format_relative_time_from_str(start_str),
-                                    format_relative_time_from_str(end_str)
-                                ),
+                        col2_lines.push(Line::from(vec![
+                            Span::raw("  "),
+                            Span::styled(
+                                "\u{2501}".repeat(filled),
+                                Style::default().fg(Color::Cyan),
+                            ),
+                            Span::styled(
+                                "\u{2591}".repeat(empty),
                                 Style::default().fg(Color::DarkGray),
-                            )],
-                        ));
+                            ),
+                            Span::raw(format!(" {}%", pct)),
+                        ]));
                     }
                 }
 
-                // Affected components
-                if !maint.affected_components.is_empty() {
-                    lines.push(gutter_line(
-                        "",
-                        vec![
-                            Span::styled("Affects: ", Style::default().fg(Color::DarkGray)),
-                            Span::raw(maint.affected_components.join(", ")),
-                        ],
-                    ));
-                }
-
                 if i < maintenances.len() - 1 {
-                    lines.push(gutter_line("", vec![Span::raw("")]));
+                    col2_lines.push(Line::from(""));
                 }
             }
         }
-        lines.push(Line::from(""));
 
-        // ── SRC section ────────────────────────────────────────────────────
-        let source_name = entry.source_label.as_deref().unwrap_or("Unavailable");
-        let method_label = entry.source_method.map(|m| m.label()).unwrap_or("Unknown");
+        let col2 = Paragraph::new(col2_lines)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(detail_border)
+                    .title(" Incidents "),
+            )
+            .wrap(Wrap { trim: false });
+        f.render_widget(col2, col_chunks[1]);
 
-        lines.push(gutter_line(
-            "SRC",
-            vec![
-                Span::raw(source_name.to_string()),
-                Span::raw("  "),
-                Span::styled(
-                    format!("[{}]", method_label),
-                    Style::default().fg(Color::DarkGray),
-                ),
-            ],
-        ));
+        // ── Col 3: Notes (detail for first incident or maintenance) ─────
+        let mut col3_lines: Vec<Line> = Vec::new();
 
-        // Last checked
-        let last_checked_display = entry
-            .last_checked
-            .as_deref()
-            .map(format_relative_time_from_str)
-            .unwrap_or_else(|| "Unknown".to_string());
-        lines.push(gutter_line(
-            "",
-            vec![
-                Span::styled("checked: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(last_checked_display),
-            ],
-        ));
+        if let Some(incident) = incidents.first() {
+            col3_lines.push(Line::from(Span::styled(
+                incident.name.clone(),
+                Style::default().add_modifier(Modifier::BOLD),
+            )));
+            col3_lines.push(Line::from(""));
 
-        // Official URL
-        if let Some(url) = &entry.official_url {
-            lines.push(gutter_line(
-                "",
-                vec![
-                    Span::styled("url: ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(url.clone()),
-                ],
-            ));
+            if let Some(update) = &incident.latest_update {
+                col3_lines.push(Line::from(Span::raw(update.body.clone())));
+                col3_lines.push(Line::from(""));
+            }
+
+            if !incident.affected_components.is_empty() {
+                col3_lines.push(Line::from(vec![
+                    Span::styled("Affects: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(incident.affected_components.join(", ")),
+                ]));
+            }
+
+            if let Some(ts) = incident
+                .updated_at
+                .as_deref()
+                .or(incident.created_at.as_deref())
+            {
+                col3_lines.push(Line::from(vec![
+                    Span::styled("Updated: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(format_relative_time_from_str(ts)),
+                ]));
+            }
+
+            // Impact badge
+            let (impact_text, impact_color) = match incident.impact.to_lowercase().as_str() {
+                s if s.contains("major") || s.contains("critical") => ("major", Color::Red),
+                s if s.contains("minor") => ("minor", Color::Yellow),
+                _ => ("none", Color::DarkGray),
+            };
+            col3_lines.push(Line::from(vec![
+                Span::styled("Impact: ", Style::default().fg(Color::DarkGray)),
+                Span::styled(impact_text, Style::default().fg(impact_color)),
+            ]));
+        } else if let Some(maint) = maintenances.first() {
+            col3_lines.push(Line::from(Span::styled(
+                maint.name.clone(),
+                Style::default().add_modifier(Modifier::BOLD),
+            )));
+            col3_lines.push(Line::from(""));
+
+            if let (Some(start_str), Some(end_str)) = (
+                maint.scheduled_for.as_deref(),
+                maint.scheduled_until.as_deref(),
+            ) {
+                col3_lines.push(Line::from(vec![
+                    Span::styled("From: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(format_relative_time_from_str(start_str)),
+                ]));
+                col3_lines.push(Line::from(vec![
+                    Span::styled("Until: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(format_relative_time_from_str(end_str)),
+                ]));
+            }
+
+            if !maint.affected_components.is_empty() {
+                col3_lines.push(Line::from(vec![
+                    Span::styled("Affects: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(maint.affected_components.join(", ")),
+                ]));
+            }
+        } else {
+            col3_lines.push(Line::from(Span::styled(
+                "\u{2014}",
+                Style::default().fg(Color::DarkGray),
+            )));
         }
 
-        // Related agents
-        if !related_agents.is_empty() {
-            lines.push(gutter_line(
-                "",
-                vec![
-                    Span::styled("agents: ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(related_agents.join(", ")),
-                ],
-            ));
-        }
-        lines.push(Line::from(""));
-
-        // ── Footer hints ───────────────────────────────────────────────────
-        lines.push(Line::from(vec![
-            Span::styled(" o ", Style::default().fg(Color::Yellow)),
-            Span::raw("open  "),
-            Span::styled(" r ", Style::default().fg(Color::Yellow)),
-            Span::raw("refresh  "),
-            Span::styled(" Tab ", Style::default().fg(Color::Yellow)),
-            Span::raw("focus list"),
-        ]));
-
-        lines
+        let col3 = Paragraph::new(col3_lines)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(detail_border)
+                    .title(" Notes "),
+            )
+            .wrap(Wrap { trim: false });
+        f.render_widget(col3, col_chunks[2]);
     } else {
-        vec![Line::from(Span::styled(
+        let paragraph = Paragraph::new(vec![Line::from(Span::styled(
             "Select a provider to view details",
             Style::default().fg(Color::DarkGray),
-        ))]
-    };
-
-    let detail_area = chunks[1];
-
-    if let Some(slices) = pie_chart_data {
-        // Split detail area: top for PieChart, bottom for scrollable Paragraph
-        let detail_chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Length(12), Constraint::Min(0)])
-            .split(detail_area);
-
-        let pie = PieChart::new(slices)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(detail_border)
-                    .title(" Details "),
-            )
-            .show_legend(true)
-            .show_percentages(true)
-            .legend_position(tui_piechart::LegendPosition::Right);
-        f.render_widget(pie, detail_chunks[0]);
-
-        let paragraph = Paragraph::new(detail_lines)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(detail_border),
-            )
-            .wrap(Wrap { trim: false })
-            .scroll((status_app.detail_scroll, 0));
-        f.render_widget(paragraph, detail_chunks[1]);
-    } else {
-        let paragraph = Paragraph::new(detail_lines)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(detail_border)
-                    .title(" Details "),
-            )
-            .wrap(Wrap { trim: false })
-            .scroll((status_app.detail_scroll, 0));
+        ))])
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(detail_border)
+                .title(" Details "),
+        );
         f.render_widget(paragraph, detail_area);
     }
 }
