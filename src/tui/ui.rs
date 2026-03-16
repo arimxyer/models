@@ -227,14 +227,14 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
 
     let title = if status_app.loading {
         format!(
-            " Status ({}) refreshing... ",
+            " Providers ({}) refreshing... ",
             status_app.filtered_entries.len()
         )
     } else if status_app.search_query.is_empty() {
-        format!(" Status ({}) ", status_app.filtered_entries.len())
+        format!(" Providers ({}) ", status_app.filtered_entries.len())
     } else {
         format!(
-            " Status ({}) [/{query}] ",
+            " Providers ({}) [/{query}] ",
             status_app.filtered_entries.len(),
             query = status_app.search_query
         )
@@ -458,6 +458,11 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                         comp_unknown as f64,
                         Color::DarkGray,
                     ));
+                }
+                // Single-slice pie renders as a line — add a tiny same-color
+                // slice to force full circle rendering
+                if slices.len() == 1 {
+                    slices.push(PieSlice::new("", 0.001, slices[0].color()));
                 }
                 let pie = PieChart::new(slices)
                     .block(
