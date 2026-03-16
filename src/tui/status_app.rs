@@ -7,7 +7,7 @@ use ratatui::widgets::ListState;
 use crate::agents::AgentsFile;
 use crate::status::{
     canonical_status_slug, status_seed_for_provider, ProviderHealth, ProviderStatus,
-    StatusProviderSeed, STATUS_REGISTRY,
+    StatusProvenance, StatusProviderSeed, STATUS_REGISTRY,
 };
 
 const PAGE_SIZE: usize = 10;
@@ -71,6 +71,7 @@ impl StatusApp {
                     display_name: entry.display_name.to_string(),
                     source_slug: entry.source_slug.to_string(),
                     strategy: entry.strategy,
+                    support_tier: entry.support_tier,
                 },
             );
         }
@@ -123,6 +124,8 @@ impl StatusApp {
             a.health
                 .sort_rank()
                 .cmp(&b.health.sort_rank())
+                .then_with(|| a.support_tier.sort_rank().cmp(&b.support_tier.sort_rank()))
+                .then_with(|| a.provenance.sort_rank().cmp(&b.provenance.sort_rank()))
                 .then_with(|| a.display_name.cmp(&b.display_name))
         });
         self.entries = entries;
@@ -237,6 +240,20 @@ impl StatusApp {
             }
         }
         (op, deg, out, other)
+    }
+
+    pub fn provenance_counts(&self) -> (usize, usize, usize) {
+        let mut official = 0;
+        let mut fallback = 0;
+        let mut unavailable = 0;
+        for entry in &self.entries {
+            match entry.provenance {
+                StatusProvenance::Official => official += 1,
+                StatusProvenance::Fallback => fallback += 1,
+                StatusProvenance::Unavailable => unavailable += 1,
+            }
+        }
+        (official, fallback, unavailable)
     }
 
     pub fn switch_focus(&mut self) {
@@ -368,5 +385,20 @@ mod tests {
         assert_eq!(deg, 0);
         assert_eq!(out, 0);
         assert!(other > 0); // all Unknown = other
+    }
+
+    #[test]
+    fn provenance_counts_tallies_all_entries() {
+        let app = StatusApp::new(&AgentsFile {
+            schema_version: 1,
+            last_scraped: None,
+            scrape_source: None,
+            agents: HashMap::new(),
+        });
+
+        let (official, fallback, unavailable) = app.provenance_counts();
+        assert_eq!(official, 0);
+        assert_eq!(fallback, 0);
+        assert!(unavailable > 0);
     }
 }

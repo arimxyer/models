@@ -80,6 +80,12 @@ impl StatusFetcher {
             a.1.health
                 .sort_rank()
                 .cmp(&b.1.health.sort_rank())
+                .then_with(|| {
+                    a.1.support_tier
+                        .sort_rank()
+                        .cmp(&b.1.support_tier.sort_rank())
+                })
+                .then_with(|| a.1.provenance.sort_rank().cmp(&b.1.provenance.sort_rank()))
                 .then_with(|| a.1.display_name.cmp(&b.1.display_name))
         });
 
@@ -994,10 +1000,6 @@ fn parse_instatus_components(body: &str) -> Result<Vec<ComponentStatus>, String>
         })
         .collect())
 }
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 fn resolve_provider_status(
     seed: &StatusProviderSeed,

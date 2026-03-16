@@ -11,7 +11,7 @@ use ratatui::{
 use super::app::{App, Filters, Focus, Mode, ProviderListItem, SortOrder, Tab};
 use crate::agents::{format_stars, FetchStatus};
 use crate::provider_category::{provider_category, ProviderCategory};
-use crate::status::ProviderHealth;
+use crate::status::{ProviderHealth, StatusProvenance, StatusSupportTier};
 use tui_piechart::{PieChart, PieSlice, Resolution};
 
 pub fn draw(f: &mut Frame, app: &mut App) {
@@ -119,6 +119,22 @@ fn status_health_icon(health: ProviderHealth) -> &'static str {
     }
 }
 
+fn status_provenance_style(provenance: StatusProvenance) -> Style {
+    match provenance {
+        StatusProvenance::Official => Style::default().fg(Color::Green),
+        StatusProvenance::Fallback => Style::default().fg(Color::Yellow),
+        StatusProvenance::Unavailable => Style::default().fg(Color::DarkGray),
+    }
+}
+
+fn status_support_style(tier: StatusSupportTier) -> Style {
+    match tier {
+        StatusSupportTier::Required => Style::default().fg(Color::Cyan),
+        StatusSupportTier::Curated => Style::default().fg(Color::Blue),
+        StatusSupportTier::Untracked => Style::default().fg(Color::DarkGray),
+    }
+}
+
 fn component_status_icon(status: &str) -> &'static str {
     let s = status.to_lowercase();
     if s.contains("operational") {
@@ -196,12 +212,13 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
     // Split left panel: 1 line for aggregate bar + rest for list
     let left_chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(1), Constraint::Min(0)])
+        .constraints([Constraint::Length(2), Constraint::Min(0)])
         .split(chunks[0]);
 
     // Aggregate health bar
     let (op, deg, out, other) = status_app.health_counts();
-    let agg_line = Line::from(vec![
+    let (official, fallback, unavailable) = status_app.provenance_counts();
+    let agg_health = Line::from(vec![
         Span::raw(" "),
         Span::styled("●", Style::default().fg(Color::Green)),
         Span::raw(format!(" {}  ", op)),
@@ -212,7 +229,18 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
         Span::styled("?", Style::default().fg(Color::DarkGray)),
         Span::raw(format!(" {}", other)),
     ]);
-    f.render_widget(Paragraph::new(agg_line), left_chunks[0]);
+    let agg_sources = Line::from(vec![
+        Span::styled(" O ", Style::default().fg(Color::Green)),
+        Span::raw(format!("{}  ", official)),
+        Span::styled(" F ", Style::default().fg(Color::Yellow)),
+        Span::raw(format!("{}  ", fallback)),
+        Span::styled(" M ", Style::default().fg(Color::DarkGray)),
+        Span::raw(format!("{}", unavailable)),
+    ]);
+    f.render_widget(
+        Paragraph::new(vec![agg_health, agg_sources]),
+        left_chunks[0],
+    );
 
     let list_border = if status_app.focus == StatusFocus::List {
         Style::default().fg(Color::Cyan)
@@ -279,14 +307,15 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     Style::default().fg(Color::Yellow),
                 ));
             }
-            let provenance_suffix = match entry.provenance {
-                crate::status::StatusProvenance::Official => "  off",
-                crate::status::StatusProvenance::Fallback => "  fb",
-                crate::status::StatusProvenance::Unavailable => "  —",
-            };
+            spans.push(Span::raw("  "));
             spans.push(Span::styled(
-                provenance_suffix,
-                Style::default().fg(Color::DarkGray),
+                entry.support_tier.short_label(),
+                status_support_style(entry.support_tier),
+            ));
+            spans.push(Span::raw("/"));
+            spans.push(Span::styled(
+                entry.provenance.short_label(),
+                status_provenance_style(entry.provenance),
             ));
             items.push(ListItem::new(Line::from(spans)));
         }
@@ -308,12 +337,18 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
     if let Some(entry) = status_app.current_entry() {
         let display_name = entry.display_name.clone();
         let health = entry.health;
+        let provenance = entry.provenance;
+        let support_tier = entry.support_tier;
         let error_msg = entry.error.clone();
         let source_name = entry
             .source_label
             .as_deref()
             .unwrap_or("Unavailable")
             .to_string();
+        let summary_text = entry
+            .summary
+            .clone()
+            .unwrap_or_else(|| provenance.detail_note().to_string());
         let method_label = entry
             .source_method
             .map(|m| m.label())
@@ -353,9 +388,19 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
             ),
             Span::raw("  "),
             Span::styled(health.label(), status_health_style(health)),
+            Span::raw("  "),
+            Span::styled(
+                support_tier.label(),
+                status_support_style(support_tier).add_modifier(Modifier::BOLD),
+            ),
         ]));
 
         let mut src_spans = vec![
+            Span::styled(
+                provenance.label(),
+                status_provenance_style(provenance).add_modifier(Modifier::BOLD),
+            ),
+            Span::raw("  "),
             Span::raw(source_name),
             Span::styled(
                 format!("  [{}]", method_label),
@@ -372,6 +417,24 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
             src_spans.push(Span::raw(fresh));
         }
         header_lines.push(Line::from(src_spans));
+        header_lines.push(Line::from(vec![
+            Span::styled("note: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                provenance.detail_note(),
+                status_provenance_style(provenance),
+            ),
+        ]));
+        let summary_wrap_width = usize::from(detail_area.width.saturating_sub(12)).max(20);
+        for (idx, line) in textwrap::wrap(&summary_text, summary_wrap_width)
+            .iter()
+            .enumerate()
+        {
+            let prefix = if idx == 0 { "summary: " } else { "         " };
+            header_lines.push(Line::from(vec![
+                Span::styled(prefix, Style::default().fg(Color::DarkGray)),
+                Span::raw(line.to_string()),
+            ]));
+        }
 
         if let Some(err) = error_msg {
             header_lines.push(Line::from(vec![Span::styled(
@@ -481,8 +544,13 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     .resolution(Resolution::Braille);
                 f.render_widget(pie, dash_halves[0]);
             } else {
+                let empty_components_label = match provenance {
+                    StatusProvenance::Official => "Official source has no component detail",
+                    StatusProvenance::Fallback => "Fallback snapshot has no component detail",
+                    StatusProvenance::Unavailable => "No component data available",
+                };
                 let no_data = Paragraph::new(Span::styled(
-                    "No component data",
+                    empty_components_label,
                     Style::default().fg(Color::DarkGray),
                 ))
                 .block(
@@ -496,7 +564,6 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
             // Right half: Summary stats + active incidents
             let mut dash_lines: Vec<Line> = Vec::new();
 
-            // Component summary line
             let mut summary_spans: Vec<Span> = vec![
                 Span::styled("●", Style::default().fg(Color::Green)),
                 Span::raw(format!(" {}  ", comp_op)),
@@ -527,8 +594,13 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                 .collect();
 
             if dash_active.is_empty() {
+                let empty_incidents_label = match provenance {
+                    StatusProvenance::Official => "No active incidents",
+                    StatusProvenance::Fallback => "No incident detail in fallback snapshot",
+                    StatusProvenance::Unavailable => "No incident data available",
+                };
                 dash_lines.push(Line::from(Span::styled(
-                    "No active incidents",
+                    empty_incidents_label,
                     Style::default().fg(Color::DarkGray),
                 )));
             } else {

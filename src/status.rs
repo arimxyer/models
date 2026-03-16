@@ -65,12 +65,39 @@ pub enum StatusProvenance {
 }
 
 impl StatusProvenance {
-    #[allow(dead_code)]
-    pub fn label(&self) -> &'static str {
+    pub fn label(self) -> &'static str {
         match self {
             Self::Official => "Official",
             Self::Fallback => "Fallback",
             Self::Unavailable => "Unavailable",
+        }
+    }
+
+    pub fn short_label(self) -> &'static str {
+        match self {
+            Self::Official => "OFF",
+            Self::Fallback => "FB",
+            Self::Unavailable => "MISS",
+        }
+    }
+
+    pub fn sort_rank(self) -> u8 {
+        match self {
+            Self::Official => 0,
+            Self::Fallback => 1,
+            Self::Unavailable => 2,
+        }
+    }
+
+    pub fn detail_note(self) -> &'static str {
+        match self {
+            Self::Official => "Official machine-readable provider status feed.",
+            Self::Fallback => {
+                "Fallback aggregator snapshot. Verify details on the provider status page."
+            }
+            Self::Unavailable => {
+                "No working machine-readable status source is configured or reachable."
+            }
         }
     }
 }
@@ -256,6 +283,33 @@ impl OfficialStatusSource {
 pub enum StatusSupportTier {
     Required,
     Curated,
+    Untracked,
+}
+
+impl StatusSupportTier {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Required => "Required",
+            Self::Curated => "Curated",
+            Self::Untracked => "Untracked",
+        }
+    }
+
+    pub fn short_label(self) -> &'static str {
+        match self {
+            Self::Required => "R",
+            Self::Curated => "C",
+            Self::Untracked => "U",
+        }
+    }
+
+    pub fn sort_rank(self) -> u8 {
+        match self {
+            Self::Required => 0,
+            Self::Curated => 1,
+            Self::Untracked => 2,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -535,6 +589,7 @@ pub struct StatusProviderSeed {
     pub display_name: String,
     pub source_slug: String,
     pub strategy: StatusStrategy,
+    pub support_tier: StatusSupportTier,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -542,6 +597,7 @@ pub struct ProviderStatus {
     pub slug: String,
     pub display_name: String,
     pub source_slug: String,
+    pub support_tier: StatusSupportTier,
     pub health: ProviderHealth,
     pub provenance: StatusProvenance,
     pub source_label: Option<String>,
@@ -562,6 +618,7 @@ impl ProviderStatus {
             slug: seed.slug.clone(),
             display_name: seed.display_name.clone(),
             source_slug: seed.source_slug.clone(),
+            support_tier: seed.support_tier,
             health: ProviderHealth::Unknown,
             provenance: StatusProvenance::Unavailable,
             source_label: None,
@@ -603,6 +660,9 @@ pub fn status_seed_for_provider(slug: &str) -> StatusProviderSeed {
             .map(|entry| entry.source_slug.to_string())
             .unwrap_or_else(|| canonical.to_string()),
         strategy: strategy_for_provider(slug),
+        support_tier: entry
+            .map(|entry| entry.support_tier)
+            .unwrap_or(StatusSupportTier::Untracked),
     }
 }
 
@@ -650,6 +710,13 @@ mod tests {
             status_registry_entry("openai").map(|entry| entry.source_slug),
             Some("openai")
         );
+    }
+
+    #[test]
+    fn unknown_provider_defaults_to_untracked_support() {
+        let seed = status_seed_for_provider("some-nonexistent-provider");
+        assert_eq!(seed.support_tier, StatusSupportTier::Untracked);
+        assert_eq!(seed.source_slug, "some-nonexistent-provider");
     }
 
     #[test]
@@ -706,6 +773,7 @@ mod tests {
             slug: "openai".to_string(),
             display_name: "OpenAI".to_string(),
             source_slug: "openai".to_string(),
+            support_tier: StatusSupportTier::Required,
             health: ProviderHealth::Operational,
             provenance: StatusProvenance::Official,
             source_label: Some("OpenAI Status".to_string()),
