@@ -59,7 +59,7 @@ Key findings:
 - The detail surface reads top-to-bottom as one information story: identity, capabilities, economics, limits, modalities, dates.
 
 Minor clarity debt:
-- `Provider` is slightly generic as the title of the upper-right summary box; the content is clear, but the title is weaker than the section names below (`src/tui/ui.rs:1593-1600`).
+- `Provider` is slightly generic as the title of the upper-right summary box; the content is clear, but the title is weaker than the section names below (`src/tui/ui.rs:1636-1638`).
 - `RTFO` is compact and familiar to repeat users, but it is insider shorthand rather than a plain-language label (`src/tui/ui.rs:985-1045`).
 - The `[5] Cat` / `[6] Grp` row is efficient but terse; it favors expert speed over first-use readability (`src/tui/ui.rs:832-857`).
 
