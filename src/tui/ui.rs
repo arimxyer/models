@@ -2613,12 +2613,7 @@ fn draw_benchmark_detail(f: &mut Frame, area: Rect, app: &App) {
     let bench_app = &app.benchmarks_app;
     let store = &app.benchmark_store;
 
-    let border_style = Style::default().fg(Color::DarkGray);
-
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(border_style)
-        .title(" Details ");
+    let block = Block::default().borders(Borders::ALL).title(" Details ");
 
     let entry = match bench_app.current_entry(store) {
         Some(e) => e,
