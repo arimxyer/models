@@ -23,12 +23,14 @@ mise run fmt && mise run clippy && mise run test
 - **Models Tab** (`src/tui/app.rs`, `src/tui/ui.rs`) — browse models from models.dev API with 3-column layout (20% providers | 45% model list | 35% detail panel), RTFO capability indicators, adaptive provider panel
 - **Benchmarks Tab** (`src/tui/benchmarks_app.rs`) — compare model benchmarks from Artificial Analysis with browse/compare modes, H2H table, scatter plot, radar chart views
 - **Agents Tab** (`src/tui/agents_app.rs`) — track AI coding assistants with GitHub integration
+- **Status Tab** (`src/tui/status_app.rs`) — live provider health monitoring with detail view for incidents, components, and scheduled maintenance
 
 ### Data Flow
 - Model data: fetched from models.dev API at startup (`src/api.rs`)
 - Benchmark data: fetched fresh from jsDelivr CDN on every launch (`src/benchmark_fetch.rs`)
 - Agent/GitHub data: disk-cached with ETag conditional fetching (`src/agents/cache.rs`, `src/agents/github.rs`)
 - CLI agents: uses `fetch_releases_only` (1 API call, no repo metadata) — TUI uses full `fetch_conditional` (2 calls, includes stars/issues/license)
+- Status data: fetched from each provider's official status page (Statuspage, BetterStack, Instatus, etc.) with apistatuscheck.com as fallback (`src/status_fetch.rs`), provider registry and strategy mapping in `src/status.rs`
 
 ### Async Pattern
 Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message` variants processed in the main loop (`src/tui/mod.rs`). The app never blocks on network calls.
@@ -42,6 +44,12 @@ Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message`
 - Commands: `status`, `latest`, `list-sources`, `<tool>` (with `--latest`, `--list`, `--pick`, `--version`, `--web`)
 - Uses termimad for styled markdown output in TTY, plain text when piped
 
+### CLI Subcommands
+- `models list` / `models search` / `models show` — thin wrappers in `src/cli/list.rs`, `search.rs`, `show.rs` delegating to `src/cli/models.rs`
+- `models benchmarks` — interactive benchmark picker (`src/cli/benchmarks.rs`)
+- `models completions <shell>` — shell completion generation via clap_complete
+- `src/cli/styles.rs` — shared color constants and styling for CLI output
+
 ### CLI Inline Pickers
 - `src/cli/models.rs` — interactive model picker with `/` filter, `s`/`S` sort, preview pane
 - `src/cli/benchmarks.rs` — interactive benchmark picker with filter, sort, detail preview
@@ -50,14 +58,20 @@ Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message`
 
 ### Key Files
 - `src/tui/mod.rs` — startup, event loop, async channel handling
-- `src/tui/app.rs` — App state, Message enum, update logic
+- `src/tui/app.rs` — App state, Message enum, update logic, Tab enum (Models/Agents/Benchmarks/Status)
 - `src/tui/event.rs` — keybinding → Message mapping
 - `src/tui/ui.rs` — rendering
 - `src/tui/markdown.rs` — custom markdown-to-ratatui converter (headers, bullets, bold, code, URLs, search highlighting)
+- `src/tui/benchmarks_app.rs` — BenchmarksApp state, compare mode, H2H/scatter/radar views
+- `src/tui/status_app.rs` — StatusApp state, provider list/detail focus, search filtering
 - `src/benchmarks.rs` — BenchmarkStore, BenchmarkEntry
 - `src/benchmark_fetch.rs` — jsDelivr CDN fetcher (no cache, no ETag)
 - `src/model_traits.rs` — runtime matching of AA entries to models.dev for open/closed status, reasoning, tool_call, and context limits
-- `src/tui/benchmarks_app.rs` — BenchmarksApp state, compare mode, H2H/scatter/radar views
+- `src/status.rs` — ProviderHealth, ProviderStatus, StatusProviderSeed, STATUS_REGISTRY
+- `src/status_fetch.rs` — StatusFetcher, official status page fetchers (Statuspage/BetterStack/Instatus/etc.) with apistatuscheck.com fallback
+- `src/config.rs` — user config file (agents, cache, display settings)
+- `src/data.rs` — Provider/Model data structures from models.dev API
+- `src/cli/styles.rs` — shared CLI color constants and styling
 
 ### GitHub Actions
 - `ci.yml` — runs on PR/push: fmt check, clippy, test
@@ -95,4 +109,3 @@ Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message`
 - `AA_API_KEY` — Artificial Analysis API key (GitHub repo secret, local `.env`)
 - `AUR_SSH_PRIVATE_KEY` — SSH key for pushing to AUR (`~/.ssh/aur`)
 - `CARGO_REGISTRY_TOKEN` — crates.io publish token (GitHub repo secret)
-- `TAP_GITHUB_TOKEN` — for updating the Scoop bucket repo
