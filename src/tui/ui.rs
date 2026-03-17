@@ -355,12 +355,6 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     Style::default().fg(Color::Yellow),
                 ));
             }
-<<<<<<< HEAD
-            if incident_count == 0 && entry.health == ProviderHealth::Maintenance {
-                spans.push(Span::styled(" maint", Style::default().fg(Color::Cyan)));
-            }
-=======
->>>>>>> d9bd09b (task: add status page redesign coverage)
             items.push(ListItem::new(Line::from(spans)));
         }
     }
@@ -605,8 +599,6 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     ),
                 ]));
             }
-<<<<<<< HEAD
-=======
             glance_lines.push(Line::from(vec![
                 Span::styled("Affected: ", Style::default().fg(Color::DarkGray)),
                 Span::raw(
@@ -619,7 +611,6 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     Span::raw(format!("{} listed", components.len())),
                 ]));
             }
->>>>>>> d9bd09b (task: add status page redesign coverage)
             if let Some(caveat) = caveat {
                 glance_lines.push(Line::from(vec![
                     Span::styled("Note: ", Style::default().fg(Color::DarkGray)),
@@ -631,11 +622,7 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     Block::default()
                         .borders(Borders::ALL)
                         .border_style(detail_border)
-<<<<<<< HEAD
-                        .title(" Overall status "),
-=======
                         .title(" Overview "),
->>>>>>> d9bd09b (task: add status page redesign coverage)
                 )
                 .wrap(Wrap { trim: false });
             f.render_widget(glance_para, dash_halves[0]);
@@ -738,17 +725,10 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     Block::default()
                         .borders(Borders::ALL)
                         .border_style(detail_border)
-<<<<<<< HEAD
-                        .title(if active_incidents.is_empty() && !maintenances.is_empty() {
-                            " Scheduled maintenance "
-                        } else {
-                            " Active incidents "
-=======
                         .title(if active_incidents.is_empty() {
                             " Maintenance "
                         } else {
                             " Current incidents "
->>>>>>> d9bd09b (task: add status page redesign coverage)
                         }),
                 )
                 .wrap(Wrap { trim: false });
@@ -1164,10 +1144,6 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
             );
         }
 
-<<<<<<< HEAD
-        // View hint row
-=======
->>>>>>> d9bd09b (task: add status page redesign coverage)
         all_rows.push(Row::new(vec![
             Cell::from(Span::styled(
                 format!("[c] {}", comp_view.label()),
@@ -1186,11 +1162,7 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     Block::default()
                         .borders(Borders::ALL)
                         .border_style(detail_border)
-<<<<<<< HEAD
-                        .title(" Services and components "),
-=======
                         .title(" Services "),
->>>>>>> d9bd09b (task: add status page redesign coverage)
                 )
                 .wrap(Wrap { trim: false });
             f.render_widget(empty_detail, vert_chunks[2]);
@@ -1200,19 +1172,11 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     "Service",
                     Style::default().fg(Color::DarkGray),
                 )),
-<<<<<<< HEAD
-                Cell::from(Span::styled(
-                    "Current",
-                    Style::default().fg(Color::DarkGray),
-                )),
-                Cell::from(Span::styled("Latest", Style::default().fg(Color::DarkGray))),
-=======
                 Cell::from(Span::styled("Issue", Style::default().fg(Color::DarkGray))),
                 Cell::from(Span::styled(
                     "Latest update",
                     Style::default().fg(Color::DarkGray),
                 )),
->>>>>>> d9bd09b (task: add status page redesign coverage)
             ]);
 
             let table = Table::new(
@@ -1228,11 +1192,7 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                 Block::default()
                     .borders(Borders::ALL)
                     .border_style(detail_border)
-<<<<<<< HEAD
-                    .title(" Services and components "),
-=======
                     .title(" Services "),
->>>>>>> d9bd09b (task: add status page redesign coverage)
             )
             .column_spacing(1);
             f.render_widget(table, vert_chunks[2]);
