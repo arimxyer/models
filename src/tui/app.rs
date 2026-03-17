@@ -219,6 +219,8 @@ pub enum Message {
     OpenStatusPage,
     ScrollStatusDetailUp,
     ScrollStatusDetailDown,
+    PageScrollStatusDetailUp,
+    PageScrollStatusDetailDown,
     // Async data messages
     GitHubDataReceived(String, GitHubData),
     GitHubFetchFailed(String, String), // (agent_id, error_message)
@@ -798,6 +800,18 @@ impl App {
             Message::ScrollStatusDetailDown => {
                 if let Some(ref mut status_app) = self.status_app {
                     status_app.detail_scroll = status_app.detail_scroll.saturating_add(1);
+                }
+            }
+            Message::PageScrollStatusDetailUp => {
+                if let Some(ref mut status_app) = self.status_app {
+                    status_app.detail_scroll =
+                        status_app.detail_scroll.saturating_sub(PAGE_SIZE as u16);
+                }
+            }
+            Message::PageScrollStatusDetailDown => {
+                if let Some(ref mut status_app) = self.status_app {
+                    status_app.detail_scroll =
+                        status_app.detail_scroll.saturating_add(PAGE_SIZE as u16);
                 }
             }
             Message::SwitchAgentFocus => {

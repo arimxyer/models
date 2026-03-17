@@ -1,9 +1,10 @@
 use ratatui::{
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Direction, Layout, Margin, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{
-        Block, Borders, Cell, Clear, List, ListItem, ListState, Paragraph, Row, Table, Wrap,
+        Block, Borders, Cell, Clear, List, ListItem, ListState, Paragraph, Row, Scrollbar,
+        ScrollbarOrientation, ScrollbarState, Table, Wrap,
     },
     Frame,
 };
@@ -125,7 +126,7 @@ fn component_status_icon(status: &str) -> &'static str {
     } else if s.contains("degraded") || s.contains("partial") {
         "◐"
     } else if s.contains("outage") || s.contains("major") || s.contains("down") {
-        "✕"
+        "✗"
     } else if s.contains("maintenance") {
         "◆"
     } else {
@@ -142,7 +143,7 @@ fn component_status_style(status: &str) -> Style {
     } else if s.contains("outage") || s.contains("major") || s.contains("down") {
         Style::default().fg(Color::Red)
     } else if s.contains("maintenance") {
-        Style::default().fg(Color::Cyan)
+        Style::default().fg(Color::Blue)
     } else {
         Style::default().fg(Color::DarkGray)
     }
@@ -456,7 +457,7 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                 Span::styled(status_health_icon(health), status_health_style(health)),
                 Span::raw(" "),
                 Span::styled(
-                    display_name,
+                    display_name.clone(),
                     Style::default()
                         .fg(Color::White)
                         .add_modifier(Modifier::BOLD),
@@ -632,16 +633,33 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
             detail_lines.extend(note_lines);
         }
 
+        let content_len = detail_lines.len();
         let detail = Paragraph::new(detail_lines)
             .block(
                 Block::default()
                     .borders(Borders::ALL)
                     .border_style(detail_border)
-                    .title(" Status "),
+                    .title(format!(" {} ", display_name)),
             )
             .wrap(Wrap { trim: false })
             .scroll((detail_scroll, 0));
         f.render_widget(detail, detail_area);
+
+        // Scrollbar for detail panel
+        let visible_h = detail_area.height.saturating_sub(2) as usize;
+        if content_len > visible_h {
+            let mut scrollbar_state = ScrollbarState::new(content_len)
+                .position(detail_scroll as usize)
+                .viewport_content_length(visible_h);
+            f.render_stateful_widget(
+                Scrollbar::new(ScrollbarOrientation::VerticalRight),
+                detail_area.inner(Margin {
+                    vertical: 1,
+                    horizontal: 0,
+                }),
+                &mut scrollbar_state,
+            );
+        }
     } else {
         let paragraph = Paragraph::new(vec![Line::from(Span::styled(
             "Select a provider to view details",
@@ -1580,6 +1598,21 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &mut App) {
         .scroll((scroll_pos, 0));
 
     f.render_widget(paragraph, area);
+
+    // Scrollbar for detail panel
+    if visual_total > visible_height {
+        let mut scrollbar_state = ScrollbarState::new(visual_total as usize)
+            .position(scroll_pos as usize)
+            .viewport_content_length(visible_height as usize);
+        f.render_stateful_widget(
+            Scrollbar::new(ScrollbarOrientation::VerticalRight),
+            area.inner(Margin {
+                vertical: 1,
+                horizontal: 0,
+            }),
+            &mut scrollbar_state,
+        );
+    }
 
     // Update match state and detail height (after lines are consumed)
     app.last_detail_height = visible_height;
@@ -3780,6 +3813,21 @@ fn draw_help_popup(f: &mut Frame, scroll: u16, current_tab: Tab) {
         .block(block)
         .scroll((scroll_pos, 0));
     f.render_widget(paragraph, area);
+
+    // Scrollbar for help popup
+    if content_lines > visible_height {
+        let mut scrollbar_state = ScrollbarState::new(content_lines as usize)
+            .position(scroll_pos as usize)
+            .viewport_content_length(visible_height as usize);
+        f.render_stateful_widget(
+            Scrollbar::new(ScrollbarOrientation::VerticalRight),
+            area.inner(Margin {
+                vertical: 1,
+                horizontal: 0,
+            }),
+            &mut scrollbar_state,
+        );
+    }
 }
 
 fn draw_picker_modal(f: &mut Frame, app: &App) {
@@ -4469,10 +4517,24 @@ fn draw_h2h_table_generic(f: &mut Frame, area: Rect, app: &App) {
         }
     }
 
-    let max_scroll = lines.len().saturating_sub(inner.height as usize);
+    let content_len = lines.len();
+    let max_scroll = content_len.saturating_sub(inner.height as usize);
     let scroll_y = app.benchmarks_app.h2h_scroll.min(max_scroll);
     let paragraph = Paragraph::new(lines).scroll((scroll_y as u16, 0));
     f.render_widget(paragraph, inner);
+
+    // Scrollbar for H2H table
+    let visible_h = inner.height as usize;
+    if content_len > visible_h {
+        let mut scrollbar_state = ScrollbarState::new(content_len)
+            .position(scroll_y)
+            .viewport_content_length(visible_h);
+        f.render_stateful_widget(
+            Scrollbar::new(ScrollbarOrientation::VerticalRight),
+            inner,
+            &mut scrollbar_state,
+        );
+    }
 }
 
 fn draw_scatter(f: &mut Frame, area: Rect, app: &App) {

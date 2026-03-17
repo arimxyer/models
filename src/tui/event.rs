@@ -391,18 +391,34 @@ fn handle_status_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Opti
             Some(Message::SelectFirstStatusProvider)
         }
         KeyCode::Char('G') if focus == StatusFocus::List => Some(Message::SelectLastStatusProvider),
-        KeyCode::Char('d')
-            if modifiers.contains(KeyModifiers::CONTROL) && focus == StatusFocus::List =>
-        {
-            Some(Message::PageDownStatusProvider)
+        KeyCode::Char('d') if modifiers.contains(KeyModifiers::CONTROL) => {
+            if focus == StatusFocus::List {
+                Some(Message::PageDownStatusProvider)
+            } else {
+                Some(Message::PageScrollStatusDetailDown)
+            }
         }
-        KeyCode::Char('u')
-            if modifiers.contains(KeyModifiers::CONTROL) && focus == StatusFocus::List =>
-        {
-            Some(Message::PageUpStatusProvider)
+        KeyCode::Char('u') if modifiers.contains(KeyModifiers::CONTROL) => {
+            if focus == StatusFocus::List {
+                Some(Message::PageUpStatusProvider)
+            } else {
+                Some(Message::PageScrollStatusDetailUp)
+            }
         }
-        KeyCode::PageDown if focus == StatusFocus::List => Some(Message::PageDownStatusProvider),
-        KeyCode::PageUp if focus == StatusFocus::List => Some(Message::PageUpStatusProvider),
+        KeyCode::PageDown => {
+            if focus == StatusFocus::List {
+                Some(Message::PageDownStatusProvider)
+            } else {
+                Some(Message::PageScrollStatusDetailDown)
+            }
+        }
+        KeyCode::PageUp => {
+            if focus == StatusFocus::List {
+                Some(Message::PageUpStatusProvider)
+            } else {
+                Some(Message::PageScrollStatusDetailUp)
+            }
+        }
         KeyCode::Char('h') | KeyCode::Left => Some(Message::SwitchStatusFocus),
         KeyCode::Char('l') | KeyCode::Right => Some(Message::SwitchStatusFocus),
         KeyCode::Tab | KeyCode::BackTab => Some(Message::SwitchStatusFocus),
