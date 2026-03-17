@@ -113,9 +113,11 @@ impl StatusApp {
                         .as_ref()
                         .is_some_and(|name| name.to_lowercase().contains(&query))
                     || entry
-                        .summary
-                        .as_ref()
+                        .provider_summary_text()
                         .is_some_and(|summary| summary.to_lowercase().contains(&query))
+                    || entry
+                        .status_note_text()
+                        .is_some_and(|note| note.to_lowercase().contains(&query))
             })
             .map(|(idx, _)| idx)
             .collect();

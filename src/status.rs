@@ -295,6 +295,60 @@ impl StatusSupportTier {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum StatusLoadState {
+    #[default]
+    Placeholder,
+    Loaded,
+    Partial,
+    Failed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum StatusDetailAvailability {
+    Available,
+    NoneReported,
+    Unsupported,
+    FetchFailed,
+    #[default]
+    NotAttempted,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum StatusDetailSource {
+    Inline,
+    Enrichment,
+    SummaryOnly,
+    Derived,
+    #[default]
+    None,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct StatusDetailState {
+    pub availability: StatusDetailAvailability,
+    pub source: StatusDetailSource,
+    pub note: Option<String>,
+    pub error: Option<String>,
+}
+
+impl StatusDetailState {
+    pub fn is_available(&self) -> bool {
+        matches!(
+            self.availability,
+            StatusDetailAvailability::Available | StatusDetailAvailability::NoneReported
+        )
+    }
+
+    pub fn is_none_reported(&self) -> bool {
+        self.availability == StatusDetailAvailability::NoneReported
+    }
+
+    pub fn is_fetch_failed(&self) -> bool {
+        self.availability == StatusDetailAvailability::FetchFailed
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[allow(dead_code)]
 pub enum StatusConfidence {
     High,
@@ -709,16 +763,22 @@ pub struct ProviderStatus {
     pub support_tier: StatusSupportTier,
     pub health: ProviderHealth,
     pub provenance: StatusProvenance,
+    pub load_state: StatusLoadState,
     pub source_label: Option<String>,
     pub source_method: Option<StatusSourceMethod>,
     pub official_url: Option<String>,
     pub fallback_url: Option<String>,
-    pub last_checked: Option<String>,
-    pub summary: Option<String>,
+    pub source_updated_at: Option<String>,
+    pub provider_summary: Option<String>,
+    pub status_note: Option<String>,
     pub components: Vec<ComponentStatus>,
+    pub components_state: StatusDetailState,
     pub incidents: Vec<ActiveIncident>,
+    pub incidents_state: StatusDetailState,
     pub scheduled_maintenances: Vec<ScheduledMaintenance>,
-    pub error: Option<String>,
+    pub scheduled_maintenances_state: StatusDetailState,
+    pub official_error: Option<String>,
+    pub fallback_error: Option<String>,
 }
 
 impl ProviderStatus {
@@ -730,16 +790,22 @@ impl ProviderStatus {
             support_tier: seed.support_tier,
             health: ProviderHealth::Unknown,
             provenance: StatusProvenance::Unavailable,
+            load_state: StatusLoadState::Placeholder,
             source_label: None,
             source_method: None,
             official_url: None,
             fallback_url: None,
-            last_checked: None,
-            summary: None,
+            source_updated_at: None,
+            provider_summary: None,
+            status_note: None,
             components: Vec::new(),
+            components_state: StatusDetailState::default(),
             incidents: Vec::new(),
+            incidents_state: StatusDetailState::default(),
             scheduled_maintenances: Vec::new(),
-            error: None,
+            scheduled_maintenances_state: StatusDetailState::default(),
+            official_error: None,
+            fallback_error: None,
         }
     }
 
@@ -756,8 +822,89 @@ impl ProviderStatus {
             .collect()
     }
 
+    pub fn component_detail_available(&self) -> bool {
+        self.components_state.is_available()
+    }
+
+    pub fn incident_detail_available(&self) -> bool {
+        self.incidents_state.is_available()
+    }
+
+    pub fn maintenance_detail_available(&self) -> bool {
+        self.scheduled_maintenances_state.is_available()
+    }
+
+    pub fn confirmed_no_components(&self) -> bool {
+        self.components_state.is_none_reported()
+    }
+
+    pub fn confirmed_no_incidents(&self) -> bool {
+        self.incidents_state.is_none_reported()
+    }
+
+    #[allow(dead_code)]
+    pub fn confirmed_no_maintenance(&self) -> bool {
+        self.scheduled_maintenances_state.is_none_reported()
+    }
+
+    pub fn has_detail_fetch_failures(&self) -> bool {
+        self.components_state.is_fetch_failed()
+            || self.incidents_state.is_fetch_failed()
+            || self.scheduled_maintenances_state.is_fetch_failed()
+    }
+
+    pub fn has_partial_data(&self) -> bool {
+        self.load_state == StatusLoadState::Partial || self.has_detail_fetch_failures()
+    }
+
+    pub fn provider_summary_text(&self) -> Option<&str> {
+        self.provider_summary.as_deref()
+    }
+
+    pub fn status_note_text(&self) -> Option<&str> {
+        self.status_note.as_deref()
+    }
+
+    pub fn error_summary(&self) -> Option<String> {
+        match (&self.official_error, &self.fallback_error) {
+            (Some(official), Some(fallback)) => {
+                Some(format!("official: {official}; fallback: {fallback}"))
+            }
+            (Some(official), None) => Some(format!("official: {official}")),
+            (None, Some(fallback)) => Some(format!("fallback: {fallback}")),
+            (None, None) => None,
+        }
+    }
+
+    pub fn detail_state_message(&self, state: &StatusDetailState, label: &str) -> Option<String> {
+        match state.availability {
+            StatusDetailAvailability::Available | StatusDetailAvailability::NoneReported => None,
+            StatusDetailAvailability::Unsupported => Some(
+                state
+                    .note
+                    .clone()
+                    .unwrap_or_else(|| format!("{label} unavailable")),
+            ),
+            StatusDetailAvailability::FetchFailed => Some(
+                state
+                    .error
+                    .clone()
+                    .unwrap_or_else(|| format!("{label} failed to load")),
+            ),
+            StatusDetailAvailability::NotAttempted => Some(
+                state
+                    .note
+                    .clone()
+                    .unwrap_or_else(|| format!("{label} not loaded")),
+            ),
+        }
+    }
+
     /// Count of non-operational components (outage, degraded, or maintenance).
     pub fn non_operational_component_count(&self) -> usize {
+        if !self.component_detail_available() {
+            return 0;
+        }
         self.components
             .iter()
             .filter(|c| {
@@ -770,7 +917,11 @@ impl ProviderStatus {
     /// Combined issue count for display badges: active incidents + non-operational
     /// components that aren't already covered by an incident.
     pub fn issue_count(&self) -> usize {
-        let incidents = self.active_incidents().len();
+        let incidents = if self.incident_detail_available() {
+            self.active_incidents().len()
+        } else {
+            0
+        };
         let non_op_components = self.non_operational_component_count();
         // If there are incidents, they typically cover the component issues.
         // Show the larger of the two to avoid double-counting.
@@ -809,7 +960,11 @@ impl ProviderStatus {
         let assessment = self.assessment();
         if self.provenance == StatusProvenance::Unavailable {
             Some("Status unavailable")
-        } else if self.error.is_some() || self.provenance == StatusProvenance::Fallback {
+        } else if self.provenance == StatusProvenance::Fallback {
+            Some("Limited detail available")
+        } else if self.has_partial_data() {
+            Some("Some status details failed to load")
+        } else if !self.component_detail_available() || !self.incident_detail_available() {
             Some("Limited detail available")
         } else if assessment
             .warnings
@@ -831,13 +986,13 @@ impl ProviderStatus {
         let confidence = self.confidence(coverage, freshness, &contradictions);
         let affected_surfaces = self.affected_surfaces();
         let mut reconciliation_notes = Vec::new();
-        if !self.components.is_empty() {
+        if self.component_detail_available() {
             reconciliation_notes.push(format!(
                 "{} component signal(s) normalized into the app health model.",
                 self.components.len()
             ));
         }
-        if !active_incidents.is_empty() {
+        if self.incident_detail_available() {
             reconciliation_notes.push(format!(
                 "{} active incident(s) contribute to the current assessment.",
                 active_incidents.len()
@@ -853,6 +1008,16 @@ impl ProviderStatus {
             reconciliation_notes.push(
                 "Assessment is constrained by missing machine-readable status data.".to_string(),
             );
+        }
+        for note in [
+            self.components_state.note.as_deref(),
+            self.incidents_state.note.as_deref(),
+            self.scheduled_maintenances_state.note.as_deref(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            reconciliation_notes.push(note.to_string());
         }
 
         let mut warnings = Vec::new();
@@ -881,8 +1046,22 @@ impl ProviderStatus {
                     .to_string(),
             );
         }
+        for (label, state) in [
+            ("Component details", &self.components_state),
+            ("Incident details", &self.incidents_state),
+            ("Maintenance details", &self.scheduled_maintenances_state),
+        ] {
+            if state.availability == StatusDetailAvailability::FetchFailed {
+                warnings.push(
+                    state
+                        .error
+                        .clone()
+                        .unwrap_or_else(|| format!("{label} failed to load.")),
+                );
+            }
+        }
         warnings.extend(contradictions.iter().map(|c| c.detail.clone()));
-        if let Some(error) = &self.error {
+        if let Some(error) = self.error_summary() {
             warnings.push(format!("Fetch error: {error}"));
         }
 
@@ -908,38 +1087,27 @@ impl ProviderStatus {
         match self.provenance {
             StatusProvenance::Unavailable => StatusCoverage::None,
             StatusProvenance::Fallback => StatusCoverage::SummaryOnly,
-            StatusProvenance::Official => match self.source_method {
-                Some(
-                    StatusSourceMethod::StatuspageV2
-                    | StatusSourceMethod::IncidentIoShim
-                    | StatusSourceMethod::BetterStack
-                    | StatusSourceMethod::OnlineOrNot
-                    | StatusSourceMethod::StatusIo,
-                ) => StatusCoverage::Full,
-                Some(StatusSourceMethod::Instatus) => {
-                    if self.components.is_empty() {
-                        StatusCoverage::IncidentOnly
-                    } else {
-                        StatusCoverage::Full
+            StatusProvenance::Official => {
+                let has_incidents = self.incident_detail_available();
+                let has_components = self.component_detail_available();
+                match (has_incidents, has_components) {
+                    (true, true) => StatusCoverage::Full,
+                    (true, false) => StatusCoverage::IncidentOnly,
+                    (false, true) => StatusCoverage::ComponentOnly,
+                    (false, false) => {
+                        if self.provider_summary.is_some() {
+                            StatusCoverage::SummaryOnly
+                        } else {
+                            StatusCoverage::None
+                        }
                     }
                 }
-                Some(StatusSourceMethod::GoogleCloudJson) => StatusCoverage::IncidentOnly,
-                Some(StatusSourceMethod::Feed | StatusSourceMethod::ApiStatusCheck) => {
-                    StatusCoverage::SummaryOnly
-                }
-                None => {
-                    if self.summary.is_some() {
-                        StatusCoverage::SummaryOnly
-                    } else {
-                        StatusCoverage::None
-                    }
-                }
-            },
+            }
         }
     }
 
     fn freshness(&self) -> StatusFreshness {
-        let Some(last_checked) = self.last_checked.as_deref() else {
+        let Some(last_checked) = self.source_updated_at.as_deref() else {
             return StatusFreshness::Unknown;
         };
         let Some(parsed) = parse_status_timestamp(last_checked) else {
@@ -974,6 +1142,9 @@ impl ProviderStatus {
         };
 
         if matches!(freshness, StatusFreshness::Stale | StatusFreshness::Unknown) {
+            confidence = downgrade_confidence(confidence);
+        }
+        if self.has_detail_fetch_failures() {
             confidence = downgrade_confidence(confidence);
         }
         if !contradictions.is_empty() {
@@ -1015,20 +1186,27 @@ impl ProviderStatus {
         active_incident_count: usize,
     ) -> Vec<StatusContradiction> {
         let mut contradictions = Vec::new();
-        let summary = self.summary.as_deref().unwrap_or_default().to_lowercase();
+        let summary = self
+            .provider_summary
+            .as_deref()
+            .unwrap_or_default()
+            .to_lowercase();
         let summary_claims_operational = summary.contains("operational")
             || summary.contains("all systems operational")
             || summary.contains("fully operational");
-        let degraded_components = self
-            .components
-            .iter()
-            .filter(|component| {
-                matches!(
-                    component_health(&component.status),
-                    ProviderHealth::Degraded | ProviderHealth::Outage
-                )
-            })
-            .count();
+        let degraded_components = if self.component_detail_available() {
+            self.components
+                .iter()
+                .filter(|component| {
+                    matches!(
+                        component_health(&component.status),
+                        ProviderHealth::Degraded | ProviderHealth::Outage
+                    )
+                })
+                .count()
+        } else {
+            0
+        };
 
         if summary_claims_operational && active_incident_count > 0 {
             contradictions.push(StatusContradiction {
@@ -1070,8 +1248,9 @@ impl ProviderStatus {
     ) -> String {
         let source = self.source_label.as_deref().unwrap_or("No source");
         let summary = self
-            .summary
+            .provider_summary
             .as_deref()
+            .or(self.status_note.as_deref())
             .unwrap_or("No provider summary was supplied.");
         format!(
             "{} is {} based on {} evidence ({}, {}, {}). {}",
@@ -1094,8 +1273,16 @@ impl ProviderStatus {
                 self.source_method.map(|method| method.label()).unwrap_or("status"),
                 coverage.label().to_lowercase(),
                 active_incident_count,
-                component_count,
-                maintenance_count
+                if self.component_detail_available() {
+                    component_count
+                } else {
+                    0
+                },
+                if self.maintenance_detail_available() {
+                    maintenance_count
+                } else {
+                    0
+                }
             ),
             StatusProvenance::Fallback => format!(
                 "Fallback {} snapshot with {} coverage. Raw incidents/components are unavailable in this adapter.",
@@ -1319,16 +1506,37 @@ mod tests {
             support_tier: StatusSupportTier::Required,
             health: ProviderHealth::Operational,
             provenance: StatusProvenance::Official,
+            load_state: StatusLoadState::Loaded,
             source_label: Some("OpenAI Status".to_string()),
             source_method: Some(StatusSourceMethod::StatuspageV2),
             official_url: Some("https://status.openai.com".to_string()),
             fallback_url: Some("https://apistatuscheck.com/api/openai".to_string()),
-            last_checked: None,
-            summary: None,
+            source_updated_at: None,
+            provider_summary: None,
+            status_note: None,
             components: Vec::new(),
+            components_state: StatusDetailState {
+                availability: StatusDetailAvailability::NoneReported,
+                source: StatusDetailSource::Inline,
+                note: None,
+                error: None,
+            },
             incidents: Vec::new(),
+            incidents_state: StatusDetailState {
+                availability: StatusDetailAvailability::NoneReported,
+                source: StatusDetailSource::Inline,
+                note: None,
+                error: None,
+            },
             scheduled_maintenances: Vec::new(),
-            error: None,
+            scheduled_maintenances_state: StatusDetailState {
+                availability: StatusDetailAvailability::NoneReported,
+                source: StatusDetailSource::Inline,
+                note: None,
+                error: None,
+            },
+            official_error: None,
+            fallback_error: None,
         };
 
         assert_eq!(status.best_open_url(), Some("https://status.openai.com"));
@@ -1370,16 +1578,37 @@ mod tests {
             support_tier: StatusSupportTier::Required,
             health: ProviderHealth::Operational,
             provenance: StatusProvenance::Official,
+            load_state: StatusLoadState::Loaded,
             source_label: Some("OpenAI Status".to_string()),
             source_method: Some(StatusSourceMethod::StatuspageV2),
             official_url: Some("https://status.openai.com".to_string()),
             fallback_url: None,
-            last_checked: Some(Utc::now().to_rfc3339()),
-            summary: Some("All Systems Operational".to_string()),
+            source_updated_at: Some(Utc::now().to_rfc3339()),
+            provider_summary: Some("All Systems Operational".to_string()),
+            status_note: None,
             components: Vec::new(),
+            components_state: StatusDetailState {
+                availability: StatusDetailAvailability::NoneReported,
+                source: StatusDetailSource::Inline,
+                note: None,
+                error: None,
+            },
             incidents: Vec::new(),
+            incidents_state: StatusDetailState {
+                availability: StatusDetailAvailability::NoneReported,
+                source: StatusDetailSource::Inline,
+                note: None,
+                error: None,
+            },
             scheduled_maintenances: Vec::new(),
-            error: None,
+            scheduled_maintenances_state: StatusDetailState {
+                availability: StatusDetailAvailability::NoneReported,
+                source: StatusDetailSource::Inline,
+                note: None,
+                error: None,
+            },
+            official_error: None,
+            fallback_error: None,
         }
     }
 
@@ -1419,7 +1648,27 @@ mod tests {
         status.provenance = StatusProvenance::Fallback;
         status.source_method = Some(StatusSourceMethod::ApiStatusCheck);
         status.fallback_url = Some("https://apistatuscheck.com/api/openai".to_string());
-        status.last_checked = Some((Utc::now() - Duration::hours(36)).to_rfc3339());
+        status.source_updated_at = Some((Utc::now() - Duration::hours(36)).to_rfc3339());
+        status.components_state = StatusDetailState {
+            availability: StatusDetailAvailability::Unsupported,
+            source: StatusDetailSource::SummaryOnly,
+            note: Some("Service details are unavailable from the fallback adapter.".to_string()),
+            error: None,
+        };
+        status.incidents_state = StatusDetailState {
+            availability: StatusDetailAvailability::Unsupported,
+            source: StatusDetailSource::SummaryOnly,
+            note: Some("Incident details are unavailable from the fallback adapter.".to_string()),
+            error: None,
+        };
+        status.scheduled_maintenances_state = StatusDetailState {
+            availability: StatusDetailAvailability::Unsupported,
+            source: StatusDetailSource::SummaryOnly,
+            note: Some(
+                "Maintenance details are unavailable from the fallback adapter.".to_string(),
+            ),
+            error: None,
+        };
 
         let assessment = status.assessment();
         assert_eq!(assessment.coverage, StatusCoverage::SummaryOnly);
@@ -1448,7 +1697,7 @@ mod tests {
         );
 
         let mut stale = sample_status();
-        stale.last_checked = Some((Utc::now() - Duration::hours(30)).to_rfc3339());
+        stale.source_updated_at = Some((Utc::now() - Duration::hours(30)).to_rfc3339());
         assert_eq!(
             stale.user_visible_caveat(),
             Some("Verify details on the official status page")

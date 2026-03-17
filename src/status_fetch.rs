@@ -7,7 +7,8 @@ use tokio::time::timeout;
 
 use crate::status::{
     ActiveIncident, ComponentStatus, IncidentUpdate, OfficialStatusSource, ProviderHealth,
-    ProviderStatus, ScheduledMaintenance, StatusProvenance, StatusProviderSeed, StatusSourceMethod,
+    ProviderStatus, ScheduledMaintenance, StatusDetailAvailability, StatusDetailSource,
+    StatusDetailState, StatusLoadState, StatusProvenance, StatusProviderSeed, StatusSourceMethod,
     StatusStrategy,
 };
 
@@ -139,19 +140,33 @@ async fn fetch_official(
         StatusSourceMethod::IncidentIoShim => {
             let body = fetch_text(client, source.endpoint_url()).await?;
             let mut snapshot = parse_statuspage_v2_summary(source, &body)?;
+            snapshot.incidents.clear();
+            snapshot.incidents_state = not_attempted_detail_state(
+                StatusDetailSource::Enrichment,
+                "Incident details require a second incident feed for this source.",
+            );
             let incidents_url = format!("{}/api/v2/incidents.json", source.page_url());
-            if let Ok(Ok(incidents)) = timeout(Duration::from_secs(3), async {
-                let resp = client
-                    .get(&incidents_url)
-                    .send()
-                    .await
-                    .map_err(|e| e.to_string())?;
-                let text = resp.text().await.map_err(|e| e.to_string())?;
+            match timeout(Duration::from_secs(3), async {
+                let text = fetch_text(client, &incidents_url).await?;
                 parse_incidents_json(&text)
             })
             .await
             {
-                snapshot.incidents = incidents;
+                Ok(Ok(incidents)) => {
+                    snapshot.incidents = incidents;
+                    snapshot.incidents_state =
+                        available_detail_state(&snapshot.incidents, StatusDetailSource::Enrichment);
+                }
+                Ok(Err(err)) => {
+                    snapshot.incidents_state =
+                        fetch_failed_detail_state(StatusDetailSource::Enrichment, err);
+                }
+                Err(_) => {
+                    snapshot.incidents_state = fetch_failed_detail_state(
+                        StatusDetailSource::Enrichment,
+                        "Incident details timed out after 3s.",
+                    );
+                }
             }
             Ok(snapshot)
         }
@@ -171,18 +186,29 @@ async fn fetch_official(
             let body = fetch_text(client, source.endpoint_url()).await?;
             let mut snapshot = parse_instatus_summary(source, &body)?;
             let components_url = format!("{}/v2/components.json", source.page_url());
-            if let Ok(Ok(components)) = timeout(Duration::from_secs(3), async {
-                let resp = client
-                    .get(&components_url)
-                    .send()
-                    .await
-                    .map_err(|e| e.to_string())?;
-                let text = resp.text().await.map_err(|e| e.to_string())?;
+            match timeout(Duration::from_secs(3), async {
+                let text = fetch_text(client, &components_url).await?;
                 parse_instatus_components(&text)
             })
             .await
             {
-                snapshot.components = components;
+                Ok(Ok(components)) => {
+                    snapshot.components = components;
+                    snapshot.components_state = available_detail_state(
+                        &snapshot.components,
+                        StatusDetailSource::Enrichment,
+                    );
+                }
+                Ok(Err(err)) => {
+                    snapshot.components_state =
+                        fetch_failed_detail_state(StatusDetailSource::Enrichment, err);
+                }
+                Err(_) => {
+                    snapshot.components_state = fetch_failed_detail_state(
+                        StatusDetailSource::Enrichment,
+                        "Service details timed out after 3s.",
+                    );
+                }
             }
             Ok(snapshot)
         }
@@ -267,15 +293,8 @@ async fn fetch_single(
                 fallback_result.ok().flatten(),
             );
 
-            // Populate per-provider error when both sources failed
-            if status.provenance == StatusProvenance::Unavailable {
-                if let Some(ref off_err) = official_err {
-                    status.error = Some(match &fallback_err {
-                        Some(fb_err) => format!("official: {off_err}; fallback: {fb_err}"),
-                        None => format!("official: {off_err}"),
-                    });
-                }
-            }
+            status.official_error = official_err;
+            status.fallback_error = fallback_err;
 
             status
         }
@@ -289,11 +308,15 @@ struct OfficialSnapshot {
     method: StatusSourceMethod,
     health: ProviderHealth,
     official_url: String,
-    last_checked: Option<String>,
-    summary: Option<String>,
+    source_updated_at: Option<String>,
+    provider_summary: Option<String>,
+    status_note: Option<String>,
     components: Vec<ComponentStatus>,
+    components_state: StatusDetailState,
     incidents: Vec<ActiveIncident>,
+    incidents_state: StatusDetailState,
     maintenance: Vec<ScheduledMaintenance>,
+    maintenance_state: StatusDetailState,
 }
 
 impl OfficialSnapshot {
@@ -329,6 +352,16 @@ impl OfficialSnapshot {
 
         let summary = latest.map(|incident| incident.external_desc.clone());
         let last_checked = latest.and_then(|incident| incident.modified.clone());
+        let components_state = unsupported_detail_state(
+            "Service details are not exposed as component rows by this Google adapter.",
+        );
+        let incidents_state = not_attempted_detail_state(
+            StatusDetailSource::Derived,
+            "Raw Google incident details are not preserved by this adapter yet.",
+        );
+        let maintenance_state = unsupported_detail_state(
+            "Scheduled maintenance details are not exposed by this Google adapter.",
+        );
 
         Self {
             label: product.title.clone(),
@@ -338,10 +371,17 @@ impl OfficialSnapshot {
                 "https://status.cloud.google.com/products/{}/history",
                 product.id
             ),
-            last_checked,
-            summary,
+            source_updated_at: last_checked,
+            provider_summary: summary,
+            status_note: Some(
+                "Google Cloud incidents are currently summarized into provider-level status only."
+                    .to_string(),
+            ),
+            components_state,
             components: Vec::new(),
+            incidents_state,
             incidents: Vec::new(),
+            maintenance_state,
             maintenance: Vec::new(),
         }
     }
@@ -353,8 +393,8 @@ struct FallbackSnapshot {
     health: ProviderHealth,
     official_url: Option<String>,
     fallback_url: String,
-    last_checked: Option<String>,
-    summary: Option<String>,
+    source_updated_at: Option<String>,
+    provider_summary: Option<String>,
 }
 
 impl FallbackSnapshot {
@@ -364,9 +404,55 @@ impl FallbackSnapshot {
             health: ProviderHealth::from_api_status(&payload.api.status),
             official_url: Some(payload.api.status_page_url),
             fallback_url: payload.links.page,
-            last_checked: payload.api.last_checked,
-            summary: Some(payload.api.description),
+            source_updated_at: payload.api.last_checked,
+            provider_summary: Some(payload.api.description),
         }
+    }
+}
+
+fn available_detail_state<T>(items: &[T], source: StatusDetailSource) -> StatusDetailState {
+    StatusDetailState {
+        availability: if items.is_empty() {
+            StatusDetailAvailability::NoneReported
+        } else {
+            StatusDetailAvailability::Available
+        },
+        source,
+        note: None,
+        error: None,
+    }
+}
+
+fn unsupported_detail_state(note: impl Into<String>) -> StatusDetailState {
+    StatusDetailState {
+        availability: StatusDetailAvailability::Unsupported,
+        source: StatusDetailSource::None,
+        note: Some(note.into()),
+        error: None,
+    }
+}
+
+fn not_attempted_detail_state(
+    source: StatusDetailSource,
+    note: impl Into<String>,
+) -> StatusDetailState {
+    StatusDetailState {
+        availability: StatusDetailAvailability::NotAttempted,
+        source,
+        note: Some(note.into()),
+        error: None,
+    }
+}
+
+fn fetch_failed_detail_state(
+    source: StatusDetailSource,
+    error: impl Into<String>,
+) -> StatusDetailState {
+    StatusDetailState {
+        availability: StatusDetailAvailability::FetchFailed,
+        source,
+        note: None,
+        error: Some(error.into()),
     }
 }
 
@@ -408,7 +494,7 @@ fn parse_statuspage_v2_summary(
         )
     });
 
-    let components = payload
+    let components: Vec<ComponentStatus> = payload
         .components
         .iter()
         .map(|c| ComponentStatus {
@@ -418,7 +504,7 @@ fn parse_statuspage_v2_summary(
         })
         .collect();
 
-    let incidents = payload
+    let incidents: Vec<ActiveIncident> = payload
         .incidents
         .iter()
         .map(|i| ActiveIncident {
@@ -437,7 +523,7 @@ fn parse_statuspage_v2_summary(
         })
         .collect();
 
-    let maintenance = payload
+    let maintenance: Vec<ScheduledMaintenance> = payload
         .scheduled_maintenances
         .iter()
         .map(|m| ScheduledMaintenance {
@@ -449,6 +535,9 @@ fn parse_statuspage_v2_summary(
             affected_components: m.components.iter().map(|c| c.name.clone()).collect(),
         })
         .collect();
+    let components_state = available_detail_state(&components, StatusDetailSource::Inline);
+    let incidents_state = available_detail_state(&incidents, StatusDetailSource::Inline);
+    let maintenance_state = available_detail_state(&maintenance, StatusDetailSource::Inline);
 
     Ok(OfficialSnapshot {
         label: payload
@@ -462,10 +551,14 @@ fn parse_statuspage_v2_summary(
             .page
             .url
             .unwrap_or_else(|| source.page_url().to_string()),
-        last_checked: payload.page.updated_at,
-        summary: incident_summary.or(Some(payload.status.description)),
+        source_updated_at: payload.page.updated_at,
+        provider_summary: incident_summary.or(Some(payload.status.description)),
+        status_note: None,
+        components_state,
         components,
+        incidents_state,
         incidents,
+        maintenance_state,
         maintenance,
     })
 }
@@ -572,7 +665,7 @@ fn parse_better_stack(
 
     let included = v.get("included").and_then(|v| v.as_array());
 
-    let components = included
+    let components: Vec<ComponentStatus> = included
         .map(|arr| {
             arr.iter()
                 .filter(|item| {
@@ -580,7 +673,8 @@ fn parse_better_stack(
                 })
                 .filter_map(|item| {
                     let name = item
-                        .pointer("/attributes/resource_name")
+                        .pointer("/attributes/public_name")
+                        .or_else(|| item.pointer("/attributes/resource_name"))
                         .and_then(|v| v.as_str())?;
                     let status = item
                         .pointer("/attributes/status")
@@ -628,16 +722,28 @@ fn parse_better_stack(
         .first()
         .map(|i| i.name.clone())
         .or_else(|| Some(aggregate_state.to_string()));
+    let components_state = available_detail_state(&components, StatusDetailSource::Inline);
+    let incidents_state = available_detail_state(&incidents, StatusDetailSource::Inline);
+    let maintenance_state = unsupported_detail_state(
+        "Scheduled maintenance details are not exposed by this Better Stack adapter.",
+    );
 
     Ok(OfficialSnapshot {
         label: source.label().to_string(),
         method: StatusSourceMethod::BetterStack,
         health,
         official_url: source.page_url().to_string(),
-        last_checked: None,
-        summary,
+        source_updated_at: v
+            .pointer("/data/attributes/updated_at")
+            .and_then(|v| v.as_str())
+            .map(str::to_string),
+        provider_summary: summary,
+        status_note: None,
+        components_state,
         components,
+        incidents_state,
         incidents,
+        maintenance_state,
         maintenance: Vec::new(),
     })
 }
@@ -665,7 +771,7 @@ fn parse_onlineornot(source: OfficialStatusSource, body: &str) -> Result<Officia
 
     let health = ProviderHealth::from_api_status(&status_str);
 
-    let components = result
+    let components: Vec<ComponentStatus> = result
         .get("components")
         .and_then(|v| v.as_array())
         .map(|arr| {
@@ -744,16 +850,23 @@ fn parse_onlineornot(source: OfficialStatusSource, body: &str) -> Result<Officia
         .first()
         .map(|i| i.name.clone())
         .or_else(|| Some(status_str.to_string()));
+    let components_state = available_detail_state(&components, StatusDetailSource::Inline);
+    let incidents_state = available_detail_state(&incidents, StatusDetailSource::Inline);
+    let maintenance_state = available_detail_state(&maintenance, StatusDetailSource::Inline);
 
     Ok(OfficialSnapshot {
         label: source.label().to_string(),
         method: StatusSourceMethod::OnlineOrNot,
         health,
         official_url: source.page_url().to_string(),
-        last_checked: None,
-        summary,
+        source_updated_at: None,
+        provider_summary: summary,
+        status_note: None,
+        components_state,
         components,
+        incidents_state,
         incidents,
+        maintenance_state,
         maintenance,
     })
 }
@@ -765,7 +878,7 @@ fn parse_onlineornot(source: OfficialStatusSource, body: &str) -> Result<Officia
 fn status_io_code_to_string(code: u64) -> String {
     match code {
         100 => "operational".to_string(),
-        300 => "degraded_performance".to_string(),
+        300 | 400 => "degraded_performance".to_string(),
         500 => "major_outage".to_string(),
         600 => "under_maintenance".to_string(),
         _ => format!("unknown_{code}"),
@@ -775,7 +888,7 @@ fn status_io_code_to_string(code: u64) -> String {
 fn status_io_code_to_health(code: u64) -> ProviderHealth {
     match code {
         100 => ProviderHealth::Operational,
-        300 => ProviderHealth::Degraded,
+        300 | 400 => ProviderHealth::Degraded,
         500 => ProviderHealth::Outage,
         600 => ProviderHealth::Maintenance,
         _ => ProviderHealth::Unknown,
@@ -869,16 +982,26 @@ fn parse_status_io(source: OfficialStatusSource, body: &str) -> Result<OfficialS
         .first()
         .map(|i| i.name.clone())
         .or_else(|| Some(status_io_code_to_string(overall_code)));
+    let components_state = available_detail_state(&components, StatusDetailSource::Inline);
+    let incidents_state = available_detail_state(&incidents, StatusDetailSource::Inline);
+    let maintenance_state = available_detail_state(&maintenance, StatusDetailSource::Inline);
 
     Ok(OfficialSnapshot {
         label: source.label().to_string(),
         method: StatusSourceMethod::StatusIo,
         health,
         official_url: source.page_url().to_string(),
-        last_checked: None,
-        summary,
+        source_updated_at: result
+            .pointer("/status_overall/updated")
+            .and_then(|v| v.as_str())
+            .map(str::to_string),
+        provider_summary: summary,
+        status_note: None,
+        components_state,
         components,
+        incidents_state,
         incidents,
+        maintenance_state,
         maintenance,
     })
 }
@@ -968,16 +1091,26 @@ fn parse_instatus_summary(
         .first()
         .map(|i| i.name.clone())
         .or_else(|| Some(normalize_component_status(page_status)));
+    let components_state = not_attempted_detail_state(
+        StatusDetailSource::Enrichment,
+        "Service details require the Instatus components endpoint.",
+    );
+    let incidents_state = available_detail_state(&incidents, StatusDetailSource::Inline);
+    let maintenance_state = available_detail_state(&maintenance, StatusDetailSource::Inline);
 
     Ok(OfficialSnapshot {
         label: source.label().to_string(),
         method: StatusSourceMethod::Instatus,
         health,
         official_url: source.page_url().to_string(),
-        last_checked: None,
-        summary,
+        source_updated_at: None,
+        provider_summary: summary,
+        status_note: None,
+        components_state,
         components: Vec::new(),
+        incidents_state,
         incidents,
+        maintenance_state,
         maintenance,
     })
 }
@@ -1011,14 +1144,26 @@ fn resolve_provider_status(
     if let Some(official) = official {
         status.health = official.health;
         status.provenance = StatusProvenance::Official;
+        status.load_state = if official.components_state.is_fetch_failed()
+            || official.incidents_state.is_fetch_failed()
+            || official.maintenance_state.is_fetch_failed()
+        {
+            StatusLoadState::Partial
+        } else {
+            StatusLoadState::Loaded
+        };
         status.source_label = Some(official.label);
         status.source_method = Some(official.method);
         status.official_url = Some(official.official_url);
-        status.last_checked = official.last_checked;
-        status.summary = official.summary;
+        status.source_updated_at = official.source_updated_at;
+        status.provider_summary = official.provider_summary;
+        status.status_note = official.status_note;
         status.components = official.components;
+        status.components_state = official.components_state;
         status.incidents = official.incidents;
+        status.incidents_state = official.incidents_state;
         status.scheduled_maintenances = official.maintenance;
+        status.scheduled_maintenances_state = official.maintenance_state;
 
         // Reconcile health: cross-check API-declared status against
         // actual incidents and component statuses. Take the worst.
@@ -1084,16 +1229,40 @@ fn resolve_provider_status(
     if let Some(fallback) = fallback {
         status.health = fallback.health;
         status.provenance = StatusProvenance::Fallback;
+        status.load_state = StatusLoadState::Loaded;
         status.source_label = Some(fallback.label);
         status.source_method = Some(StatusSourceMethod::ApiStatusCheck);
         status.official_url = fallback.official_url;
         status.fallback_url = Some(fallback.fallback_url);
-        status.last_checked = fallback.last_checked;
-        status.summary = fallback.summary;
+        status.source_updated_at = fallback.source_updated_at;
+        status.provider_summary = fallback.provider_summary;
+        status.status_note =
+            Some("Fallback adapter exposes only provider-level summary status.".to_string());
+        status.components_state = StatusDetailState {
+            availability: StatusDetailAvailability::Unsupported,
+            source: StatusDetailSource::SummaryOnly,
+            note: Some("Service details are unavailable from the fallback adapter.".to_string()),
+            error: None,
+        };
+        status.incidents_state = StatusDetailState {
+            availability: StatusDetailAvailability::Unsupported,
+            source: StatusDetailSource::SummaryOnly,
+            note: Some("Incident details are unavailable from the fallback adapter.".to_string()),
+            error: None,
+        };
+        status.scheduled_maintenances_state = StatusDetailState {
+            availability: StatusDetailAvailability::Unsupported,
+            source: StatusDetailSource::SummaryOnly,
+            note: Some(
+                "Maintenance details are unavailable from the fallback adapter.".to_string(),
+            ),
+            error: None,
+        };
         return status;
     }
 
-    status.summary = match seed.strategy {
+    status.load_state = StatusLoadState::Failed;
+    status.status_note = match seed.strategy {
         StatusStrategy::Unverified => Some(
             "No verified machine-readable official or fallback source has been added for this provider yet."
                 .to_string(),
@@ -1107,6 +1276,28 @@ fn resolve_provider_status(
             ..
         } => Some("Official source unavailable and no fallback source is configured.".to_string()),
     };
+    let unavailable_state = match seed.strategy {
+        StatusStrategy::Unverified => StatusDetailState {
+            availability: StatusDetailAvailability::Unsupported,
+            source: StatusDetailSource::None,
+            note: Some(
+                "No verified machine-readable source is configured for this provider.".to_string(),
+            ),
+            error: None,
+        },
+        StatusStrategy::OfficialFirst { .. } => StatusDetailState {
+            availability: StatusDetailAvailability::FetchFailed,
+            source: StatusDetailSource::None,
+            note: None,
+            error: Some(
+                "No provider detail could be loaded from the configured status sources."
+                    .to_string(),
+            ),
+        },
+    };
+    status.components_state = unavailable_state.clone();
+    status.incidents_state = unavailable_state.clone();
+    status.scheduled_maintenances_state = unavailable_state;
     status
 }
 
@@ -1246,12 +1437,24 @@ struct GoogleAffectedProduct {
 
 #[cfg(test)]
 mod tests {
-    use crate::status::{status_seed_for_provider, StatusProvenance};
+    use crate::status::{
+        status_seed_for_provider, StatusDetailAvailability, StatusDetailSource, StatusDetailState,
+        StatusLoadState, StatusProvenance,
+    };
 
     use super::*;
 
     fn seed(slug: &str) -> StatusProviderSeed {
         status_seed_for_provider(slug)
+    }
+
+    fn inline_none_state() -> StatusDetailState {
+        StatusDetailState {
+            availability: StatusDetailAvailability::NoneReported,
+            source: StatusDetailSource::Inline,
+            note: None,
+            error: None,
+        }
     }
 
     #[test]
@@ -1263,23 +1466,28 @@ mod tests {
                 method: StatusSourceMethod::StatuspageV2,
                 health: ProviderHealth::Degraded,
                 official_url: "https://status.openai.com".to_string(),
-                last_checked: Some("2026-03-11T00:00:00Z".to_string()),
-                summary: Some("Partial System Degradation".to_string()),
+                source_updated_at: Some("2026-03-11T00:00:00Z".to_string()),
+                provider_summary: Some("Partial System Degradation".to_string()),
+                status_note: None,
                 components: Vec::new(),
+                components_state: inline_none_state(),
                 incidents: Vec::new(),
+                incidents_state: inline_none_state(),
                 maintenance: Vec::new(),
+                maintenance_state: inline_none_state(),
             }),
             Some(FallbackSnapshot {
                 label: "OpenAI".to_string(),
                 health: ProviderHealth::Operational,
                 official_url: Some("https://status.openai.com".to_string()),
                 fallback_url: "https://apistatuscheck.com/api/openai".to_string(),
-                last_checked: Some("2026-03-11T00:00:00Z".to_string()),
-                summary: Some("Fallback".to_string()),
+                source_updated_at: Some("2026-03-11T00:00:00Z".to_string()),
+                provider_summary: Some("Fallback".to_string()),
             }),
         );
 
         assert_eq!(status.provenance, StatusProvenance::Official);
+        assert_eq!(status.load_state, StatusLoadState::Loaded);
         assert_eq!(status.health, ProviderHealth::Degraded);
         assert_eq!(status.fallback_url, None);
     }
@@ -1294,12 +1502,16 @@ mod tests {
                 health: ProviderHealth::Operational,
                 official_url: Some("https://status.openai.com".to_string()),
                 fallback_url: "https://apistatuscheck.com/api/openai".to_string(),
-                last_checked: Some("2026-03-11T00:00:00Z".to_string()),
-                summary: Some("Fallback".to_string()),
+                source_updated_at: Some("2026-03-11T00:00:00Z".to_string()),
+                provider_summary: Some("Fallback".to_string()),
             }),
         );
 
         assert_eq!(status.provenance, StatusProvenance::Fallback);
+        assert_eq!(
+            status.components_state.availability,
+            StatusDetailAvailability::Unsupported
+        );
         assert_eq!(status.best_open_url(), Some("https://status.openai.com"));
         assert_eq!(
             status.fallback_url.as_deref(),
@@ -1311,6 +1523,7 @@ mod tests {
     fn both_fail_stays_unavailable() {
         let status = resolve_provider_status(&seed("openai"), None, None);
         assert_eq!(status.provenance, StatusProvenance::Unavailable);
+        assert_eq!(status.load_state, StatusLoadState::Failed);
         assert_eq!(status.health, ProviderHealth::Unknown);
     }
 
@@ -1319,7 +1532,7 @@ mod tests {
         let status = resolve_provider_status(&seed("some-nonexistent-provider"), None, None);
         assert_eq!(status.provenance, StatusProvenance::Unavailable);
         assert!(status
-            .summary
+            .status_note
             .as_deref()
             .unwrap_or_default()
             .contains("added for this provider yet"));
@@ -1346,6 +1559,10 @@ mod tests {
         let snapshot = OfficialSnapshot::from_google(&product, &incidents);
         assert_eq!(snapshot.method, StatusSourceMethod::GoogleCloudJson);
         assert_eq!(snapshot.health, ProviderHealth::Operational);
+        assert_eq!(
+            snapshot.incidents_state.availability,
+            StatusDetailAvailability::NotAttempted
+        );
         assert!(snapshot
             .official_url
             .contains("Z0FZJAMvEB4j3NbCJs6B/history"));
@@ -1366,7 +1583,7 @@ mod tests {
                     "id": "r1",
                     "type": "status_page_resource",
                     "attributes": {
-                        "resource_name": "API",
+                        "public_name": "API",
                         "status": "degraded"
                     }
                 },

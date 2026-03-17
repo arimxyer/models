@@ -206,7 +206,7 @@ fn provider_last_meaningful_update(
         return Some(("latest event", format_relative_time_from_str(&raw)));
     }
 
-    entry.last_checked.as_deref().map(|raw| {
+    entry.source_updated_at.as_deref().map(|raw| {
         let label = match entry.source_method {
             Some(StatusSourceMethod::ApiStatusCheck) => "last checked",
             _ => "source updated",
@@ -334,7 +334,7 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                 spans.push(Span::raw(" "));
                 spans.push(Span::styled(
                     issue_count.to_string(),
-                    Style::default().fg(Color::Yellow),
+                    status_health_style(entry.health),
                 ));
             }
             items.push(ListItem::new(Line::from(spans)));
@@ -358,7 +358,7 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
         let display_name = entry.display_name.clone();
         let health = entry.health;
         let provenance = entry.provenance;
-        let error_msg = entry.error.clone();
+        let error_msg = entry.error_summary();
         let source_name = entry
             .source_label
             .clone()
@@ -371,13 +371,17 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
         let (time_label, time_value) = provider_last_meaningful_update(entry)
             .map(|(label, value)| (title_case_status_time_label(label), value))
             .unwrap_or(("Source updated", "Unknown".to_string()));
-        let service_detail_unavailable =
-            entry.components.is_empty() && provenance != StatusProvenance::Unavailable;
-        let caveat = if service_detail_unavailable {
-            Some("Service details unavailable".to_string())
-        } else {
-            entry.user_visible_caveat().map(str::to_string)
-        };
+        let service_note = entry.detail_state_message(&entry.components_state, "Service details");
+        let incident_note = entry.detail_state_message(&entry.incidents_state, "Incident details");
+        let maintenance_note =
+            entry.detail_state_message(&entry.scheduled_maintenances_state, "Maintenance details");
+        let maintenance_problem = entry.scheduled_maintenances_state.is_fetch_failed();
+        let caveat = service_note
+            .clone()
+            .or_else(|| incident_note.clone())
+            .or_else(|| entry.user_visible_caveat().map(str::to_string));
+        let confirmed_no_components = entry.confirmed_no_components();
+        let confirmed_no_incidents = entry.confirmed_no_incidents();
         let active_incidents = sorted_active_incidents(entry);
         let components = sorted_components(entry, &active_incidents);
         let detail_scroll = status_app.detail_scroll;
@@ -394,6 +398,12 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
             time_label,
             &time_value,
             &caveat,
+            &service_note,
+            &incident_note,
+            &maintenance_note,
+            confirmed_no_components,
+            confirmed_no_incidents,
+            maintenance_problem,
             &active_incidents,
             &components,
             &entry.scheduled_maintenances,
@@ -456,6 +466,9 @@ fn sorted_components<'a>(
     entry: &'a crate::status::ProviderStatus,
     active_incidents: &[crate::status::ActiveIncident],
 ) -> Vec<&'a crate::status::ComponentStatus> {
+    if !entry.component_detail_available() {
+        return Vec::new();
+    }
     let mut component_incident_map: std::collections::HashSet<&str> =
         std::collections::HashSet::new();
     for incident in active_incidents {
@@ -589,7 +602,7 @@ fn draw_overall_dashboard(f: &mut Frame, area: Rect, status_app: &super::status_
                 spans.push(Span::raw(" "));
                 spans.push(Span::styled(
                     issue_count.to_string(),
-                    Style::default().fg(Color::Yellow),
+                    status_health_style(entry.health),
                 ));
             }
             lines.push(Line::from(spans));
@@ -772,6 +785,12 @@ fn draw_provider_status_detail(
     time_label: &str,
     time_value: &str,
     caveat: &Option<String>,
+    service_note: &Option<String>,
+    incident_note: &Option<String>,
+    maintenance_note: &Option<String>,
+    confirmed_no_components: bool,
+    confirmed_no_incidents: bool,
+    maintenance_problem: bool,
     active_incidents: &[crate::status::ActiveIncident],
     components: &[&crate::status::ComponentStatus],
     scheduled_maintenances: &[crate::status::ScheduledMaintenance],
@@ -790,7 +809,8 @@ fn draw_provider_status_detail(
         status_h += 1;
     }
 
-    let has_components = !components.is_empty();
+    let has_components =
+        !components.is_empty() || service_note.is_some() || confirmed_no_components;
     // Count non-operational components for the services panel
     let non_op_comp_count = components
         .iter()
@@ -809,9 +829,13 @@ fn draw_provider_status_detail(
         0
     };
 
-    let has_maintenance = !scheduled_maintenances.is_empty();
+    let has_maintenance = !scheduled_maintenances.is_empty() || maintenance_problem;
     let maint_lines = if has_maintenance {
-        (scheduled_maintenances.len() * 2) as u16 // name + detail per item
+        if scheduled_maintenances.is_empty() {
+            1
+        } else {
+            (scheduled_maintenances.len() * 2) as u16
+        }
     } else {
         0
     };
@@ -837,18 +861,32 @@ fn draw_provider_status_detail(
         let status_area = panel_chunks[chunk_idx];
         chunk_idx += 1;
 
-        let issue_summary = match (active_incidents.len(), scheduled_maintenances.len()) {
-            (0, 0) => "0 active incidents".to_string(),
-            (incidents, 0) => format!(
+        let issue_summary = match (
+            incident_note.as_deref(),
+            active_incidents.len(),
+            scheduled_maintenances.len(),
+        ) {
+            (Some(note), 0, 0) => note.to_string(),
+            (Some(note), 0, maintenance) => format!(
+                "{note} • {maintenance} maintenance item{}",
+                if maintenance == 1 { "" } else { "s" }
+            ),
+            (None, 0, 0) => "0 active incidents".to_string(),
+            (None, incidents, 0) => format!(
                 "{incidents} active incident{}",
                 if incidents == 1 { "" } else { "s" }
             ),
-            (0, maintenance) => format!(
+            (None, 0, maintenance) => format!(
                 "0 active incidents • {maintenance} maintenance item{}",
                 if maintenance == 1 { "" } else { "s" }
             ),
-            (incidents, maintenance) => format!(
+            (None, incidents, maintenance) => format!(
                 "{incidents} active incident{} • {maintenance} maintenance item{}",
+                if incidents == 1 { "" } else { "s" },
+                if maintenance == 1 { "" } else { "s" },
+            ),
+            (Some(note), incidents, maintenance) => format!(
+                "{incidents} active incident{} • {maintenance} maintenance item{} • {note}",
                 if incidents == 1 { "" } else { "s" },
                 if maintenance == 1 { "" } else { "s" },
             ),
@@ -919,37 +957,47 @@ fn draw_provider_status_detail(
 
         let mut lines: Vec<Line<'static>> = Vec::new();
 
-        // Show each non-operational component on its own line
-        for comp in components {
-            let s = comp.status.to_lowercase();
-            if s.contains("operational") || s == "unknown" || s.is_empty() {
-                continue;
+        if let Some(note) = service_note {
+            lines.push(Line::from(Span::styled(
+                note.clone(),
+                Style::default().fg(Color::DarkGray),
+            )));
+        } else if confirmed_no_components {
+            lines.push(Line::from(Span::styled(
+                "No service-level issues reported",
+                Style::default().fg(Color::DarkGray),
+            )));
+        } else {
+            for comp in components {
+                let s = comp.status.to_lowercase();
+                if s.contains("operational") || s == "unknown" || s.is_empty() {
+                    continue;
+                }
+                let name = translate_component_name(&comp.name);
+                lines.push(Line::from(vec![
+                    Span::styled(
+                        component_status_icon(&comp.status),
+                        component_status_style(&comp.status),
+                    ),
+                    Span::raw(" "),
+                    Span::styled(name, Style::default().add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        format!("  {}", comp.status.replace('_', " ")),
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                ]));
             }
-            let name = translate_component_name(&comp.name);
-            lines.push(Line::from(vec![
-                Span::styled(
-                    component_status_icon(&comp.status),
-                    component_status_style(&comp.status),
-                ),
-                Span::raw(" "),
-                Span::styled(name, Style::default().add_modifier(Modifier::BOLD)),
-                Span::styled(
-                    format!("  {}", comp.status.replace('_', " ")),
-                    Style::default().fg(Color::DarkGray),
-                ),
-            ]));
-        }
 
-        // Summary line for healthy components
-        if healthy_comp_count > 0 {
-            lines.push(Line::from(vec![
-                Span::styled("●", Style::default().fg(Color::Green)),
-                Span::raw(format!(
-                    " {} service{} operational",
-                    healthy_comp_count,
-                    if healthy_comp_count == 1 { "" } else { "s" }
-                )),
-            ]));
+            if healthy_comp_count > 0 {
+                lines.push(Line::from(vec![
+                    Span::styled("●", Style::default().fg(Color::Green)),
+                    Span::raw(format!(
+                        " {} service{} operational",
+                        healthy_comp_count,
+                        if healthy_comp_count == 1 { "" } else { "s" }
+                    )),
+                ]));
+            }
         }
 
         let block = Block::default()
@@ -974,8 +1022,15 @@ fn draw_provider_status_detail(
         let mut lines: Vec<Line<'static>> = Vec::new();
 
         if active_incidents.is_empty() {
+            let incident_empty_text = incident_note.clone().unwrap_or_else(|| {
+                if confirmed_no_incidents {
+                    "No active incidents".to_string()
+                } else {
+                    "Incident details unavailable".to_string()
+                }
+            });
             lines.push(Line::from(Span::styled(
-                "No active incidents",
+                incident_empty_text,
                 Style::default().fg(Color::DarkGray),
             )));
         }
@@ -1047,25 +1102,34 @@ fn draw_provider_status_detail(
     if has_maintenance {
         let maint_area = panel_chunks[chunk_idx];
         let mut lines: Vec<Line<'static>> = Vec::new();
-        for maint in scheduled_maintenances {
-            lines.push(Line::from(vec![
-                Span::styled("◆ ", Style::default().fg(Color::Blue)),
-                Span::styled(
-                    maint.name.clone(),
-                    Style::default().add_modifier(Modifier::BOLD),
-                ),
-            ]));
-            let mut maint_bits = vec![maint.status.clone()];
-            if let Some(start) = maint.scheduled_for.as_deref() {
-                maint_bits.push(format_relative_time_from_str(start));
-            }
-            if !maint.affected_components.is_empty() {
-                maint_bits.push(maint.affected_components.join(", "));
-            }
+        if maintenance_problem {
             lines.push(Line::from(Span::styled(
-                format!("  {}", maint_bits.join(" • ")),
+                maintenance_note
+                    .clone()
+                    .unwrap_or_else(|| "Maintenance details failed to load".to_string()),
                 Style::default().fg(Color::DarkGray),
             )));
+        } else {
+            for maint in scheduled_maintenances {
+                lines.push(Line::from(vec![
+                    Span::styled("◆ ", Style::default().fg(Color::Blue)),
+                    Span::styled(
+                        maint.name.clone(),
+                        Style::default().add_modifier(Modifier::BOLD),
+                    ),
+                ]));
+                let mut maint_bits = vec![maint.status.clone()];
+                if let Some(start) = maint.scheduled_for.as_deref() {
+                    maint_bits.push(format_relative_time_from_str(start));
+                }
+                if !maint.affected_components.is_empty() {
+                    maint_bits.push(maint.affected_components.join(", "));
+                }
+                lines.push(Line::from(Span::styled(
+                    format!("  {}", maint_bits.join(" • ")),
+                    Style::default().fg(Color::DarkGray),
+                )));
+            }
         }
 
         let block = Block::default()
@@ -5442,12 +5506,16 @@ mod tests {
             support_tier: StatusSupportTier::Required,
             health: ProviderHealth::Degraded,
             provenance: StatusProvenance::Fallback,
+            load_state: crate::status::StatusLoadState::Loaded,
             source_label: Some("API Status Check".to_string()),
             source_method: Some(StatusSourceMethod::ApiStatusCheck),
             official_url: Some("https://status.openai.com".to_string()),
             fallback_url: Some("https://apistatuscheck.com/openai".to_string()),
-            last_checked: Some("2026-03-16T23:55:00Z".to_string()),
-            summary: Some("Elevated API errors affecting chat completions.".to_string()),
+            source_updated_at: Some("2026-03-16T23:55:00Z".to_string()),
+            provider_summary: Some("Elevated API errors affecting chat completions.".to_string()),
+            status_note: Some(
+                "Fallback adapter exposes only provider-level summary status.".to_string(),
+            ),
             components: vec![
                 ComponentStatus {
                     name: "API".to_string(),
@@ -5460,6 +5528,12 @@ mod tests {
                     group_name: None,
                 },
             ],
+            components_state: crate::status::StatusDetailState {
+                availability: crate::status::StatusDetailAvailability::Available,
+                source: crate::status::StatusDetailSource::Inline,
+                note: None,
+                error: None,
+            },
             incidents: vec![ActiveIncident {
                 name: "Elevated API errors".to_string(),
                 status: "investigating".to_string(),
@@ -5474,6 +5548,12 @@ mod tests {
                 }),
                 affected_components: vec!["API".to_string()],
             }],
+            incidents_state: crate::status::StatusDetailState {
+                availability: crate::status::StatusDetailAvailability::Available,
+                source: crate::status::StatusDetailSource::Inline,
+                note: None,
+                error: None,
+            },
             scheduled_maintenances: vec![ScheduledMaintenance {
                 name: "Database maintenance".to_string(),
                 status: "scheduled".to_string(),
@@ -5482,7 +5562,14 @@ mod tests {
                 scheduled_until: Some("2026-03-17T04:00:00Z".to_string()),
                 affected_components: vec!["Auth".to_string()],
             }],
-            error: None,
+            scheduled_maintenances_state: crate::status::StatusDetailState {
+                availability: crate::status::StatusDetailAvailability::Available,
+                source: crate::status::StatusDetailSource::Inline,
+                note: None,
+                error: None,
+            },
+            official_error: None,
+            fallback_error: None,
         }
     }
 
@@ -5534,9 +5621,12 @@ mod tests {
         let mut entry = sample_provider_status();
         entry.health = ProviderHealth::Operational;
         entry.provenance = StatusProvenance::Official;
-        entry.summary = Some("All systems operational".to_string());
+        entry.provider_summary = Some("All systems operational".to_string());
         entry.incidents.clear();
         entry.scheduled_maintenances.clear();
+        entry.incidents_state.availability = crate::status::StatusDetailAvailability::NoneReported;
+        entry.scheduled_maintenances_state.availability =
+            crate::status::StatusDetailAvailability::NoneReported;
         for component in &mut entry.components {
             component.status = "operational".to_string();
         }
@@ -5554,10 +5644,28 @@ mod tests {
         entry.health = ProviderHealth::Operational;
         entry.provenance = StatusProvenance::Official;
         entry.source_method = Some(StatusSourceMethod::ApiStatusCheck);
-        entry.summary = Some("All systems operational".to_string());
+        entry.provider_summary = Some("All systems operational".to_string());
         entry.components.clear();
         entry.incidents.clear();
         entry.scheduled_maintenances.clear();
+        entry.components_state = crate::status::StatusDetailState {
+            availability: crate::status::StatusDetailAvailability::Unsupported,
+            source: crate::status::StatusDetailSource::SummaryOnly,
+            note: Some("Service details unavailable".to_string()),
+            error: None,
+        };
+        entry.incidents_state = crate::status::StatusDetailState {
+            availability: crate::status::StatusDetailAvailability::Unsupported,
+            source: crate::status::StatusDetailSource::SummaryOnly,
+            note: Some("Incident details unavailable".to_string()),
+            error: None,
+        };
+        entry.scheduled_maintenances_state = crate::status::StatusDetailState {
+            availability: crate::status::StatusDetailAvailability::Unsupported,
+            source: crate::status::StatusDetailSource::SummaryOnly,
+            note: Some("Maintenance details unavailable".to_string()),
+            error: None,
+        };
 
         let mut app = make_status_app(entry);
         let rendered = render_status_text(&mut app);
