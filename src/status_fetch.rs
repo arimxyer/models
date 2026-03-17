@@ -1033,16 +1033,47 @@ fn resolve_provider_status(
             reconciled = ProviderHealth::Degraded;
         }
 
-        // Worst component status overrides if worse than current
-        for comp in &status.components {
-            let comp_health = match comp.status.as_str() {
-                "major_outage" => ProviderHealth::Outage,
-                "partial_outage" | "degraded_performance" => ProviderHealth::Degraded,
-                "under_maintenance" => ProviderHealth::Maintenance,
-                _ => ProviderHealth::Operational,
+        // Component-aware health: consider severity AND proportion.
+        // A single component outage among many healthy ones → Degraded, not Outage.
+        if !status.components.is_empty() {
+            let total = status.components.len();
+            let mut outage_count = 0usize;
+            let mut degraded_count = 0usize;
+            let mut maintenance_count = 0usize;
+
+            for comp in &status.components {
+                match comp.status.as_str() {
+                    "major_outage" => outage_count += 1,
+                    "partial_outage" | "degraded_performance" => degraded_count += 1,
+                    "under_maintenance" => maintenance_count += 1,
+                    _ => {}
+                }
+            }
+
+            let affected = outage_count + degraded_count;
+            let worst_component = if outage_count > 0 {
+                ProviderHealth::Outage
+            } else if degraded_count > 0 {
+                ProviderHealth::Degraded
+            } else if maintenance_count > 0 {
+                ProviderHealth::Maintenance
+            } else {
+                ProviderHealth::Operational
             };
-            if comp_health.sort_rank() < reconciled.sort_rank() {
-                reconciled = comp_health;
+
+            // Only promote to full Outage if a significant fraction of
+            // components are affected (>= 1/3) or if the majority are in outage.
+            // Otherwise cap at Degraded — a single service down among many
+            // healthy ones is a partial degradation, not a full outage.
+            let component_health =
+                if worst_component == ProviderHealth::Outage && affected * 3 < total {
+                    ProviderHealth::Degraded
+                } else {
+                    worst_component
+                };
+
+            if component_health.sort_rank() < reconciled.sort_rank() {
+                reconciled = component_health;
             }
         }
 

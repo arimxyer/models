@@ -756,6 +756,27 @@ impl ProviderStatus {
             .collect()
     }
 
+    /// Count of non-operational components (outage, degraded, or maintenance).
+    pub fn non_operational_component_count(&self) -> usize {
+        self.components
+            .iter()
+            .filter(|c| {
+                let s = c.status.to_lowercase();
+                !s.contains("operational") && s != "unknown" && !s.is_empty()
+            })
+            .count()
+    }
+
+    /// Combined issue count for display badges: active incidents + non-operational
+    /// components that aren't already covered by an incident.
+    pub fn issue_count(&self) -> usize {
+        let incidents = self.active_incidents().len();
+        let non_op_components = self.non_operational_component_count();
+        // If there are incidents, they typically cover the component issues.
+        // Show the larger of the two to avoid double-counting.
+        incidents.max(non_op_components)
+    }
+
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn user_visible_affected_items(&self) -> Vec<String> {
         let assessment = self.assessment();

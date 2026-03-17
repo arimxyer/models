@@ -329,11 +329,11 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                 Span::raw(" "),
                 Span::styled(truncate(&entry.display_name, 20), text_style),
             ];
-            let incident_count = entry.active_incidents().len();
-            if incident_count > 0 {
+            let issue_count = entry.issue_count();
+            if issue_count > 0 {
                 spans.push(Span::raw(" "));
                 spans.push(Span::styled(
-                    incident_count.to_string(),
+                    issue_count.to_string(),
                     Style::default().fg(Color::Yellow),
                 ));
             }
@@ -576,14 +576,23 @@ fn draw_overall_dashboard(f: &mut Frame, area: Rect, status_app: &super::status_
     {
         let mut lines: Vec<Line<'static>> = Vec::new();
         for entry in &status_app.entries {
-            lines.push(Line::from(vec![
+            let mut spans = vec![
                 Span::styled(
                     status_health_icon(entry.health),
                     status_health_style(entry.health),
                 ),
                 Span::raw(" "),
                 Span::raw(entry.display_name.clone()),
-            ]));
+            ];
+            let issue_count = entry.issue_count();
+            if issue_count > 0 {
+                spans.push(Span::raw(" "));
+                spans.push(Span::styled(
+                    issue_count.to_string(),
+                    Style::default().fg(Color::Yellow),
+                ));
+            }
+            lines.push(Line::from(spans));
         }
 
         let block = Block::default()
@@ -618,16 +627,52 @@ fn draw_overall_dashboard(f: &mut Frame, area: Rect, status_app: &super::status_
                 ),
             ]));
 
+            // Show non-operational component statuses (one per line)
+            let non_op_components: Vec<_> = entry
+                .components
+                .iter()
+                .filter(|c| {
+                    let s = c.status.to_lowercase();
+                    !s.contains("operational") && s != "unknown"
+                })
+                .collect();
+            for comp in &non_op_components {
+                let name = translate_component_name(&comp.name);
+                lines.push(Line::from(vec![
+                    Span::raw("  "),
+                    Span::styled(
+                        component_status_icon(&comp.status),
+                        component_status_style(&comp.status),
+                    ),
+                    Span::raw(" "),
+                    Span::raw(name),
+                    Span::styled(
+                        format!("  {}", comp.status.replace('_', " ")),
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                ]));
+            }
+
             // Incident details
             let incidents = entry.active_incidents();
-            if incidents.is_empty() {
+            if incidents.is_empty() && non_op_components.is_empty() {
                 lines.push(Line::from(Span::styled(
                     format!("  {}", status_verdict_copy(entry.health)),
                     Style::default().fg(Color::DarkGray),
                 )));
             }
             for incident in &incidents {
+                // Incident name
+                lines.push(Line::from(vec![
+                    Span::styled("  ◉ ", incident_stage_style(&incident.status)),
+                    Span::raw(incident.name.clone()),
+                ]));
+                // Status + impact + time
                 let mut detail_bits = vec![incident.status.clone()];
+                let impact_lower = incident.impact.to_lowercase();
+                if !impact_lower.is_empty() && impact_lower != "none" {
+                    detail_bits.push(incident.impact.clone());
+                }
                 if let Some(ts) = incident
                     .updated_at
                     .as_deref()
@@ -635,22 +680,22 @@ fn draw_overall_dashboard(f: &mut Frame, area: Rect, status_app: &super::status_
                 {
                     detail_bits.push(format_relative_time_from_str(ts));
                 }
-                lines.push(Line::from(vec![
-                    Span::styled("  ◉ ", incident_stage_style(&incident.status)),
-                    Span::raw(incident.name.clone()),
-                ]));
                 lines.push(Line::from(Span::styled(
                     format!("    {}", detail_bits.join(" • ")),
                     Style::default().fg(Color::DarkGray),
                 )));
-                // Show first line of latest update if available
+                // Affected components
+                if !incident.affected_components.is_empty() {
+                    lines.push(Line::from(Span::styled(
+                        format!("    Affected: {}", incident.affected_components.join(", ")),
+                        Style::default().fg(Color::DarkGray),
+                    )));
+                }
+                // Provider update body (wrapped, up to 4 lines)
                 if let Some(update) = &incident.latest_update {
                     let body_w = usize::from(cols[1].width.saturating_sub(8)).max(20);
-                    if let Some(first_line) = textwrap::wrap(&update.body, body_w).first() {
-                        lines.push(Line::from(Span::styled(
-                            format!("    {first_line}"),
-                            Style::default().fg(Color::DarkGray),
-                        )));
+                    for line in textwrap::wrap(&update.body, body_w).iter().take(4) {
+                        lines.push(Line::from(Span::raw(format!("    {line}"))));
                     }
                 }
             }
@@ -746,22 +791,20 @@ fn draw_provider_status_detail(
     }
 
     let has_components = !components.is_empty();
-    // Compute how many rows the horizontal service list needs
+    // Count non-operational components for the services panel
+    let non_op_comp_count = components
+        .iter()
+        .filter(|c| {
+            let s = c.status.to_lowercase();
+            !s.contains("operational") && s != "unknown" && !s.is_empty()
+        })
+        .count();
+    let healthy_comp_count = components.len() - non_op_comp_count;
+    // Service rows: one per non-operational component + optional summary line
     let service_rows = if has_components {
-        let inner_w = area.width.saturating_sub(4) as usize;
-        let mut row_w = 0usize;
-        let mut rows = 1u16;
-        for comp in components {
-            let name = translate_component_name(&comp.name);
-            let cell_w = name.chars().count() + 3; // icon + space + name + gap
-            if row_w > 0 && row_w + cell_w > inner_w {
-                rows += 1;
-                row_w = cell_w;
-            } else {
-                row_w += cell_w;
-            }
-        }
-        rows
+        let base = non_op_comp_count as u16;
+        let summary = if healthy_comp_count > 0 { 1u16 } else { 0 };
+        (base + summary).max(1) // at least 1 row
     } else {
         0
     };
@@ -869,32 +912,44 @@ fn draw_provider_status_detail(
         f.render_widget(Paragraph::new(lines).block(block), status_area);
     }
 
-    // ── Services (horizontal row) ──────────────────────────────
+    // ── Services (non-operational highlighted, healthy summarized) ─
     if has_components {
         let services_area = panel_chunks[chunk_idx];
         chunk_idx += 1;
 
-        let inner_w = services_area.width.saturating_sub(4) as usize;
         let mut lines: Vec<Line<'static>> = Vec::new();
-        let mut current_spans: Vec<Span<'static>> = Vec::new();
-        let mut row_w = 0usize;
 
+        // Show each non-operational component on its own line
         for comp in components {
-            let name = translate_component_name(&comp.name);
-            let cell_w = name.chars().count() + 3;
-            if row_w > 0 && row_w + cell_w > inner_w {
-                lines.push(Line::from(std::mem::take(&mut current_spans)));
-                row_w = 0;
+            let s = comp.status.to_lowercase();
+            if s.contains("operational") || s == "unknown" || s.is_empty() {
+                continue;
             }
-            current_spans.push(Span::styled(
-                component_status_icon(&comp.status),
-                component_status_style(&comp.status),
-            ));
-            current_spans.push(Span::raw(format!(" {name}  ")));
-            row_w += cell_w;
+            let name = translate_component_name(&comp.name);
+            lines.push(Line::from(vec![
+                Span::styled(
+                    component_status_icon(&comp.status),
+                    component_status_style(&comp.status),
+                ),
+                Span::raw(" "),
+                Span::styled(name, Style::default().add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    format!("  {}", comp.status.replace('_', " ")),
+                    Style::default().fg(Color::DarkGray),
+                ),
+            ]));
         }
-        if !current_spans.is_empty() {
-            lines.push(Line::from(current_spans));
+
+        // Summary line for healthy components
+        if healthy_comp_count > 0 {
+            lines.push(Line::from(vec![
+                Span::styled("●", Style::default().fg(Color::Green)),
+                Span::raw(format!(
+                    " {} service{} operational",
+                    healthy_comp_count,
+                    if healthy_comp_count == 1 { "" } else { "s" }
+                )),
+            ]));
         }
 
         let block = Block::default()
