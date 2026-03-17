@@ -1,13 +1,12 @@
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::time::Instant;
 
 use ratatui::widgets::ListState;
 
 use crate::agents::AgentsFile;
 use crate::status::{
-    canonical_status_slug, status_seed_for_provider, ProviderHealth, ProviderStatus,
-    StatusProvenance, StatusProviderSeed, STATUS_REGISTRY,
+    status_seed_for_provider, ProviderHealth, ProviderStatus, StatusProvenance, StatusProviderSeed,
+    STATUS_REGISTRY,
 };
 
 const PAGE_SIZE: usize = 10;
@@ -55,13 +54,11 @@ pub struct StatusApp {
     pub last_refreshed: Option<Instant>,
     pub last_error: Option<String>,
     pub comp_view: CompView,
-    pub related_agents: HashMap<String, Vec<String>>,
 }
 
 impl StatusApp {
-    pub fn new(agents_file: &AgentsFile) -> Self {
+    pub fn new(_agents_file: &AgentsFile) -> Self {
         let mut by_slug: BTreeMap<String, StatusProviderSeed> = BTreeMap::new();
-        let mut related_agents: HashMap<String, Vec<String>> = HashMap::new();
 
         for entry in STATUS_REGISTRY {
             by_slug.insert(
@@ -74,19 +71,6 @@ impl StatusApp {
                     support_tier: entry.support_tier,
                 },
             );
-        }
-
-        for agent in agents_file.agents.values() {
-            for slug in &agent.supported_providers {
-                let canonical = canonical_status_slug(slug).to_string();
-                // Only link agents to providers that exist in the registry
-                if by_slug.contains_key(&canonical) {
-                    related_agents
-                        .entry(canonical)
-                        .or_default()
-                        .push(agent.name.clone());
-                }
-            }
         }
 
         let entries: Vec<_> = by_slug.values().map(ProviderStatus::placeholder).collect();
@@ -106,7 +90,6 @@ impl StatusApp {
             last_refreshed: None,
             last_error: None,
             comp_view: CompView::default(),
-            related_agents,
         };
         app.update_filtered();
         app
@@ -172,13 +155,6 @@ impl StatusApp {
         self.filtered_entries
             .get(self.selected)
             .and_then(|&idx| self.entries.get(idx))
-    }
-
-    pub fn related_agents_for(&self, slug: &str) -> &[String] {
-        self.related_agents
-            .get(slug)
-            .map(Vec::as_slice)
-            .unwrap_or(&[])
     }
 
     pub fn next(&mut self) {
