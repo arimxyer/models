@@ -202,6 +202,7 @@ impl StatusApp {
         self.detail_scroll = 0;
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn health_counts(&self) -> (usize, usize, usize, usize) {
         let mut op = 0;
         let mut deg = 0;
@@ -218,6 +219,7 @@ impl StatusApp {
         (op, deg, out, other)
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn provenance_counts(&self) -> (usize, usize, usize) {
         let mut official = 0;
         let mut fallback = 0;

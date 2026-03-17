@@ -69,6 +69,7 @@ pub enum StatusProvenance {
 }
 
 impl StatusProvenance {
+    #[allow(dead_code)]
     pub fn label(self) -> &'static str {
         match self {
             Self::Official => "Official",
@@ -85,6 +86,7 @@ impl StatusProvenance {
         }
     }
 
+    #[allow(dead_code)]
     pub fn detail_note(self) -> &'static str {
         match self {
             Self::Official => "Official machine-readable provider status feed.",
