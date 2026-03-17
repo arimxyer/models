@@ -215,8 +215,10 @@ fn status_affected_summary(
     entry: &crate::status::ProviderStatus,
     assessment: &crate::status::ProviderAssessment,
 ) -> Option<String> {
-    if !assessment.affected_surfaces.is_empty() {
-        return Some(entry.user_visible_affected_items().join(", "));
+    if assessment.overall_health == ProviderHealth::Operational
+        && entry.active_incidents().is_empty()
+    {
+        return None;
     }
 
     let affected_components: BTreeSet<String> =
@@ -5097,6 +5099,25 @@ mod tests {
         assert!(!rendered.contains("freshness"));
         assert!(!rendered.contains("contradiction"));
         assert!(!rendered.contains("R/FB"));
+    }
+
+    #[test]
+    fn operational_status_hides_affected_right_now_summary() {
+        let mut entry = sample_provider_status();
+        entry.health = ProviderHealth::Operational;
+        entry.provenance = StatusProvenance::Official;
+        entry.summary = Some("All systems operational".to_string());
+        entry.incidents.clear();
+        entry.scheduled_maintenances.clear();
+        for component in &mut entry.components {
+            component.status = "operational".to_string();
+        }
+
+        let mut app = make_status_app(entry);
+        let rendered = render_status_text(&mut app);
+
+        assert!(rendered.contains("All systems operational"));
+        assert!(!rendered.contains("Affected right now:"));
     }
 
     #[test]

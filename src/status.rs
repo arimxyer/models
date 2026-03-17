@@ -759,11 +759,15 @@ impl ProviderStatus {
     pub fn user_visible_affected_items(&self) -> Vec<String> {
         let assessment = self.assessment();
         if !assessment.affected_surfaces.is_empty() {
-            return assessment
+            let mut items: Vec<String> = assessment
                 .affected_surfaces
                 .iter()
                 .map(|surface| surface.label().to_string())
                 .collect();
+            if items.len() > 1 {
+                items.retain(|item| item != AffectedSurface::Unknown.label());
+            }
+            return items;
         }
 
         self.active_incidents()
@@ -1446,6 +1450,26 @@ mod tests {
         assert_eq!(
             status.user_visible_affected_items(),
             vec!["API".to_string(), "Auth".to_string()]
+        );
+    }
+
+    #[test]
+    fn user_visible_affected_items_drops_unknown_when_known_surfaces_exist() {
+        let mut status = sample_status();
+        status.components.push(ComponentStatus {
+            name: "Claude".to_string(),
+            status: "operational".to_string(),
+            group_name: None,
+        });
+        status.components.push(ComponentStatus {
+            name: "API".to_string(),
+            status: "operational".to_string(),
+            group_name: None,
+        });
+
+        assert_eq!(
+            status.user_visible_affected_items(),
+            vec!["API".to_string()]
         );
     }
 
