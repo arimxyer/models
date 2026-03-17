@@ -1137,36 +1137,23 @@ fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut App) {
         Style::default().fg(Color::DarkGray)
     };
 
-    // Build title with count, search query, filter, and sort indicators
+    // Build title with count, filter, and sort indicators
     let sort_indicator = format!(" \u{2193}{}", agents_app.sort_order.label());
     let filter_indicator = agents_app.format_active_filters();
-    let search_query = &agents_app.search_query;
 
-    let title = match (search_query.is_empty(), filter_indicator.is_empty()) {
-        (true, true) => format!(
+    let title = if filter_indicator.is_empty() {
+        format!(
             " Agents ({}){} ",
             agents_app.filtered_entries.len(),
             sort_indicator
-        ),
-        (true, false) => format!(
+        )
+    } else {
+        format!(
             " Agents ({}) [{}]{} ",
             agents_app.filtered_entries.len(),
             filter_indicator,
             sort_indicator
-        ),
-        (false, true) => format!(
-            " Agents ({}) [/{}]{} ",
-            agents_app.filtered_entries.len(),
-            search_query,
-            sort_indicator
-        ),
-        (false, false) => format!(
-            " Agents ({}) [/{}] [{}]{} ",
-            agents_app.filtered_entries.len(),
-            search_query,
-            filter_indicator,
-            sort_indicator
-        ),
+        )
     };
 
     // Outer block with title at top
@@ -1584,7 +1571,14 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &mut App) {
         .map(|a| a.current_match)
         .unwrap_or(0);
     let detail_title = if !search_query.is_empty() && match_count > 0 {
-        format!(" Details [{}/{}] ", current_match_display + 1, match_count)
+        format!(
+            " Details [/{} {}/{}] ",
+            search_query,
+            current_match_display + 1,
+            match_count
+        )
+    } else if !search_query.is_empty() {
+        format!(" Details [/{}] ", search_query)
     } else {
         " Details ".to_string()
     };

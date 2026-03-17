@@ -518,10 +518,6 @@ impl AgentsApp {
             active.push("open".to_string());
         }
 
-        if !self.search_query.is_empty() {
-            active.push("search".to_string());
-        }
-
         active.join(", ")
     }
 }
