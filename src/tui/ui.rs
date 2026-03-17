@@ -237,6 +237,79 @@ fn overall_non_operational_components(
         .collect()
 }
 
+fn overall_attention_components(
+    entry: &crate::status::ProviderStatus,
+) -> Vec<&crate::status::ComponentStatus> {
+    overall_non_operational_components(entry)
+        .into_iter()
+        .filter(|component| !component.status.to_lowercase().contains("maint"))
+        .collect()
+}
+
+fn overall_attention_entries(
+    status_app: &super::status_app::StatusApp,
+) -> Vec<&crate::status::ProviderStatus> {
+    let mut entries: Vec<_> = status_app
+        .entries
+        .iter()
+        .filter(|entry| {
+            !entry.active_incidents().is_empty()
+                || !overall_attention_components(entry).is_empty()
+                || matches!(
+                    entry.health,
+                    ProviderHealth::Outage | ProviderHealth::Degraded | ProviderHealth::Unknown
+                )
+        })
+        .collect();
+    entries.sort_by(|a, b| a.health.sort_rank().cmp(&b.health.sort_rank()));
+    entries
+}
+
+fn component_scope_name(component: &crate::status::ComponentStatus) -> String {
+    component
+        .group_name
+        .as_deref()
+        .filter(|group| !group.is_empty())
+        .unwrap_or(&component.name)
+        .to_string()
+}
+
+fn component_display_name(component: &crate::status::ComponentStatus) -> String {
+    let name = translate_component_name(&component.name);
+    match component.group_name.as_deref() {
+        Some(group) if !group.is_empty() && group != component.name => {
+            format!("{group}: {name}")
+        }
+        _ => name,
+    }
+}
+
+fn component_only_scope_title(components: &[&crate::status::ComponentStatus]) -> String {
+    let mut scopes: Vec<String> = Vec::new();
+    for component in components {
+        let scope = component_scope_name(component);
+        if !scopes.contains(&scope) {
+            scopes.push(scope);
+        }
+    }
+
+    match scopes.len() {
+        0 => "Component-reported service degradation".to_string(),
+        1 => scopes[0].clone(),
+        _ => "Multiple affected services".to_string(),
+    }
+}
+
+fn provider_health_label(health: ProviderHealth) -> &'static str {
+    match health {
+        ProviderHealth::Operational => "operational",
+        ProviderHealth::Degraded => "degraded",
+        ProviderHealth::Outage => "outage",
+        ProviderHealth::Maintenance => "maintenance",
+        ProviderHealth::Unknown => "unknown",
+    }
+}
+
 fn incident_impact_style(impact: &str) -> Style {
     let normalized = impact.to_lowercase();
     if normalized.contains("critical") || normalized.contains("major") {
@@ -277,7 +350,7 @@ fn push_component_scope_lines(
     for component in components.iter().take(max_items) {
         lines.push(Line::from(vec![
             Span::styled("    - ", Style::default().fg(Color::DarkGray)),
-            Span::raw(translate_component_name(&component.name)),
+            Span::raw(component_display_name(component)),
             Span::styled(" (", Style::default().fg(Color::DarkGray)),
             Span::styled(
                 component.status.replace('_', " "),
@@ -607,7 +680,7 @@ fn sorted_components<'a>(
 fn draw_overall_dashboard(f: &mut Frame, area: Rect, status_app: &super::status_app::StatusApp) {
     let (op, deg, out, other) = status_app.health_counts();
     let total = status_app.entries.len();
-    let non_op = status_app.non_operational_entries();
+    let attention_entries = overall_attention_entries(status_app);
     let all_maint = status_app.all_maintenances();
     let dark_border = Style::default().fg(Color::DarkGray);
 
@@ -665,7 +738,7 @@ fn draw_overall_dashboard(f: &mut Frame, area: Rect, status_app: &super::status_
     // ── Attention Now ───────────────────────────────────────────
     {
         let mut lines: Vec<Line<'static>> = Vec::new();
-        if non_op.is_empty() {
+        if attention_entries.is_empty() {
             lines.push(Line::from(Span::styled(
                 "No providers need attention right now",
                 Style::default().fg(Color::Green),
@@ -725,9 +798,9 @@ fn draw_overall_dashboard(f: &mut Frame, area: Rect, status_app: &super::status_
             }
         }
 
-        for entry in &non_op {
+        for entry in &attention_entries {
             let incidents = entry.active_incidents();
-            let non_op_components = overall_non_operational_components(entry);
+            let non_op_components = overall_attention_components(entry);
 
             lines.push(Line::from(vec![
                 Span::styled(
@@ -818,22 +891,22 @@ fn draw_overall_dashboard(f: &mut Frame, area: Rect, status_app: &super::status_
                         )));
                     }
                 }
-            } else if let Some(component) = non_op_components.first() {
+            } else if !non_op_components.is_empty() {
                 lines.push(Line::from(vec![
-                    Span::styled("  Issue: ", status_field_label_style()),
+                    Span::styled("  Scope: ", status_field_label_style()),
                     Span::styled(
-                        translate_component_name(&component.name),
+                        component_only_scope_title(&non_op_components),
                         Style::default().add_modifier(Modifier::BOLD),
                     ),
                 ]));
                 lines.push(Line::from(vec![
                     Span::styled("  Status: ", status_field_label_style()),
                     Span::styled(
-                        component.status.replace('_', " "),
-                        component_status_style(&component.status),
+                        provider_health_label(entry.health),
+                        status_health_style(entry.health),
                     ),
                     Span::raw("  "),
-                    Span::styled("Ongoing: ", status_field_label_style()),
+                    Span::styled("Updated: ", status_field_label_style()),
                     Span::styled(
                         provider_last_meaningful_update(entry)
                             .map(|(_, value)| value)
@@ -864,10 +937,10 @@ fn draw_overall_dashboard(f: &mut Frame, area: Rect, status_app: &super::status_
             lines.push(Line::from(""));
         }
 
-        let issue_title = if non_op.is_empty() {
+        let issue_title = if attention_entries.is_empty() {
             " Attention Now ".to_string()
         } else {
-            format!(" Attention Now ({}) ", non_op.len())
+            format!(" Attention Now ({}) ", attention_entries.len())
         };
         let block = Block::default()
             .borders(Borders::ALL)

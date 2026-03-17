@@ -213,17 +213,6 @@ impl StatusApp {
         (official, fallback, unavailable)
     }
 
-    /// Providers with health != Operational, sorted by severity (outage > degraded > maintenance).
-    pub fn non_operational_entries(&self) -> Vec<&ProviderStatus> {
-        let mut entries: Vec<_> = self
-            .entries
-            .iter()
-            .filter(|e| e.health != ProviderHealth::Operational)
-            .collect();
-        entries.sort_by(|a, b| a.health.sort_rank().cmp(&b.health.sort_rank()));
-        entries
-    }
-
     /// All scheduled maintenances across all providers, as (display_name, maintenance) pairs.
     pub fn all_maintenances(&self) -> Vec<(&str, &ScheduledMaintenance)> {
         self.entries
