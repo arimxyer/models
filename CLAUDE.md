@@ -31,6 +31,7 @@ mise run fmt && mise run clippy && mise run test
 - Agent/GitHub data: disk-cached with ETag conditional fetching (`src/agents/cache.rs`, `src/agents/github.rs`)
 - CLI agents: uses `fetch_releases_only` (1 API call, no repo metadata) — TUI uses full `fetch_conditional` (2 calls, includes stars/issues/license)
 - Status data: fetched from each provider's official status page (Statuspage, BetterStack, Instatus, etc.) with apistatuscheck.com as fallback (`src/status_fetch.rs`), provider registry and strategy mapping in `src/status.rs`
+- Status source contract and normalization rules are documented in `docs/status-source-shape-audit.md` and `docs/status-normalization-spec.md`
 
 ### Async Pattern
 Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message` variants processed in the main loop (`src/tui/mod.rs`). The app never blocks on network calls.
@@ -69,6 +70,8 @@ Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message`
 - `src/model_traits.rs` — runtime matching of AA entries to models.dev for open/closed status, reasoning, tool_call, and context limits
 - `src/status.rs` — ProviderHealth, ProviderStatus, StatusProviderSeed, STATUS_REGISTRY
 - `src/status_fetch.rs` — StatusFetcher, official status page fetchers (Statuspage/BetterStack/Instatus/etc.) with apistatuscheck.com fallback
+- `docs/status-source-shape-audit.md` — upstream status-source families, live payload quirks, and adapter coverage notes
+- `docs/status-normalization-spec.md` — canonical status detail availability semantics and helper/UI contract
 - `src/config.rs` — user config file (agents, cache, display settings)
 - `src/data.rs` — Provider/Model data structures from models.dev API
 - `src/cli/styles.rs` — shared CLI color constants and styling
@@ -85,6 +88,7 @@ Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message`
 - No disk cache — benchmark data fetched fresh from CDN on every launch, empty store until CDN responds
 - `BenchmarkEntry` must derive both `Serialize` and `Deserialize`
 - New `BenchmarkEntry` fields require `#[serde(default)]`
+- Status detail semantics use parallel `*_state` metadata on `ProviderStatus`; UI and assessment logic should use helper methods instead of inferring meaning from empty vectors
 
 ## Gotchas
 - clippy `-D warnings` treats unused enum variant fields as errors — if a Message variant's payload is only passed through (e.g., error strings logged nowhere), use a unit variant instead
@@ -97,6 +101,7 @@ Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message`
 - `Paragraph::scroll((y, 0))` with `.wrap(Wrap { trim: false })` counts **visual (wrapped) lines**, not logical lines — scroll positions must account for line wrapping when jumping to specific content
 - Use `line.width()` (unicode-aware) not `.len()` (byte count) when computing wrapped line heights — ratatui wraps on display width, not byte length. Word-wrapping needs +1 buffer per wrapped line since `div_ceil` underestimates
 - TLS uses `rustls-tls-native-roots` (not `rustls-tls`) — loads certificates from the OS trust store to support corporate TLS-inspecting proxies
+- Status-source quirks to preserve: Better Stack resources use `public_name`; Status.io `status_code = 400` means degraded; incident.io incidents and Instatus components need second fetches; the Google adapter is currently summary-derived rather than preserving raw incident rows
 
 ## Releasing
 1. Bump version in `Cargo.toml`
