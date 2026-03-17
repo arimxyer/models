@@ -756,6 +756,7 @@ impl ProviderStatus {
             .collect()
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn user_visible_affected_items(&self) -> Vec<String> {
         let assessment = self.assessment();
         if !assessment.affected_surfaces.is_empty() {

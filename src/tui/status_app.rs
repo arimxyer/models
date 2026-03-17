@@ -18,30 +18,6 @@ pub enum StatusFocus {
     Details,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum CompView {
-    #[default]
-    Summary,
-    Expanded,
-}
-
-impl CompView {
-    pub fn next(self) -> Self {
-        match self {
-            Self::Summary => Self::Expanded,
-            Self::Expanded => Self::Summary,
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Summary => "summary",
-            Self::Expanded => "expanded",
-        }
-    }
-}
-
 pub struct StatusApp {
     pub entries: Vec<ProviderStatus>,
     pub filtered_entries: Vec<usize>,
@@ -53,7 +29,6 @@ pub struct StatusApp {
     pub loading: bool,
     pub last_refreshed: Option<Instant>,
     pub last_error: Option<String>,
-    pub comp_view: CompView,
 }
 
 impl StatusApp {
@@ -89,7 +64,6 @@ impl StatusApp {
             loading: true,
             last_refreshed: None,
             last_error: None,
-            comp_view: CompView::default(),
         };
         app.update_filtered();
         app

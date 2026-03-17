@@ -219,7 +219,6 @@ pub enum Message {
     OpenStatusPage,
     ScrollStatusDetailUp,
     ScrollStatusDetailDown,
-    CycleCompView,
     // Async data messages
     GitHubDataReceived(String, GitHubData),
     GitHubFetchFailed(String, String), // (agent_id, error_message)
@@ -803,12 +802,6 @@ impl App {
             Message::ScrollStatusDetailDown => {
                 if let Some(ref mut status_app) = self.status_app {
                     status_app.detail_scroll = status_app.detail_scroll.saturating_add(1);
-                }
-            }
-            Message::CycleCompView => {
-                if let Some(ref mut status_app) = self.status_app {
-                    status_app.comp_view = status_app.comp_view.next();
-                    status_app.detail_scroll = 0;
                 }
             }
             Message::SwitchAgentFocus => {
