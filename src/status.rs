@@ -77,14 +77,6 @@ impl StatusProvenance {
         }
     }
 
-    pub fn short_label(self) -> &'static str {
-        match self {
-            Self::Official => "OFF",
-            Self::Fallback => "FB",
-            Self::Unavailable => "MISS",
-        }
-    }
-
     pub fn sort_rank(self) -> u8 {
         match self {
             Self::Official => 0,
@@ -291,22 +283,6 @@ pub enum StatusSupportTier {
 }
 
 impl StatusSupportTier {
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Required => "Required",
-            Self::Curated => "Curated",
-            Self::Untracked => "Untracked",
-        }
-    }
-
-    pub fn short_label(self) -> &'static str {
-        match self {
-            Self::Required => "R",
-            Self::Curated => "C",
-            Self::Untracked => "U",
-        }
-    }
-
     pub fn sort_rank(self) -> u8 {
         match self {
             Self::Required => 0,

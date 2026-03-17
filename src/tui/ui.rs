@@ -13,7 +13,7 @@ use ratatui::{
 use super::app::{App, Filters, Focus, Mode, ProviderListItem, SortOrder, Tab};
 use crate::agents::{format_stars, FetchStatus};
 use crate::provider_category::{provider_category, ProviderCategory};
-use crate::status::{ProviderHealth, StatusProvenance, StatusSupportTier};
+use crate::status::{ProviderHealth, StatusProvenance};
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
@@ -125,14 +125,6 @@ fn status_provenance_style(provenance: StatusProvenance) -> Style {
         StatusProvenance::Official => Style::default().fg(Color::Green),
         StatusProvenance::Fallback => Style::default().fg(Color::Yellow),
         StatusProvenance::Unavailable => Style::default().fg(Color::DarkGray),
-    }
-}
-
-fn status_support_style(tier: StatusSupportTier) -> Style {
-    match tier {
-        StatusSupportTier::Required => Style::default().fg(Color::Cyan),
-        StatusSupportTier::Curated => Style::default().fg(Color::Blue),
-        StatusSupportTier::Untracked => Style::default().fg(Color::DarkGray),
     }
 }
 
@@ -363,16 +355,9 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     Style::default().fg(Color::Yellow),
                 ));
             }
-            spans.push(Span::raw("  "));
-            spans.push(Span::styled(
-                entry.support_tier.short_label(),
-                status_support_style(entry.support_tier),
-            ));
-            spans.push(Span::raw("/"));
-            spans.push(Span::styled(
-                entry.provenance.short_label(),
-                status_provenance_style(entry.provenance),
-            ));
+            if incident_count == 0 && entry.health == ProviderHealth::Maintenance {
+                spans.push(Span::styled(" maint", Style::default().fg(Color::Cyan)));
+            }
             items.push(ListItem::new(Line::from(spans)));
         }
     }
@@ -394,7 +379,6 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
         let display_name = entry.display_name.clone();
         let health = entry.health;
         let provenance = entry.provenance;
-        let support_tier = entry.support_tier;
         let error_msg = entry.error.clone();
         let source_name = entry
             .source_label
@@ -410,8 +394,6 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
         let incidents: Vec<crate::status::ActiveIncident> = entry.incidents.clone();
         let maintenances: Vec<crate::status::ScheduledMaintenance> =
             entry.scheduled_maintenances.clone();
-        let entry_slug = entry.slug.clone();
-        let related_agents = status_app.related_agents_for(&entry_slug).to_vec();
         let freshness = status_app.last_refreshed.map(|t| {
             let secs = t.elapsed().as_secs();
             if secs < 60 {
@@ -490,7 +472,7 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
             "updated: ",
             Style::default().fg(Color::DarkGray),
         ));
-        meta_spans.push(Span::raw(last_meaningful_update));
+        meta_spans.push(Span::raw(last_meaningful_update.clone()));
         if let Some(fresh) = freshness {
             meta_spans.push(Span::styled(
                 "  refreshed: ",
@@ -503,8 +485,10 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
         let mut source_spans = vec![
             Span::styled("source: ", Style::default().fg(Color::DarkGray)),
             Span::styled(source_name, status_provenance_style(provenance)),
+            Span::styled("  updated: ", Style::default().fg(Color::DarkGray)),
+            Span::raw(last_meaningful_update.clone()),
             Span::styled("  checked: ", Style::default().fg(Color::DarkGray)),
-            Span::raw(last_checked_display),
+            Span::raw(last_checked_display.clone()),
         ];
         if provenance != StatusProvenance::Official {
             source_spans.push(Span::raw("  "));
@@ -572,7 +556,7 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
         );
         f.render_widget(header_para, vert_chunks[0]);
 
-        // ── Dashboard panel ──────────────────────────────────────────
+        // ── Status page summary row ──────────────────────────────────
         {
             let dash_halves = Layout::default()
                 .direction(Direction::Horizontal)
@@ -580,13 +564,34 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                 .split(vert_chunks[1]);
 
             let mut glance_lines = vec![Line::from(vec![
-                Span::styled("Current: ", Style::default().fg(Color::DarkGray)),
+                Span::styled("Current state: ", Style::default().fg(Color::DarkGray)),
                 Span::styled(health.label(), status_health_style(health)),
             ])];
-            if let Some(issues) = &incident_badge {
+            for line in textwrap::wrap(
+                &detail_summary,
+                usize::from(dash_halves[0].width.saturating_sub(4)).max(18),
+            ) {
+                glance_lines.push(Line::from(line.to_string()));
+            }
+            if let Some(affected) = &affected_summary {
                 glance_lines.push(Line::from(vec![
-                    Span::styled("Issues: ", Style::default().fg(Color::DarkGray)),
-                    Span::styled(issues, Style::default().fg(Color::Yellow)),
+                    Span::styled("Affected: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(affected.clone()),
+                ]));
+            }
+            glance_lines.push(Line::from(vec![
+                Span::styled("Latest update: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(last_meaningful_update),
+            ]));
+            if active_incident_count > 0 {
+                glance_lines.push(Line::from(vec![
+                    Span::styled("Incidents: ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(
+                        incident_badge
+                            .clone()
+                            .unwrap_or_else(|| "Active issue".to_string()),
+                        Style::default().fg(Color::Yellow),
+                    ),
                 ]));
             } else if !maintenances.is_empty() {
                 glance_lines.push(Line::from(vec![
@@ -597,31 +602,9 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     ),
                 ]));
             }
-            glance_lines.push(Line::from(vec![
-                Span::styled("Affected: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(
-                    affected_summary.unwrap_or_else(|| "No specific services listed".to_string()),
-                ),
-            ]));
-            if !components.is_empty() {
-                glance_lines.push(Line::from(vec![
-                    Span::styled("Services: ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(format!("{} listed", components.len())),
-                ]));
-            }
-            if !related_agents.is_empty() {
-                glance_lines.push(Line::from(vec![
-                    Span::styled("Agents: ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(related_agents.join(", ")),
-                ]));
-            }
-            glance_lines.push(Line::from(vec![
-                Span::styled("Tracking: ", Style::default().fg(Color::DarkGray)),
-                Span::styled(support_tier.label(), status_support_style(support_tier)),
-            ]));
             if let Some(caveat) = caveat {
                 glance_lines.push(Line::from(vec![
-                    Span::styled("Caveat: ", Style::default().fg(Color::DarkGray)),
+                    Span::styled("Note: ", Style::default().fg(Color::DarkGray)),
                     Span::styled(caveat, Style::default().fg(Color::Yellow)),
                 ]));
             }
@@ -630,7 +613,7 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     Block::default()
                         .borders(Borders::ALL)
                         .border_style(detail_border)
-                        .title(" At a glance "),
+                        .title(" Overall status "),
                 )
                 .wrap(Wrap { trim: false });
             f.render_widget(glance_para, dash_halves[0]);
@@ -659,7 +642,18 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                         dash_lines.push(Line::from(vec![
                             Span::styled("  ", Style::default()),
                             Span::styled(timing, Style::default().fg(Color::DarkGray)),
+                            Span::raw("  "),
+                            Span::styled(maint.status.clone(), Style::default().fg(Color::Cyan)),
                         ]));
+                        if !maint.affected_components.is_empty() {
+                            dash_lines.push(Line::from(vec![
+                                Span::raw("  "),
+                                Span::styled(
+                                    maint.affected_components.join(", "),
+                                    Style::default().fg(Color::DarkGray),
+                                ),
+                            ]));
+                        }
                     }
                 }
             } else {
@@ -722,7 +716,11 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     Block::default()
                         .borders(Borders::ALL)
                         .border_style(detail_border)
-                        .title(" Active detail "),
+                        .title(if active_incidents.is_empty() && !maintenances.is_empty() {
+                            " Scheduled maintenance "
+                        } else {
+                            " Active incidents "
+                        }),
                 )
                 .wrap(Wrap { trim: false });
             f.render_widget(dash_para, dash_halves[1]);
@@ -1137,17 +1135,7 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
             );
         }
 
-        // Related agents + view hint as info rows
-        if !related_agents.is_empty() {
-            all_rows.push(Row::new(vec![
-                Cell::from(Line::from(vec![
-                    Span::styled("agents: ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(related_agents.join(", ")),
-                ])),
-                Cell::from(""),
-                Cell::from(""),
-            ]));
-        }
+        // View hint row
         all_rows.push(Row::new(vec![
             Cell::from(Span::styled(
                 format!("[c] {}", comp_view.label()),
@@ -1166,7 +1154,7 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     Block::default()
                         .borders(Borders::ALL)
                         .border_style(detail_border)
-                        .title(" Service detail "),
+                        .title(" Services and components "),
                 )
                 .wrap(Wrap { trim: false });
             f.render_widget(empty_detail, vert_chunks[2]);
@@ -1176,7 +1164,10 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     "Service",
                     Style::default().fg(Color::DarkGray),
                 )),
-                Cell::from(Span::styled("Issue", Style::default().fg(Color::DarkGray))),
+                Cell::from(Span::styled(
+                    "Current",
+                    Style::default().fg(Color::DarkGray),
+                )),
                 Cell::from(Span::styled("Latest", Style::default().fg(Color::DarkGray))),
             ]);
 
@@ -1193,7 +1184,7 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                 Block::default()
                     .borders(Borders::ALL)
                     .border_style(detail_border)
-                    .title(" Service detail "),
+                    .title(" Services and components "),
             )
             .column_spacing(1);
             f.render_widget(table, vert_chunks[2]);
