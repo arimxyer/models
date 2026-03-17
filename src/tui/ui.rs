@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    text::{Line, Span, Text},
+    text::{Line, Span},
     widgets::{
         Block, Borders, Cell, Clear, List, ListItem, ListState, Paragraph, Row, Table, Wrap,
     },
@@ -117,14 +117,6 @@ fn status_health_icon(health: ProviderHealth) -> &'static str {
         ProviderHealth::Outage => "✗",
         ProviderHealth::Maintenance => "◆",
         ProviderHealth::Unknown => "?",
-    }
-}
-
-fn status_provenance_style(provenance: StatusProvenance) -> Style {
-    match provenance {
-        StatusProvenance::Official => Style::default().fg(Color::Green),
-        StatusProvenance::Fallback => Style::default().fg(Color::Yellow),
-        StatusProvenance::Unavailable => Style::default().fg(Color::DarkGray),
     }
 }
 
@@ -378,6 +370,7 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
             })
             .unwrap_or_else(|| "Unknown".to_string());
         let caveat = entry.user_visible_caveat().map(str::to_string);
+        let affected_summary = status_affected_summary(entry, &entry.assessment());
         let detail_scroll = status_app.detail_scroll;
         let comp_view = status_app.comp_view;
 
@@ -480,13 +473,11 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     Style::default().fg(Color::DarkGray),
                 )));
                 if let Some(update) = &incident.latest_update {
-                    for (idx, line) in textwrap::wrap(&update.body, body_width.saturating_sub(2))
+                    for line in textwrap::wrap(&update.body, body_width.saturating_sub(2))
                         .iter()
                         .take(3)
-                        .enumerate()
                     {
-                        let prefix = if idx == 0 { "  " } else { "  " };
-                        body_lines.push(Line::from(Span::raw(format!("{prefix}{line}"))));
+                        body_lines.push(Line::from(Span::raw(format!("  {line}"))));
                     }
                 }
                 body_lines.push(Line::from(""));
@@ -503,6 +494,12 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                 .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),
         )));
+        if let Some(affected_summary) = &affected_summary {
+            body_lines.push(Line::from(Span::styled(
+                format!("Affected right now: {affected_summary}"),
+                Style::default().fg(Color::DarkGray),
+            )));
+        }
 
         let mut component_incident_map: std::collections::HashMap<String, String> =
             std::collections::HashMap::new();
