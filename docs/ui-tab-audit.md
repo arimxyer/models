@@ -1,124 +1,156 @@
-# UI Tab Audit
+# Cross-Tab UI Audit
+
+## Role in the doc stack
+This is a **canonical synthesis document**.
+
+Use this file to understand:
+- the shared product shell across tabs
+- where each tab is strongest
+- where each tab drifts
+- what should be standardized in the design guide
+
+Supporting evidence lives in:
+- `docs/models-tab-lane-audit.md`
+- `docs/agents-tab-audit.md`
+- `docs/benchmarks-tab-audit.md`
+- `docs/status-tab-focused-audit.md`
+- `docs/cross-tab-controls-interaction-audit.md`
+- `docs/status-tab-multi-pass-audit.md`
 
 ## Goal
-Identify the layout patterns the tabs already share, where the Status tab drifts from those patterns, and which tab-specific ideas are worth standardizing.
+Define the shared interaction and layout language of the app so future tab work can improve consistency without flattening the strengths of individual tabs.
 
-## Shared shell patterns already present
-Across Models, Agents, and Benchmarks, the app already has a recognizable product shell:
-- top tab bar for global navigation
-- bottom footer for shortcuts and help hints
-- bordered panels with cyan focus and dark-gray unfocused borders
-- titles that usually communicate count, search, sort, or current context
-- left-side navigation rails and right-side detail areas
-- content-specific detail panels instead of generic dashboard chrome
+## Audit method
+Every tab should be reviewed through the same lens:
+1. keybinds and interaction model
+2. sorts / filters / toggles / modes
+3. panel layout and panel ownership
+4. naming and title semantics
+5. spacing / rhythm
+6. data structure and presentation
+7. first-use scan path
+8. repeat-use stability
+9. strongest keepers
+10. highest-confidence rewrite targets
 
-These shared patterns are part of the app's identity and should be preserved.
+## Shared shell invariants
+Across Models, Agents, Benchmarks, and Status, the app already has a recognizable product shell:
+- global tab bar at the top
+- global shortcut/help footer at the bottom
+- cyan focus border and dark-gray unfocused border
+- navigation-first rails on the left
+- explanation/detail surfaces on the right
+- counts/search/sort/filter state usually surfaced in titles rather than scattered into the body
 
-## Per-tab audit
+These are product-level strengths and should be preserved.
+
+## Per-tab synthesis
 
 ### Models
-**Current structure**
-- 3-column fixed browse layout: Providers | Models | Details
-- provider rail is compact navigation
-- model list owns filtering/sorting metadata in the title
-- detail panel is stable and information-dense
+**Current shell**
+- `Providers | Models | Details`
+- the clearest left-to-right ownership model in the app
 
-**What it does well**
-- strongest layout stability in the app
-- navigation and detail responsibilities are clear
-- panel titles are concrete and domain-based
-- scan path is predictable for repeat use
+**What it does especially well**
+- strongest scan path and repeat-use stability
+- concrete section naming inside details (`Capabilities`, `Pricing`, `Limits`, etc.)
+- title-level state exposure instead of extra body chrome
+- lightweight navigation rails
 
-**What to learn from it**
-- preserve stable left-to-right role assignment
-- keep navigation rails lightweight
-- avoid renaming or repurposing panels without a strong reason
+**What should be standardized from it**
+- navigation rail discipline
+- title truthfulness
+- one dominant reading order in the detail panel
+
+**What should not be copied blindly**
+- stacked provider-summary micro-panel patterns only work when the upper panel has a narrow, stable job
+- terse shorthand like `RTFO` is efficient, but not a good general default for broader UX surfaces
 
 ### Agents
-**Current structure**
-- 2-column layout: Agents | Details
-- left rail is content-sized, not overly wide
-- detail panel is a long-form read surface with one stable title
+**Current shell**
+- `Agents | Details`
+- content-sized rail + long-form detail surface
 
-**What it does well**
-- detail panel has a single identity: Details
-- metadata is grouped near the top, then history/content flows below
-- the list is obviously navigation-first
-
-**What to learn from it**
-- one strong detail surface is often enough
-- avoid extra nested boxes when one detail panel can hold the story
-- keep operational metadata near the top in predictable slots
-
-### Benchmarks
-**Current structure**
-- browse mode: Creators | Benchmarks | Details
-- compare mode: compact list + comparison panel
-- explicit sub-tab bar for alternate views in compare mode
-
-**What it does well**
-- modes are explicit and legible
-- panel titles are domain nouns: Creators, Models, Details, Scatter, Radar, H2H
-- compare mode uses a clear alternate shell instead of cramming all views together
-
-**What to learn from it**
-- mode changes should be explicit
-- alternative views should be named after the thing the user is looking at
-- tabs/subtabs work better than overloaded mixed-content boxes
-
-### Status
-**Current structure**
-- left provider rail + right stacked detail shell
-- custom right-side blocks: Status page / Narrative / Note
-- single body panel currently mixes incidents, services, maintenance, and caveats
-
-**What it does well now**
-- provider rail is much closer to navigation-first than before
-- hero verdict is more obvious than earlier versions
-- incidents and services are trending toward a status-page model
+**What it does especially well**
+- stable detail identity (`Details`)
+- good metadata-at-the-top structure
+- clear separation between navigation and explanation
 
 **Where it drifts**
-- the right panel naming is inconsistent with the rest of the app
-- "Narrative" is not a user concept; it is an implementation bucket
-- hero metadata semantics have been moving around while being tuned
-- stacked content exists, but the field locations and labels are not yet stable enough
-- service-detail absence and timestamp semantics still need stronger fixed labeling
+- dormant/hidden IA around categories and tracked-vs-untracked discovery
+- some inline detail-body action hints duplicate footer/help responsibilities
 
-**Why it feels off**
-The Status tab is still acting like a special-case experiment rather than a peer tab in the same product family. Models, Agents, and Benchmarks each have clearer panel identity and more stable field placement.
+**What should be standardized from it**
+- one strong detail surface can be enough
+- long-form detail panels still need stable top metadata slots
+
+### Benchmarks
+**Current shell**
+- browse mode: `Creators | Benchmarks | Details`
+- compare mode: compact left rail + explicit compare view (`H2H`, `Scatter`, `Radar`)
+
+**What it does especially well**
+- strongest explicit mode/view naming in the app
+- complex controls remain coherent because the views are named and bounded
+- powerful compare workflow without collapsing everything into one mixed panel
+
+**Where it drifts**
+- some control labeling is inaccurate (`filter` vs grouping)
+- compare left rail changes identity depending on mode, which reduces spatial certainty
+- abbreviations are efficient but somewhat expert-coded
+
+**What should be standardized from it**
+- alternate views should be explicit and named after the thing the user is seeing
+- complex control surfaces are okay if the mode boundaries are obvious
+
+### Status
+**Current shell**
+- provider rail + custom stacked right-side shell
+- right side currently behaves more like a special-case microsite than a peer tab
+
+**What it does especially well now**
+- provider rail is finally navigation-first
+- operational severity sort is useful
+- incidents / services / maintenance are trending toward domain sections
+- missing service detail is handled more honestly than before
+
+**Where it drifts most**
+- abstract container naming (`Narrative`, `Note` in prior/current variants)
+- hidden or weakly surfaced semantics in hero metadata and controls
+- section ownership is not yet as stable as in Models / Agents / Benchmarks
+- mode/control disclosure is weaker than the actual feature set
+
+**What this means**
+Status should not be tuned as an isolated status-page clone. It should be rebuilt as a stable member of the app family.
 
 ## Cross-tab strengths worth standardizing
 1. **Concrete panel names**
-   - Good: Providers, Models, Agents, Details, Creators, Scatter
-   - Weak: Narrative, Note, generic meta wording
-
+   - prefer domain nouns: `Providers`, `Agents`, `Details`, `Current incidents`, `Services`
 2. **Stable panel responsibility**
-   - left side navigates
-   - right side explains the selected thing
-   - alternate views are explicit, not mixed into one body
+   - rails navigate, detail panes explain
+3. **Title-level state exposure**
+   - count, search, sort, filter, or mode belongs in titles when possible
+4. **Explicit mode/view naming**
+   - when alternate views exist, name them directly
+5. **Stable top metadata slots**
+   - the most important status/identity information should be in fixed places
 
-3. **Predictable metadata slots**
-   - counts/search/sort in titles
-   - key object metadata near the top of the detail surface
-   - no shifting semantics hidden behind one recurring word
+## Cross-tab drift patterns to watch for
+1. abstract or implementation-bucket names
+2. hidden interaction state that is not disclosed in footer/help
+3. search matching invisible content the user cannot relocate
+4. conditional layout changes that alter semantic location too much
+5. expert shorthand becoming default user-facing language
 
-4. **Minimal chrome inside the main content**
-   - app footer owns global help/controls
-   - panels should not repeat control hints in content bodies
+## Design implications
+The app should aim for:
+- stable field placement
+- stable section ownership
+- explicit labels for changing semantics
+- minimal body chrome
+- explicit controls when modes or views change meaningfully
 
-## Status-specific opportunities
-The Status tab should evolve toward:
-- a stable hero header with fixed labeled fields
-- explicit sections named after user concepts
-- no abstract buckets like Narrative
-- a predictable scan path for first-time and repeat users
-
-Suggested section naming:
-- Overview
-- Current incidents
-- Services
-- Maintenance
-- Notes
-
-## Recommended next use of this audit
-Use this audit with `docs/ui-design-guide.md` before making more Status-tab layout changes.
+## Canonical next use
+Use this file together with:
+- `docs/ui-design-guide.md` for rules
+- `docs/status-tab-redesign-spec.md` for Status implementation

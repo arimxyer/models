@@ -1,5 +1,14 @@
 # Benchmarks Tab Audit
 
+## Role in the doc stack
+This is a **supporting evidence** document.
+
+Use it as input to the canonical docs:
+- `docs/ui-tab-audit.md`
+- `docs/ui-design-guide.md`
+- `docs/status-tab-redesign-spec.md`
+
+
 ## Scope
 Focused audit of the Benchmarks tab only, using the shared shell guidance in `docs/ui-tab-audit.md` and `docs/ui-design-guide.md`. This is read-only analysis; no UI code changes are proposed here.
 

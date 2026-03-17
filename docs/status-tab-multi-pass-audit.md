@@ -1,5 +1,14 @@
 # Status Tab Multi-Pass Audit
 
+## Role in the doc stack
+This is a **supporting evidence** document.
+
+Use it as input to the canonical docs:
+- `docs/ui-tab-audit.md`
+- `docs/ui-design-guide.md`
+- `docs/status-tab-redesign-spec.md`
+
+
 ## Scope
 A deeper audit of the Status tab using multiple lanes and passes:
 - cross-tab shell/architecture audit

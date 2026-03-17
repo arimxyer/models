@@ -1,5 +1,14 @@
 # Status Tab Focused Audit
 
+## Role in the doc stack
+This is a **supporting evidence** document.
+
+Use it as input to the canonical docs:
+- `docs/ui-tab-audit.md`
+- `docs/ui-design-guide.md`
+- `docs/status-tab-redesign-spec.md`
+
+
 ## Scope
 Read-only audit of the current Status tab. This pass covers keybinds, implicit sort/filter behavior, panel layout, naming, spacing, data structure and presentation, scan path, repeat-use stability, and what the tab already does well.
 

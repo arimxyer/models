@@ -1,5 +1,14 @@
 # Models Tab Lane Audit
 
+## Role in the doc stack
+This is a **supporting evidence** document.
+
+Use it as input to the canonical docs:
+- `docs/ui-tab-audit.md`
+- `docs/ui-design-guide.md`
+- `docs/status-tab-redesign-spec.md`
+
+
 ## Scope
 Focused lane audit for the Models tab before more Status-tab redesign work.
 

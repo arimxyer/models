@@ -1,5 +1,14 @@
 # UI Design Artifact Rewrite Plan
 
+## Role in the doc stack
+This is a **supporting planning artifact** document.
+
+Use it as input to the canonical docs:
+- `docs/ui-tab-audit.md`
+- `docs/ui-design-guide.md`
+- `docs/status-tab-redesign-spec.md`
+
+
 ## Goal
 Turn the current audit/spec set into a tighter design-document stack that can guide implementation without interpretation drift.
 

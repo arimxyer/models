@@ -1,27 +1,38 @@
 # UI Design Guide
 
-## Purpose
-Provide a reusable layout and UX standard for this TUI so new work stays aligned across tabs instead of drifting tab-by-tab.
+## Role in the doc stack
+This is the **canonical design rules document**.
+
+Use it to decide:
+- how tab shells should be structured
+- how names and titles should work
+- where metadata should live
+- how controls should be disclosed
+- how Status should be rebuilt without drifting again
+
+Evidence lives in the audit docs. This file is the rule layer, not the evidence layer.
 
 ## Core principles
-1. **Stable locations beat clever layout changes**
-   - users expect values to change, not field locations
-2. **Use domain nouns for panel names**
-   - avoid abstract or internal labels
+1. **Stable locations beat clever rearrangement**
+   - values may change; field locations should not change casually
+2. **Use domain nouns**
+   - avoid internal or abstract labels
 3. **Navigation is not explanation**
-   - rails select things; detail panes explain them
+   - rails select; detail panes explain
 4. **One panel, one job**
-   - avoid mixed-purpose boxes
+   - mixed-purpose boxes are a smell
 5. **Label semantics explicitly**
    - if a field can mean different things, label the exact meaning shown
+6. **Controls must be discoverable**
+   - active modes/toggles must be surfaced in footer/help or removed
 
 ## Shared shell rules
 - global tab bar at top
 - global shortcut/help footer at bottom
 - focused panel border: cyan
 - unfocused panel border: dark gray
-- panel titles should communicate the thing, count, search, or mode
-- no control-hint prose inside the main content unless there is no better home
+- titles should communicate object, count, search, sort, filter, or mode
+- avoid body-level control-hint clutter when footer/help can own it
 
 ## Panel naming rules
 Prefer:
@@ -35,6 +46,9 @@ Prefer:
 - Maintenance
 - History
 - Notes
+- Head-to-Head
+- Scatter
+- Radar
 
 Avoid:
 - Narrative
@@ -42,60 +56,94 @@ Avoid:
 - Context
 - Story
 - Meta
-unless the domain truly requires it.
+- generic mixed-content labels
+
+## Title truthfulness rules
+- if a title implies a domain concept, the panel must actually own that concept
+- titles should not hide changing semantics behind a stable but vague name
+- if sort/filter/mode materially changes what the user is seeing, expose that in the title or an adjacent explicit control surface
 
 ## Field placement rules
 If a detail surface has metadata, keep it in fixed slots:
-- line 1: object identity + status/verdict
-- line 2: source and time metadata with explicit labels
-- line 3: issue count or high-priority badge
+- slot 1: identity + verdict/status
+- slot 2: source/ownership metadata
+- slot 3: time metadata with explicit label
+- slot 4: issue badge or high-priority state
 
-Do not swap the meaning of a recurring field label between states.
+Do not let a recurring row silently change meaning between states.
+
+## Controls and interaction rules
+### Shared movement language
+Prefer reuse of:
+- `j/k/g/G`
+- `Ctrl-d/Ctrl-u`
+- `PageUp/PageDown`
+- `/` for search
+- `Tab` / `h` / `l` for focus shifts where applicable
+
+### Disclosure rules
+- every active mode toggle must appear in footer/help unless intentionally removed
+- footer/help should describe the actual control surface, not a reduced subset
+- hidden defaults (sort order, searchable hidden fields, mode toggles) must be justified or surfaced
+
+### Alternate views
+- alternate views should be explicit and named
+- do not hide major view differences under subtle container-title mutations
+
+## Section ownership rules
+Each visible section should own one concept only.
+
+Examples:
+- `Overview` owns identity/verdict/source/time/issue count
+- `Current incidents` owns active incident content
+- `Services` owns service rows
+- `Maintenance` owns maintenance rows
+- `Notes` owns caveats/errors
+
+A section must not absorb another section's semantics just because one section is hidden.
 
 ## Status-tab-specific guidance
-### Shell contract
-- Left rail is always:
-  - status icon
-  - provider name
-  - optional issue count
-- Right panel should converge on a stable section stack in this order:
-  1. Overview
-  2. Current incidents
-  3. Services
-  4. Maintenance
-  5. Notes
+### Left rail contract
+One-line provider rows only:
+- status icon
+- provider name
+- optional active issue count
 
-### Fixed-slot contract for Overview
-Overview must keep the same slot order for every provider state:
+Do not add:
+- summary text
+- provenance badges
+- timestamp text
+- support-tier meta
+
+### Right panel contract
+Use a stable section stack in this order:
+1. Overview
+2. Current incidents
+3. Services
+4. Maintenance
+5. Notes
+
+### Overview contract
+Fixed slot order:
 1. provider identity + verdict
-2. source field
-3. time field
+2. `Source: ...`
+3. one explicit time label:
+   - `Latest event`
+   - `Source updated`
+   - `Last checked`
 4. issue badge line
 
-Allowed time labels:
-- `Latest event`
-- `Source updated`
-- `Last checked`
-
 Forbidden:
-- unlabeled timestamp lines
-- generic `Updated` when the timestamp type changes by provider/state
-
-### Section ownership rules
-- **Overview**: identity, verdict, source, time, issue count only
-- **Current incidents**: incident title, stage, latest update, affected services
-- **Services**: component/service rows only
-- **Maintenance**: scheduled or in-progress maintenance only
-- **Notes**: caveats, service-detail limitations, and relevant fetch/source errors only
-
-A section should not absorb another section's meaning just because one section is hidden.
+- unlabeled timestamps
+- generic `Updated` when semantics differ by source/state
+- caveats mixed into Overview
 
 ### Visibility rules
-- `Overview`: always visible
-- `Current incidents`: show only when incidents exist
-- `Services`: show only when service detail exists
-- `Maintenance`: show only when maintenance exists
-- `Notes`: show only when caveat/error exists
+- Overview: always visible
+- Current incidents: visible only when incidents exist
+- Services: visible only when service detail exists
+- Maintenance: visible only when maintenance exists
+- Notes: visible only when caveat/error exists
 
 ### Canonical state matrix
 | State | Overview | Current incidents | Services | Maintenance | Notes |
@@ -106,62 +154,24 @@ A section should not absorb another section's meaning just because one section i
 | Maintenance | visible | hidden unless separate incident exists | visible if detail exists | visible | conditional |
 | Unavailable | visible | hidden | hidden | hidden | `Status unavailable` plus error if relevant |
 
-### Stability rules
-- Provider rail rows remain one line tall
-- Section titles stay concrete and domain-based
-- No abstract container names such as `Narrative`, `Context`, `Insight`
-- No field changes meaning across providers
-- If a compact/expanded mode exists, it may suffix a section title but must not rename the section itself
+### Status controls rule
+For the redesign pass, hidden service-density mode should not survive unless it is clearly surfaced and justified. Simpler is better.
 
-### Right panel structure
-The Status tab should use named sections in this order:
-1. Overview
-2. Current incidents
-3. Services
-4. Maintenance
-5. Notes
-
-### Overview rules
-Always keep the same field layout:
-- provider name
-- status verdict
-- source
-- time field with explicit semantic label
-- official page hint/link text if available
-- incident count badge if non-zero
-
-Preferred time labels:
-- `Latest event`
-- `Source updated`
-- `Last checked`
-
-Never collapse all of these under just `Updated`.
-
-### Services rules
-- if service detail exists, show Services in its normal slot
-- if service detail does not exist, do not replace the slot with misleading pseudo-services
-- use a clear note such as `Service details unavailable`
-
-### Notes rules
-Notes should be conditional and compact:
-- service details unavailable
-- limited detail available
-- status unavailable
-- fetch/source error summary when truly relevant
-
-## Consistency over optimization
-When improving one tab, compare it to the others first:
-- does the panel naming still match the rest of the app?
-- are field locations becoming more stable or less stable?
-- is the right panel easier to learn after one use?
+## Audit workflow rule
+Before major UI redesign work:
+1. run or refresh per-tab audits
+2. synthesize cross-tab patterns and drift
+3. update the guide if the rule layer changed
+4. then write the implementation spec
+5. then implement
 
 ## Review checklist
-Before shipping UI changes, ask:
+Before accepting UI work, ask:
 - Are labels concrete?
 - Are field locations stable?
-- Is the navigation rail still lightweight?
-- Does the detail panel have one clear reading order?
-- Did we remove internal/implementation vocabulary from the UI?
+- Is the rail still navigation-first?
+- Does each section own one concept?
+- Are controls discoverable?
+- Are hidden defaults justified?
+- Are render tests covering canonical states/modes?
 - Would a repeat user know where to look without relearning the page?
-- Are render tests asserting the expected section titles and rejecting forbidden labels?
-- Are the canonical provider states covered by tests or live review?

@@ -1,82 +1,82 @@
 # Status Tab Redesign Spec
 
+## Role in the doc stack
+This is the **canonical implementation spec** for the next Status-tab rewrite.
+
+It is derived from:
+- `docs/ui-tab-audit.md`
+- `docs/ui-design-guide.md`
+- `docs/status-tab-focused-audit.md`
+- `docs/status-tab-multi-pass-audit.md`
+- `docs/cross-tab-controls-interaction-audit.md`
+
 ## Goal
-Rewrite the Status tab so it behaves like a stable product surface rather than a one-off custom layout. The redesign must optimize for:
+Rewrite the Status tab so it feels like a stable member of the product family, not a custom microsite.
+
+Success means:
 - first-use clarity
 - repeat-use scanning
 - fixed field locations
+- explicit labels
 - concrete section names
-- truthful handling of missing service detail
-
-This spec is implementation-grade and should be used with:
-- `docs/ui-tab-audit.md`
-- `docs/status-tab-multi-pass-audit.md`
-- `docs/ui-design-guide.md`
-- `.codex/skills/ui-design-guide/SKILL.md`
+- truthful handling of missing detail
+- no hidden or weakly explained interaction state
 
 ## Non-goals
 - no new fetch pipeline
-- no new status providers
-- no attempt to expose all raw source evidence
+- no new provider integrations
+- no raw-evidence dump UI
 - no decorative charts
-- no new generalized design system abstractions
+- no speculative design-system abstraction work
+
+## Current problems this rewrite must fix
+1. abstract container naming (`Narrative`, `Note`, similar drift)
+2. unstable semantics in hero metadata
+3. hidden/under-advertised interaction state
+4. too much special-case shell behavior relative to other tabs
+5. service/detail absence not always expressed through stable structure
 
 ## Shell contract
 ### Left rail
-One-line provider rows only.
-
-Each row may contain only:
-- status icon
+One-line rows only:
+- health icon
 - provider name
 - optional active issue count
 
-Do not add:
-- provenance badges
-- timestamp metadata
-- summary text
-- support-tier meta
+### Right side
+Use **one stable outer detail surface**.
 
-### Right panel
-Use a single stable detail surface with internal section headers.
-
-Avoid multiple abstract top-level boxes like:
-- `Narrative`
-- `Note`
-- any other non-domain container labels
-
-Preferred top-level right-panel title:
+Preferred outer title:
 - `Status`
 - or `Details`
 
-The important point is that the outer panel title stays stable while the internal section headers carry the domain meaning.
+Do not create multiple abstract top-level boxes for the same read flow.
+The semantic structure belongs in internal section headers.
 
-## Fixed reading order
-Internal section order is always:
+## Internal section order
+Always render sections in this order:
 1. Overview
 2. Current incidents
 3. Services
 4. Maintenance
 5. Notes
 
-Sections may hide when empty according to the visibility rules below, but their semantic ownership must never drift.
+Sections may be hidden by visibility rules, but ownership must not drift.
 
-## Section specs
+## Section contracts
 ### 1. Overview
-Purpose: answer "what is the provider state right now?"
+Purpose: answer “what is the provider state right now?”
 
-Fixed slot order inside Overview:
-1. provider identity line
+Fixed slot order:
+1. provider identity + health icon
 2. verdict line
-3. source line
-4. time line
+3. `Source: ...`
+4. explicit time line:
+   - `Latest event: ...`
+   - `Source updated: ...`
+   - `Last checked: ...`
 5. issue badge line
 
-#### Slot details
-**Identity line**
-- provider name
-- optional health icon
-
-**Verdict line**
 Allowed verdict copy:
 - `All systems operational`
 - `Some services degraded`
@@ -84,123 +84,70 @@ Allowed verdict copy:
 - `Scheduled maintenance in progress`
 - `Status unavailable`
 
-**Source line**
-Must always be explicitly labeled:
-- `Source: <source label>`
-
-If official page exists, append as a separate token on the same line or the next line:
-- `Official page`
-
-**Time line**
-Must always be explicitly labeled with one of:
-- `Latest event: ...`
-- `Source updated: ...`
-- `Last checked: ...`
-
-Forbidden:
-- bare `Updated`
-- unlabeled timestamp text
-- changing the same label to mean different things in different states
-
-**Issue badge line**
-Examples:
-- `1 active incident`
-- `3 active incidents`
-
-If zero, this line may be omitted.
-
-#### Overview ownership
-Overview may include only:
-- provider identity
-- verdict
-- source
-- time
-- issue count
-
-Overview must not include:
+Forbidden in Overview:
 - caveat prose
-- service lists
-- incident update bodies
+- service rows
+- incident body text
 - maintenance rows
 
 ### 2. Current incidents
-Purpose: answer "what is broken right now?"
+Purpose: answer “what is broken right now?”
 
-Include only active incident content:
-- incident title
+Show only active incidents.
+Each incident row/card may include:
+- title
 - stage/status
-- most recent incident time
+- latest incident time
 - affected services/components
 - latest meaningful update text
 
-Do not include:
-- maintenance items
-- source caveats
-- component inventory rows
+Do not include maintenance or source caveats here.
 
 ### 3. Services
-Purpose: answer "which services are healthy or affected?"
+Purpose: answer “which services are healthy or affected?”
 
-Include only service/component rows.
-
+Show only service/component rows.
 Each row may include:
 - status icon
-- service/component name
-- concise status text
+- service name
+- concise service status
 - optional linked incident/maintenance name
 
 Ordering:
-1. outage/degraded services
-2. maintenance-tagged services
-3. operational services
-
-In compact mode:
-- operational services may collapse into a summary row
+1. outage/degraded
+2. maintenance-tagged
+3. operational
 
 If no service detail exists:
-- hide the section entirely
+- hide Services entirely
 - surface `Service details unavailable` in Notes
 
 ### 4. Maintenance
-Purpose: answer "is planned maintenance happening?"
+Purpose: answer “is planned maintenance happening?”
 
-Include only:
-- maintenance title
+Show only maintenance items:
+- title
 - status
-- scheduled time/window
+- scheduled window/time
 - affected services
 
-Do not mix maintenance into incidents or notes.
-
 ### 5. Notes
-Purpose: communicate compact caveats only.
+Purpose: answer “what caveat or limitation matters here?”
 
-Allowed note types:
+Allowed content:
 - `Service details unavailable`
 - `Limited detail available`
 - `Status unavailable`
-- source/fetch error text when necessary
+- relevant source/fetch error text
 
-Rules:
-- keep notes compact
-- do not use Notes as a dump for extra metadata
-- Notes must not contain service rows or incident narrative
+Notes must stay compact and must not become a junk drawer.
 
 ## Visibility rules
-### Overview
-- always visible
-
-### Current incidents
-- visible only when active incidents exist
-
-### Services
-- visible only when component/service detail exists
-
-### Maintenance
-- visible only when maintenance exists
-
-### Notes
-- visible only when caveat/error exists
+- Overview: always visible
+- Current incidents: only if active incidents exist
+- Services: only if service detail exists
+- Maintenance: only if maintenance exists
+- Notes: only if caveat/error exists
 
 ## Canonical state matrix
 | State | Overview | Current incidents | Services | Maintenance | Notes |
@@ -211,35 +158,38 @@ Rules:
 | Maintenance | visible | hidden unless separate incident exists | visible if detail exists | visible | conditional |
 | Unavailable | visible | hidden | hidden | hidden | `Status unavailable` plus error if relevant |
 
-## Naming rules
-Allowed internal section headers:
-- `Overview`
-- `Current incidents`
-- `Services`
-- `Maintenance`
-- `Notes`
+## Interaction contract
+### Must keep
+- standard movement/search/focus language shared by the app
+- `o` open status page
+- `r` refresh
 
-Forbidden:
-- `Narrative`
-- `Context`
-- `Insight`
-- `Story`
-- generic unlabeled boxes for mixed content
+### Must change
+- hidden service-density mode (`c`) should be **removed** for this redesign pass unless a clearly named, explicitly surfaced reason to keep it emerges
+- footer/help must match the actual interaction surface
+
+Rationale:
+The cross-tab controls audit found that the current hidden toggle is under-disclosed and makes the tab less learnable.
+
+## Title and metadata rules
+- outer panel title stays stable
+- section titles use concrete domain nouns only
+- no generic `Updated`
+- no unlabeled metadata bullet sentence that forces semantic parsing
+- source and time must be readable as fixed fields, not one compressed sentence fragment
+
+## Search and list-order rules
+- if the provider list uses severity-first ordering, treat that as intentional product behavior
+- searchable fields should preferably map to visible content; avoid search matching invisible semantics unless clearly justified
 
 ## Spacing and rhythm rules
-- each visible section gets a concrete header
-- one blank separator between sections maximum
-- do not create extra bordered micro-panels for each content type unless the entire right-panel architecture changes intentionally
-- avoid long uninterrupted mixed-content wells
-- the user should be able to visually distinguish where incidents end and services begin without rereading labels multiple times
+- one blank separator between visible sections max
+- section headers should make section boundaries visually obvious
+- avoid multiple stacked bordered micro-panels for one conceptual detail flow
+- Overview should remain above the fold
 
-## Scrolling rules
-- Overview must remain above the fold
-- if incidents are long, services should still remain reachable without the page feeling like a prose document
-- compact mode should optimize for scanning, not completeness
-
-## Render-test expectations
-Add or update tests for at least these states:
+## Test requirements
+Render tests should cover at least:
 1. operational + full detail
 2. operational + no service detail
 3. degraded + active incident
@@ -247,46 +197,50 @@ Add or update tests for at least these states:
 5. unavailable
 
 Tests should assert:
-- expected section titles are present/absent by state
-- forbidden titles are absent (`Narrative`, `Updated` as generic timestamp label)
-- service-less states do not render the Services section
-- explicit timestamp labels are used
+- required section titles appear/vanish correctly
+- forbidden labels are absent (`Narrative`, generic `Updated`)
+- service-less states do not render Services
+- explicit time labels are present
 - Notes only contain caveat/error content
+- footer/help do not advertise removed controls
 
-## Implementation lane suggestions
-### Lane 1: shell/section rewrite
-Primary files:
+## Implementation lanes
+### Lane 1 — shell rewrite
+Primary file:
 - `src/tui/ui.rs`
 
 Responsibilities:
-- remove abstract right-panel containers
-- implement stable section order
-- fix section naming and field placement
+- collapse special-case outer boxes
+- implement one stable detail surface
+- implement section order and naming
 
-### Lane 2: state/test coverage
+### Lane 2 — interaction/test cleanup
 Primary files:
 - `src/tui/ui.rs`
-- `src/status.rs` only if helper behavior needs tightening
+- `src/tui/event.rs`
+- `src/tui/status_app.rs`
+- `src/tui/app.rs` only if needed
 
 Responsibilities:
-- add/adjust render tests for canonical states
-- tighten helper behavior to support section visibility rules
+- remove or explicitly surface hidden mode behavior
+- align footer/help with actual controls
+- add render/regression tests
 
-### Lane 3: review/docs
+### Lane 3 — verification and doc alignment
 Primary files:
 - `docs/status-tab-redesign-spec.md`
-- `docs/ui-design-guide.md` if final wording must be synced after implementation
+- `docs/ui-design-guide.md` if wording must be synced after implementation
 
 Responsibilities:
-- ensure implementation matches the spec
-- record any deliberate deviations
+- confirm implementation matches the spec
+- record any justified deviations
 
 ## Acceptance criteria
 The redesign is acceptable only if:
-- the right panel no longer uses `Narrative`
-- each visible section has a concrete domain title
-- timestamps use explicit semantic labels
-- service-less providers do not display pseudo-service content
-- the provider rail remains one line tall and navigation-first
-- the right panel feels stable across provider states
-- render tests cover the canonical state matrix
+- no abstract right-panel container names remain
+- section order is stable across provider states
+- source/time semantics are explicitly labeled
+- service-less providers do not fabricate pseudo-services
+- controls shown in footer/help match actual behavior
+- the tab feels structurally aligned with Models / Agents / Benchmarks
+- tests cover the canonical state matrix

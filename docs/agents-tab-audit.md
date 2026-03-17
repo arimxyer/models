@@ -1,5 +1,14 @@
 # Agents Tab Audit
 
+## Role in the doc stack
+This is a **supporting evidence** document.
+
+Use it as input to the canonical docs:
+- `docs/ui-tab-audit.md`
+- `docs/ui-design-guide.md`
+- `docs/status-tab-redesign-spec.md`
+
+
 ## Scope
 Read-only audit of the current Agents tab against the shared shell described in `docs/ui-tab-audit.md` and `docs/ui-design-guide.md`.
 
