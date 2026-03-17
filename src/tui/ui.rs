@@ -634,6 +634,9 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
         }
 
         let content_len = detail_lines.len();
+        let visible_h = detail_area.height.saturating_sub(2) as usize;
+        let max_scroll = (content_len as u16).saturating_sub(visible_h as u16);
+        let clamped_scroll = detail_scroll.min(max_scroll);
         let detail = Paragraph::new(detail_lines)
             .block(
                 Block::default()
@@ -642,14 +645,13 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     .title(format!(" {} ", display_name)),
             )
             .wrap(Wrap { trim: false })
-            .scroll((detail_scroll, 0));
+            .scroll((clamped_scroll, 0));
         f.render_widget(detail, detail_area);
 
         // Scrollbar for detail panel
-        let visible_h = detail_area.height.saturating_sub(2) as usize;
         if content_len > visible_h {
             let mut scrollbar_state = ScrollbarState::new(content_len)
-                .position(detail_scroll as usize)
+                .position(clamped_scroll as usize)
                 .viewport_content_length(visible_h);
             f.render_stateful_widget(
                 Scrollbar::new(ScrollbarOrientation::VerticalRight),

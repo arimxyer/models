@@ -228,6 +228,9 @@ fn handle_agents_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Opti
         // Sort
         KeyCode::Char('s') => Some(Message::CycleAgentSort),
 
+        // Clear search (matches Models and Status tabs)
+        KeyCode::Esc => Some(Message::ClearSearch),
+
         _ => None,
     }
 }
