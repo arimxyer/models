@@ -355,9 +355,12 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     Style::default().fg(Color::Yellow),
                 ));
             }
+<<<<<<< HEAD
             if incident_count == 0 && entry.health == ProviderHealth::Maintenance {
                 spans.push(Span::styled(" maint", Style::default().fg(Color::Cyan)));
             }
+=======
+>>>>>>> d9bd09b (task: add status page redesign coverage)
             items.push(ListItem::new(Line::from(spans)));
         }
     }
@@ -530,7 +533,7 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
             Span::styled(" r ", Style::default().fg(Color::Yellow)),
             Span::raw("refresh  "),
             Span::styled(" c ", Style::default().fg(Color::Yellow)),
-            Span::raw("service view  "),
+            Span::raw("services  "),
             Span::styled(" Tab ", Style::default().fg(Color::Yellow)),
             Span::raw("focus list"),
         ]);
@@ -602,6 +605,21 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     ),
                 ]));
             }
+<<<<<<< HEAD
+=======
+            glance_lines.push(Line::from(vec![
+                Span::styled("Affected: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(
+                    affected_summary.unwrap_or_else(|| "No specific services listed".to_string()),
+                ),
+            ]));
+            if !components.is_empty() {
+                glance_lines.push(Line::from(vec![
+                    Span::styled("Services: ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(format!("{} listed", components.len())),
+                ]));
+            }
+>>>>>>> d9bd09b (task: add status page redesign coverage)
             if let Some(caveat) = caveat {
                 glance_lines.push(Line::from(vec![
                     Span::styled("Note: ", Style::default().fg(Color::DarkGray)),
@@ -613,7 +631,11 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     Block::default()
                         .borders(Borders::ALL)
                         .border_style(detail_border)
+<<<<<<< HEAD
                         .title(" Overall status "),
+=======
+                        .title(" Overview "),
+>>>>>>> d9bd09b (task: add status page redesign coverage)
                 )
                 .wrap(Wrap { trim: false });
             f.render_widget(glance_para, dash_halves[0]);
@@ -716,10 +738,17 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     Block::default()
                         .borders(Borders::ALL)
                         .border_style(detail_border)
+<<<<<<< HEAD
                         .title(if active_incidents.is_empty() && !maintenances.is_empty() {
                             " Scheduled maintenance "
                         } else {
                             " Active incidents "
+=======
+                        .title(if active_incidents.is_empty() {
+                            " Maintenance "
+                        } else {
+                            " Current incidents "
+>>>>>>> d9bd09b (task: add status page redesign coverage)
                         }),
                 )
                 .wrap(Wrap { trim: false });
@@ -1135,7 +1164,10 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
             );
         }
 
+<<<<<<< HEAD
         // View hint row
+=======
+>>>>>>> d9bd09b (task: add status page redesign coverage)
         all_rows.push(Row::new(vec![
             Cell::from(Span::styled(
                 format!("[c] {}", comp_view.label()),
@@ -1154,7 +1186,11 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     Block::default()
                         .borders(Borders::ALL)
                         .border_style(detail_border)
+<<<<<<< HEAD
                         .title(" Services and components "),
+=======
+                        .title(" Services "),
+>>>>>>> d9bd09b (task: add status page redesign coverage)
                 )
                 .wrap(Wrap { trim: false });
             f.render_widget(empty_detail, vert_chunks[2]);
@@ -1164,11 +1200,19 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     "Service",
                     Style::default().fg(Color::DarkGray),
                 )),
+<<<<<<< HEAD
                 Cell::from(Span::styled(
                     "Current",
                     Style::default().fg(Color::DarkGray),
                 )),
                 Cell::from(Span::styled("Latest", Style::default().fg(Color::DarkGray))),
+=======
+                Cell::from(Span::styled("Issue", Style::default().fg(Color::DarkGray))),
+                Cell::from(Span::styled(
+                    "Latest update",
+                    Style::default().fg(Color::DarkGray),
+                )),
+>>>>>>> d9bd09b (task: add status page redesign coverage)
             ]);
 
             let table = Table::new(
@@ -1184,7 +1228,11 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                 Block::default()
                     .borders(Borders::ALL)
                     .border_style(detail_border)
+<<<<<<< HEAD
                     .title(" Services and components "),
+=======
+                    .title(" Services "),
+>>>>>>> d9bd09b (task: add status page redesign coverage)
             )
             .column_spacing(1);
             f.render_widget(table, vert_chunks[2]);
@@ -5471,4 +5519,149 @@ fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
             Constraint::Percentage((100 - percent_x) / 2),
         ])
         .split(popup_layout[1])[1]
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::HashMap, time::Instant};
+
+    use ratatui::{backend::TestBackend, Terminal};
+
+    use super::*;
+    use crate::{
+        agents::AgentsFile,
+        benchmarks::BenchmarkStore,
+        status::{
+            ActiveIncident, ComponentStatus, IncidentUpdate, ProviderStatus, ScheduledMaintenance,
+            StatusProvenance, StatusSourceMethod, StatusSupportTier,
+        },
+    };
+
+    fn make_status_app(entry: ProviderStatus) -> App {
+        let mut app = App::new(
+            HashMap::new(),
+            Some(&AgentsFile {
+                schema_version: 1,
+                last_scraped: None,
+                scrape_source: None,
+                agents: HashMap::new(),
+            }),
+            None,
+            BenchmarkStore::empty(),
+        );
+        app.current_tab = Tab::Status;
+        let status_app = app.status_app.as_mut().expect("status app");
+        status_app.entries = vec![entry];
+        status_app.loading = false;
+        status_app.last_refreshed = Some(Instant::now());
+        status_app.update_filtered();
+        status_app.list_state.select(Some(0));
+        app
+    }
+
+    fn sample_provider_status() -> ProviderStatus {
+        ProviderStatus {
+            slug: "openai".to_string(),
+            display_name: "OpenAI".to_string(),
+            source_slug: "openai".to_string(),
+            support_tier: StatusSupportTier::Required,
+            health: ProviderHealth::Degraded,
+            provenance: StatusProvenance::Fallback,
+            source_label: Some("API Status Check".to_string()),
+            source_method: Some(StatusSourceMethod::ApiStatusCheck),
+            official_url: Some("https://status.openai.com".to_string()),
+            fallback_url: Some("https://apistatuscheck.com/openai".to_string()),
+            last_checked: Some("2026-03-16T23:55:00Z".to_string()),
+            summary: Some("Elevated API errors affecting chat completions.".to_string()),
+            components: vec![
+                ComponentStatus {
+                    name: "API".to_string(),
+                    status: "partial_outage".to_string(),
+                    group_name: None,
+                },
+                ComponentStatus {
+                    name: "Auth".to_string(),
+                    status: "operational".to_string(),
+                    group_name: None,
+                },
+            ],
+            incidents: vec![ActiveIncident {
+                name: "Elevated API errors".to_string(),
+                status: "investigating".to_string(),
+                impact: "minor".to_string(),
+                shortlink: None,
+                created_at: Some("2026-03-16T23:40:00Z".to_string()),
+                updated_at: Some("2026-03-16T23:58:00Z".to_string()),
+                latest_update: Some(IncidentUpdate {
+                    status: "investigating".to_string(),
+                    body: "We are investigating elevated error rates for API requests.".to_string(),
+                    created_at: "2026-03-16T23:58:00Z".to_string(),
+                }),
+                affected_components: vec!["API".to_string()],
+            }],
+            scheduled_maintenances: vec![ScheduledMaintenance {
+                name: "Database maintenance".to_string(),
+                status: "scheduled".to_string(),
+                impact: "none".to_string(),
+                scheduled_for: Some("2026-03-17T03:00:00Z".to_string()),
+                scheduled_until: Some("2026-03-17T04:00:00Z".to_string()),
+                affected_components: vec!["Auth".to_string()],
+            }],
+            error: None,
+        }
+    }
+
+    fn render_status_text(app: &mut App) -> String {
+        let backend = TestBackend::new(140, 40);
+        let mut terminal = Terminal::new(backend).expect("terminal");
+        terminal
+            .draw(|frame| draw_status_main(frame, frame.area(), app))
+            .expect("draw succeeds");
+        let buffer = terminal.backend().buffer().clone();
+        let mut lines = Vec::new();
+        for y in 0..buffer.area.height {
+            let mut line = String::new();
+            for x in 0..buffer.area.width {
+                line.push_str(buffer[(x, y)].symbol());
+            }
+            lines.push(line);
+        }
+        lines.join("\n")
+    }
+
+    #[test]
+    fn status_detail_reads_like_a_status_page() {
+        let mut app = make_status_app(sample_provider_status());
+
+        let rendered = render_status_text(&mut app);
+
+        assert!(rendered.contains("Overview"));
+        assert!(rendered.contains("Current incidents"));
+        assert!(rendered.contains("Services"));
+        assert!(rendered.contains("1 active issue"));
+        assert!(rendered.contains("affected: API"));
+        assert!(rendered.contains("source: API Status Check"));
+        assert!(rendered.contains("Latest update"));
+        assert!(!rendered.contains("Tracking:"));
+        assert!(!rendered.contains("Agents:"));
+        assert!(!rendered.contains("confidence"));
+        assert!(!rendered.contains("coverage"));
+        assert!(!rendered.contains("freshness"));
+        assert!(!rendered.contains("contradiction"));
+        assert!(!rendered.contains("R/FB"));
+    }
+
+    #[test]
+    fn provider_list_stays_navigation_focused() {
+        let mut app = make_status_app(sample_provider_status());
+
+        let rendered = render_status_text(&mut app);
+
+        assert!(rendered.contains("Providers (1)"));
+        assert!(rendered.contains("OpenAI 1!"));
+        assert!(!rendered.contains("R/"));
+        assert!(!rendered.contains("/FB"));
+        assert!(!rendered.contains("/OFF"));
+        assert!(!rendered.contains("/MISS"));
+    }
 }
