@@ -467,6 +467,20 @@ fn incident_stage_style(stage: &str) -> Style {
     }
 }
 
+fn wrapped_visual_line_count(lines: &[Line<'_>], wrap_width: usize) -> u16 {
+    lines
+        .iter()
+        .map(|line| {
+            let line_width = line.width();
+            if wrap_width == 0 || line_width == 0 {
+                1
+            } else {
+                line_width.div_ceil(wrap_width).max(1) as u16
+            }
+        })
+        .sum()
+}
+
 fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
     use super::status_app::StatusFocus;
 
@@ -573,7 +587,13 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
     let detail_area = chunks[1];
 
     if status_app.is_overall_selected() {
-        draw_overall_dashboard(f, detail_area, status_app);
+        draw_overall_dashboard(
+            f,
+            detail_area,
+            status_app,
+            status_app.detail_scroll,
+            status_app.focus == StatusFocus::Details,
+        );
     } else if let Some(entry) = status_app.current_entry() {
         let display_name = entry.display_name.clone();
         let health = entry.health;
@@ -721,7 +741,13 @@ fn sorted_components<'a>(
 
 // ── Overall Dashboard ──────────────────────────────────────────────────
 
-fn draw_overall_dashboard(f: &mut Frame, area: Rect, status_app: &super::status_app::StatusApp) {
+fn draw_overall_dashboard(
+    f: &mut Frame,
+    area: Rect,
+    status_app: &super::status_app::StatusApp,
+    detail_scroll: u16,
+    is_focused: bool,
+) {
     let (op, deg, out, other) = status_app.health_counts();
     let total = status_app.entries.len();
     let attention_entries = overall_attention_entries(status_app);
@@ -842,139 +868,51 @@ fn draw_overall_dashboard(f: &mut Frame, area: Rect, status_app: &super::status_
             }
         }
 
-        for entry in &attention_entries {
-            let incidents = entry.active_incidents();
-            let non_op_components = overall_attention_components(entry);
+        let incident_entries: Vec<_> = attention_entries
+            .iter()
+            .copied()
+            .filter(|entry| !entry.active_incidents().is_empty())
+            .collect();
+        let component_entries: Vec<_> = attention_entries
+            .iter()
+            .copied()
+            .filter(|entry| entry.active_incidents().is_empty())
+            .collect();
+        let body_width = usize::from(rows[1].width.saturating_sub(10)).max(28);
 
-            lines.push(Line::from(vec![
-                Span::styled(
-                    status_health_icon(entry.health),
-                    status_health_style(entry.health),
-                ),
-                Span::raw(" "),
-                Span::styled(
-                    entry.display_name.clone(),
-                    Style::default().add_modifier(Modifier::BOLD),
-                ),
-            ]));
-
-            let body_width = usize::from(rows[1].width.saturating_sub(10)).max(28);
-
-            if let Some(incident) = incidents.first() {
-                lines.push(Line::from(vec![
-                    Span::styled("  Issue: ", status_field_label_style()),
-                    Span::styled(
-                        incident.name.clone(),
-                        Style::default().add_modifier(Modifier::BOLD),
-                    ),
-                ]));
-
-                let mut metadata_spans = vec![Span::raw("  ")];
-                metadata_spans.push(Span::styled("Status: ", status_field_label_style()));
-                metadata_spans.push(Span::styled(
-                    incident_status_value(incident),
-                    incident_stage_style(&incident.status),
-                ));
-
-                let impact_lower = incident.impact.to_lowercase();
-                if !impact_lower.is_empty() && impact_lower != "none" {
-                    metadata_spans.push(Span::raw("  "));
-                    metadata_spans.push(Span::styled("Impact: ", status_field_label_style()));
-                    metadata_spans.push(Span::styled(
-                        incident.impact.clone(),
-                        incident_impact_style(&incident.impact),
-                    ));
-                }
-
-                if let Some((label, value)) = incident_time_value(entry, incident) {
-                    metadata_spans.push(Span::raw("  "));
-                    metadata_spans.push(Span::styled(
-                        format!("{label}: "),
-                        status_field_label_style(),
-                    ));
-                    metadata_spans.push(Span::styled(value, Style::default().fg(Color::Cyan)));
-                }
-                lines.push(Line::from(metadata_spans));
-
-                if incidents.len() > 1 {
-                    lines.push(Line::from(vec![
-                        Span::styled("  Additional incidents: ", status_field_label_style()),
-                        Span::styled(
-                            format!("{} more", incidents.len() - 1),
-                            Style::default().fg(Color::DarkGray),
-                        ),
-                    ]));
-                }
-
-                if !non_op_components.is_empty() {
-                    push_component_scope_lines(&mut lines, &non_op_components, 4);
-                } else if !incident.affected_components.is_empty() {
-                    push_plain_scope_lines(
-                        &mut lines,
-                        "Affected",
-                        &incident.affected_components,
-                        4,
-                    );
-                }
-                if let Some(update) = &incident.latest_update {
-                    let wrapped = textwrap::wrap(&update.body, body_width.saturating_sub(6));
-                    if let Some(first_line) = wrapped.first() {
-                        lines.push(Line::from(vec![
-                            Span::styled("  Update: ", status_field_label_style()),
-                            Span::raw(first_line.to_string()),
-                        ]));
-                    }
-                    for line in wrapped.iter().skip(1).take(1) {
-                        lines.push(Line::from(Span::styled(
-                            format!("          {line}"),
-                            Style::default().fg(Color::DarkGray),
-                        )));
-                    }
-                }
-            } else if !non_op_components.is_empty() {
-                lines.push(Line::from(vec![
-                    Span::styled("  Scope: ", status_field_label_style()),
-                    Span::styled(
-                        component_only_scope_title(&non_op_components),
-                        Style::default().add_modifier(Modifier::BOLD),
-                    ),
-                ]));
-                lines.push(Line::from(vec![
-                    Span::styled("  Status: ", status_field_label_style()),
-                    Span::styled(
-                        provider_health_label(entry.health),
-                        status_health_style(entry.health),
-                    ),
-                    Span::raw("  "),
-                    Span::styled("Updated: ", status_field_label_style()),
-                    Span::styled(
-                        provider_last_meaningful_update(entry)
-                            .map(|(_, value)| value)
-                            .unwrap_or_else(|| "recently updated".to_string()),
-                        Style::default().fg(Color::Cyan),
-                    ),
-                ]));
-                push_component_scope_lines(&mut lines, &non_op_components, 4);
-            } else if let Some(note) = entry.user_visible_caveat() {
-                lines.push(Line::from(vec![
-                    Span::styled("  Note: ", status_field_label_style()),
-                    Span::styled(note.to_string(), Style::default().fg(Color::DarkGray)),
-                ]));
-            }
-
-            if incidents.is_empty() && non_op_components.is_empty() {
-                if let Some((label, value)) = provider_last_meaningful_update(entry) {
-                    lines.push(Line::from(vec![
-                        Span::styled(
-                            format!("  {}: ", title_case_status_time_label(label)),
-                            Style::default().fg(Color::DarkGray),
-                        ),
-                        Span::styled(value, Style::default().fg(Color::Cyan)),
-                    ]));
-                }
-            }
-
+        if !incident_entries.is_empty() {
+            lines.push(Line::from(Span::styled(
+                "Active Incidents",
+                status_section_label_style(),
+            )));
+            lines.push(Line::from(Span::styled(
+                "Providers with formal incident rows from the upstream status source",
+                Style::default().fg(Color::DarkGray),
+            )));
             lines.push(Line::from(""));
+        }
+
+        for entry in &incident_entries {
+            render_overall_attention_entry(&mut lines, entry, body_width);
+        }
+
+        if !component_entries.is_empty() {
+            if !incident_entries.is_empty() {
+                lines.push(Line::from(""));
+            }
+            lines.push(Line::from(Span::styled(
+                "Component-Reported Degradation",
+                status_section_label_style(),
+            )));
+            lines.push(Line::from(Span::styled(
+                "Providers reporting degraded services without a formal incident row",
+                Style::default().fg(Color::DarkGray),
+            )));
+            lines.push(Line::from(""));
+        }
+
+        for entry in &component_entries {
+            render_overall_attention_entry(&mut lines, entry, body_width);
         }
 
         let issue_title = if attention_entries.is_empty() {
@@ -982,17 +920,172 @@ fn draw_overall_dashboard(f: &mut Frame, area: Rect, status_app: &super::status_
         } else {
             format!(" Attention Now ({}) ", attention_entries.len())
         };
+        let attention_border = if is_focused {
+            Style::default().fg(Color::Cyan)
+        } else {
+            dark_border
+        };
+        let visible_height = rows[1].height.saturating_sub(2);
+        let wrap_width = rows[1].width.saturating_sub(2) as usize;
+        let visual_total = wrapped_visual_line_count(&lines, wrap_width);
+        let max_scroll = visual_total.saturating_sub(visible_height);
+        let scroll_pos = detail_scroll.min(max_scroll);
         let block = Block::default()
             .borders(Borders::ALL)
-            .border_style(dark_border)
+            .border_style(attention_border)
             .title(issue_title);
-        f.render_widget(
-            Paragraph::new(lines)
-                .block(block)
-                .wrap(Wrap { trim: false }),
-            rows[1],
-        );
+        let paragraph = Paragraph::new(lines)
+            .block(block)
+            .wrap(Wrap { trim: false })
+            .scroll((scroll_pos, 0));
+        f.render_widget(paragraph, rows[1]);
+
+        if visual_total > visible_height {
+            let mut scrollbar_state = ScrollbarState::new(visual_total as usize)
+                .position(scroll_pos as usize)
+                .viewport_content_length(visible_height as usize);
+            f.render_stateful_widget(
+                Scrollbar::new(ScrollbarOrientation::VerticalRight),
+                rows[1].inner(Margin {
+                    vertical: 1,
+                    horizontal: 0,
+                }),
+                &mut scrollbar_state,
+            );
+        }
     }
+}
+
+fn render_overall_attention_entry(
+    lines: &mut Vec<Line<'static>>,
+    entry: &crate::status::ProviderStatus,
+    body_width: usize,
+) {
+    let incidents = entry.active_incidents();
+    let non_op_components = overall_attention_components(entry);
+
+    lines.push(Line::from(vec![
+        Span::styled(
+            status_health_icon(entry.health),
+            status_health_style(entry.health),
+        ),
+        Span::raw(" "),
+        Span::styled(
+            entry.display_name.clone(),
+            Style::default().add_modifier(Modifier::BOLD),
+        ),
+    ]));
+
+    if let Some(incident) = incidents.first() {
+        lines.push(Line::from(vec![
+            Span::styled("  Issue: ", status_field_label_style()),
+            Span::styled(
+                incident.name.clone(),
+                Style::default().add_modifier(Modifier::BOLD),
+            ),
+        ]));
+
+        let mut metadata_spans = vec![Span::raw("  ")];
+        metadata_spans.push(Span::styled("Status: ", status_field_label_style()));
+        metadata_spans.push(Span::styled(
+            incident_status_value(incident),
+            incident_stage_style(&incident.status),
+        ));
+
+        let impact_lower = incident.impact.to_lowercase();
+        if !impact_lower.is_empty() && impact_lower != "none" {
+            metadata_spans.push(Span::raw("  "));
+            metadata_spans.push(Span::styled("Impact: ", status_field_label_style()));
+            metadata_spans.push(Span::styled(
+                incident.impact.clone(),
+                incident_impact_style(&incident.impact),
+            ));
+        }
+
+        if let Some((label, value)) = incident_time_value(entry, incident) {
+            metadata_spans.push(Span::raw("  "));
+            metadata_spans.push(Span::styled(
+                format!("{label}: "),
+                status_field_label_style(),
+            ));
+            metadata_spans.push(Span::styled(value, Style::default().fg(Color::Cyan)));
+        }
+        lines.push(Line::from(metadata_spans));
+
+        if incidents.len() > 1 {
+            lines.push(Line::from(vec![
+                Span::styled("  Additional incidents: ", status_field_label_style()),
+                Span::styled(
+                    format!("{} more", incidents.len() - 1),
+                    Style::default().fg(Color::DarkGray),
+                ),
+            ]));
+        }
+
+        if !non_op_components.is_empty() {
+            push_component_scope_lines(lines, &non_op_components, 4);
+        } else if !incident.affected_components.is_empty() {
+            push_plain_scope_lines(lines, "Affected", &incident.affected_components, 4);
+        }
+        if let Some(update) = &incident.latest_update {
+            let wrapped = textwrap::wrap(&update.body, body_width.saturating_sub(6));
+            if let Some(first_line) = wrapped.first() {
+                lines.push(Line::from(vec![
+                    Span::styled("  Update: ", status_field_label_style()),
+                    Span::raw(first_line.to_string()),
+                ]));
+            }
+            for line in wrapped.iter().skip(1).take(1) {
+                lines.push(Line::from(Span::styled(
+                    format!("          {line}"),
+                    Style::default().fg(Color::DarkGray),
+                )));
+            }
+        }
+    } else if !non_op_components.is_empty() {
+        lines.push(Line::from(vec![
+            Span::styled("  Scope: ", status_field_label_style()),
+            Span::styled(
+                component_only_scope_title(&non_op_components),
+                Style::default().add_modifier(Modifier::BOLD),
+            ),
+        ]));
+        lines.push(Line::from(vec![
+            Span::styled("  Status: ", status_field_label_style()),
+            Span::styled(
+                provider_health_label(entry.health),
+                status_health_style(entry.health),
+            ),
+            Span::raw("  "),
+            Span::styled("Updated: ", status_field_label_style()),
+            Span::styled(
+                provider_last_meaningful_update(entry)
+                    .map(|(_, value)| value)
+                    .unwrap_or_else(|| "recently updated".to_string()),
+                Style::default().fg(Color::Cyan),
+            ),
+        ]));
+        push_component_scope_lines(lines, &non_op_components, 4);
+    } else if let Some(note) = entry.user_visible_caveat() {
+        lines.push(Line::from(vec![
+            Span::styled("  Note: ", status_field_label_style()),
+            Span::styled(note.to_string(), Style::default().fg(Color::DarkGray)),
+        ]));
+    }
+
+    if incidents.is_empty() && non_op_components.is_empty() {
+        if let Some((label, value)) = provider_last_meaningful_update(entry) {
+            lines.push(Line::from(vec![
+                Span::styled(
+                    format!("  {}: ", title_case_status_time_label(label)),
+                    Style::default().fg(Color::DarkGray),
+                ),
+                Span::styled(value, Style::default().fg(Color::Cyan)),
+            ]));
+        }
+    }
+
+    lines.push(Line::from(""));
 }
 
 // ── Individual Provider Detail (4 subpanels) ───────────────────────────
@@ -5934,6 +6027,7 @@ mod tests {
 
         assert!(rendered.contains("Overall Status"));
         assert!(rendered.contains("Attention Now (1)"));
+        assert!(rendered.contains("Active Incidents"));
         assert!(rendered.contains("Elevated API errors"));
         assert!(rendered.contains("investigating"));
         assert!(rendered.contains("Services"));
