@@ -232,12 +232,6 @@ fn section_header(title: &str) -> Line<'static> {
     ))
 }
 
-fn status_field_line(label: &str, value: impl Into<String>) -> Line<'static> {
-    Line::from(vec![
-        Span::styled(format!("{label}: "), Style::default().fg(Color::DarkGray)),
-        Span::raw(value.into()),
-    ])
-}
 fn status_verdict_copy(health: ProviderHealth) -> &'static str {
     match health {
         ProviderHealth::Operational => "All systems operational",
@@ -437,6 +431,25 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
         });
 
         let body_width = usize::from(detail_area.width.saturating_sub(4)).max(24);
+        let issue_summary = match (active_incidents.len(), entry.scheduled_maintenances.len()) {
+            (0, 0) => "0 active incidents".to_string(),
+            (incidents, 0) => format!(
+                "{incidents} active incident{}",
+                if incidents == 1 { "" } else { "s" }
+            ),
+            (0, maintenance) => format!(
+                "0 active incidents • {maintenance} maintenance item{}",
+                if maintenance == 1 { "" } else { "s" }
+            ),
+            (incidents, maintenance) => {
+                format!(
+                    "{incidents} active incident{} • {maintenance} maintenance item{}",
+                    if incidents == 1 { "" } else { "s" },
+                    if maintenance == 1 { "" } else { "s" },
+                )
+            }
+        };
+        let support_line = format!("Source: {source_display} • {time_label}: {time_value}");
         let mut detail_lines: Vec<Line<'static>> = vec![
             section_header("Overview"),
             Line::from(vec![
@@ -453,26 +466,21 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                 status_verdict_copy(health),
                 status_health_style(health).add_modifier(Modifier::BOLD),
             )),
-            status_field_line("Source", source_display),
-            status_field_line(time_label, time_value),
+            Line::from(Span::styled(
+                issue_summary,
+                if active_incidents.is_empty() {
+                    Style::default().fg(Color::DarkGray)
+                } else {
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD)
+                },
+            )),
+            Line::from(Span::styled(
+                support_line,
+                Style::default().fg(Color::DarkGray),
+            )),
         ];
-
-        let issue_summary = match (active_incidents.len(), entry.scheduled_maintenances.len()) {
-            (0, 0) => "Active incidents: 0".to_string(),
-            (incidents, 0) => format!("Active incidents: {incidents}"),
-            (0, maintenance) => format!("Active incidents: 0 • Maintenance: {maintenance}"),
-            (incidents, maintenance) => {
-                format!("Active incidents: {incidents} • Maintenance: {maintenance}")
-            }
-        };
-        detail_lines.push(Line::from(Span::styled(
-            issue_summary,
-            if active_incidents.is_empty() {
-                Style::default().fg(Color::DarkGray)
-            } else {
-                Style::default().fg(Color::Yellow)
-            },
-        )));
 
         if !active_incidents.is_empty() {
             detail_lines.push(Line::from(""));
@@ -515,7 +523,18 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
         if !components.is_empty() {
             detail_lines.push(Line::from(""));
             detail_lines.push(section_header("Services"));
-            for component in components {
+
+            let (highlighted_components, healthy_components): (Vec<_>, Vec<_>) =
+                components.into_iter().partition(|component| {
+                    component_status_icon(&component.status) != "●"
+                        || component_incident_map.contains_key(&component.name)
+                        || component_maintenance_map.contains_key(&component.name)
+                });
+
+            let show_all_healthy =
+                highlighted_components.is_empty() && healthy_components.len() <= 4;
+
+            for component in &highlighted_components {
                 let service_name = translate_component_name(&component.name);
                 detail_lines.push(Line::from(vec![
                     Span::styled(
@@ -523,7 +542,7 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                         component_status_style(&component.status),
                     ),
                     Span::raw(" "),
-                    Span::raw(service_name),
+                    Span::styled(service_name, Style::default().add_modifier(Modifier::BOLD)),
                 ]));
 
                 let mut notes = vec![component.status.replace('_', " ")];
@@ -536,6 +555,30 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     format!("  {}", notes.join(" • ")),
                     Style::default().fg(Color::DarkGray),
                 )));
+            }
+
+            if show_all_healthy {
+                for component in &healthy_components {
+                    let service_name = translate_component_name(&component.name);
+                    detail_lines.push(Line::from(vec![
+                        Span::styled("●", Style::default().fg(Color::Green)),
+                        Span::raw(" "),
+                        Span::raw(service_name),
+                    ]));
+                }
+            } else if !healthy_components.is_empty() {
+                detail_lines.push(Line::from(vec![
+                    Span::styled("●", Style::default().fg(Color::Green)),
+                    Span::raw(format!(
+                        " {} service{} operational",
+                        healthy_components.len(),
+                        if healthy_components.len() == 1 {
+                            ""
+                        } else {
+                            "s"
+                        }
+                    )),
+                ]));
             }
         }
 
@@ -5000,7 +5043,7 @@ mod tests {
         assert!(rendered.contains("Some services degraded"));
         assert!(rendered.contains("API Status Check"));
         assert!(rendered.contains("official page"));
-        assert!(rendered.contains("Active incidents: 1"));
+        assert!(rendered.contains("1 active incident"));
         assert!(rendered.contains("Overview"));
         assert!(!rendered.contains("Narrative"));
         assert!(!rendered.contains("Status page"));
