@@ -5,8 +5,8 @@ use ratatui::widgets::ListState;
 
 use crate::agents::AgentsFile;
 use crate::status::{
-    status_seed_for_provider, ProviderHealth, ProviderStatus, StatusProvenance, StatusProviderSeed,
-    STATUS_REGISTRY,
+    status_seed_for_provider, ProviderHealth, ProviderStatus, ScheduledMaintenance,
+    StatusProvenance, StatusProviderSeed, STATUS_REGISTRY,
 };
 
 const PAGE_SIZE: usize = 10;
@@ -97,6 +97,7 @@ impl StatusApp {
         self.last_error = Some(error);
     }
 
+    /// `selected` is a display index: 0 = Overall, 1+ = provider at `filtered_entries[selected - 1]`.
     pub fn update_filtered(&mut self) {
         let query = self.search_query.to_lowercase();
         self.filtered_entries = self
@@ -119,15 +120,24 @@ impl StatusApp {
             .map(|(idx, _)| idx)
             .collect();
 
-        if self.selected >= self.filtered_entries.len() {
+        // If current provider selection is out of range, reset to Overall
+        if self.selected > self.filtered_entries.len() {
             self.selected = 0;
         }
         self.list_state.select(Some(self.selected));
     }
 
+    pub fn is_overall_selected(&self) -> bool {
+        self.selected == 0
+    }
+
+    /// Returns the selected provider, or `None` when Overall (index 0) is selected.
     pub fn current_entry(&self) -> Option<&ProviderStatus> {
+        if self.selected == 0 {
+            return None;
+        }
         self.filtered_entries
-            .get(self.selected)
+            .get(self.selected - 1)
             .and_then(|&idx| self.entries.get(idx))
     }
 
@@ -135,7 +145,7 @@ impl StatusApp {
         if self.filtered_entries.is_empty() {
             return;
         }
-        self.selected = (self.selected + 1).min(self.filtered_entries.len().saturating_sub(1));
+        self.selected = (self.selected + 1).min(self.filtered_entries.len());
         self.list_state.select(Some(self.selected));
         self.detail_scroll = 0;
     }
@@ -153,19 +163,13 @@ impl StatusApp {
     }
 
     pub fn select_last(&mut self) {
-        if self.filtered_entries.is_empty() {
-            return;
-        }
-        self.selected = self.filtered_entries.len() - 1;
+        self.selected = self.filtered_entries.len(); // last provider (0 = Overall)
         self.list_state.select(Some(self.selected));
         self.detail_scroll = 0;
     }
 
     pub fn page_down(&mut self) {
-        if self.filtered_entries.is_empty() {
-            return;
-        }
-        self.selected = (self.selected + PAGE_SIZE).min(self.filtered_entries.len() - 1);
+        self.selected = (self.selected + PAGE_SIZE).min(self.filtered_entries.len());
         self.list_state.select(Some(self.selected));
         self.detail_scroll = 0;
     }
@@ -176,7 +180,6 @@ impl StatusApp {
         self.detail_scroll = 0;
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn health_counts(&self) -> (usize, usize, usize, usize) {
         let mut op = 0;
         let mut deg = 0;
@@ -206,6 +209,30 @@ impl StatusApp {
             }
         }
         (official, fallback, unavailable)
+    }
+
+    /// Providers with health != Operational, sorted by severity (outage > degraded > maintenance).
+    pub fn non_operational_entries(&self) -> Vec<&ProviderStatus> {
+        let mut entries: Vec<_> = self
+            .entries
+            .iter()
+            .filter(|e| e.health != ProviderHealth::Operational)
+            .collect();
+        entries.sort_by(|a, b| a.health.sort_rank().cmp(&b.health.sort_rank()));
+        entries
+    }
+
+    /// All scheduled maintenances across all providers, as (display_name, maintenance) pairs.
+    pub fn all_maintenances(&self) -> Vec<(&str, &ScheduledMaintenance)> {
+        self.entries
+            .iter()
+            .flat_map(|entry| {
+                entry
+                    .scheduled_maintenances
+                    .iter()
+                    .map(move |m| (entry.display_name.as_str(), m))
+            })
+            .collect()
     }
 
     pub fn switch_focus(&mut self) {
