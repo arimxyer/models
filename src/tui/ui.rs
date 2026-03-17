@@ -237,32 +237,94 @@ fn overall_non_operational_components(
         .collect()
 }
 
-fn summarize_component_scope(
+fn incident_impact_style(impact: &str) -> Style {
+    let normalized = impact.to_lowercase();
+    if normalized.contains("critical") || normalized.contains("major") {
+        Style::default().fg(Color::Red)
+    } else if normalized.contains("minor") || normalized.contains("partial") {
+        Style::default().fg(Color::Yellow)
+    } else if normalized.contains("maint") {
+        Style::default().fg(Color::Blue)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    }
+}
+
+fn status_field_label_style() -> Style {
+    Style::default().fg(Color::Blue)
+}
+
+fn status_section_label_style() -> Style {
+    Style::default()
+        .fg(Color::Blue)
+        .add_modifier(Modifier::BOLD)
+}
+
+fn push_component_scope_lines(
+    lines: &mut Vec<Line<'static>>,
     components: &[&crate::status::ComponentStatus],
     max_items: usize,
-) -> Option<String> {
+) {
     if components.is_empty() {
-        return None;
+        return;
     }
 
-    let shown: Vec<String> = components
-        .iter()
-        .take(max_items)
-        .map(|component| {
-            format!(
-                "{} ({})",
-                translate_component_name(&component.name),
-                component.status.replace('_', " ")
-            )
-        })
-        .collect();
+    lines.push(Line::from(Span::styled(
+        "  Services",
+        status_section_label_style(),
+    )));
+
+    for component in components.iter().take(max_items) {
+        lines.push(Line::from(vec![
+            Span::styled("    - ", Style::default().fg(Color::DarkGray)),
+            Span::raw(translate_component_name(&component.name)),
+            Span::styled(" (", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                component.status.replace('_', " "),
+                component_status_style(&component.status),
+            ),
+            Span::styled(")", Style::default().fg(Color::DarkGray)),
+        ]));
+    }
 
     let remaining = components.len().saturating_sub(max_items);
-    let mut summary = shown.join(", ");
     if remaining > 0 {
-        summary.push_str(&format!(", +{remaining} more"));
+        lines.push(Line::from(Span::styled(
+            format!("    +{remaining} more affected service(s)"),
+            Style::default().fg(Color::DarkGray),
+        )));
     }
-    Some(summary)
+}
+
+fn push_plain_scope_lines(
+    lines: &mut Vec<Line<'static>>,
+    label: &str,
+    items: &[String],
+    max_items: usize,
+) {
+    if items.is_empty() {
+        return;
+    }
+
+    lines.push(Line::from(Span::styled(
+        format!("  {label}"),
+        status_section_label_style(),
+    )));
+
+    for item in items.iter().take(max_items) {
+        lines.push(Line::from(vec![
+            Span::styled("    - ", Style::default().fg(Color::DarkGray)),
+            Span::raw(item.clone()),
+        ]));
+    }
+
+    let remaining = items.len().saturating_sub(max_items);
+    if remaining > 0 {
+        lines.push(Line::from(Span::styled(
+            format!("    +{remaining} more"),
+            Style::default().fg(Color::DarkGray),
+        )));
+    }
 }
 
 fn status_verdict_copy(health: ProviderHealth) -> &'static str {
@@ -636,18 +698,23 @@ fn draw_overall_dashboard(f: &mut Frame, area: Rect, status_app: &super::status_
                     lines.push(Line::from(vec![
                         Span::styled("◆ ", Style::default().fg(Color::Blue)),
                         Span::styled(
-                            truncate(provider_name, 18),
+                            provider_name.to_string(),
                             Style::default().add_modifier(Modifier::BOLD),
                         ),
-                        Span::styled(
-                            format!("  {}", truncate(&maint.name, 42)),
-                            Style::default().fg(Color::DarkGray),
-                        ),
                     ]));
-                    lines.push(Line::from(Span::styled(
-                        format!("  {} • {time_str}", maint.status.replace('_', " ")),
-                        Style::default().fg(Color::DarkGray),
-                    )));
+                    lines.push(Line::from(vec![
+                        Span::styled("  Maintenance: ", status_field_label_style()),
+                        Span::raw(maint.name.clone()),
+                    ]));
+                    lines.push(Line::from(vec![
+                        Span::styled("  Status: ", status_field_label_style()),
+                        Span::styled(
+                            maint.status.replace('_', " "),
+                            component_status_style(&maint.status),
+                        ),
+                        Span::styled("  Scheduled: ", status_field_label_style()),
+                        Span::styled(time_str, Style::default().fg(Color::Cyan)),
+                    ]));
                 }
                 if all_maint.len() > 4 {
                     lines.push(Line::from(Span::styled(
@@ -661,22 +728,6 @@ fn draw_overall_dashboard(f: &mut Frame, area: Rect, status_app: &super::status_
         for entry in &non_op {
             let incidents = entry.active_incidents();
             let non_op_components = overall_non_operational_components(entry);
-            let issue_summary = match (incidents.len(), non_op_components.len()) {
-                (0, 0) => status_verdict_copy(entry.health).to_string(),
-                (incidents, 0) => format!(
-                    "{incidents} active incident{}",
-                    if incidents == 1 { "" } else { "s" }
-                ),
-                (0, components) => format!(
-                    "{components} affected service{}",
-                    if components == 1 { "" } else { "s" }
-                ),
-                (incidents, components) => format!(
-                    "{incidents} incident{} • {components} affected service{}",
-                    if incidents == 1 { "" } else { "s" },
-                    if components == 1 { "" } else { "s" }
-                ),
-            };
 
             lines.push(Line::from(vec![
                 Span::styled(
@@ -688,56 +739,77 @@ fn draw_overall_dashboard(f: &mut Frame, area: Rect, status_app: &super::status_
                     entry.display_name.clone(),
                     Style::default().add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(
-                    format!("  {issue_summary}"),
-                    Style::default().fg(Color::DarkGray),
-                ),
             ]));
 
             let body_width = usize::from(rows[1].width.saturating_sub(10)).max(28);
-            if let Some((label, value)) = provider_last_meaningful_update(entry) {
-                lines.push(Line::from(Span::styled(
-                    format!("  {}: {}", title_case_status_time_label(label), value),
-                    Style::default().fg(Color::DarkGray),
-                )));
-            }
 
             if let Some(incident) = incidents.first() {
-                let mut detail_bits = vec![incident.status.clone()];
+                lines.push(Line::from(vec![
+                    Span::styled("  Issue: ", status_field_label_style()),
+                    Span::styled(
+                        incident.name.clone(),
+                        Style::default().add_modifier(Modifier::BOLD),
+                    ),
+                ]));
+
+                let mut metadata_spans = vec![Span::raw("  ")];
+                metadata_spans.push(Span::styled("Status: ", status_field_label_style()));
+                metadata_spans.push(Span::styled(
+                    incident.status.clone(),
+                    incident_stage_style(&incident.status),
+                ));
+
                 let impact_lower = incident.impact.to_lowercase();
                 if !impact_lower.is_empty() && impact_lower != "none" {
-                    detail_bits.push(incident.impact.clone());
+                    metadata_spans.push(Span::raw("  "));
+                    metadata_spans.push(Span::styled("Impact: ", status_field_label_style()));
+                    metadata_spans.push(Span::styled(
+                        incident.impact.clone(),
+                        incident_impact_style(&incident.impact),
+                    ));
                 }
-                lines.push(Line::from(vec![
-                    Span::styled("  Incident: ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(truncate(&incident.name, body_width.saturating_sub(12))),
-                ]));
-                lines.push(Line::from(Span::styled(
-                    format!("  Status: {}", detail_bits.join(" • ")),
-                    Style::default().fg(Color::DarkGray),
-                )));
-                if !incident.affected_components.is_empty() {
-                    lines.push(Line::from(Span::styled(
-                        format!(
-                            "  Affected: {}",
-                            truncate(&incident.affected_components.join(", "), body_width)
+
+                if let Some(ts) = incident
+                    .updated_at
+                    .as_deref()
+                    .or(incident.created_at.as_deref())
+                {
+                    metadata_spans.push(Span::raw("  "));
+                    metadata_spans.push(Span::styled("Ongoing: ", status_field_label_style()));
+                    metadata_spans.push(Span::styled(
+                        format_relative_time_from_str(ts),
+                        Style::default().fg(Color::Cyan),
+                    ));
+                }
+                lines.push(Line::from(metadata_spans));
+
+                if incidents.len() > 1 {
+                    lines.push(Line::from(vec![
+                        Span::styled("  Additional incidents: ", status_field_label_style()),
+                        Span::styled(
+                            format!("{} more", incidents.len() - 1),
+                            Style::default().fg(Color::DarkGray),
                         ),
-                        Style::default().fg(Color::DarkGray),
-                    )));
+                    ]));
                 }
-                if let Some(service_scope) = summarize_component_scope(&non_op_components, 3) {
-                    lines.push(Line::from(Span::styled(
-                        format!("  Services: {service_scope}"),
-                        Style::default().fg(Color::DarkGray),
-                    )));
+
+                if !non_op_components.is_empty() {
+                    push_component_scope_lines(&mut lines, &non_op_components, 4);
+                } else if !incident.affected_components.is_empty() {
+                    push_plain_scope_lines(
+                        &mut lines,
+                        "Affected",
+                        &incident.affected_components,
+                        4,
+                    );
                 }
                 if let Some(update) = &incident.latest_update {
-                    let wrapped = textwrap::wrap(&update.body, body_width.saturating_sub(10));
+                    let wrapped = textwrap::wrap(&update.body, body_width.saturating_sub(6));
                     if let Some(first_line) = wrapped.first() {
-                        lines.push(Line::from(Span::styled(
-                            format!("  Update: {first_line}"),
-                            Style::default().fg(Color::DarkGray),
-                        )));
+                        lines.push(Line::from(vec![
+                            Span::styled("  Update: ", status_field_label_style()),
+                            Span::raw(first_line.to_string()),
+                        ]));
                     }
                     for line in wrapped.iter().skip(1).take(1) {
                         lines.push(Line::from(Span::styled(
@@ -747,18 +819,46 @@ fn draw_overall_dashboard(f: &mut Frame, area: Rect, status_app: &super::status_
                     }
                 }
             } else if let Some(component) = non_op_components.first() {
-                let _ = component;
-                if let Some(service_scope) = summarize_component_scope(&non_op_components, 4) {
-                    lines.push(Line::from(Span::styled(
-                        format!("  Services: {service_scope}"),
-                        Style::default().fg(Color::DarkGray),
-                    )));
-                }
+                lines.push(Line::from(vec![
+                    Span::styled("  Issue: ", status_field_label_style()),
+                    Span::styled(
+                        translate_component_name(&component.name),
+                        Style::default().add_modifier(Modifier::BOLD),
+                    ),
+                ]));
+                lines.push(Line::from(vec![
+                    Span::styled("  Status: ", status_field_label_style()),
+                    Span::styled(
+                        component.status.replace('_', " "),
+                        component_status_style(&component.status),
+                    ),
+                    Span::raw("  "),
+                    Span::styled("Ongoing: ", status_field_label_style()),
+                    Span::styled(
+                        provider_last_meaningful_update(entry)
+                            .map(|(_, value)| value)
+                            .unwrap_or_else(|| "recently updated".to_string()),
+                        Style::default().fg(Color::Cyan),
+                    ),
+                ]));
+                push_component_scope_lines(&mut lines, &non_op_components, 4);
             } else if let Some(note) = entry.user_visible_caveat() {
-                lines.push(Line::from(Span::styled(
-                    format!("  Note: {note}"),
-                    Style::default().fg(Color::DarkGray),
-                )));
+                lines.push(Line::from(vec![
+                    Span::styled("  Note: ", status_field_label_style()),
+                    Span::styled(note.to_string(), Style::default().fg(Color::DarkGray)),
+                ]));
+            }
+
+            if incidents.is_empty() && non_op_components.is_empty() {
+                if let Some((label, value)) = provider_last_meaningful_update(entry) {
+                    lines.push(Line::from(vec![
+                        Span::styled(
+                            format!("  {}: ", title_case_status_time_label(label)),
+                            Style::default().fg(Color::DarkGray),
+                        ),
+                        Span::styled(value, Style::default().fg(Color::Cyan)),
+                    ]));
+                }
             }
 
             lines.push(Line::from(""));
@@ -5722,10 +5822,10 @@ mod tests {
         assert!(rendered.contains("Overall Status"));
         assert!(rendered.contains("Attention Now (1)"));
         assert!(rendered.contains("Elevated API errors"));
-        assert!(rendered.contains("Incident:"));
-        assert!(rendered.contains("Status: investigating"));
-        assert!(rendered.contains("Affected: API"));
-        assert!(rendered.contains("Services: API (partial outage)"));
+        assert!(rendered.contains("investigating"));
+        assert!(rendered.contains("Services"));
+        assert!(rendered.contains("API (partial outage)"));
+        assert!(rendered.contains("Update"));
         assert!(!rendered.contains("Signal Quality"));
         assert!(!rendered.contains("Active Issues"));
         assert!(!rendered.contains("need attention •"));
