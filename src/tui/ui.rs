@@ -13,7 +13,7 @@ use ratatui::{
 use super::app::{App, Filters, Focus, Mode, ProviderListItem, SortOrder, Tab};
 use crate::agents::{format_stars, FetchStatus};
 use crate::provider_category::{provider_category, ProviderCategory};
-use crate::status::{ProviderHealth, StatusProvenance};
+use crate::status::{ProviderHealth, StatusProvenance, StatusSourceMethod};
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
@@ -179,7 +179,9 @@ fn format_relative_time_from_str(ts: &str) -> String {
         .unwrap_or_else(|| ts.to_string())
 }
 
-fn provider_last_meaningful_update(entry: &crate::status::ProviderStatus) -> Option<String> {
+fn provider_last_meaningful_update(
+    entry: &crate::status::ProviderStatus,
+) -> Option<(&'static str, String)> {
     let latest = entry
         .incidents
         .iter()
@@ -201,14 +203,17 @@ fn provider_last_meaningful_update(entry: &crate::status::ProviderStatus) -> Opt
         .max_by_key(|(timestamp, _)| *timestamp)
         .map(|(_, raw)| raw.to_string());
 
-    latest
-        .map(|raw| format_relative_time_from_str(&raw))
-        .or_else(|| {
-            entry
-                .last_checked
-                .as_deref()
-                .map(format_relative_time_from_str)
-        })
+    if let Some(raw) = latest {
+        return Some(("latest event", format_relative_time_from_str(&raw)));
+    }
+
+    entry.last_checked.as_deref().map(|raw| {
+        let label = match entry.source_method {
+            Some(StatusSourceMethod::ApiStatusCheck) => "last checked",
+            _ => "source updated",
+        };
+        (label, format_relative_time_from_str(raw))
+    })
 }
 
 fn status_affected_summary(
@@ -363,15 +368,15 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
         } else {
             None
         };
-        let meta_updated = provider_last_meaningful_update(entry)
-            .or_else(|| {
-                entry
-                    .last_checked
-                    .as_deref()
-                    .map(format_relative_time_from_str)
-            })
-            .unwrap_or_else(|| "Unknown".to_string());
-        let caveat = entry.user_visible_caveat().map(str::to_string);
+        let meta_update = provider_last_meaningful_update(entry)
+            .unwrap_or_else(|| ("source updated", "Unknown".to_string()));
+        let service_detail_unavailable =
+            entry.components.is_empty() && provenance != StatusProvenance::Unavailable;
+        let caveat = if service_detail_unavailable {
+            Some("Service details unavailable".to_string())
+        } else {
+            entry.user_visible_caveat().map(str::to_string)
+        };
         let affected_summary = status_affected_summary(entry, &entry.assessment());
         let detail_scroll = status_app.detail_scroll;
         let comp_view = status_app.comp_view;
@@ -425,7 +430,7 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
             status_verdict_copy(health),
             status_health_style(health).add_modifier(Modifier::BOLD),
         )));
-        let mut meta_bits = vec![source_name, format!("updated {meta_updated}")];
+        let mut meta_bits = vec![source_name, format!("{} {}", meta_update.0, meta_update.1)];
         if let Some(hint) = official_hint {
             meta_bits.push(hint);
         }
@@ -486,23 +491,6 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
             }
         }
 
-        body_lines.push(Line::from(Span::styled(
-            if comp_view == CompView::Summary {
-                "Services"
-            } else {
-                "Services (expanded)"
-            },
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )));
-        if let Some(affected_summary) = &affected_summary {
-            body_lines.push(Line::from(Span::styled(
-                format!("Affected right now: {affected_summary}"),
-                Style::default().fg(Color::DarkGray),
-            )));
-        }
-
         let mut component_incident_map: std::collections::HashMap<String, String> =
             std::collections::HashMap::new();
         for incident in &active_incidents {
@@ -538,13 +526,25 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
             })
         });
 
-        let mut collapsed_operational = 0usize;
-        if components.is_empty() {
+        if !components.is_empty() {
             body_lines.push(Line::from(Span::styled(
-                "No service-level detail available.",
-                Style::default().fg(Color::DarkGray),
+                if comp_view == CompView::Summary {
+                    "Services"
+                } else {
+                    "Services (expanded)"
+                },
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
             )));
-        } else {
+            if let Some(affected_summary) = &affected_summary {
+                body_lines.push(Line::from(Span::styled(
+                    format!("Affected right now: {affected_summary}"),
+                    Style::default().fg(Color::DarkGray),
+                )));
+            }
+
+            let mut collapsed_operational = 0usize;
             for component in components {
                 let is_operational = component_status_icon(&component.status) == "●";
                 if is_operational && comp_view == CompView::Summary {
@@ -581,8 +581,8 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     )),
                 ]));
             }
+            body_lines.push(Line::from(""));
         }
-        body_lines.push(Line::from(""));
 
         if !entry.scheduled_maintenances.is_empty() {
             body_lines.push(Line::from(Span::styled(
@@ -5118,6 +5118,36 @@ mod tests {
 
         assert!(rendered.contains("All systems operational"));
         assert!(!rendered.contains("Affected right now:"));
+    }
+
+    #[test]
+    fn summary_only_status_hides_services_section_and_shows_service_note() {
+        let mut entry = sample_provider_status();
+        entry.health = ProviderHealth::Operational;
+        entry.provenance = StatusProvenance::Official;
+        entry.source_method = Some(StatusSourceMethod::ApiStatusCheck);
+        entry.summary = Some("All systems operational".to_string());
+        entry.components.clear();
+        entry.incidents.clear();
+        entry.scheduled_maintenances.clear();
+
+        let mut app = make_status_app(entry);
+        let rendered = render_status_text(&mut app);
+
+        assert!(rendered.contains("Service details unavailable"));
+        assert!(rendered.contains("last checked"));
+        assert!(!rendered.contains("Services (expanded)"));
+        assert!(!rendered.contains("Affected right now:"));
+    }
+
+    #[test]
+    fn incident_driven_status_uses_latest_event_label() {
+        let mut app = make_status_app(sample_provider_status());
+
+        let rendered = render_status_text(&mut app);
+
+        assert!(rendered.contains("latest event"));
+        assert!(!rendered.contains("updated 23"));
     }
 
     #[test]
