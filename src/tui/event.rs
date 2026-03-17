@@ -164,14 +164,14 @@ fn handle_agents_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Opti
             if focus == AgentFocus::List {
                 Some(Message::SelectFirstAgent)
             } else {
-                None
+                Some(Message::ScrollDetailTop)
             }
         }
         KeyCode::Char('G') => {
             if focus == AgentFocus::List {
                 Some(Message::SelectLastAgent)
             } else {
-                None
+                Some(Message::ScrollDetailBottom)
             }
         }
         // Page navigation (Ctrl+d/u or PageDown/PageUp)
@@ -390,10 +390,20 @@ fn handle_status_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Opti
                 Some(Message::ScrollStatusDetailUp)
             }
         }
-        KeyCode::Char('g') if focus == StatusFocus::List => {
-            Some(Message::SelectFirstStatusProvider)
+        KeyCode::Char('g') => {
+            if focus == StatusFocus::List {
+                Some(Message::SelectFirstStatusProvider)
+            } else {
+                Some(Message::ScrollStatusDetailTop)
+            }
         }
-        KeyCode::Char('G') if focus == StatusFocus::List => Some(Message::SelectLastStatusProvider),
+        KeyCode::Char('G') => {
+            if focus == StatusFocus::List {
+                Some(Message::SelectLastStatusProvider)
+            } else {
+                Some(Message::ScrollStatusDetailBottom)
+            }
+        }
         KeyCode::Char('d') if modifiers.contains(KeyModifiers::CONTROL) => {
             if focus == StatusFocus::List {
                 Some(Message::PageDownStatusProvider)

@@ -153,6 +153,8 @@ pub enum Message {
     // Detail panel scrolling
     ScrollDetailUp,
     ScrollDetailDown,
+    ScrollDetailTop,
+    ScrollDetailBottom,
     PageScrollDetailUp,
     PageScrollDetailDown,
     // Search match navigation
@@ -219,6 +221,8 @@ pub enum Message {
     OpenStatusPage,
     ScrollStatusDetailUp,
     ScrollStatusDetailDown,
+    ScrollStatusDetailTop,
+    ScrollStatusDetailBottom,
     PageScrollStatusDetailUp,
     PageScrollStatusDetailDown,
     // Async data messages
@@ -802,6 +806,16 @@ impl App {
                     status_app.detail_scroll = status_app.detail_scroll.saturating_add(1);
                 }
             }
+            Message::ScrollStatusDetailTop => {
+                if let Some(ref mut status_app) = self.status_app {
+                    status_app.detail_scroll = 0;
+                }
+            }
+            Message::ScrollStatusDetailBottom => {
+                if let Some(ref mut status_app) = self.status_app {
+                    status_app.detail_scroll = u16::MAX; // clamped at render time
+                }
+            }
             Message::PageScrollStatusDetailUp => {
                 if let Some(ref mut status_app) = self.status_app {
                     status_app.detail_scroll =
@@ -895,6 +909,16 @@ impl App {
             Message::ScrollDetailDown => {
                 if let Some(ref mut agents_app) = self.agents_app {
                     agents_app.detail_scroll = agents_app.detail_scroll.saturating_add(1);
+                }
+            }
+            Message::ScrollDetailTop => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.detail_scroll = 0;
+                }
+            }
+            Message::ScrollDetailBottom => {
+                if let Some(ref mut agents_app) = self.agents_app {
+                    agents_app.detail_scroll = u16::MAX; // clamped at render time
                 }
             }
             Message::PageScrollDetailUp => {
