@@ -310,6 +310,50 @@ fn provider_health_label(health: ProviderHealth) -> &'static str {
     }
 }
 
+fn sparse_incident_metadata(incident: &crate::status::ActiveIncident) -> bool {
+    incident.created_at.is_none()
+        && incident.updated_at.is_none()
+        && incident.latest_update.is_none()
+        && incident.impact.trim().eq_ignore_ascii_case("none")
+        && incident.affected_components.is_empty()
+}
+
+fn incident_status_value(incident: &crate::status::ActiveIncident) -> String {
+    if sparse_incident_metadata(incident) && incident.status.eq_ignore_ascii_case("investigating") {
+        "reported".to_string()
+    } else {
+        incident.status.clone()
+    }
+}
+
+fn incident_time_value(
+    entry: &crate::status::ProviderStatus,
+    incident: &crate::status::ActiveIncident,
+) -> Option<(&'static str, String)> {
+    if let Some(updated_at) = incident.updated_at.as_deref() {
+        return Some(("Updated", format_relative_time_from_str(updated_at)));
+    }
+
+    if let Some(update) = incident.latest_update.as_ref() {
+        if !update.created_at.trim().is_empty() {
+            return Some(("Updated", format_relative_time_from_str(&update.created_at)));
+        }
+    }
+
+    if let Some(created_at) = incident.created_at.as_deref() {
+        return Some(("Reported", format_relative_time_from_str(created_at)));
+    }
+
+    provider_last_meaningful_update(entry).map(|(label, value)| {
+        let display_label = match label {
+            "source updated" => "Source updated",
+            "last checked" => "Last checked",
+            _ => "Updated",
+        };
+        (display_label, value)
+    })
+}
+
 fn incident_impact_style(impact: &str) -> Style {
     let normalized = impact.to_lowercase();
     if normalized.contains("critical") || normalized.contains("major") {
@@ -828,7 +872,7 @@ fn draw_overall_dashboard(f: &mut Frame, area: Rect, status_app: &super::status_
                 let mut metadata_spans = vec![Span::raw("  ")];
                 metadata_spans.push(Span::styled("Status: ", status_field_label_style()));
                 metadata_spans.push(Span::styled(
-                    incident.status.clone(),
+                    incident_status_value(incident),
                     incident_stage_style(&incident.status),
                 ));
 
@@ -842,17 +886,13 @@ fn draw_overall_dashboard(f: &mut Frame, area: Rect, status_app: &super::status_
                     ));
                 }
 
-                if let Some(ts) = incident
-                    .updated_at
-                    .as_deref()
-                    .or(incident.created_at.as_deref())
-                {
+                if let Some((label, value)) = incident_time_value(entry, incident) {
                     metadata_spans.push(Span::raw("  "));
-                    metadata_spans.push(Span::styled("Ongoing: ", status_field_label_style()));
                     metadata_spans.push(Span::styled(
-                        format_relative_time_from_str(ts),
-                        Style::default().fg(Color::Cyan),
+                        format!("{label}: "),
+                        status_field_label_style(),
                     ));
+                    metadata_spans.push(Span::styled(value, Style::default().fg(Color::Cyan)));
                 }
                 lines.push(Line::from(metadata_spans));
 
