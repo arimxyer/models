@@ -22,9 +22,10 @@ Read these first:
 ## Workflow
 1. Audit the current panel structure.
 2. Identify where the target tab drifts from the guide.
-3. Propose layout changes using the guide's naming and placement rules.
-4. Only then implement.
-5. Add or update regression tests for stable labels/structure when practical.
+3. For Status, map the target provider state to the canonical state matrix before designing.
+4. Propose layout changes using the guide's naming, ownership, and placement rules.
+5. Only then implement.
+6. Add or update regression tests for stable labels/structure when practical.
 
 ## Status-tab note
-For the Status tab specifically, use the guide's fixed section order and explicit timestamp semantics. Do not reintroduce ambiguous labels like `Updated` or abstract container names like `Narrative`.
+For the Status tab specifically, use the guide's fixed section order, fixed Overview slot order, explicit timestamp semantics, and section ownership rules. Do not reintroduce ambiguous labels like `Updated` or abstract container names like `Narrative`.
