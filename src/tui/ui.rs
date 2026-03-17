@@ -370,7 +370,12 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
             None
         };
         let meta_updated = provider_last_meaningful_update(entry)
-            .or_else(|| entry.last_checked.as_deref().map(format_relative_time_from_str))
+            .or_else(|| {
+                entry
+                    .last_checked
+                    .as_deref()
+                    .map(format_relative_time_from_str)
+            })
             .unwrap_or_else(|| "Unknown".to_string());
         let caveat = entry.user_visible_caveat().map(str::to_string);
         let detail_scroll = status_app.detail_scroll;
@@ -460,7 +465,11 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     ),
                 ]));
                 let mut detail_bits = vec![incident.status.clone()];
-                if let Some(updated_at) = incident.updated_at.as_deref().or(incident.created_at.as_deref()) {
+                if let Some(updated_at) = incident
+                    .updated_at
+                    .as_deref()
+                    .or(incident.created_at.as_deref())
+                {
                     detail_bits.push(format_relative_time_from_str(updated_at));
                 }
                 if !incident.affected_components.is_empty() {
@@ -525,9 +534,9 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     _ => 4,
                 }
             };
-            severity(&a.status)
-                .cmp(&severity(&b.status))
-                .then_with(|| translate_component_name(&a.name).cmp(&translate_component_name(&b.name)))
+            severity(&a.status).cmp(&severity(&b.status)).then_with(|| {
+                translate_component_name(&a.name).cmp(&translate_component_name(&b.name))
+            })
         });
 
         let mut collapsed_operational = 0usize;
@@ -568,7 +577,9 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
             if collapsed_operational > 0 {
                 body_lines.push(Line::from(vec![
                     Span::styled("●", Style::default().fg(Color::Green)),
-                    Span::raw(format!(" {collapsed_operational} additional services operational")),
+                    Span::raw(format!(
+                        " {collapsed_operational} additional services operational"
+                    )),
                 ]));
             }
         }
@@ -622,7 +633,10 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
             )));
         }
         if let Some(err) = error_msg {
-            footer_lines.push(Line::from(Span::styled(err, Style::default().fg(Color::Red))));
+            footer_lines.push(Line::from(Span::styled(
+                err,
+                Style::default().fg(Color::Red),
+            )));
         }
 
         let section_chunks = if footer_lines.is_empty() {
