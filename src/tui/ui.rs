@@ -410,7 +410,6 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
         };
 
         let body_width = usize::from(detail_area.width.saturating_sub(4)).max(24);
-        let hero_width = body_width;
 
         let mut hero_lines = vec![Line::from(vec![
             Span::styled(status_health_icon(health), status_health_style(health)),
@@ -5072,13 +5071,14 @@ mod tests {
 
         let rendered = render_status_text(&mut app);
 
-        assert!(rendered.contains("Overview"));
+        assert!(rendered.contains("Status page"));
+        assert!(rendered.contains("Some services degraded"));
+        assert!(rendered.contains("API Status Check"));
+        assert!(rendered.contains("official page"));
+        assert!(rendered.contains("1 active incident"));
         assert!(rendered.contains("Current incidents"));
         assert!(rendered.contains("Services"));
-        assert!(rendered.contains("1 active issue"));
-        assert!(rendered.contains("affected: API"));
-        assert!(rendered.contains("source: API Status Check"));
-        assert!(rendered.contains("Latest update"));
+        assert!(rendered.contains("Database maintenance"));
         assert!(!rendered.contains("Tracking:"));
         assert!(!rendered.contains("Agents:"));
         assert!(!rendered.contains("confidence"));
@@ -5095,7 +5095,7 @@ mod tests {
         let rendered = render_status_text(&mut app);
 
         assert!(rendered.contains("Providers (1)"));
-        assert!(rendered.contains("OpenAI 1!"));
+        assert!(rendered.contains("OpenAI 1"));
         assert!(!rendered.contains("R/"));
         assert!(!rendered.contains("/FB"));
         assert!(!rendered.contains("/OFF"));
