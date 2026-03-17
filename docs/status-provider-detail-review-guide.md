@@ -2,39 +2,43 @@
 
 _Last updated: March 16, 2026_
 
-Reference spec: `.omx/context/status-page-inspired-redesign-20260317T001900Z.md`
+Reference specs:
+- `docs/status-tab-bold-design-brief.md`
+- `.omx/context/status-page-inspired-redesign-20260317T001900Z.md`
 
-## What changed
-- `src/tui/ui.rs` now leads with provider verdict, active issue count, affected surfaces, recent update timing, and compact source/caveat context.
-- `src/status.rs` now exposes `active_incidents`, `user_visible_affected_items`, and `user_visible_caveat` so suppression rules live in the status model instead of the UI.
-- The right-hand detail no longer foregrounds confidence, coverage, and freshness metadata.
+## Review goal
+Validate that the Status tab now reads like a provider status page instead of a dashboard.
 
-## Spec coverage map
-- **Top / primary takeaway** — provider name, overall verdict, active issue badge, affected surfaces, and last meaningful update are grouped into the opening header.
-- **Middle / current events** — the `Active detail` panel shows current incidents first and falls back to scheduled maintenance when no active incident is present.
-- **Bottom / supporting evidence** — the service table remains available for component-level detail, with a collapsed summary mode behind `c`.
-- **Trust language** — reconciliation stays internal; users see short caveats such as `Limited detail available`, `Verify details on the official status page`, or `Status unavailable` instead of internal confidence taxonomy.
+## Acceptance shape
+- **Left rail** — navigation only: status icon, provider name, optional active issue count badge.
+- **Right panel order** — single-column flow: hero -> current incidents -> services/components -> maintenance/history -> caveat footer.
+- **Empty sections** — hidden by default; do not replace them with filler copy.
+- **Trust language** — compact caveat/footer only; no repeated dashboard or meta-trust framing.
 
 ## Manual review checklist
-1. Open the Status tab and confirm the selected provider header reads as: verdict first, then active issue count if any, then affected/update metadata.
-2. Verify fallback or unavailable providers show a short caveat (`Limited detail available` or `Status unavailable`) instead of internal trust taxonomy.
-3. Verify providers with active incidents show incident title, phase, and recent update text in the `Active detail` block.
-4. Verify providers with scheduled maintenance but no active incident show the maintenance item in `Active detail` and a maintenance count in `At a glance`.
-5. Verify providers with no service-level detail show `No service-level detail available.` instead of an empty component table.
-6. Toggle `c` in the Status detail panel and confirm service rows collapse or expand without changing the top-level verdict messaging.
+1. Confirm the provider list stays one-line and navigation-only: no summaries, freshness copy, provenance notes, or helper text in the rail.
+2. Confirm the right-hand detail reads top-to-bottom as a single column rather than an `Overview` + `Current incidents` split dashboard.
+3. Confirm the hero makes the verdict obvious with provider name, verdict, compact source/update metadata, and an optional active-issue badge.
+4. Confirm active incidents, when present, appear immediately after the hero and own the narrative with title, stage, relative update time, affected services, and latest meaningful update text.
+5. Confirm the services/components section reads like a status-page component list rather than a three-column evidence table.
+6. Confirm maintenance/history only appears when it adds signal and sits below services/components.
+7. Confirm caveats are terse and footer-like (`Limited detail available`, `See official status page for full incident history`, or `Status unavailable`) instead of repeated provenance taxonomy.
+8. Confirm duplicated `Affected`, `updated`, `checked`, `refreshed`, and dashboard-summary copy has been materially removed.
+9. Confirm providers with no active incidents do not show filler such as `No active incidents reported.` when the section can simply disappear.
+10. Toggle `c` and confirm service rows collapse/expand without changing the hero or incident narrative.
+
+## Blocking deltas to catch
+If any of the following are still present, the redesign is not done:
+- An `Overview` card or any other dashboard-style summary block in the right panel.
+- A horizontal split between overview and incidents/maintenance near the top of the detail view.
+- Repeated `Affected` or timestamp lines in both the hero and a second summary block.
+- User-facing provenance taxonomy or reconciliation/meta-trust copy outside the caveat footer.
+- Empty-state filler replacing an omitted incidents or maintenance/history section.
 
 ## Code-quality review notes
-- The design intent from the spec is present: the primary takeaway is now in the header, while raw evidence sits below it.
-- The data-quality helpers in `src/status.rs` reduce duplication inside the UI and keep suppression rules testable.
-- Remaining UX debt is limited and non-blocking for this lane:
-  - `At a glance` still repeats the top-level verdict and affected summary already shown in the header.
-  - Scheduled maintenance is contextual rather than a dedicated section when incidents are present.
-  - Source metadata is compact, but fallback providers still get two header rows (`source` plus `source note`).
-
-## Follow-up ideas (non-blocking)
-1. Trim `At a glance` to only fields that do not already appear in the header.
-2. Promote scheduled maintenance to its own small section when both maintenance and incidents are present.
-3. Collapse fallback source context into a single compact row if header density becomes an issue.
+- Keep the normalized assessment model internal; the UI should expose only the verdict, current incident reality, service health, and terse caveats.
+- Prefer deletion/suppression over adding more explanatory layers.
+- Support code in `src/status.rs` or `src/tui/status_app.rs` is acceptable only when it helps the single-column status-page presentation stay concise.
 
 ## Automated verification
 - `mise run fmt`
