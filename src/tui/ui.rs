@@ -297,24 +297,29 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
         )
     };
 
+    let is_list_focused = status_app.focus == StatusFocus::List;
     let mut items = Vec::new();
     for (row_idx, &idx) in status_app.filtered_entries.iter().enumerate() {
         if let Some(entry) = status_app.entries.get(idx) {
             let is_selected = status_app.list_state.selected() == Some(row_idx);
+            let (prefix, text_style) = if is_selected {
+                (
+                    if is_list_focused { "> " } else { "  " },
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                )
+            } else {
+                ("  ", Style::default())
+            };
             let mut spans = vec![
+                Span::styled(prefix, text_style),
                 Span::styled(
                     status_health_icon(entry.health),
                     status_health_style(entry.health),
                 ),
                 Span::raw(" "),
-                Span::styled(
-                    truncate(&entry.display_name, 22),
-                    if is_selected {
-                        Style::default().add_modifier(Modifier::BOLD)
-                    } else {
-                        Style::default()
-                    },
-                ),
+                Span::styled(truncate(&entry.display_name, 20), text_style),
             ];
             let incident_count = entry.active_incidents().len();
             if incident_count > 0 {
@@ -324,11 +329,7 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
                     Style::default().fg(Color::Yellow),
                 ));
             }
-            let mut item = ListItem::new(Line::from(spans));
-            if is_selected {
-                item = item.style(Style::default().add_modifier(Modifier::REVERSED));
-            }
-            items.push(item);
+            items.push(ListItem::new(Line::from(spans)));
         }
     }
 
@@ -419,7 +420,7 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
         components.sort_by(|a, b| {
             let severity = |status: &str| -> u8 {
                 match component_status_icon(status) {
-                    "✕" => 0,
+                    "✗" => 0,
                     "◐" => 1,
                     "◆" => 2,
                     "●" => 3,
