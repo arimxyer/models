@@ -493,30 +493,16 @@ fn draw_overall_dashboard(f: &mut Frame, area: Rect, status_app: &super::status_
     let total = status_app.entries.len();
     let non_op = status_app.non_operational_entries();
     let all_maint = status_app.all_maintenances();
-
-    // Build dynamic constraint list
-    let mut constraints: Vec<Constraint> = vec![Constraint::Length(4)]; // Health gauge
-    if !non_op.is_empty() {
-        constraints.push(Constraint::Length((non_op.len() + 2) as u16)); // Active Issues
-    }
-    constraints.push(Constraint::Min(0)); // Providers grid
-    if !all_maint.is_empty() {
-        constraints.push(Constraint::Length((all_maint.len() + 2) as u16)); // Maintenance
-    }
-
-    let panel_chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints(constraints)
-        .split(area);
-
-    let mut chunk_idx = 0;
     let dark_border = Style::default().fg(Color::DarkGray);
 
-    // ── Health gauge ───────────────────────────────────────────
-    {
-        let health_area = panel_chunks[chunk_idx];
-        chunk_idx += 1;
+    // Top: Health gauge (full width), Bottom: 3-column body
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(4), Constraint::Min(0)])
+        .split(area);
 
+    // ── Health gauge (full width) ──────────────────────────────
+    {
         let ratio = if total > 0 {
             op as f64 / total as f64
         } else {
@@ -527,10 +513,9 @@ fn draw_overall_dashboard(f: &mut Frame, area: Rect, status_app: &super::status_
             .borders(Borders::ALL)
             .border_style(dark_border)
             .title(" Health ");
-        let inner = block.inner(health_area);
-        f.render_widget(block, health_area);
+        let inner = block.inner(rows[0]);
+        f.render_widget(block, rows[0]);
 
-        // Split inner: gauge line + tally line
         let inner_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Length(1), Constraint::Length(1)])
@@ -561,35 +546,66 @@ fn draw_overall_dashboard(f: &mut Frame, area: Rect, status_app: &super::status_
         f.render_widget(Paragraph::new(Line::from(tally_spans)), inner_chunks[1]);
     }
 
-    // ── Active Issues ──────────────────────────────────────────
-    if !non_op.is_empty() {
-        let issues_area = panel_chunks[chunk_idx];
-        chunk_idx += 1;
+    // ── 3-column body: Providers | Active Issues | Maintenance ─
+    // Providers: fixed width based on longest name
+    // Issues: flexible (takes remaining space)
+    // Maintenance: fixed width, only if items exist
+    let max_provider_name = status_app
+        .entries
+        .iter()
+        .map(|e| e.display_name.chars().count())
+        .max()
+        .unwrap_or(8);
+    let provider_col_w = (max_provider_name + 6) as u16; // icon + space + name + padding + border
 
+    let mut col_constraints = vec![
+        Constraint::Length(provider_col_w), // Providers
+        Constraint::Min(0),                 // Active Issues (flexible)
+    ];
+    let maint_col_w: u16 = if !all_maint.is_empty() { 28 } else { 0 };
+    if !all_maint.is_empty() {
+        col_constraints.push(Constraint::Length(maint_col_w));
+    }
+
+    let cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints(col_constraints)
+        .split(rows[1]);
+
+    // ── Column 1: Providers (single column list) ───────────────
+    {
         let mut lines: Vec<Line<'static>> = Vec::new();
-        let inner_w = issues_area.width.saturating_sub(4) as usize;
-        let name_col = non_op
-            .iter()
-            .map(|e| e.display_name.chars().count())
-            .max()
-            .unwrap_or(10)
-            .min(16);
+        for entry in &status_app.entries {
+            lines.push(Line::from(vec![
+                Span::styled(
+                    status_health_icon(entry.health),
+                    status_health_style(entry.health),
+                ),
+                Span::raw(" "),
+                Span::raw(entry.display_name.clone()),
+            ]));
+        }
+
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(dark_border)
+            .title(format!(" Providers ({total}) "));
+        f.render_widget(Paragraph::new(lines).block(block), cols[0]);
+    }
+
+    // ── Column 2: Active Issues (detailed) ─────────────────────
+    {
+        let mut lines: Vec<Line<'static>> = Vec::new();
+
+        if non_op.is_empty() {
+            lines.push(Line::from(Span::styled(
+                "All providers operational",
+                Style::default().fg(Color::Green),
+            )));
+        }
 
         for entry in &non_op {
-            let incident_name = entry
-                .active_incidents()
-                .first()
-                .map(|i| i.name.clone())
-                .unwrap_or_default();
-            let time_str = entry
-                .active_incidents()
-                .first()
-                .and_then(|i| i.updated_at.as_deref().or(i.created_at.as_deref()))
-                .map(format_relative_time_from_str)
-                .unwrap_or_default();
-            let name = truncate(&entry.display_name, name_col);
-            let desc_width = inner_w.saturating_sub(name_col + 8); // icon + spaces + time
-            let desc = truncate(&incident_name, desc_width);
+            // Provider name + health
             lines.push(Line::from(vec![
                 Span::styled(
                     status_health_icon(entry.health),
@@ -597,101 +613,103 @@ fn draw_overall_dashboard(f: &mut Frame, area: Rect, status_app: &super::status_
                 ),
                 Span::raw(" "),
                 Span::styled(
-                    format!("{:<width$}", name, width = name_col),
+                    entry.display_name.clone(),
                     Style::default().add_modifier(Modifier::BOLD),
                 ),
-                Span::raw("  "),
-                Span::raw(desc),
-                Span::styled(
-                    format!("  {time_str}"),
-                    Style::default().fg(Color::DarkGray),
-                ),
             ]));
-        }
 
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(dark_border)
-            .title(format!(" Active Issues ({}) ", non_op.len()));
-        let paragraph = Paragraph::new(lines).block(block);
-        f.render_widget(paragraph, issues_area);
-    }
-
-    // ── Providers grid ─────────────────────────────────────────
-    {
-        let grid_area = panel_chunks[chunk_idx];
-        chunk_idx += 1;
-
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(dark_border)
-            .title(format!(" Providers ({total}) "));
-        let inner = block.inner(grid_area);
-        f.render_widget(block, grid_area);
-
-        // Only operational providers in the grid
-        let operational: Vec<_> = status_app
-            .entries
-            .iter()
-            .filter(|e| e.health == ProviderHealth::Operational)
-            .collect();
-
-        if !operational.is_empty() {
-            let max_name = operational
-                .iter()
-                .map(|e| e.display_name.chars().count())
-                .max()
-                .unwrap_or(8);
-            let col_width = (max_name + 4).max(12); // icon + space + name + gap
-            let num_cols = (inner.width as usize / col_width).max(1);
-
-            let mut lines: Vec<Line<'static>> = Vec::new();
-            for row_entries in operational.chunks(num_cols) {
-                let mut spans: Vec<Span<'static>> = Vec::new();
-                for entry in row_entries {
-                    spans.push(Span::styled("●", Style::default().fg(Color::Green)));
-                    spans.push(Span::raw(format!(
-                        " {:<width$}",
-                        truncate(&entry.display_name, col_width - 3),
-                        width = col_width - 2
-                    )));
-                }
-                lines.push(Line::from(spans));
+            // Incident details
+            let incidents = entry.active_incidents();
+            if incidents.is_empty() {
+                lines.push(Line::from(Span::styled(
+                    format!("  {}", status_verdict_copy(entry.health)),
+                    Style::default().fg(Color::DarkGray),
+                )));
             }
-            f.render_widget(Paragraph::new(lines), inner);
+            for incident in &incidents {
+                let mut detail_bits = vec![incident.status.clone()];
+                if let Some(ts) = incident
+                    .updated_at
+                    .as_deref()
+                    .or(incident.created_at.as_deref())
+                {
+                    detail_bits.push(format_relative_time_from_str(ts));
+                }
+                lines.push(Line::from(vec![
+                    Span::styled("  ◉ ", incident_stage_style(&incident.status)),
+                    Span::raw(incident.name.clone()),
+                ]));
+                lines.push(Line::from(Span::styled(
+                    format!("    {}", detail_bits.join(" • ")),
+                    Style::default().fg(Color::DarkGray),
+                )));
+                // Show first line of latest update if available
+                if let Some(update) = &incident.latest_update {
+                    let body_w = usize::from(cols[1].width.saturating_sub(8)).max(20);
+                    if let Some(first_line) = textwrap::wrap(&update.body, body_w).first() {
+                        lines.push(Line::from(Span::styled(
+                            format!("    {first_line}"),
+                            Style::default().fg(Color::DarkGray),
+                        )));
+                    }
+                }
+            }
+            lines.push(Line::from("")); // spacing between providers
         }
+
+        let issue_title = if non_op.is_empty() {
+            " Active Issues ".to_string()
+        } else {
+            format!(" Active Issues ({}) ", non_op.len())
+        };
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(dark_border)
+            .title(issue_title);
+        f.render_widget(
+            Paragraph::new(lines)
+                .block(block)
+                .wrap(Wrap { trim: false }),
+            cols[1],
+        );
     }
 
-    // ── Maintenance ────────────────────────────────────────────
+    // ── Column 3: Maintenance (conditional) ────────────────────
     if !all_maint.is_empty() {
-        let maint_area = panel_chunks[chunk_idx];
         let mut lines: Vec<Line<'static>> = Vec::new();
         for (provider_name, maint) in &all_maint {
-            let time_str = maint
-                .scheduled_for
-                .as_deref()
-                .map(format_relative_time_from_str)
-                .unwrap_or_default();
             lines.push(Line::from(vec![
                 Span::styled("◆ ", Style::default().fg(Color::Blue)),
                 Span::styled(
                     (*provider_name).to_string(),
                     Style::default().add_modifier(Modifier::BOLD),
                 ),
-                Span::raw("  "),
-                Span::raw(truncate(&maint.name, 30)),
-                Span::styled(
-                    format!("  {time_str}"),
-                    Style::default().fg(Color::DarkGray),
-                ),
             ]));
+            let time_str = maint
+                .scheduled_for
+                .as_deref()
+                .map(format_relative_time_from_str)
+                .unwrap_or_default();
+            lines.push(Line::from(Span::styled(
+                format!("  {}", truncate(&maint.name, 22)),
+                Style::default().fg(Color::DarkGray),
+            )));
+            lines.push(Line::from(Span::styled(
+                format!("  {time_str}"),
+                Style::default().fg(Color::DarkGray),
+            )));
         }
 
         let block = Block::default()
             .borders(Borders::ALL)
             .border_style(dark_border)
             .title(format!(" Maintenance ({}) ", all_maint.len()));
-        f.render_widget(Paragraph::new(lines).block(block), maint_area);
+        f.render_widget(
+            Paragraph::new(lines)
+                .block(block)
+                .wrap(Wrap { trim: false }),
+            cols[2],
+        );
     }
 }
 
