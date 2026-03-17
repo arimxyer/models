@@ -36,13 +36,16 @@ pub fn handle_events(app: &App) -> Result<Option<Message>> {
 }
 
 fn handle_normal_mode(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Option<Message> {
-    // Check for picker mode (intercepts before normal handling)
+    // Check for modal popups (intercept before global keys to prevent e.g. 'q' quitting)
     if app.current_tab == super::app::Tab::Agents {
         if let Some(ref agents_app) = app.agents_app {
             if agents_app.show_picker {
                 return handle_picker_keys(code);
             }
         }
+    }
+    if app.current_tab == super::app::Tab::Benchmarks && app.benchmarks_app.show_sort_picker {
+        return handle_sort_picker_keys(code);
     }
 
     // Global keys (work on any tab)
@@ -242,9 +245,7 @@ fn handle_sort_picker_keys(code: KeyCode) -> Option<Message> {
 fn handle_benchmarks_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Option<Message> {
     use super::benchmarks_app::BenchmarkFocus;
 
-    if app.benchmarks_app.show_sort_picker {
-        return handle_sort_picker_keys(code);
-    }
+    // Sort picker is now intercepted in handle_normal_mode before global keys
 
     let focus = app.benchmarks_app.focus;
 

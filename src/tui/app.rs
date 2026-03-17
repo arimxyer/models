@@ -704,13 +704,9 @@ impl App {
                 self.help_scroll = self.help_scroll.saturating_sub(1);
             }
             Message::ScrollHelpDown => {
-                // Help content lines, cap scroll to prevent scrolling past content
-                const HELP_LINES: u16 = 49;
-                const MIN_VISIBLE: u16 = 5;
-                let max_scroll = HELP_LINES.saturating_sub(MIN_VISIBLE);
-                if self.help_scroll < max_scroll {
-                    self.help_scroll = self.help_scroll.saturating_add(1);
-                }
+                // Render-time clamping in draw_help_popup() prevents scrolling
+                // past content, so we just increment here.
+                self.help_scroll = self.help_scroll.saturating_add(1);
             }
             Message::NextTab => {
                 self.current_tab = self.current_tab.next();
@@ -1171,6 +1167,7 @@ impl App {
             }
             Message::BenchmarkDataReceived(entries) => {
                 self.selections.clear();
+                self.benchmarks_app.loading = false;
                 self.benchmark_store = BenchmarkStore::from_entries(entries);
                 self.open_weights_map = crate::model_traits::build_open_weights_map(
                     &self.providers,
@@ -1184,7 +1181,8 @@ impl App {
                     .rebuild(&self.benchmark_store, &self.open_weights_map);
             }
             Message::BenchmarkFetchFailed => {
-                // Silently keep existing data
+                self.benchmarks_app.loading = false;
+                self.set_status("Failed to fetch benchmark data".to_string());
             }
             Message::StatusDataReceived(entries) => {
                 if let Some(ref mut status_app) = self.status_app {

@@ -913,7 +913,7 @@ fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
         )
     } else if filter_indicator.is_empty() {
         format!(
-            " {} ({}) [{}]{} ",
+            " {} ({}) [/{}]{} ",
             provider_label,
             models.len(),
             app.search_query,
@@ -921,7 +921,7 @@ fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
         )
     } else {
         format!(
-            " {} ({}) [{}] [{}]{} ",
+            " {} ({}) [/{}] [{}]{} ",
             provider_label,
             models.len(),
             app.search_query,
@@ -2254,22 +2254,26 @@ fn draw_benchmark_list_compact(f: &mut Frame, area: Rect, app: &mut App) {
         }
     };
 
+    let loading_suffix = if bench_app.loading { " loading..." } else { "" };
+
     let title = if bench_app.search_query.is_empty() {
         format!(
-            " Models ({}){}{}{} ",
+            " Models ({}){}{}{}{} ",
             bench_app.filtered_indices.len(),
             source_indicator,
             reasoning_indicator,
-            sort_indicator
+            sort_indicator,
+            loading_suffix
         )
     } else {
         format!(
-            " Models ({}) [/{}]{}{}{} ",
+            " Models ({}) [/{}]{}{}{}{} ",
             bench_app.filtered_indices.len(),
             bench_app.search_query,
             source_indicator,
             reasoning_indicator,
-            sort_indicator
+            sort_indicator,
+            loading_suffix
         )
     };
 
@@ -2409,25 +2413,28 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
     };
 
     let creator_label = bench_app.selected_creator_name().unwrap_or("Benchmarks");
+    let loading_suffix = if bench_app.loading { " loading..." } else { "" };
 
     let title = if bench_app.search_query.is_empty() {
         format!(
-            " {} ({}){}{}{} ",
+            " {} ({}){}{}{}{} ",
             creator_label,
             bench_app.filtered_indices.len(),
             source_indicator,
             reasoning_indicator,
-            sort_indicator
+            sort_indicator,
+            loading_suffix
         )
     } else {
         format!(
-            " {} ({}) [/{}]{}{}{} ",
+            " {} ({}) [/{}]{}{}{}{} ",
             creator_label,
             bench_app.filtered_indices.len(),
             bench_app.search_query,
             source_indicator,
             reasoning_indicator,
-            sort_indicator
+            sort_indicator,
+            loading_suffix
         )
     };
 
@@ -3170,6 +3177,8 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
                     if app.selections.len() >= 2 {
                         use super::benchmarks_app::{BenchmarkFocus, BottomView};
                         let mut spans = vec![
+                            Span::styled(" q ", Style::default().fg(Color::Yellow)),
+                            Span::raw("quit  "),
                             Span::styled(" h/l ", Style::default().fg(Color::Yellow)),
                             Span::raw("focus  "),
                             Span::styled(" t ", Style::default().fg(Color::Yellow)),
@@ -3223,6 +3232,8 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
                         Line::from(spans)
                     } else {
                         Line::from(vec![
+                            Span::styled(" q ", Style::default().fg(Color::Yellow)),
+                            Span::raw("quit  "),
                             Span::styled(" 1 ", Style::default().fg(Color::Yellow)),
                             Span::raw("intel  "),
                             Span::styled(" 2 ", Style::default().fg(Color::Yellow)),
@@ -3299,10 +3310,16 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
 }
 
 fn truncate(s: &str, max_len: usize) -> String {
-    if s.len() <= max_len {
+    // Use char count as a proxy — safe for UTF-8 boundaries.
+    // Most model/provider names are ASCII; CJK chars are ~2 display-width
+    // but char-based truncation is still safe (no panics).
+    let char_count: usize = s.chars().count();
+    if char_count <= max_len {
         s.to_string()
     } else {
-        format!("{}...", &s[..max_len.saturating_sub(3)])
+        let target = max_len.saturating_sub(3);
+        let truncated: String = s.chars().take(target).collect();
+        format!("{truncated}...")
     }
 }
 

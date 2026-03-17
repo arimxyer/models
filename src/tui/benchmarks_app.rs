@@ -499,6 +499,7 @@ pub struct BenchmarksApp {
     pub radar_preset: RadarPreset,
     pub show_sort_picker: bool,
     pub sort_picker_selected: usize,
+    pub loading: bool,
 }
 
 impl BenchmarksApp {
@@ -533,6 +534,7 @@ impl BenchmarksApp {
             radar_preset: RadarPreset::default(),
             show_sort_picker: false,
             sort_picker_selected: 0,
+            loading: true,
         };
 
         app.build_creator_list(store);
