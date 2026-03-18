@@ -217,7 +217,7 @@ pub fn draw_radar(f: &mut Frame, area: Rect, app: &super::app::App) {
 
     for (sel_idx, &store_idx) in app.selections.iter().enumerate() {
         if let Some(entry) = entries.get(store_idx) {
-            let color = super::ui::compare_colors(sel_idx);
+            let color = super::ui_benchmarks::compare_colors(sel_idx);
 
             let raw_values: Vec<Option<f64>> = axes.iter().map(|ax| (ax.extract)(entry)).collect();
 

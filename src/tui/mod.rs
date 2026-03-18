@@ -17,6 +17,11 @@ pub mod markdown;
 pub mod radar;
 pub mod status_app;
 pub mod ui;
+mod ui_agents;
+mod ui_benchmarks;
+mod ui_compare;
+mod ui_models;
+mod ui_status;
 
 use crate::agents::{
     load_agents, AsyncGitHubClient, ConditionalFetchResult, GitHubCache, GitHubData,
@@ -25,7 +30,7 @@ use crate::benchmark_fetch::{BenchmarkFetchResult, BenchmarkFetcher};
 use crate::benchmarks::BenchmarkStore;
 use crate::config::Config;
 use crate::data::ProvidersMap;
-use crate::status_fetch::{StatusFetchResult, StatusFetcher};
+use crate::status::{StatusFetchResult, StatusFetcher};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 

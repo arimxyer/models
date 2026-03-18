@@ -9,7 +9,6 @@ mod formatting;
 mod model_traits;
 mod provider_category;
 mod status;
-mod status_fetch;
 mod tui;
 
 use anyhow::Result;
