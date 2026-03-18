@@ -1432,12 +1432,12 @@
     "math_500": null,
     "aime": null,
     "aime_25": null,
-    "output_tps": null,
-    "ttft": null,
-    "ttfat": null,
-    "price_input": 0,
-    "price_output": 0,
-    "price_blended": 0
+    "output_tps": 196.39,
+    "ttft": 0.46,
+    "ttfat": 10.644,
+    "price_input": 0.15,
+    "price_output": 0.6,
+    "price_blended": 0.263
   },
   {
     "id": "70152cb0-fb36-4732-a925-89ef40994be1",
@@ -1642,12 +1642,12 @@
     "math_500": null,
     "aime": null,
     "aime_25": null,
-    "output_tps": null,
-    "ttft": null,
-    "ttfat": null,
-    "price_input": 0,
-    "price_output": 0,
-    "price_blended": 0
+    "output_tps": 158.762,
+    "ttft": 0.449,
+    "ttfat": 0.449,
+    "price_input": 0.15,
+    "price_output": 0.6,
+    "price_blended": 0.263
   },
   {
     "id": "ce819310-af7c-49d3-9a02-6845111e1788",
