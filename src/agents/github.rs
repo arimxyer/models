@@ -406,13 +406,7 @@ impl AsyncGitHubClient {
 
 /// Format star count for display (e.g., 12345 -> "12.3k")
 pub fn format_stars(stars: u64) -> String {
-    if stars >= 1_000_000 {
-        format!("{:.1}m", stars as f64 / 1_000_000.0)
-    } else if stars >= 1_000 {
-        format!("{:.1}k", stars as f64 / 1_000.0)
-    } else {
-        stars.to_string()
-    }
+    crate::formatting::format_stars(stars)
 }
 
 #[cfg(test)]

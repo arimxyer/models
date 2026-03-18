@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use chrono::{DateTime, Duration, Utc};
+use chrono::{Duration, Utc};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ProviderHealth {
@@ -1110,7 +1110,7 @@ impl ProviderStatus {
         let Some(last_checked) = self.source_updated_at.as_deref() else {
             return StatusFreshness::Unknown;
         };
-        let Some(parsed) = parse_status_timestamp(last_checked) else {
+        let Some(parsed) = crate::formatting::parse_date(last_checked) else {
             return StatusFreshness::Unknown;
         };
         let age = Utc::now().signed_duration_since(parsed);
@@ -1349,17 +1349,6 @@ fn normalize_surface(text: &str) -> AffectedSurface {
     } else {
         AffectedSurface::Unknown
     }
-}
-
-fn parse_status_timestamp(value: &str) -> Option<DateTime<Utc>> {
-    if let Ok(dt) = DateTime::parse_from_rfc3339(value) {
-        return Some(dt.with_timezone(&Utc));
-    }
-
-    chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d")
-        .ok()
-        .and_then(|date| date.and_hms_opt(0, 0, 0))
-        .map(|dt| DateTime::from_naive_utc_and_offset(dt, Utc))
 }
 
 impl ActiveIncident {

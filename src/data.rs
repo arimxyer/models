@@ -1,3 +1,5 @@
+use crate::formatting;
+
 use serde::Deserialize;
 use std::collections::HashMap;
 
@@ -95,24 +97,24 @@ impl Model {
         self.limit
             .as_ref()
             .and_then(|l| l.context)
-            .map(format_tokens)
-            .unwrap_or_else(|| "-".to_string())
+            .map(formatting::format_tokens)
+            .unwrap_or_else(|| formatting::EM_DASH.to_string())
     }
 
     pub fn output_str(&self) -> String {
         self.limit
             .as_ref()
             .and_then(|l| l.output)
-            .map(format_tokens)
-            .unwrap_or_else(|| "-".to_string())
+            .map(formatting::format_tokens)
+            .unwrap_or_else(|| formatting::EM_DASH.to_string())
     }
 
     pub fn input_limit_str(&self) -> String {
         self.limit
             .as_ref()
             .and_then(|l| l.input)
-            .map(format_tokens)
-            .unwrap_or_else(|| "-".to_string())
+            .map(formatting::format_tokens)
+            .unwrap_or_else(|| formatting::EM_DASH.to_string())
     }
 
     pub fn is_free(&self) -> bool {
@@ -128,14 +130,14 @@ impl Model {
                 let input = c
                     .input
                     .map(|v| format!("${}", v))
-                    .unwrap_or("-".to_string());
+                    .unwrap_or(formatting::EM_DASH.to_string());
                 let output = c
                     .output
                     .map(|v| format!("${}", v))
-                    .unwrap_or("-".to_string());
+                    .unwrap_or(formatting::EM_DASH.to_string());
                 format!("{}/{}", input, output)
             }
-            None => "-/-".to_string(),
+            None => format!("{}/{}", formatting::EM_DASH, formatting::EM_DASH),
         }
     }
 
@@ -165,7 +167,7 @@ impl Model {
             caps.push("temperature");
         }
         if caps.is_empty() {
-            "-".to_string()
+            formatting::EM_DASH.to_string()
         } else {
             caps.join(", ")
         }
@@ -188,26 +190,6 @@ impl Model {
             }
             None => "text -> text".to_string(),
         }
-    }
-}
-
-fn format_tokens(n: u64) -> String {
-    if n >= 1_000_000 {
-        let m = n as f64 / 1_000_000.0;
-        if m.fract() == 0.0 {
-            format!("{}M", m as u64)
-        } else {
-            format!("{:.1}M", m)
-        }
-    } else if n >= 1_000 {
-        let k = n as f64 / 1_000.0;
-        if k.fract() == 0.0 {
-            format!("{}k", k as u64)
-        } else {
-            format!("{:.1}k", k)
-        }
-    } else {
-        n.to_string()
     }
 }
 

@@ -8,11 +8,81 @@ use ratatui::{
     },
     Frame,
 };
+use unicode_width::UnicodeWidthStr;
 
 use super::app::{App, Filters, Focus, Mode, ProviderListItem, SortOrder, Tab};
 use crate::agents::{format_stars, FetchStatus};
+use crate::formatting::{format_tokens, EM_DASH};
 use crate::provider_category::{provider_category, ProviderCategory};
 use crate::status::{ProviderHealth, StatusProvenance, StatusSourceMethod};
+
+/// Border style: Cyan when focused, DarkGray when not.
+fn focus_border(focused: bool) -> Style {
+    Style::default().fg(if focused {
+        Color::Cyan
+    } else {
+        Color::DarkGray
+    })
+}
+
+/// Caret prefix for list items: "> " when focused, "  " when not.
+fn caret(focused: bool) -> &'static str {
+    if focused {
+        "> "
+    } else {
+        "  "
+    }
+}
+
+/// Selection style: Yellow + BOLD when selected, default otherwise.
+fn selection_style(selected: bool) -> Style {
+    if selected {
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default()
+    }
+}
+
+/// Build a help-popup line: 16-char padded key in Yellow + description.
+fn help_line<'a>(key: &'a str, desc: &'a str) -> Line<'a> {
+    Line::from(vec![
+        Span::styled(format!("  {:<14}", key), Style::default().fg(Color::Yellow)),
+        Span::raw(desc),
+    ])
+}
+
+/// Render a vertical scrollbar if content exceeds viewport.
+/// `inside_block`: true when the area has `Borders::ALL` (applies vertical margin).
+fn render_scrollbar(
+    f: &mut Frame,
+    area: Rect,
+    content_len: usize,
+    position: usize,
+    viewport_len: usize,
+    inside_block: bool,
+) {
+    if content_len <= viewport_len {
+        return;
+    }
+    let scroll_area = if inside_block {
+        area.inner(Margin {
+            vertical: 1,
+            horizontal: 0,
+        })
+    } else {
+        area
+    };
+    let mut state = ScrollbarState::new(content_len)
+        .position(position)
+        .viewport_content_length(viewport_len);
+    f.render_stateful_widget(
+        Scrollbar::new(ScrollbarOrientation::VerticalRight),
+        scroll_area,
+        &mut state,
+    );
+}
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
@@ -573,12 +643,7 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
             let display_idx = row_idx + 1; // offset for Overall
             let is_selected = status_app.list_state.selected() == Some(display_idx);
             let (prefix, text_style) = if is_selected {
-                (
-                    if is_list_focused { "> " } else { "  " },
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD),
-                )
+                (caret(is_list_focused), selection_style(true))
             } else {
                 ("  ", Style::default())
             };
@@ -1108,11 +1173,7 @@ fn render_overall_panel(
     scroll: u16,
     focused: bool,
 ) {
-    let border_style = if focused {
-        Style::default().fg(Color::Cyan)
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
+    let border_style = focus_border(focused);
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(border_style)
@@ -1129,19 +1190,14 @@ fn render_overall_panel(
         .scroll((scroll_pos, 0));
     f.render_widget(paragraph, area);
 
-    if visual_total > visible_height {
-        let mut scrollbar_state = ScrollbarState::new(visual_total as usize)
-            .position(scroll_pos as usize)
-            .viewport_content_length(visible_height as usize);
-        f.render_stateful_widget(
-            Scrollbar::new(ScrollbarOrientation::VerticalRight),
-            area.inner(Margin {
-                vertical: 1,
-                horizontal: 0,
-            }),
-            &mut scrollbar_state,
-        );
-    }
+    render_scrollbar(
+        f,
+        area,
+        visual_total as usize,
+        scroll_pos as usize,
+        visible_height as usize,
+        true,
+    );
 }
 
 fn draw_overall_dashboard(
@@ -1665,19 +1721,14 @@ fn draw_provider_status_detail(
             .scroll((clamped_scroll, 0));
         f.render_widget(paragraph, incidents_area);
 
-        if content_len > visible_h {
-            let mut scrollbar_state = ScrollbarState::new(content_len)
-                .position(clamped_scroll as usize)
-                .viewport_content_length(visible_h);
-            f.render_stateful_widget(
-                Scrollbar::new(ScrollbarOrientation::VerticalRight),
-                incidents_area.inner(Margin {
-                    vertical: 1,
-                    horizontal: 0,
-                }),
-                &mut scrollbar_state,
-            );
-        }
+        render_scrollbar(
+            f,
+            incidents_area,
+            content_len,
+            clamped_scroll as usize,
+            visible_h,
+            true,
+        );
     }
 
     // ── Maintenance ────────────────────────────────────────────
@@ -1757,16 +1808,16 @@ fn provider_detail_lines(app: &App) -> Vec<Line<'static>> {
         ]),
         Line::from(vec![
             Span::styled("Docs: ", Style::default().fg(Color::DarkGray)),
-            Span::raw(provider.doc.clone().unwrap_or_else(|| "-".into())),
+            Span::raw(provider.doc.clone().unwrap_or_else(|| EM_DASH.into())),
         ]),
         Line::from(vec![
             Span::styled("API:  ", Style::default().fg(Color::DarkGray)),
-            Span::raw(provider.api.clone().unwrap_or_else(|| "-".into())),
+            Span::raw(provider.api.clone().unwrap_or_else(|| EM_DASH.into())),
         ]),
         Line::from(vec![
             Span::styled("Env:  ", Style::default().fg(Color::DarkGray)),
             Span::raw(if provider.env.is_empty() {
-                "-".to_string()
+                EM_DASH.to_string()
             } else {
                 provider.env.join(", ")
             }),
@@ -1830,11 +1881,7 @@ fn draw_right_panel(f: &mut Frame, area: Rect, app: &App) {
 
 fn draw_providers(f: &mut Frame, area: Rect, app: &mut App) {
     let is_focused = app.focus == Focus::Providers;
-    let border_style = if is_focused {
-        Style::default().fg(Color::Cyan)
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
+    let border_style = focus_border(is_focused);
 
     let outer_block = Block::default()
         .borders(Borders::ALL)
@@ -1918,7 +1965,7 @@ fn draw_providers(f: &mut Frame, area: Rect, app: &mut App) {
         }
     }
 
-    let caret = if is_focused { "> " } else { "  " };
+    let caret = caret(is_focused);
     let list = List::new(items)
         .highlight_style(
             Style::default()
@@ -1932,11 +1979,7 @@ fn draw_providers(f: &mut Frame, area: Rect, app: &mut App) {
 
 fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
     let is_focused = app.focus == Focus::Models;
-    let border_style = if is_focused {
-        Style::default().fg(Color::Cyan)
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
+    let border_style = focus_border(is_focused);
 
     let models = app.filtered_models();
 
@@ -2033,7 +2076,7 @@ fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
     };
 
     // Caret prefix for focused panel
-    let caret = if is_focused { "> " } else { "  " };
+    let caret = caret(is_focused);
 
     // Build header spans (leading spaces to align with caret)
     let mut header_spans: Vec<Span> = vec![
@@ -2176,11 +2219,7 @@ fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut App) {
     };
 
     let is_focused = agents_app.focus == AgentFocus::List;
-    let border_style = if is_focused {
-        Style::default().fg(Color::Cyan)
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
+    let border_style = focus_border(is_focused);
 
     // Build title with count, filter, and sort indicators
     let sort_indicator = format!(" \u{2193}{}", agents_app.sort_order.label());
@@ -2289,7 +2328,7 @@ fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut App) {
             } else if entry.agent.categories.contains(&"ide".to_string()) {
                 "IDE"
             } else {
-                "-"
+                EM_DASH
             };
 
             // Status indicator: colored dot for installed agents, dash for others
@@ -2307,16 +2346,11 @@ fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut App) {
                     FetchStatus::Failed(_) => ("\u{2717}", Style::default().fg(Color::Red)), // ✗ red
                 }
             } else {
-                ("-", Style::default().fg(Color::DarkGray))
+                (EM_DASH, Style::default().fg(Color::DarkGray))
             };
 
             let (prefix, text_style) = if is_selected {
-                (
-                    if is_focused { "> " } else { "  " },
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD),
-                )
+                (caret(is_focused), selection_style(true))
             } else {
                 ("  ", Style::default())
             };
@@ -2357,11 +2391,7 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &mut App) {
         None => return,
     };
 
-    let border_style = if is_focused {
-        Style::default().fg(Color::Cyan)
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
+    let border_style = focus_border(is_focused);
 
     let mut match_line_indices: Vec<u16> = Vec::new();
 
@@ -2372,7 +2402,7 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &mut App) {
 
         // Header: Name + Version
         let name = entry.agent.name.clone();
-        let version_str = entry.github.latest_version().unwrap_or("-").to_string();
+        let version_str = entry.github.latest_version().unwrap_or(EM_DASH).to_string();
         detail_lines.push(Line::from(vec![
             Span::styled(
                 name,
@@ -2641,19 +2671,14 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &mut App) {
     f.render_widget(paragraph, area);
 
     // Scrollbar for detail panel
-    if visual_total > visible_height {
-        let mut scrollbar_state = ScrollbarState::new(visual_total as usize)
-            .position(scroll_pos as usize)
-            .viewport_content_length(visible_height as usize);
-        f.render_stateful_widget(
-            Scrollbar::new(ScrollbarOrientation::VerticalRight),
-            area.inner(Margin {
-                vertical: 1,
-                horizontal: 0,
-            }),
-            &mut scrollbar_state,
-        );
-    }
+    render_scrollbar(
+        f,
+        area,
+        visual_total as usize,
+        scroll_pos as usize,
+        visible_height as usize,
+        true,
+    );
 
     // Update match state and detail height (after lines are consumed)
     app.last_detail_height = visible_height;
@@ -3139,11 +3164,7 @@ fn draw_benchmark_creators(f: &mut Frame, area: Rect, app: &mut App) {
     let store = &app.benchmark_store;
 
     let is_focused = bench_app.focus == BenchmarkFocus::Creators;
-    let border_style = if is_focused {
-        Style::default().fg(Color::Cyan)
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
+    let border_style = focus_border(is_focused);
 
     let source_indicator = match bench_app.source_filter {
         super::benchmarks_app::SourceFilter::All => String::new(),
@@ -3265,7 +3286,7 @@ fn draw_benchmark_creators(f: &mut Frame, area: Rect, app: &mut App) {
         })
         .collect();
 
-    let caret = if is_focused { "> " } else { "  " };
+    let caret = caret(is_focused);
     let list = List::new(items)
         .highlight_style(
             Style::default()
@@ -3301,11 +3322,7 @@ fn draw_benchmark_list_compact(f: &mut Frame, area: Rect, app: &mut App) {
     let store = &app.benchmark_store;
 
     let is_focused = bench_app.focus == BenchmarkFocus::List;
-    let border_style = if is_focused {
-        Style::default().fg(Color::Cyan)
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
+    let border_style = focus_border(is_focused);
 
     let sort_dir = if bench_app.sort_descending {
         "\u{2193}"
@@ -3358,7 +3375,7 @@ fn draw_benchmark_list_compact(f: &mut Frame, area: Rect, app: &mut App) {
     let inner_area = outer_block.inner(area);
     f.render_widget(outer_block, area);
 
-    let caret = if is_focused { "> " } else { "  " };
+    let caret = caret(is_focused);
     let entries = store.entries();
 
     // Extra columns: marker(2) + caret(2) + reasoning(3) + source(2) + optional region/type
@@ -3459,11 +3476,7 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
     let store = &app.benchmark_store;
 
     let is_focused = bench_app.focus == BenchmarkFocus::List;
-    let border_style = if is_focused {
-        Style::default().fg(Color::Cyan)
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
+    let border_style = focus_border(is_focused);
 
     let sort_dir = if bench_app.sort_descending {
         "\u{2193}"
@@ -3541,7 +3554,7 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
         .max(10);
 
     // Caret prefix for focused panel
-    let caret = if is_focused { "> " } else { "  " };
+    let caret = caret(is_focused);
 
     let header_style = Style::default()
         .fg(Color::Yellow)
@@ -3758,7 +3771,7 @@ fn draw_benchmark_detail_content(
     };
     let ctx_str = entry
         .context_window
-        .map(fmt_tokens)
+        .map(format_tokens)
         .unwrap_or_else(|| em.to_string());
     push_meta_row(
         &mut lines,
@@ -3769,7 +3782,7 @@ fn draw_benchmark_detail_content(
     // Max output
     let out_str = entry
         .max_output
-        .map(fmt_tokens)
+        .map(format_tokens)
         .unwrap_or_else(|| em.to_string());
     push_meta_row(
         &mut lines,
@@ -4026,18 +4039,6 @@ fn push_detail_row(
     }
 
     lines.push(Line::from(spans));
-}
-
-/// Format a 0-100 index value
-/// Format a token count as "128k" or "1M" / "2M" for million-scale values.
-fn fmt_tokens(value: u64) -> String {
-    if value >= 1_000_000 && value.is_multiple_of(1_000_000) {
-        format!("{}M", value / 1_000_000)
-    } else if value >= 1_000_000 {
-        format!("{:.1}M", value as f64 / 1_000_000.0)
-    } else {
-        format!("{}k", value / 1_000)
-    }
 }
 
 fn fmt_idx(value: Option<f64>) -> String {
@@ -4419,74 +4420,35 @@ fn draw_help_popup(f: &mut Frame, scroll: u16, current_tab: Tab) {
     // Clear the area behind the popup
     f.render_widget(Clear, area);
 
+    let help_section = |title: &'static str| -> Line<'static> {
+        Line::from(Span::styled(
+            title,
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ))
+    };
+
     let mut help_text = vec![
         // Common: Navigation
-        Line::from(Span::styled(
-            "Navigation",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )),
-        Line::from(vec![
-            Span::styled("  j/↓           ", Style::default().fg(Color::Yellow)),
-            Span::raw("Move down"),
-        ]),
-        Line::from(vec![
-            Span::styled("  k/↑           ", Style::default().fg(Color::Yellow)),
-            Span::raw("Move up"),
-        ]),
-        Line::from(vec![
-            Span::styled("  g             ", Style::default().fg(Color::Yellow)),
-            Span::raw("First item"),
-        ]),
-        Line::from(vec![
-            Span::styled("  G             ", Style::default().fg(Color::Yellow)),
-            Span::raw("Last item"),
-        ]),
-        Line::from(vec![
-            Span::styled("  Ctrl+d/PgDn   ", Style::default().fg(Color::Yellow)),
-            Span::raw("Page down"),
-        ]),
-        Line::from(vec![
-            Span::styled("  Ctrl+u/PgUp   ", Style::default().fg(Color::Yellow)),
-            Span::raw("Page up"),
-        ]),
+        help_section("Navigation"),
+        help_line("j/↓", "Move down"),
+        help_line("k/↑", "Move up"),
+        help_line("g", "First item"),
+        help_line("G", "Last item"),
+        help_line("Ctrl+d/PgDn", "Page down"),
+        help_line("Ctrl+u/PgUp", "Page up"),
         Line::from(""),
         // Common: Panels
-        Line::from(Span::styled(
-            "Panels",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )),
-        Line::from(vec![
-            Span::styled("  h/←/l/→       ", Style::default().fg(Color::Yellow)),
-            Span::raw("Switch panels"),
-        ]),
-        Line::from(vec![
-            Span::styled("  Tab           ", Style::default().fg(Color::Yellow)),
-            Span::raw("Switch panels"),
-        ]),
+        help_section("Panels"),
+        help_line("h/←/l/→", "Switch panels"),
+        help_line("Tab", "Switch panels"),
         Line::from(""),
         // Common: Search
-        Line::from(Span::styled(
-            "Search",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )),
-        Line::from(vec![
-            Span::styled("  /             ", Style::default().fg(Color::Yellow)),
-            Span::raw("Start search"),
-        ]),
-        Line::from(vec![
-            Span::styled("  Enter/Esc     ", Style::default().fg(Color::Yellow)),
-            Span::raw("Exit search mode"),
-        ]),
-        Line::from(vec![
-            Span::styled("  Esc           ", Style::default().fg(Color::Yellow)),
-            Span::raw("Clear search (in normal mode)"),
-        ]),
+        help_section("Search"),
+        help_line("/", "Start search"),
+        help_line("Enter/Esc", "Exit search mode"),
+        help_line("Esc", "Clear search (in normal mode)"),
         Line::from(""),
     ];
 
@@ -4494,146 +4456,61 @@ fn draw_help_popup(f: &mut Frame, scroll: u16, current_tab: Tab) {
     match current_tab {
         Tab::Models => {
             help_text.extend(vec![
-                Line::from(Span::styled(
-                    "Filters & Sort",
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD),
-                )),
-                Line::from(vec![
-                    Span::styled("  s             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Cycle sort (name → date → cost → context)"),
-                ]),
-                Line::from(vec![
-                    Span::styled("  S             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Toggle sort direction"),
-                ]),
-                Line::from(vec![
-                    Span::styled("  1             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Toggle reasoning models filter"),
-                ]),
-                Line::from(vec![
-                    Span::styled("  2             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Toggle tools filter"),
-                ]),
-                Line::from(vec![
-                    Span::styled("  3             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Toggle open weights filter"),
-                ]),
-                Line::from(vec![
-                    Span::styled("  4             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Toggle free models filter"),
-                ]),
-                Line::from(vec![
-                    Span::styled("  5             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Cycle provider category filter"),
-                ]),
-                Line::from(vec![
-                    Span::styled("  6             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Toggle category grouping"),
-                ]),
+                help_section("Filters & Sort"),
+                help_line("s", "Cycle sort (name → date → cost → context)"),
+                help_line("S", "Toggle sort direction"),
+                help_line("1", "Toggle reasoning models filter"),
+                help_line("2", "Toggle tools filter"),
+                help_line("3", "Toggle open weights filter"),
+                help_line("4", "Toggle free models filter"),
+                help_line("5", "Cycle provider category filter"),
+                help_line("6", "Toggle category grouping"),
                 Line::from(""),
-                Line::from(Span::styled(
-                    "Copy & Open",
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD),
-                )),
-                Line::from(vec![
-                    Span::styled("  c             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Copy provider/model"),
-                ]),
-                Line::from(vec![
-                    Span::styled("  C             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Copy model only"),
-                ]),
-                Line::from(vec![
-                    Span::styled("  o             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Open provider docs in browser"),
-                ]),
-                Line::from(vec![
-                    Span::styled("  D             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Copy provider docs URL"),
-                ]),
-                Line::from(vec![
-                    Span::styled("  A             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Copy provider API URL"),
-                ]),
+                help_section("Copy & Open"),
+                help_line("c", "Copy provider/model"),
+                help_line("C", "Copy model only"),
+                help_line("o", "Open provider docs in browser"),
+                help_line("D", "Copy provider docs URL"),
+                help_line("A", "Copy provider API URL"),
                 Line::from(""),
             ]);
         }
         Tab::Agents => {
             help_text.extend(vec![
-                Line::from(Span::styled(
-                    "Filters & Sort",
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD),
-                )),
-                Line::from(vec![
-                    Span::styled("  s             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Cycle sort (name → updated → stars → status)"),
-                ]),
-                Line::from(vec![
-                    Span::styled("  1             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Toggle installed filter"),
-                ]),
-                Line::from(vec![
-                    Span::styled("  2             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Toggle CLI filter"),
-                ]),
-                Line::from(vec![
-                    Span::styled("  3             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Toggle open source filter"),
-                ]),
+                help_section("Filters & Sort"),
+                help_line("s", "Cycle sort (name → updated → stars → status)"),
+                help_line("1", "Toggle installed filter"),
+                help_line("2", "Toggle CLI filter"),
+                help_line("3", "Toggle open source filter"),
                 Line::from(""),
-                Line::from(Span::styled(
-                    "Actions",
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD),
-                )),
-                Line::from(vec![
-                    Span::styled("  o             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Open docs in browser"),
-                ]),
-                Line::from(vec![
-                    Span::styled("  r             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Open GitHub repo in browser"),
-                ]),
-                Line::from(vec![
-                    Span::styled("  c             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Copy agent name"),
-                ]),
-                Line::from(vec![
-                    Span::styled("  a             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Add/remove tracked agents"),
-                ]),
+                help_section("Actions"),
+                help_line("o", "Open docs in browser"),
+                help_line("r", "Open GitHub repo in browser"),
+                help_line("c", "Copy agent name"),
+                help_line("a", "Add/remove tracked agents"),
                 Line::from(""),
-                Line::from(Span::styled(
-                    "Status Indicators",
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD),
-                )),
+                help_section("Status Indicators"),
                 Line::from(vec![
-                    Span::styled("  ○             ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(
+                        format!("  {:<14}", "○"),
+                        Style::default().fg(Color::DarkGray),
+                    ),
                     Span::raw("Not tracked"),
                 ]),
                 Line::from(vec![
-                    Span::styled("  ◐             ", Style::default().fg(Color::Yellow)),
+                    Span::styled(format!("  {:<14}", "◐"), Style::default().fg(Color::Yellow)),
                     Span::raw("Loading GitHub data"),
                 ]),
                 Line::from(vec![
-                    Span::styled("  ●             ", Style::default().fg(Color::Green)),
+                    Span::styled(format!("  {:<14}", "●"), Style::default().fg(Color::Green)),
                     Span::raw("Up to date"),
                 ]),
                 Line::from(vec![
-                    Span::styled("  ●             ", Style::default().fg(Color::Blue)),
+                    Span::styled(format!("  {:<14}", "●"), Style::default().fg(Color::Blue)),
                     Span::raw("Update available"),
                 ]),
                 Line::from(vec![
-                    Span::styled("  ✗             ", Style::default().fg(Color::Red)),
+                    Span::styled(format!("  {:<14}", "✗"), Style::default().fg(Color::Red)),
                     Span::raw("Fetch failed"),
                 ]),
                 Line::from(""),
@@ -4641,154 +4518,47 @@ fn draw_help_popup(f: &mut Frame, scroll: u16, current_tab: Tab) {
         }
         Tab::Benchmarks => {
             help_text.extend(vec![
-                Line::from(Span::styled(
-                    "Quick Sort (press again to flip direction)",
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD),
-                )),
-                Line::from(vec![
-                    Span::styled("  1             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Sort by Intelligence index"),
-                ]),
-                Line::from(vec![
-                    Span::styled("  2             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Sort by Release date"),
-                ]),
-                Line::from(vec![
-                    Span::styled("  3             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Sort by Speed (tok/s)"),
-                ]),
+                help_section("Quick Sort (press again to flip direction)"),
+                help_line("1", "Sort by Intelligence index"),
+                help_line("2", "Sort by Release date"),
+                help_line("3", "Sort by Speed (tok/s)"),
                 Line::from(""),
-                Line::from(Span::styled(
-                    "Filters",
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD),
-                )),
-                Line::from(vec![
-                    Span::styled("  4             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Cycle source filter (Open/Closed/Mixed)"),
-                ]),
-                Line::from(vec![
-                    Span::styled("  5             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Cycle region filter (US/China/Europe/...)"),
-                ]),
-                Line::from(vec![
-                    Span::styled("  6             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Cycle type filter (Startup/Big Tech/Research)"),
-                ]),
-                Line::from(vec![
-                    Span::styled("  7             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Cycle reasoning filter (All/Reasoning/Non-reasoning)"),
-                ]),
+                help_section("Filters"),
+                help_line("4", "Cycle source filter (Open/Closed/Mixed)"),
+                help_line("5", "Cycle region filter (US/China/Europe/...)"),
+                help_line("6", "Cycle type filter (Startup/Big Tech/Research)"),
+                help_line("7", "Cycle reasoning filter (All/Reasoning/Non-reasoning)"),
                 Line::from(""),
-                Line::from(Span::styled(
-                    "Sort (full cycle)",
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD),
-                )),
-                Line::from(vec![
-                    Span::styled("  s             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Open sort picker"),
-                ]),
-                Line::from(vec![
-                    Span::styled("  S             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Toggle sort direction"),
-                ]),
+                help_section("Sort (full cycle)"),
+                help_line("s", "Open sort picker"),
+                help_line("S", "Toggle sort direction"),
                 Line::from(""),
-                Line::from(Span::styled(
-                    "Actions",
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD),
-                )),
-                Line::from(vec![
-                    Span::styled("  o             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Open Artificial Analysis page"),
-                ]),
+                help_section("Actions"),
+                help_line("o", "Open Artificial Analysis page"),
                 Line::from(""),
-                Line::from(Span::styled(
-                    "Compare",
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD),
-                )),
-                Line::from(vec![
-                    Span::styled("  Space         ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Toggle model for comparison (max 8)"),
-                ]),
-                Line::from(vec![
-                    Span::styled("  c             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Clear all selections"),
-                ]),
-                Line::from(vec![
-                    Span::styled("  v             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Cycle view: H2H → Scatter → Radar"),
-                ]),
-                Line::from(vec![
-                    Span::styled("  d             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Show detail overlay (H2H view)"),
-                ]),
-                Line::from(vec![
-                    Span::styled("  x             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Cycle scatter X-axis"),
-                ]),
-                Line::from(vec![
-                    Span::styled("  y             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Cycle scatter Y-axis"),
-                ]),
-                Line::from(vec![
-                    Span::styled("  a             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Cycle radar preset"),
-                ]),
-                Line::from(vec![
-                    Span::styled("  j/k           ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Scroll H2H table (when Compare focused)"),
-                ]),
-                Line::from(vec![
-                    Span::styled("  h/l           ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Switch focus: List ↔ Compare"),
-                ]),
-                Line::from(vec![
-                    Span::styled("  t             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Toggle left panel: Models ↔ Creators"),
-                ]),
+                help_section("Compare"),
+                help_line("Space", "Toggle model for comparison (max 8)"),
+                help_line("c", "Clear all selections"),
+                help_line("v", "Cycle view: H2H → Scatter → Radar"),
+                help_line("d", "Show detail overlay (H2H view)"),
+                help_line("x", "Cycle scatter X-axis"),
+                help_line("y", "Cycle scatter Y-axis"),
+                help_line("a", "Cycle radar preset"),
+                help_line("j/k", "Scroll H2H table (when Compare focused)"),
+                help_line("h/l", "Switch focus: List ↔ Compare"),
+                help_line("t", "Toggle left panel: Models ↔ Creators"),
                 Line::from(""),
             ]);
         }
         Tab::Status => {
             help_text.extend(vec![
-                Line::from(Span::styled(
-                    "Actions",
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD),
-                )),
-                Line::from(vec![
-                    Span::styled("  o             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Open provider status page"),
-                ]),
-                Line::from(vec![
-                    Span::styled("  r             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Refresh provider status"),
-                ]),
+                help_section("Actions"),
+                help_line("o", "Open provider status page"),
+                help_line("r", "Refresh provider status"),
                 Line::from(""),
-                Line::from(Span::styled(
-                    "Status view",
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD),
-                )),
-                Line::from(vec![
-                    Span::styled("  Tab/h/l       ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Switch list/details focus"),
-                ]),
-                Line::from(vec![
-                    Span::styled("  /             ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Search providers"),
-                ]),
+                help_section("Status view"),
+                help_line("Tab/h/l", "Switch list/details focus"),
+                help_line("/", "Search providers"),
                 Line::from(""),
             ]);
         }
@@ -4796,35 +4566,13 @@ fn draw_help_popup(f: &mut Frame, scroll: u16, current_tab: Tab) {
 
     // Common: Tabs and Other
     help_text.extend(vec![
-        Line::from(Span::styled(
-            "Tabs",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )),
-        Line::from(vec![
-            Span::styled("  [             ", Style::default().fg(Color::Yellow)),
-            Span::raw("Previous tab"),
-        ]),
-        Line::from(vec![
-            Span::styled("  ]             ", Style::default().fg(Color::Yellow)),
-            Span::raw("Next tab"),
-        ]),
+        help_section("Tabs"),
+        help_line("[", "Previous tab"),
+        help_line("]", "Next tab"),
         Line::from(""),
-        Line::from(Span::styled(
-            "Other",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )),
-        Line::from(vec![
-            Span::styled("  q             ", Style::default().fg(Color::Yellow)),
-            Span::raw("Quit"),
-        ]),
-        Line::from(vec![
-            Span::styled("  ?             ", Style::default().fg(Color::Yellow)),
-            Span::raw("Toggle this help"),
-        ]),
+        help_section("Other"),
+        help_line("q", "Quit"),
+        help_line("?", "Toggle this help"),
     ]);
 
     let title = match current_tab {
@@ -4851,19 +4599,14 @@ fn draw_help_popup(f: &mut Frame, scroll: u16, current_tab: Tab) {
     f.render_widget(paragraph, area);
 
     // Scrollbar for help popup
-    if content_lines > visible_height {
-        let mut scrollbar_state = ScrollbarState::new(content_lines as usize)
-            .position(scroll_pos as usize)
-            .viewport_content_length(visible_height as usize);
-        f.render_stateful_widget(
-            Scrollbar::new(ScrollbarOrientation::VerticalRight),
-            area.inner(Margin {
-                vertical: 1,
-                horizontal: 0,
-            }),
-            &mut scrollbar_state,
-        );
-    }
+    render_scrollbar(
+        f,
+        area,
+        content_lines as usize,
+        scroll_pos as usize,
+        visible_height as usize,
+        true,
+    );
 }
 
 fn draw_picker_modal(f: &mut Frame, app: &App) {
@@ -5205,7 +4948,7 @@ fn draw_h2h_table_generic(f: &mut Frame, area: Rect, app: &App) {
             .map(|e| e.display_name.as_str())
             .unwrap_or("?");
         let color = compare_colors(i);
-        let truncated = if name.len() > col_w - 1 {
+        let truncated = if name.width() > col_w - 1 {
             format!("{:.width$}", name, width = col_w - 2)
         } else {
             name.to_string()
@@ -5283,7 +5026,7 @@ fn draw_h2h_table_generic(f: &mut Frame, area: Rect, app: &App) {
             Style::default().fg(Color::DarkGray),
         )];
         for (val, color) in values.iter() {
-            let truncated = if val.len() > col_w - 1 {
+            let truncated = if val.width() > col_w - 1 {
                 format!("{:.width$}", val, width = col_w - 2)
             } else {
                 val.clone()
@@ -5455,7 +5198,7 @@ fn draw_h2h_table_generic(f: &mut Frame, area: Rect, app: &App) {
             entries
                 .get(idx)
                 .and_then(|e| e.context_window)
-                .map(|v| (fmt_tokens(v), Color::White))
+                .map(|v| (format_tokens(v), Color::White))
                 .unwrap_or_else(|| ("\u{2014}".to_string(), Color::DarkGray))
         })
         .collect();
@@ -5468,7 +5211,7 @@ fn draw_h2h_table_generic(f: &mut Frame, area: Rect, app: &App) {
             entries
                 .get(idx)
                 .and_then(|e| e.max_output)
-                .map(|v| (fmt_tokens(v), Color::White))
+                .map(|v| (format_tokens(v), Color::White))
                 .unwrap_or_else(|| ("\u{2014}".to_string(), Color::DarkGray))
         })
         .collect();
@@ -5561,16 +5304,7 @@ fn draw_h2h_table_generic(f: &mut Frame, area: Rect, app: &App) {
 
     // Scrollbar for H2H table
     let visible_h = inner.height as usize;
-    if content_len > visible_h {
-        let mut scrollbar_state = ScrollbarState::new(content_len)
-            .position(scroll_y)
-            .viewport_content_length(visible_h);
-        f.render_stateful_widget(
-            Scrollbar::new(ScrollbarOrientation::VerticalRight),
-            inner,
-            &mut scrollbar_state,
-        );
-    }
+    render_scrollbar(f, inner, content_len, scroll_y, visible_h, false);
 }
 
 fn draw_scatter(f: &mut Frame, area: Rect, app: &App) {

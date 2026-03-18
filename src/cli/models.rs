@@ -1,24 +1,24 @@
-use std::{io, time::Duration};
+use std::time::Duration;
 
 use anyhow::{bail, Result};
 use comfy_table::{presets::UTF8_FULL_CONDENSED, Table as ComfyTable};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
-    backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout},
-    style::{Color, Modifier, Style},
+    style::{Color, Style},
     text::{Line, Span},
     widgets::{
         Block, Borders, Cell as TuiCell, HighlightSpacing, Paragraph, Row as TuiRow,
         Table as TuiTable, TableState,
     },
-    Frame, Terminal, TerminalOptions, Viewport,
+    Frame,
 };
 use serde::Serialize;
 
+use crate::formatting::{cmp_opt_f64, parse_date_to_numeric, truncate};
 use crate::{api, data::Model as ApiModel};
 
-const PICKER_VIEWPORT_HEIGHT: u16 = 14;
+use super::picker::{self, PickerTerminal};
 const PICKER_SORTS: [ModelSort; 6] = [
     ModelSort::Name,
     ModelSort::Provider,
@@ -162,45 +162,27 @@ impl ModelPicker {
     }
 
     fn next(&mut self) {
-        let Some(current) = self.state.selected() else {
-            return;
-        };
-        let last = self.visible_entries.len().saturating_sub(1);
-        self.state.select(Some((current + 1).min(last)));
+        picker::nav_next(&mut self.state, self.visible_entries.len());
     }
 
     fn previous(&mut self) {
-        let Some(current) = self.state.selected() else {
-            return;
-        };
-        self.state.select(Some(current.saturating_sub(1)));
+        picker::nav_previous(&mut self.state);
     }
 
     fn first(&mut self) {
-        if !self.visible_entries.is_empty() {
-            self.state.select(Some(0));
-        }
+        picker::nav_first(&mut self.state, self.visible_entries.len());
     }
 
     fn last(&mut self) {
-        if !self.visible_entries.is_empty() {
-            self.state.select(Some(self.visible_entries.len() - 1));
-        }
+        picker::nav_last(&mut self.state, self.visible_entries.len());
     }
 
     fn page_down(&mut self) {
-        let Some(current) = self.state.selected() else {
-            return;
-        };
-        let last = self.visible_entries.len().saturating_sub(1);
-        self.state.select(Some((current + 10).min(last)));
+        picker::nav_page_down(&mut self.state, self.visible_entries.len(), 10);
     }
 
     fn page_up(&mut self) {
-        let Some(current) = self.state.selected() else {
-            return;
-        };
-        self.state.select(Some(current.saturating_sub(10)));
+        picker::nav_page_up(&mut self.state, 10);
     }
 
     fn cycle_sort(&mut self) {
@@ -271,14 +253,11 @@ impl ModelPicker {
 
         let rows = self.visible_entries.iter().map(|entry| {
             TuiRow::new(vec![
-                TuiCell::from(truncate_text(&entry.name, 26)),
-                TuiCell::from(truncate_text(&entry.provider_name, 14)),
-                TuiCell::from(truncate_text(
-                    &format_picker_sort_value(self.sort, entry),
-                    12,
-                )),
-                TuiCell::from(truncate_text(&entry.cost, 14)),
-                TuiCell::from(truncate_text(&entry.capabilities, 18)),
+                TuiCell::from(truncate(&entry.name, 26)),
+                TuiCell::from(truncate(&entry.provider_name, 14)),
+                TuiCell::from(truncate(&format_picker_sort_value(self.sort, entry), 12)),
+                TuiCell::from(truncate(&entry.cost, 14)),
+                TuiCell::from(truncate(&entry.capabilities, 18)),
                 TuiCell::from(
                     entry
                         .release_date
@@ -308,24 +287,16 @@ impl ModelPicker {
                 "Capabilities",
                 "Release",
             ])
-            .style(
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD),
-            ),
+            .style(picker::HEADER_STYLE),
         )
         .column_spacing(1)
-        .highlight_symbol(">> ")
+        .highlight_symbol(picker::HIGHLIGHT_SYMBOL)
         .highlight_spacing(HighlightSpacing::Always)
-        .row_highlight_style(
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD),
-        )
+        .row_highlight_style(picker::ROW_HIGHLIGHT_STYLE)
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Cyan))
+                .border_style(picker::ACTIVE_BORDER_STYLE)
                 .title(self.title_text()),
         );
 
@@ -334,7 +305,7 @@ impl ModelPicker {
             Paragraph::new(self.preview_lines()).block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::DarkGray))
+                    .border_style(picker::PREVIEW_BORDER_STYLE)
                     .title(" Preview "),
             ),
             chunks[1],
@@ -343,33 +314,14 @@ impl ModelPicker {
     }
 
     fn title_text(&self) -> String {
-        let results = if self.query.is_empty() {
-            format!("{} results", self.visible_entries.len())
-        } else {
-            format!(
-                "{} / {} results",
-                self.visible_entries.len(),
-                self.entries.len()
-            )
-        };
-        if self.query.is_empty() {
-            format!(
-                "{} ({}) | {} {}",
-                self.title,
-                results,
-                picker_sort_label(self.sort),
-                if self.descending { "desc" } else { "asc" }
-            )
-        } else {
-            format!(
-                "{} ({}) | {} {} | / {}",
-                self.title,
-                results,
-                picker_sort_label(self.sort),
-                if self.descending { "desc" } else { "asc" },
-                self.query
-            )
-        }
+        picker::picker_title(
+            &self.title,
+            self.visible_entries.len(),
+            self.entries.len(),
+            picker_sort_label(self.sort),
+            self.descending,
+            &self.query,
+        )
     }
 
     fn preview_lines(&self) -> Vec<Line<'static>> {
@@ -383,7 +335,7 @@ impl ModelPicker {
         vec![
             Line::from(format!(
                 "id: {}   provider: {}",
-                truncate_text(&entry.display_id, 36),
+                truncate(&entry.display_id, 36),
                 entry.provider_name
             )),
             Line::from(format!(
@@ -402,7 +354,7 @@ impl ModelPicker {
             Line::from(format!(
                 "files: {}   modalities: {}",
                 yes_no(entry.attachment),
-                truncate_text(&entry.modalities, 44)
+                truncate(&entry.modalities, 44)
             )),
         ]
     }
@@ -426,32 +378,6 @@ impl ModelPicker {
                 "Enter inspect   / filter   s sort   S reverse   c copy   q quit   ↑↓/j/k move",
             )
         }
-    }
-}
-
-struct PickerTerminal {
-    terminal: Terminal<CrosstermBackend<io::Stdout>>,
-}
-
-impl PickerTerminal {
-    fn new() -> Result<Self> {
-        crossterm::terminal::enable_raw_mode()?;
-        let backend = CrosstermBackend::new(io::stdout());
-        let terminal = Terminal::with_options(
-            backend,
-            TerminalOptions {
-                viewport: Viewport::Inline(PICKER_VIEWPORT_HEIGHT),
-            },
-        )?;
-        Ok(Self { terminal })
-    }
-}
-
-impl Drop for PickerTerminal {
-    fn drop(&mut self) {
-        let _ = self.terminal.clear();
-        let _ = crossterm::terminal::disable_raw_mode();
-        let _ = self.terminal.show_cursor();
     }
 }
 
@@ -965,18 +891,6 @@ fn yes_no(value: bool) -> &'static str {
     }
 }
 
-fn truncate_text(value: &str, max_chars: usize) -> String {
-    let char_count = value.chars().count();
-    if char_count <= max_chars {
-        return value.to_string();
-    }
-    if max_chars <= 3 {
-        return value.chars().take(max_chars).collect();
-    }
-    let visible: String = value.chars().take(max_chars - 3).collect();
-    format!("{visible}...")
-}
-
 fn parse_token_count(text: &str) -> Option<f64> {
     if text == "-" || text == "\u{2014}" {
         return None;
@@ -989,28 +903,6 @@ fn parse_token_count(text: &str) -> Option<f64> {
         return raw.parse::<f64>().ok().map(|v| v * 1_000.0);
     }
     lower.parse::<f64>().ok()
-}
-
-fn parse_date_to_numeric(date: &str) -> Option<f64> {
-    let parts: Vec<&str> = date.split('-').collect();
-    if parts.len() != 3 {
-        return None;
-    }
-    let year = parts[0].parse::<u32>().ok()?;
-    let month = parts[1].parse::<u32>().ok()?;
-    let day = parts[2].parse::<u32>().ok()?;
-    Some((year * 10000 + month * 100 + day) as f64)
-}
-
-fn cmp_opt_f64(a: Option<f64>, b: Option<f64>) -> std::cmp::Ordering {
-    match (a, b) {
-        (Some(a_val), Some(b_val)) => a_val
-            .partial_cmp(&b_val)
-            .unwrap_or(std::cmp::Ordering::Equal),
-        (Some(_), None) => std::cmp::Ordering::Less,
-        (None, Some(_)) => std::cmp::Ordering::Greater,
-        (None, None) => std::cmp::Ordering::Equal,
-    }
 }
 
 #[cfg(test)]

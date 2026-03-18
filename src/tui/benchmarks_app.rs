@@ -4,6 +4,7 @@ use ratatui::style::Color;
 use ratatui::widgets::ListState;
 
 use crate::benchmarks::{BenchmarkEntry, BenchmarkStore, ReasoningFilter};
+use crate::formatting::{cmp_opt_f64, parse_date_to_numeric};
 
 /// Page size for page up/down navigation
 const PAGE_SIZE: usize = 10;
@@ -1021,30 +1022,5 @@ impl BenchmarksApp {
 
     pub fn scroll_h2h_page_up(&mut self, page: usize) {
         self.h2h_scroll = self.h2h_scroll.saturating_sub(page);
-    }
-}
-
-/// Parse "YYYY-MM-DD" to a numeric value for sorting (e.g., 20240115.0)
-fn parse_date_to_numeric(date: &str) -> Option<f64> {
-    let parts: Vec<&str> = date.split('-').collect();
-    if parts.len() == 3 {
-        let year = parts[0].parse::<u32>().ok()?;
-        let month = parts[1].parse::<u32>().ok()?;
-        let day = parts[2].parse::<u32>().ok()?;
-        Some((year * 10000 + month * 100 + day) as f64)
-    } else {
-        None
-    }
-}
-
-/// Compare two Option<f64> values, putting None last
-fn cmp_opt_f64(a: Option<f64>, b: Option<f64>) -> std::cmp::Ordering {
-    match (a, b) {
-        (Some(a_val), Some(b_val)) => a_val
-            .partial_cmp(&b_val)
-            .unwrap_or(std::cmp::Ordering::Equal),
-        (Some(_), None) => std::cmp::Ordering::Less,
-        (None, Some(_)) => std::cmp::Ordering::Greater,
-        (None, None) => std::cmp::Ordering::Equal,
     }
 }

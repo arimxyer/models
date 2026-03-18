@@ -79,6 +79,7 @@ chrono = { version = "0.4", features = ["serde"] }
 
 # Terminal styling (used for dialoguer theme)
 console = "0.15"
+unicode-width = "0.2"
 
 [profile.release]
 strip = true
