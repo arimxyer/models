@@ -233,8 +233,8 @@ impl App {
         let agents_app = agents_file.map(|af| AgentsApp::new(af, &config));
         let status_app = agents_file.map(StatusApp::new);
         let open_weights_map =
-            crate::model_traits::build_open_weights_map(&providers, benchmark_store.entries());
-        crate::model_traits::apply_model_traits(&providers, benchmark_store.entries_mut());
+            crate::benchmarks::build_open_weights_map(&providers, benchmark_store.entries());
+        crate::benchmarks::apply_model_traits(&providers, benchmark_store.entries_mut());
         let benchmarks_app = BenchmarksApp::new(&benchmark_store, &open_weights_map);
         let models_app = ModelsApp::new(&providers);
 
@@ -962,11 +962,11 @@ impl App {
                 self.selections.clear();
                 self.benchmarks_app.loading = false;
                 self.benchmark_store = BenchmarkStore::from_entries(entries);
-                self.open_weights_map = crate::model_traits::build_open_weights_map(
+                self.open_weights_map = crate::benchmarks::build_open_weights_map(
                     &self.providers,
                     self.benchmark_store.entries(),
                 );
-                crate::model_traits::apply_model_traits(
+                crate::benchmarks::apply_model_traits(
                     &self.providers,
                     self.benchmark_store.entries_mut(),
                 );

@@ -18,8 +18,10 @@ use serde::Serialize;
 
 use super::picker::{self, PickerTerminal};
 
-use crate::benchmark_fetch::{BenchmarkFetchResult, BenchmarkFetcher};
-use crate::benchmarks::{BenchmarkEntry, BenchmarkStore, ReasoningFilter, ReasoningStatus};
+use crate::benchmarks::{
+    BenchmarkEntry, BenchmarkFetchResult, BenchmarkFetcher, BenchmarkStore, ReasoningFilter,
+    ReasoningStatus,
+};
 use crate::formatting::{cmp_opt_f64, parse_date_to_numeric, truncate};
 
 #[derive(Parser, Debug)]
@@ -785,9 +787,9 @@ fn load_benchmarks() -> Result<LoadedBenchmarks> {
     };
 
     let mut store = BenchmarkStore::from_entries(entries);
-    crate::model_traits::apply_model_traits(&provider_vec, store.entries_mut());
+    crate::benchmarks::apply_model_traits(&provider_vec, store.entries_mut());
     let open_weights_map =
-        crate::model_traits::build_open_weights_map(&provider_vec, store.entries());
+        crate::benchmarks::build_open_weights_map(&provider_vec, store.entries());
 
     Ok(LoadedBenchmarks {
         store,

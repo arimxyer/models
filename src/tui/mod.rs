@@ -27,8 +27,7 @@ mod ui_status;
 use crate::agents::{
     load_agents, AsyncGitHubClient, ConditionalFetchResult, GitHubCache, GitHubData,
 };
-use crate::benchmark_fetch::{BenchmarkFetchResult, BenchmarkFetcher};
-use crate::benchmarks::BenchmarkStore;
+use crate::benchmarks::{BenchmarkFetchResult, BenchmarkFetcher, BenchmarkStore};
 use crate::config::Config;
 use crate::data::ProvidersMap;
 use crate::status::{StatusFetchResult, StatusFetcher};

@@ -1,12 +1,10 @@
 mod agents;
 mod api;
-mod benchmark_fetch;
 mod benchmarks;
 mod cli;
 mod config;
 mod data;
 mod formatting;
-mod model_traits;
 mod provider_category;
 mod status;
 mod tui;

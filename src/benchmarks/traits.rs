@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::benchmarks::BenchmarkEntry;
+use super::{BenchmarkEntry, ReasoningStatus};
 use crate::data::Provider;
 
 /// Minimum Jaro-Winkler similarity to consider a match.
@@ -103,10 +103,8 @@ pub fn apply_model_traits(providers: &[(String, Provider)], entries: &mut [Bench
     let matched = match_entries(providers, entries);
     for entry in entries {
         if let Some(traits) = matched.get(&entry.slug) {
-            if entry.reasoning_status == crate::benchmarks::ReasoningStatus::None
-                && traits.reasoning
-            {
-                entry.reasoning_status = crate::benchmarks::ReasoningStatus::Reasoning;
+            if entry.reasoning_status == ReasoningStatus::None && traits.reasoning {
+                entry.reasoning_status = ReasoningStatus::Reasoning;
             }
             if entry.tool_call.is_none() {
                 entry.tool_call = Some(traits.tool_call);
