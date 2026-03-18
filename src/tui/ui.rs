@@ -444,6 +444,34 @@ fn push_plain_scope_lines(
     }
 }
 
+fn push_wrapped_bullet_lines(
+    lines: &mut Vec<Line<'static>>,
+    text: &str,
+    body_width: usize,
+    bullet_indent: &str,
+    continuation_indent: &str,
+) {
+    let available_width = body_width.saturating_sub(continuation_indent.len()).max(12);
+    let wrapped = textwrap::wrap(text.trim(), available_width);
+
+    if let Some(first_line) = wrapped.first() {
+        lines.push(Line::from(vec![
+            Span::styled(
+                bullet_indent.to_string(),
+                Style::default().fg(Color::DarkGray),
+            ),
+            Span::raw(first_line.to_string()),
+        ]));
+    }
+
+    for line in wrapped.iter().skip(1) {
+        lines.push(Line::from(vec![
+            Span::raw(continuation_indent.to_string()),
+            Span::raw(line.to_string()),
+        ]));
+    }
+}
+
 fn status_verdict_copy(health: ProviderHealth) -> &'static str {
     match health {
         ProviderHealth::Operational => "All systems operational",
@@ -790,10 +818,8 @@ fn soft_card_divider(width: usize) -> Line<'static> {
 }
 
 fn push_soft_card_summary(lines: &mut Vec<Line<'static>>, summary: &str, body_width: usize) {
-    let wrapped = textwrap::wrap(summary, body_width.saturating_sub(2).max(12));
-    for line in wrapped {
-        lines.push(Line::from(Span::raw(format!("  {line}"))));
-    }
+    let _ = body_width;
+    lines.push(Line::from(Span::raw(format!("  {summary}"))));
 }
 
 fn normalized_status_copy(text: &str) -> String {
@@ -810,11 +836,7 @@ fn summary_duplicates_issue(summary: &str, issue: &str) -> bool {
     let normalized_summary = normalized_status_copy(summary);
     let normalized_issue = normalized_status_copy(issue);
 
-    !normalized_summary.is_empty()
-        && !normalized_issue.is_empty()
-        && (normalized_summary == normalized_issue
-            || normalized_summary.contains(&normalized_issue)
-            || normalized_issue.contains(&normalized_summary))
+    !normalized_summary.is_empty() && normalized_summary == normalized_issue
 }
 
 fn update_duplicates_summary_or_issue(update: &str, summary: Option<&str>, issue: &str) -> bool {
@@ -831,14 +853,11 @@ fn update_duplicates_summary_or_issue(update: &str, summary: Option<&str>, issue
 }
 
 fn push_overall_caveat(lines: &mut Vec<Line<'static>>, note: &str, body_width: usize) {
-    let wrapped = textwrap::wrap(note, body_width.saturating_sub(2).max(12));
-    for (idx, line) in wrapped.into_iter().enumerate() {
-        let prefix = if idx == 0 { "  Note: " } else { "        " };
-        lines.push(Line::from(Span::styled(
-            format!("{prefix}{line}"),
-            Style::default().fg(Color::DarkGray),
-        )));
-    }
+    let _ = body_width;
+    lines.push(Line::from(vec![
+        Span::styled("  Note: ", status_field_label_style()),
+        Span::styled(note.to_string(), Style::default().fg(Color::DarkGray)),
+    ]));
 }
 
 fn push_panel_empty_state(lines: &mut Vec<Line<'static>>, title: &str, description: &str) {
@@ -885,19 +904,13 @@ fn build_incidents_panel_lines(
             ),
         ]));
 
-        if let Some(summary) = summary {
-            push_soft_card_summary(&mut lines, summary, body_width);
-        }
-
-        if !summary.is_some_and(|summary| summary_duplicates_issue(summary, &incident.name)) {
-            lines.push(Line::from(vec![
-                Span::styled("  Issue: ", status_field_label_style()),
-                Span::styled(
-                    incident.name.clone(),
-                    Style::default().add_modifier(Modifier::BOLD),
-                ),
-            ]));
-        }
+        lines.push(Line::from(vec![
+            Span::styled("  Issue: ", status_field_label_style()),
+            Span::styled(
+                incident.name.clone(),
+                Style::default().add_modifier(Modifier::BOLD),
+            ),
+        ]));
 
         let mut metadata_spans = vec![Span::raw("  ")];
         metadata_spans.push(Span::styled("Status: ", status_field_label_style()));
@@ -944,16 +957,11 @@ fn build_incidents_panel_lines(
 
         if let Some(update) = &incident.latest_update {
             if !update_duplicates_summary_or_issue(&update.body, summary, &incident.name) {
-                let wrapped = textwrap::wrap(&update.body, body_width.saturating_sub(6).max(12));
-                if let Some(first_line) = wrapped.first() {
-                    lines.push(Line::from(vec![
-                        Span::styled("  Update: ", status_field_label_style()),
-                        Span::raw(first_line.to_string()),
-                    ]));
-                }
-                for line in wrapped.iter().skip(1).take(2) {
-                    lines.push(Line::from(Span::raw(format!("          {line}"))));
-                }
+                lines.push(Line::from(Span::styled(
+                    "  Latest Update",
+                    status_section_label_style(),
+                )));
+                push_wrapped_bullet_lines(&mut lines, &update.body, body_width, "    - ", "      ");
             }
         }
 
@@ -6299,7 +6307,6 @@ mod tests {
         assert!(rendered.contains("Service Degradation"));
         assert!(rendered.contains("Maintenance Outlook"));
         assert!(rendered.contains("Updated just now"));
-        assert!(rendered.contains("Elevated API errors affecting chat completions."));
         assert!(rendered.contains("Elevated API errors"));
         assert!(rendered.contains("investigating"));
         assert!(rendered.contains("Services"));
@@ -6343,12 +6350,13 @@ mod tests {
         let rendered = render_status_text(&mut app);
 
         assert!(rendered.contains("Elevated API errors"));
-        assert!(!rendered.contains("Issue: Elevated API errors"));
-        assert!(!rendered.contains("Update: Elevated API errors"));
+        assert!(rendered.contains("Issue: Elevated API errors"));
+        assert!(!rendered.contains("Latest Update"));
+        assert!(!rendered.contains("  Elevated API errors\n"));
     }
 
     #[test]
-    fn overall_update_continuation_keeps_primary_text_color() {
+    fn overall_update_renders_as_labeled_block() {
         let mut entry = sample_provider_status();
         entry.provider_summary = Some("Distinct summary".to_string());
         entry.incidents[0].name = "Distinct issue".to_string();
@@ -6363,20 +6371,9 @@ mod tests {
         status_app.selected = 0;
         status_app.list_state.select(Some(0));
 
-        let buffer = render_status_buffer_with_size(&mut app, 100, 40);
-        let mut continuation_fg = None;
+        let rendered = render_status_text_with_size(&mut app, 100, 40);
 
-        for y in 0..buffer.area.height {
-            let mut line = String::new();
-            for x in 0..buffer.area.width {
-                line.push_str(buffer[(x, y)].symbol());
-            }
-            if line.contains("          ") && line.contains("rendered line") {
-                continuation_fg = Some(buffer[(10, y)].fg);
-                break;
-            }
-        }
-
-        assert_eq!(continuation_fg, Some(Color::Reset));
+        assert!(rendered.contains("Latest Update"));
+        assert!(rendered.contains("- This is a long update message"));
     }
 }
