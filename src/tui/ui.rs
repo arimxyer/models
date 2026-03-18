@@ -796,6 +796,40 @@ fn push_soft_card_summary(lines: &mut Vec<Line<'static>>, summary: &str, body_wi
     }
 }
 
+fn normalized_status_copy(text: &str) -> String {
+    text.chars()
+        .filter(|ch| ch.is_ascii_alphanumeric() || ch.is_ascii_whitespace())
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
+}
+
+fn summary_duplicates_issue(summary: &str, issue: &str) -> bool {
+    let normalized_summary = normalized_status_copy(summary);
+    let normalized_issue = normalized_status_copy(issue);
+
+    !normalized_summary.is_empty()
+        && !normalized_issue.is_empty()
+        && (normalized_summary == normalized_issue
+            || normalized_summary.contains(&normalized_issue)
+            || normalized_issue.contains(&normalized_summary))
+}
+
+fn update_duplicates_summary_or_issue(update: &str, summary: Option<&str>, issue: &str) -> bool {
+    let normalized_update = normalized_status_copy(update);
+    if normalized_update.is_empty() {
+        return true;
+    }
+
+    if summary.is_some_and(|summary| summary_duplicates_issue(summary, update)) {
+        return true;
+    }
+
+    summary_duplicates_issue(update, issue)
+}
+
 fn push_overall_caveat(lines: &mut Vec<Line<'static>>, note: &str, body_width: usize) {
     let wrapped = textwrap::wrap(note, body_width.saturating_sub(2).max(12));
     for (idx, line) in wrapped.into_iter().enumerate() {
@@ -837,6 +871,7 @@ fn build_incidents_panel_lines(
         let incidents = entry.active_incidents();
         let non_op_components = overall_attention_components(entry);
         let incident = incidents[0];
+        let summary = entry.provider_summary_text();
 
         lines.push(Line::from(vec![
             Span::styled(
@@ -850,17 +885,19 @@ fn build_incidents_panel_lines(
             ),
         ]));
 
-        if let Some(summary) = entry.provider_summary_text() {
+        if let Some(summary) = summary {
             push_soft_card_summary(&mut lines, summary, body_width);
         }
 
-        lines.push(Line::from(vec![
-            Span::styled("  Issue: ", status_field_label_style()),
-            Span::styled(
-                incident.name.clone(),
-                Style::default().add_modifier(Modifier::BOLD),
-            ),
-        ]));
+        if !summary.is_some_and(|summary| summary_duplicates_issue(summary, &incident.name)) {
+            lines.push(Line::from(vec![
+                Span::styled("  Issue: ", status_field_label_style()),
+                Span::styled(
+                    incident.name.clone(),
+                    Style::default().add_modifier(Modifier::BOLD),
+                ),
+            ]));
+        }
 
         let mut metadata_spans = vec![Span::raw("  ")];
         metadata_spans.push(Span::styled("Status: ", status_field_label_style()));
@@ -906,18 +943,17 @@ fn build_incidents_panel_lines(
         }
 
         if let Some(update) = &incident.latest_update {
-            let wrapped = textwrap::wrap(&update.body, body_width.saturating_sub(6).max(12));
-            if let Some(first_line) = wrapped.first() {
-                lines.push(Line::from(vec![
-                    Span::styled("  Update: ", status_field_label_style()),
-                    Span::raw(first_line.to_string()),
-                ]));
-            }
-            for line in wrapped.iter().skip(1).take(2) {
-                lines.push(Line::from(Span::styled(
-                    format!("          {line}"),
-                    Style::default().fg(Color::DarkGray),
-                )));
+            if !update_duplicates_summary_or_issue(&update.body, summary, &incident.name) {
+                let wrapped = textwrap::wrap(&update.body, body_width.saturating_sub(6).max(12));
+                if let Some(first_line) = wrapped.first() {
+                    lines.push(Line::from(vec![
+                        Span::styled("  Update: ", status_field_label_style()),
+                        Span::raw(first_line.to_string()),
+                    ]));
+                }
+                for line in wrapped.iter().skip(1).take(2) {
+                    lines.push(Line::from(Span::raw(format!("          {line}"))));
+                }
             }
         }
 
@@ -6111,13 +6147,21 @@ mod tests {
         }
     }
 
-    fn render_status_text_with_size(app: &mut App, width: u16, height: u16) -> String {
+    fn render_status_buffer_with_size(
+        app: &mut App,
+        width: u16,
+        height: u16,
+    ) -> ratatui::buffer::Buffer {
         let backend = TestBackend::new(width, height);
         let mut terminal = Terminal::new(backend).expect("terminal");
         terminal
             .draw(|frame| draw_status_main(frame, frame.area(), app))
             .expect("draw succeeds");
-        let buffer = terminal.backend().buffer().clone();
+        terminal.backend().buffer().clone()
+    }
+
+    fn render_status_text_with_size(app: &mut App, width: u16, height: u16) -> String {
+        let buffer = render_status_buffer_with_size(app, width, height);
         let mut lines = Vec::new();
         for y in 0..buffer.area.height {
             let mut line = String::new();
@@ -6278,5 +6322,61 @@ mod tests {
         assert!(rendered.contains("Active Incidents"));
         assert!(rendered.contains("Service Degradation"));
         assert!(rendered.contains("Maintenance Outlook"));
+    }
+
+    #[test]
+    fn overall_incident_card_avoids_repeating_summary_as_issue_and_update() {
+        let mut entry = sample_provider_status();
+        entry.provider_summary = Some("Elevated API errors".to_string());
+        entry.incidents[0].name = "Elevated API errors".to_string();
+        entry.incidents[0].latest_update = Some(IncidentUpdate {
+            status: "investigating".to_string(),
+            body: "Elevated API errors".to_string(),
+            created_at: "2026-03-16T23:58:00Z".to_string(),
+        });
+
+        let mut app = make_status_app(entry);
+        let status_app = app.status_app.as_mut().expect("status app");
+        status_app.selected = 0;
+        status_app.list_state.select(Some(0));
+
+        let rendered = render_status_text(&mut app);
+
+        assert!(rendered.contains("Elevated API errors"));
+        assert!(!rendered.contains("Issue: Elevated API errors"));
+        assert!(!rendered.contains("Update: Elevated API errors"));
+    }
+
+    #[test]
+    fn overall_update_continuation_keeps_primary_text_color() {
+        let mut entry = sample_provider_status();
+        entry.provider_summary = Some("Distinct summary".to_string());
+        entry.incidents[0].name = "Distinct issue".to_string();
+        entry.incidents[0].latest_update = Some(IncidentUpdate {
+            status: "investigating".to_string(),
+            body: "This is a long update message that should wrap onto another rendered line in the incidents panel for styling verification.".to_string(),
+            created_at: "2026-03-16T23:58:00Z".to_string(),
+        });
+
+        let mut app = make_status_app(entry);
+        let status_app = app.status_app.as_mut().expect("status app");
+        status_app.selected = 0;
+        status_app.list_state.select(Some(0));
+
+        let buffer = render_status_buffer_with_size(&mut app, 100, 40);
+        let mut continuation_fg = None;
+
+        for y in 0..buffer.area.height {
+            let mut line = String::new();
+            for x in 0..buffer.area.width {
+                line.push_str(buffer[(x, y)].symbol());
+            }
+            if line.contains("          ") && line.contains("rendered line") {
+                continuation_fg = Some(buffer[(10, y)].fg);
+                break;
+            }
+        }
+
+        assert_eq!(continuation_fg, Some(Color::Reset));
     }
 }
