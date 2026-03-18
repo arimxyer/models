@@ -61,25 +61,19 @@ Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message`
 - All use `PickerTerminal` wrapper (ratatui `Viewport::Inline`) for raw mode lifecycle
 
 ### Key Files
-- `src/tui/mod.rs` — startup, event loop, async channel handling
-- `src/tui/app.rs` — App state, Message enum, update logic, Tab enum (Models/Agents/Benchmarks/Status)
-- `src/tui/event.rs` — keybinding → Message mapping
-- `src/tui/ui.rs` — rendering
-- `src/tui/markdown.rs` — custom markdown-to-ratatui converter (headers, bullets, bold, code, URLs, search highlighting)
-- `src/tui/benchmarks_app.rs` — BenchmarksApp state, compare mode, H2H/scatter/radar views
-- `src/tui/radar.rs` — radar chart rendering for benchmark compare mode
-- `src/tui/status_app.rs` — StatusApp state, provider list/detail focus, search filtering
-- `src/benchmarks.rs` — BenchmarkStore, BenchmarkEntry
-- `src/benchmark_fetch.rs` — jsDelivr CDN fetcher (no cache, no ETag)
-- `src/model_traits.rs` — runtime matching of AA entries to models.dev for open/closed status, reasoning, tool_call, and context limits
+
+Each module has its own `CLAUDE.md` with detailed documentation. Top-level highlights:
+
+- `src/formatting.rs` — shared utilities: `truncate`, `parse_date`, `format_tokens`, `format_stars`, `EM_DASH`, `cmp_opt_f64`
+- `src/data.rs` — Provider/Model data structures from models.dev API
+- `src/config.rs` — user config file (agents, cache, display settings)
 - `src/provider_category.rs` — provider categorization logic
-- `src/status.rs` — ProviderHealth, ProviderStatus, StatusProviderSeed, STATUS_REGISTRY
-- `src/status_fetch.rs` — StatusFetcher, official status page fetchers (Statuspage/BetterStack/Instatus/etc.) with apistatuscheck.com fallback
+- `src/benchmarks/` — `store.rs` (BenchmarkStore/Entry), `fetch.rs` (CDN fetcher), `traits.rs` (AA↔models.dev matching)
+- `src/status/` — `types.rs`, `registry.rs`, `assessment.rs`, `fetch.rs`, `adapters/` (per-source-family parsers)
+- `src/tui/` — `app.rs` (App state, Message enum), `models_app.rs`/`agents_app.rs`/`benchmarks_app.rs`/`status_app.rs` (sub-app state), `event.rs` (NavAction dedup), `ui.rs` + `ui_*.rs` (per-tab rendering), `markdown.rs`, `radar.rs`
+- `src/cli/` — `picker.rs` (shared PickerTerminal, nav helpers, style constants), `models.rs`/`benchmarks.rs`/`agents_ui.rs` (inline pickers), `styles.rs`
 - `docs/status-source-shape-audit.md` — upstream status-source families, live payload quirks, and adapter coverage notes
 - `docs/status-normalization-spec.md` — canonical status detail availability semantics and helper/UI contract
-- `src/config.rs` — user config file (agents, cache, display settings)
-- `src/data.rs` — Provider/Model data structures from models.dev API
-- `src/cli/styles.rs` — shared CLI color constants and styling
 
 ### GitHub Actions
 - `ci.yml` — runs on PR/push: fmt check, clippy, test
