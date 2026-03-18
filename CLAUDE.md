@@ -40,6 +40,9 @@ Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message`
 - `src/cli/agents.rs` — clap subcommands, dispatch, tool resolution, all agent commands
 - `src/cli/agents_ui.rs` — inline release browser, source picker, agent disambiguation picker (ratatui `Viewport::Inline`)
 - `src/agents/changelog_parser.rs` — comrak-backed markdown parser producing normalized IR (`ChangelogBlock` enum: `Heading`/`Bullet`/`Paragraph`)
+- `src/agents/data.rs` — Agent/AgentsFile data structures, FetchStatus enum
+- `src/agents/detect.rs` — local binary detection for installed agent status
+- `src/agents/loader.rs` — loads embedded `data/agents.json` via `include_str!`
 - `src/agents/helpers.rs` — relative time formatting, release frequency, date parsing
 - Binary aliases: `models agents <cmd>` or `agents <cmd>` via argv[0] symlink detection
 - Commands: `status`, `latest`, `list-sources`, `<tool>` (with `--latest`, `--list`, `--pick`, `--version`, `--web`)
@@ -64,10 +67,12 @@ Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message`
 - `src/tui/ui.rs` — rendering
 - `src/tui/markdown.rs` — custom markdown-to-ratatui converter (headers, bullets, bold, code, URLs, search highlighting)
 - `src/tui/benchmarks_app.rs` — BenchmarksApp state, compare mode, H2H/scatter/radar views
+- `src/tui/radar.rs` — radar chart rendering for benchmark compare mode
 - `src/tui/status_app.rs` — StatusApp state, provider list/detail focus, search filtering
 - `src/benchmarks.rs` — BenchmarkStore, BenchmarkEntry
 - `src/benchmark_fetch.rs` — jsDelivr CDN fetcher (no cache, no ETag)
 - `src/model_traits.rs` — runtime matching of AA entries to models.dev for open/closed status, reasoning, tool_call, and context limits
+- `src/provider_category.rs` — provider categorization logic
 - `src/status.rs` — ProviderHealth, ProviderStatus, StatusProviderSeed, STATUS_REGISTRY
 - `src/status_fetch.rs` — StatusFetcher, official status page fetchers (Statuspage/BetterStack/Instatus/etc.) with apistatuscheck.com fallback
 - `docs/status-source-shape-audit.md` — upstream status-source families, live payload quirks, and adapter coverage notes
