@@ -1,8 +1,8 @@
 use super::app::App;
 use super::ui::{
-    caret, focus_border, render_scrollbar, selection_style, status_health_icon,
-    status_health_style, truncate,
+    caret, focus_border, render_scrollbar, selection_style, status_health_icon, status_health_style,
 };
+use crate::formatting::{format_relative_time_from_str, truncate};
 use crate::status::{ProviderHealth, StatusProvenance, StatusSourceMethod};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -62,13 +62,6 @@ fn translate_component_name(name: &str) -> String {
         }
     }
     name.to_string()
-}
-
-/// Format a timestamp string as relative time (e.g. "2h ago").
-fn format_relative_time_from_str(ts: &str) -> String {
-    crate::agents::helpers::parse_date(ts)
-        .map(|dt| crate::agents::helpers::format_relative_time(&dt))
-        .unwrap_or_else(|| ts.to_string())
 }
 
 fn provider_last_meaningful_update(

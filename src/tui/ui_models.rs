@@ -8,7 +8,8 @@ use ratatui::{
 
 use super::app::App;
 use super::models_app::{Filters, Focus, ProviderListItem, SortOrder};
-use super::ui::{caret, focus_border, truncate};
+use super::ui::{caret, focus_border};
+use crate::formatting::truncate;
 use crate::formatting::EM_DASH;
 use crate::provider_category::{provider_category, ProviderCategory};
 

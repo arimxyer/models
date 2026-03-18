@@ -102,20 +102,6 @@ pub(super) fn detail_visible_height(area: Rect) -> u16 {
     area.height.saturating_sub(2) // 2 for top and bottom borders
 }
 
-pub(super) fn truncate(s: &str, max_len: usize) -> String {
-    // Use char count as a proxy — safe for UTF-8 boundaries.
-    // Most model/provider names are ASCII; CJK chars are ~2 display-width
-    // but char-based truncation is still safe (no panics).
-    let char_count: usize = s.chars().count();
-    if char_count <= max_len {
-        s.to_string()
-    } else {
-        let target = max_len.saturating_sub(3);
-        let truncated: String = s.chars().take(target).collect();
-        format!("{truncated}...")
-    }
-}
-
 /// Create a centered rect using fixed width and height
 pub(super) fn centered_rect_fixed(width: u16, height: u16, area: Rect) -> Rect {
     let x = area.x + (area.width.saturating_sub(width)) / 2;

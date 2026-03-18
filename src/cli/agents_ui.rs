@@ -321,14 +321,9 @@ impl SourcePicker {
             source_tag,
         ];
         if let Some(stars) = item.stars {
-            let s = if stars >= 1000 {
-                format!("{:.1}k", stars as f64 / 1000.0)
-            } else {
-                stars.to_string()
-            };
             header.push(Span::raw("  "));
             header.push(Span::styled(
-                format!("\u{2605} {s}"),
+                format!("\u{2605} {}", crate::formatting::format_stars(stars)),
                 Style::default().fg(Color::Yellow),
             ));
         }

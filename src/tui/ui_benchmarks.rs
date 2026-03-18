@@ -7,9 +7,10 @@ use ratatui::{
 };
 
 use super::app::App;
-use super::ui::{caret, centered_rect, centered_rect_fixed, focus_border, truncate};
+use super::ui::{caret, centered_rect, centered_rect_fixed, focus_border};
 use super::ui_compare::{draw_h2h_table_generic, draw_scatter};
 use crate::formatting::format_tokens;
+use crate::formatting::truncate;
 
 /// Color palette for selected models in comparison mode.
 pub(crate) fn compare_colors(index: usize) -> Color {

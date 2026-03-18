@@ -103,7 +103,6 @@ pub(crate) fn format_relative_time(dt: &DateTime<Utc>) -> String {
 
 /// Convenience: parse a timestamp string and format as relative time.
 /// Falls back to the raw string if parsing fails.
-#[allow(dead_code)]
 pub(crate) fn format_relative_time_from_str(ts: &str) -> String {
     parse_date(ts)
         .map(|dt| format_relative_time(&dt))

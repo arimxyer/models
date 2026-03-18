@@ -9,9 +9,10 @@ use ratatui::{
 use super::app::App;
 use super::ui::{
     caret, centered_rect_fixed, detail_visible_height, focus_border, render_scrollbar,
-    selection_style, truncate,
+    selection_style,
 };
 use crate::agents::{format_stars, FetchStatus};
+use crate::formatting::truncate;
 use crate::formatting::EM_DASH;
 
 pub(super) fn draw_agents_main(f: &mut Frame, area: Rect, app: &mut App) {
