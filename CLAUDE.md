@@ -36,29 +36,11 @@ mise run fmt && mise run clippy && mise run test
 ### Async Pattern
 Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message` variants processed in the main loop (`src/tui/mod.rs`). The app never blocks on network calls.
 
-### Agents CLI
-- `src/cli/agents.rs` — clap subcommands, dispatch, tool resolution, all agent commands
-- `src/cli/agents_ui.rs` — inline release browser, source picker, agent disambiguation picker (ratatui `Viewport::Inline`)
-- `src/agents/changelog_parser.rs` — comrak-backed markdown parser producing normalized IR (`ChangelogBlock` enum: `Heading`/`Bullet`/`Paragraph`)
-- `src/agents/data.rs` — Agent/AgentsFile data structures, FetchStatus enum
-- `src/agents/detect.rs` — local binary detection for installed agent status
-- `src/agents/loader.rs` — loads embedded `data/agents.json` via `include_str!`
-- `src/agents/helpers.rs` — relative time formatting, release frequency, date parsing
+### Agents & CLI
+See `src/agents/CLAUDE.md` and `src/cli/CLAUDE.md` for detailed module docs.
 - Binary aliases: `models agents <cmd>` or `agents <cmd>` via argv[0] symlink detection
-- Commands: `status`, `latest`, `list-sources`, `<tool>` (with `--latest`, `--list`, `--pick`, `--version`, `--web`)
-- Uses termimad for styled markdown output in TTY, plain text when piped
-
-### CLI Subcommands
-- `models list` / `models search` / `models show` — thin wrappers in `src/cli/list.rs`, `search.rs`, `show.rs` delegating to `src/cli/models.rs`
-- `models benchmarks` — interactive benchmark picker (`src/cli/benchmarks.rs`)
-- `models completions <shell>` — shell completion generation via clap_complete
-- `src/cli/styles.rs` — shared color constants and styling for CLI output
-
-### CLI Inline Pickers
-- `src/cli/models.rs` — interactive model picker with `/` filter, `s`/`S` sort, preview pane
-- `src/cli/benchmarks.rs` — interactive benchmark picker with filter, sort, detail preview
-- `src/cli/agents_ui.rs` — release browser with changelog preview, source picker with tracking management
-- All use `PickerTerminal` wrapper (ratatui `Viewport::Inline`) for raw mode lifecycle
+- Commands: `list`, `search`, `show`, `benchmarks`, `completions <shell>`, full agents suite (`status`, `latest`, `list-sources`, `<tool>`)
+- CLI pickers use shared `PickerTerminal` infrastructure in `src/cli/picker.rs`
 
 ### Key Files
 

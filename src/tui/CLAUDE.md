@@ -37,6 +37,8 @@ The TUI is split across two layers:
 
 ## Key Gotchas
 
+- Tab render functions in `ui_*.rs` use `pub(super)` — callable from `ui.rs` but not from outside `tui/`.
+- Sub-app methods needing provider data take `&[(String, Provider)]` as parameter (e.g., `ModelsApp::update_filtered_models`). This is the established pattern for cross-tab data access — don't store shared data on sub-apps.
 - Never use `eprintln!` in TUI mode — corrupts ratatui's alternate screen buffer. Use `Message` variants or status bar updates.
 - `Paragraph::scroll((y, 0))` counts **visual wrapped lines**, not logical lines — compute cumulative wrapped heights for scroll-to accuracy.
 - Use `line.width()` (unicode-aware), not `.len()` (byte count), for width calculations.
