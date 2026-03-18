@@ -368,6 +368,20 @@ fn status_verdict_copy(health: ProviderHealth) -> &'static str {
     }
 }
 
+/// Map incident stage to a `ProviderHealth` for accent stripe coloring.
+fn incident_stage_health(stage: &str) -> ProviderHealth {
+    let normalized = stage.to_lowercase();
+    if normalized.contains("resolved") {
+        ProviderHealth::Operational
+    } else if normalized.contains("monitoring") {
+        ProviderHealth::Degraded
+    } else if normalized.contains("maint") {
+        ProviderHealth::Maintenance
+    } else {
+        ProviderHealth::Degraded
+    }
+}
+
 fn incident_stage_style(stage: &str) -> Style {
     let normalized = stage.to_lowercase();
     if normalized.contains("resolved") {
@@ -690,16 +704,26 @@ fn overall_freshness_line(status_app: &super::status_app::StatusApp) -> Line<'st
     }
 }
 
-fn soft_card_divider(width: usize) -> Line<'static> {
-    let dash_count = width.max(12);
-    Line::from(Span::styled(
-        format!("  {}", "-".repeat(dash_count.saturating_sub(2))),
-        Style::default().fg(Color::DarkGray),
-    ))
+/// Prepend a health-colored left-edge accent stripe (`"▎ "`) to an existing `Line`.
+fn soft_card_accent_line(line: Line<'static>, health: ProviderHealth) -> Line<'static> {
+    let accent_style = status_health_style(health);
+    let mut spans = vec![Span::styled("▎ ", accent_style)];
+    spans.extend(line.spans);
+    Line::from(spans)
 }
 
-fn push_soft_card_summary(lines: &mut Vec<Line<'static>>, summary: &str, body_width: usize) {
-    let _ = body_width;
+/// Wrap a batch of lines with accent stripes and push them onto `lines`.
+fn push_soft_card_lines(
+    lines: &mut Vec<Line<'static>>,
+    card_lines: Vec<Line<'static>>,
+    health: ProviderHealth,
+) {
+    for line in card_lines {
+        lines.push(soft_card_accent_line(line, health));
+    }
+}
+
+fn push_soft_card_summary(lines: &mut Vec<Line<'static>>, summary: &str, _body_width: usize) {
     lines.push(Line::from(Span::raw(format!("  {summary}"))));
 }
 
@@ -773,7 +797,9 @@ fn build_incidents_panel_lines(
         let incident = incidents[0];
         let summary = entry.provider_summary_text();
 
-        lines.push(Line::from(vec![
+        let mut card_lines = Vec::new();
+
+        card_lines.push(Line::from(vec![
             Span::styled(
                 status_health_icon(entry.health),
                 status_health_style(entry.health),
@@ -785,7 +811,7 @@ fn build_incidents_panel_lines(
             ),
         ]));
 
-        lines.push(Line::from(vec![
+        card_lines.push(Line::from(vec![
             Span::styled("  Issue: ", status_field_label_style()),
             Span::styled(
                 incident.name.clone(),
@@ -818,10 +844,10 @@ fn build_incidents_panel_lines(
             ));
             metadata_spans.push(Span::styled(value, Style::default().fg(Color::Cyan)));
         }
-        lines.push(Line::from(metadata_spans));
+        card_lines.push(Line::from(metadata_spans));
 
         if incidents.len() > 1 {
-            lines.push(Line::from(vec![
+            card_lines.push(Line::from(vec![
                 Span::styled("  Additional incidents: ", status_field_label_style()),
                 Span::styled(
                     format!("{} more", incidents.len() - 1),
@@ -831,27 +857,39 @@ fn build_incidents_panel_lines(
         }
 
         if !non_op_components.is_empty() {
-            push_component_scope_lines(&mut lines, &non_op_components, 4);
+            push_component_scope_lines(&mut card_lines, &non_op_components, 4);
         } else if !incident.affected_components.is_empty() {
-            push_plain_scope_lines(&mut lines, "Affected", &incident.affected_components, 4);
+            push_plain_scope_lines(
+                &mut card_lines,
+                "Affected",
+                &incident.affected_components,
+                4,
+            );
         }
 
         if let Some(update) = &incident.latest_update {
             if !update_duplicates_summary_or_issue(&update.body, summary, &incident.name) {
-                lines.push(Line::from(Span::styled(
+                card_lines.push(Line::from(Span::styled(
                     "  Latest Update",
                     status_section_label_style(),
                 )));
-                push_wrapped_bullet_lines(&mut lines, &update.body, body_width, "    - ", "      ");
+                push_wrapped_bullet_lines(
+                    &mut card_lines,
+                    &update.body,
+                    body_width,
+                    "    - ",
+                    "      ",
+                );
             }
         }
 
         if let Some(note) = entry.user_visible_caveat() {
-            push_overall_caveat(&mut lines, note, body_width);
+            push_overall_caveat(&mut card_lines, note, body_width);
         }
 
+        push_soft_card_lines(&mut lines, card_lines, entry.health);
+
         if idx + 1 < entries.len() {
-            lines.push(soft_card_divider(body_width));
             lines.push(Line::from(""));
         }
     }
@@ -877,7 +915,9 @@ fn build_degradation_panel_lines(
     for (idx, entry) in entries.iter().enumerate() {
         let non_op_components = overall_attention_components(entry);
 
-        lines.push(Line::from(vec![
+        let mut card_lines = Vec::new();
+
+        card_lines.push(Line::from(vec![
             Span::styled(
                 status_health_icon(entry.health),
                 status_health_style(entry.health),
@@ -890,17 +930,17 @@ fn build_degradation_panel_lines(
         ]));
 
         if let Some(summary) = entry.provider_summary_text() {
-            push_soft_card_summary(&mut lines, summary, body_width);
+            push_soft_card_summary(&mut card_lines, summary, body_width);
         }
 
-        lines.push(Line::from(vec![
+        card_lines.push(Line::from(vec![
             Span::styled("  Scope: ", status_field_label_style()),
             Span::styled(
                 component_only_scope_title(&non_op_components),
                 Style::default().add_modifier(Modifier::BOLD),
             ),
         ]));
-        lines.push(Line::from(vec![
+        card_lines.push(Line::from(vec![
             Span::styled("  Status: ", status_field_label_style()),
             Span::styled(
                 provider_health_label(entry.health),
@@ -915,14 +955,15 @@ fn build_degradation_panel_lines(
                 Style::default().fg(Color::Cyan),
             ),
         ]));
-        push_component_scope_lines(&mut lines, &non_op_components, 4);
+        push_component_scope_lines(&mut card_lines, &non_op_components, 4);
 
         if let Some(note) = entry.user_visible_caveat() {
-            push_overall_caveat(&mut lines, note, body_width);
+            push_overall_caveat(&mut card_lines, note, body_width);
         }
 
+        push_soft_card_lines(&mut lines, card_lines, entry.health);
+
         if idx + 1 < entries.len() {
-            lines.push(soft_card_divider(body_width));
             lines.push(Line::from(""));
         }
     }
@@ -932,12 +973,14 @@ fn build_degradation_panel_lines(
 
 fn build_maintenance_panel_lines(
     items: &[(&str, &crate::status::ScheduledMaintenance)],
-    body_width: usize,
+    _body_width: usize,
 ) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
 
     for (idx, (provider_name, maint)) in items.iter().enumerate() {
-        lines.push(Line::from(vec![
+        let mut card_lines = Vec::new();
+
+        card_lines.push(Line::from(vec![
             Span::styled("◆", Style::default().fg(Color::Blue)),
             Span::raw(" "),
             Span::styled(
@@ -945,7 +988,7 @@ fn build_maintenance_panel_lines(
                 Style::default().add_modifier(Modifier::BOLD),
             ),
         ]));
-        lines.push(Line::from(vec![
+        card_lines.push(Line::from(vec![
             Span::styled("  Window: ", status_field_label_style()),
             Span::styled(
                 maint.name.clone(),
@@ -966,14 +1009,15 @@ fn build_maintenance_panel_lines(
                 Style::default().fg(Color::Cyan),
             ));
         }
-        lines.push(Line::from(bits));
+        card_lines.push(Line::from(bits));
 
         if !maint.affected_components.is_empty() {
-            push_plain_scope_lines(&mut lines, "Affected", &maint.affected_components, 3);
+            push_plain_scope_lines(&mut card_lines, "Affected", &maint.affected_components, 3);
         }
 
+        push_soft_card_lines(&mut lines, card_lines, ProviderHealth::Maintenance);
+
         if idx + 1 < items.len() {
-            lines.push(soft_card_divider(body_width));
             lines.push(Line::from(""));
         }
     }
@@ -1489,8 +1533,11 @@ fn draw_provider_status_detail(
             )));
         }
 
-        for incident in active_incidents {
-            lines.push(Line::from(vec![
+        for (i, incident) in active_incidents.iter().enumerate() {
+            let accent_health = incident_stage_health(&incident.status);
+            let mut card_lines = Vec::new();
+
+            card_lines.push(Line::from(vec![
                 Span::styled("◉ ", incident_stage_style(&incident.status)),
                 Span::styled(
                     incident.name.clone(),
@@ -1508,7 +1555,7 @@ fn draw_provider_status_detail(
             if !incident.affected_components.is_empty() {
                 detail_bits.push(incident.affected_components.join(", "));
             }
-            lines.push(Line::from(Span::styled(
+            card_lines.push(Line::from(Span::styled(
                 format!("  {}", detail_bits.join(" • ")),
                 Style::default().fg(Color::DarkGray),
             )));
@@ -1517,8 +1564,14 @@ fn draw_provider_status_detail(
                     .iter()
                     .take(3)
                 {
-                    lines.push(Line::from(Span::raw(format!("  {line}"))));
+                    card_lines.push(Line::from(Span::raw(format!("  {line}"))));
                 }
+            }
+
+            push_soft_card_lines(&mut lines, card_lines, accent_health);
+
+            if i + 1 < active_incidents.len() {
+                lines.push(Line::from(""));
             }
         }
 
