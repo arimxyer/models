@@ -14,6 +14,7 @@ pub mod app;
 pub mod benchmarks_app;
 pub mod event;
 pub mod markdown;
+pub mod models_app;
 pub mod radar;
 pub mod status_app;
 pub mod ui;

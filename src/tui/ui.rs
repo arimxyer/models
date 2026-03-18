@@ -374,18 +374,18 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
         Mode::Search => {
             // Get the correct search query based on current tab
             let search_query = match app.current_tab {
-                Tab::Models => &app.search_query,
+                Tab::Models => &app.models_app.search_query,
                 Tab::Agents => app
                     .agents_app
                     .as_ref()
                     .map(|a| &a.search_query)
-                    .unwrap_or(&app.search_query),
+                    .unwrap_or(&app.models_app.search_query),
                 Tab::Benchmarks => &app.benchmarks_app.search_query,
                 Tab::Status => app
                     .status_app
                     .as_ref()
                     .map(|a| &a.search_query)
-                    .unwrap_or(&app.search_query),
+                    .unwrap_or(&app.models_app.search_query),
             };
             let content = Line::from(vec![
                 Span::styled(" Search: ", Style::default().fg(Color::Cyan)),

@@ -6,13 +6,14 @@ use ratatui::{
     Frame,
 };
 
-use super::app::{App, Filters, Focus, ProviderListItem, SortOrder};
+use super::app::App;
+use super::models_app::{Filters, Focus, ProviderListItem, SortOrder};
 use super::ui::{caret, focus_border, truncate};
 use crate::formatting::EM_DASH;
 use crate::provider_category::{provider_category, ProviderCategory};
 
 fn provider_detail_lines(app: &App) -> Vec<Line<'static>> {
-    let Some(entry) = app.current_model() else {
+    let Some(entry) = app.models_app.current_model() else {
         return vec![Line::from(Span::styled(
             "No model selected",
             Style::default().fg(Color::DarkGray),
@@ -135,7 +136,7 @@ pub(super) fn draw_main(f: &mut Frame, area: Rect, app: &mut App) {
 }
 
 fn draw_providers(f: &mut Frame, area: Rect, app: &mut App) {
-    let is_focused = app.focus == Focus::Providers;
+    let is_focused = app.models_app.focus == Focus::Providers;
     let border_style = focus_border(is_focused);
 
     let outer_block = Block::default()
@@ -152,20 +153,20 @@ fn draw_providers(f: &mut Frame, area: Rect, app: &mut App) {
         .split(inner_area);
 
     // Filter toggles row
-    let cat_active = app.provider_category_filter != ProviderCategory::All;
+    let cat_active = app.models_app.provider_category_filter != ProviderCategory::All;
     let cat_color = if cat_active {
-        app.provider_category_filter.color()
+        app.models_app.provider_category_filter.color()
     } else {
         Color::DarkGray
     };
-    let grp_color = if app.group_by_category {
+    let grp_color = if app.models_app.group_by_category {
         Color::Green
     } else {
         Color::DarkGray
     };
 
     let cat_label = if cat_active {
-        app.provider_category_filter.short_label()
+        app.models_app.provider_category_filter.short_label()
     } else {
         "Cat"
     };
@@ -179,12 +180,12 @@ fn draw_providers(f: &mut Frame, area: Rect, app: &mut App) {
     f.render_widget(Paragraph::new(filter_line), chunks[0]);
 
     // Build items list from provider_list_items
-    let mut items: Vec<ListItem> = Vec::with_capacity(app.provider_list_items.len());
+    let mut items: Vec<ListItem> = Vec::with_capacity(app.models_app.provider_list_items.len());
 
-    for item in &app.provider_list_items {
+    for item in &app.models_app.provider_list_items {
         match item {
             ProviderListItem::All => {
-                let count = app.filtered_model_count();
+                let count = app.models_app.filtered_model_count(&app.providers);
                 let text = format!("All ({})", count);
                 items.push(ListItem::new(text).style(Style::default().fg(Color::Green)));
             }
@@ -229,24 +230,24 @@ fn draw_providers(f: &mut Frame, area: Rect, app: &mut App) {
         )
         .highlight_symbol(caret);
 
-    f.render_stateful_widget(list, chunks[1], &mut app.provider_list_state);
+    f.render_stateful_widget(list, chunks[1], &mut app.models_app.provider_list_state);
 }
 
 fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
-    let is_focused = app.focus == Focus::Models;
+    let is_focused = app.models_app.focus == Focus::Models;
     let border_style = focus_border(is_focused);
 
-    let models = app.filtered_models();
+    let models = app.models_app.filtered_models();
 
-    let sort_indicator = match app.sort_order {
+    let sort_indicator = match app.models_app.sort_order {
         SortOrder::Default => String::new(),
         _ => {
-            let arrow = if app.sort_ascending {
+            let arrow = if app.models_app.sort_ascending {
                 "\u{2191}"
             } else {
                 "\u{2193}"
             };
-            let label = match app.sort_order {
+            let label = match app.models_app.sort_order {
                 SortOrder::ReleaseDate => "date",
                 SortOrder::Cost => "cost",
                 SortOrder::Context => "ctx",
@@ -256,17 +257,21 @@ fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
         }
     };
 
-    let filter_indicator = format_filters(&app.filters, app.provider_category_filter);
+    let filter_indicator = format_filters(
+        &app.models_app.filters,
+        app.models_app.provider_category_filter,
+    );
 
     // Show provider name in title when a specific provider is selected
     let provider_label = app
-        .selected_provider_data()
+        .models_app
+        .selected_provider_data(&app.providers)
         .map(|(_, p)| p.name.as_str())
         .unwrap_or("Models");
 
-    let title = if app.search_query.is_empty() && filter_indicator.is_empty() {
+    let title = if app.models_app.search_query.is_empty() && filter_indicator.is_empty() {
         format!(" {} ({}){} ", provider_label, models.len(), sort_indicator)
-    } else if app.search_query.is_empty() {
+    } else if app.models_app.search_query.is_empty() {
         format!(
             " {} ({}){} [{}] ",
             provider_label,
@@ -279,7 +284,7 @@ fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
             " {} ({}) [/{}]{} ",
             provider_label,
             models.len(),
-            app.search_query,
+            app.models_app.search_query,
             sort_indicator
         )
     } else {
@@ -287,7 +292,7 @@ fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
             " {} ({}) [/{}] [{}]{} ",
             provider_label,
             models.len(),
-            app.search_query,
+            app.models_app.search_query,
             filter_indicator,
             sort_indicator
         )
@@ -318,7 +323,7 @@ fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
         .add_modifier(Modifier::BOLD);
 
     // Determine which column is actively sorted
-    let sort_col = match app.sort_order {
+    let sort_col = match app.models_app.sort_order {
         SortOrder::Default => "name",
         SortOrder::ReleaseDate => "name",
         SortOrder::Cost => "cost",
@@ -363,7 +368,7 @@ fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
 
     // Model rows
     for (display_idx, entry) in models.iter().enumerate() {
-        let is_selected = display_idx == app.selected_model;
+        let is_selected = display_idx == app.models_app.selected_model;
         let style = if is_selected {
             Style::default()
                 .fg(Color::Yellow)
@@ -423,7 +428,7 @@ fn draw_models(f: &mut Frame, area: Rect, app: &mut App) {
     }
 
     let list = List::new(items);
-    let mut state = app.model_list_state;
+    let mut state = app.models_app.model_list_state;
     f.render_stateful_widget(list, inner_area, &mut state);
 }
 
@@ -440,7 +445,7 @@ fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
     let inner = block.inner(area);
     f.render_widget(block, area);
 
-    let Some(entry) = app.current_model() else {
+    let Some(entry) = app.models_app.current_model() else {
         let para = Paragraph::new(Line::from(Span::styled(
             "No model selected",
             Style::default().fg(Color::DarkGray),
