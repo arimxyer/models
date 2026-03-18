@@ -374,6 +374,10 @@ fn handle_status_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Opti
         .as_ref()
         .map(|a| a.focus)
         .unwrap_or(StatusFocus::List);
+    let overall_selected = app
+        .status_app
+        .as_ref()
+        .is_some_and(|status_app| status_app.is_overall_selected());
 
     match code {
         KeyCode::Char('j') | KeyCode::Down => {
@@ -432,8 +436,20 @@ fn handle_status_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Opti
                 Some(Message::PageScrollStatusDetailUp)
             }
         }
-        KeyCode::Char('h') | KeyCode::Left => Some(Message::SwitchStatusFocus),
-        KeyCode::Char('l') | KeyCode::Right => Some(Message::SwitchStatusFocus),
+        KeyCode::Char('h') | KeyCode::Left => {
+            if focus == StatusFocus::Details && overall_selected {
+                Some(Message::PrevOverallStatusPanel)
+            } else {
+                Some(Message::SwitchStatusFocus)
+            }
+        }
+        KeyCode::Char('l') | KeyCode::Right => {
+            if focus == StatusFocus::Details && overall_selected {
+                Some(Message::NextOverallStatusPanel)
+            } else {
+                Some(Message::SwitchStatusFocus)
+            }
+        }
         KeyCode::Tab | KeyCode::BackTab => Some(Message::SwitchStatusFocus),
         KeyCode::Char('/') => Some(Message::EnterSearch),
         KeyCode::Esc => Some(Message::ClearSearch),

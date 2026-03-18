@@ -219,6 +219,8 @@ pub enum Message {
     SwitchStatusFocus,
     RefreshStatus,
     OpenStatusPage,
+    PrevOverallStatusPanel,
+    NextOverallStatusPanel,
     ScrollStatusDetailUp,
     ScrollStatusDetailDown,
     ScrollStatusDetailTop,
@@ -796,36 +798,70 @@ impl App {
             Message::OpenStatusPage => {
                 // Handled in main loop
             }
+            Message::PrevOverallStatusPanel => {
+                if let Some(ref mut status_app) = self.status_app {
+                    status_app.select_prev_overall_panel();
+                }
+            }
+            Message::NextOverallStatusPanel => {
+                if let Some(ref mut status_app) = self.status_app {
+                    status_app.select_next_overall_panel();
+                }
+            }
             Message::ScrollStatusDetailUp => {
                 if let Some(ref mut status_app) = self.status_app {
-                    status_app.detail_scroll = status_app.detail_scroll.saturating_sub(1);
+                    if status_app.is_overall_selected() {
+                        status_app.scroll_active_overall_panel_up();
+                    } else {
+                        status_app.detail_scroll = status_app.detail_scroll.saturating_sub(1);
+                    }
                 }
             }
             Message::ScrollStatusDetailDown => {
                 if let Some(ref mut status_app) = self.status_app {
-                    status_app.detail_scroll = status_app.detail_scroll.saturating_add(1);
+                    if status_app.is_overall_selected() {
+                        status_app.scroll_active_overall_panel_down();
+                    } else {
+                        status_app.detail_scroll = status_app.detail_scroll.saturating_add(1);
+                    }
                 }
             }
             Message::ScrollStatusDetailTop => {
                 if let Some(ref mut status_app) = self.status_app {
-                    status_app.detail_scroll = 0;
+                    if status_app.is_overall_selected() {
+                        status_app.scroll_active_overall_panel_top();
+                    } else {
+                        status_app.detail_scroll = 0;
+                    }
                 }
             }
             Message::ScrollStatusDetailBottom => {
                 if let Some(ref mut status_app) = self.status_app {
-                    status_app.detail_scroll = u16::MAX; // clamped at render time
+                    if status_app.is_overall_selected() {
+                        status_app.scroll_active_overall_panel_bottom();
+                    } else {
+                        status_app.detail_scroll = u16::MAX; // clamped at render time
+                    }
                 }
             }
             Message::PageScrollStatusDetailUp => {
                 if let Some(ref mut status_app) = self.status_app {
-                    status_app.detail_scroll =
-                        status_app.detail_scroll.saturating_sub(PAGE_SIZE as u16);
+                    if status_app.is_overall_selected() {
+                        status_app.page_scroll_active_overall_panel_up();
+                    } else {
+                        status_app.detail_scroll =
+                            status_app.detail_scroll.saturating_sub(PAGE_SIZE as u16);
+                    }
                 }
             }
             Message::PageScrollStatusDetailDown => {
                 if let Some(ref mut status_app) = self.status_app {
-                    status_app.detail_scroll =
-                        status_app.detail_scroll.saturating_add(PAGE_SIZE as u16);
+                    if status_app.is_overall_selected() {
+                        status_app.page_scroll_active_overall_panel_down();
+                    } else {
+                        status_app.detail_scroll =
+                            status_app.detail_scroll.saturating_add(PAGE_SIZE as u16);
+                    }
                 }
             }
             Message::SwitchAgentFocus => {

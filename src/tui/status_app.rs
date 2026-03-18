@@ -18,14 +18,26 @@ pub enum StatusFocus {
     Details,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum OverallPanelFocus {
+    #[default]
+    Incidents,
+    Degradation,
+    Maintenance,
+}
+
 pub struct StatusApp {
     pub entries: Vec<ProviderStatus>,
     pub filtered_entries: Vec<usize>,
     pub selected: usize,
     pub list_state: ListState,
     pub focus: StatusFocus,
+    pub overall_panel_focus: OverallPanelFocus,
     pub search_query: String,
     pub detail_scroll: u16,
+    pub overall_incidents_scroll: u16,
+    pub overall_degradation_scroll: u16,
+    pub overall_maintenance_scroll: u16,
     pub loading: bool,
     pub last_refreshed: Option<Instant>,
     pub last_error: Option<String>,
@@ -59,8 +71,12 @@ impl StatusApp {
             selected: 0,
             list_state,
             focus: StatusFocus::default(),
+            overall_panel_focus: OverallPanelFocus::default(),
             search_query: String::new(),
             detail_scroll: 0,
+            overall_incidents_scroll: 0,
+            overall_degradation_scroll: 0,
+            overall_maintenance_scroll: 0,
             loading: true,
             last_refreshed: None,
             last_error: None,
@@ -89,6 +105,7 @@ impl StatusApp {
         self.loading = false;
         self.last_refreshed = Some(Instant::now());
         self.last_error = None;
+        self.normalize_overall_panel_focus();
         self.update_filtered();
     }
 
@@ -121,6 +138,8 @@ impl StatusApp {
             })
             .map(|(idx, _)| idx)
             .collect();
+
+        self.normalize_overall_panel_focus();
 
         // If current provider selection is out of range, reset to Overall
         if self.selected > self.filtered_entries.len() {
@@ -231,6 +250,95 @@ impl StatusApp {
             StatusFocus::List => StatusFocus::Details,
             StatusFocus::Details => StatusFocus::List,
         };
+    }
+
+    fn visible_overall_panels(&self) -> [OverallPanelFocus; 3] {
+        [
+            OverallPanelFocus::Incidents,
+            OverallPanelFocus::Degradation,
+            OverallPanelFocus::Maintenance,
+        ]
+    }
+
+    pub fn maintenance_panel_visible(&self) -> bool {
+        !self.all_maintenances().is_empty()
+    }
+
+    pub fn normalize_overall_panel_focus(&mut self) {
+        if self.overall_panel_focus == OverallPanelFocus::Maintenance
+            && !self.maintenance_panel_visible()
+        {
+            self.overall_panel_focus = OverallPanelFocus::Incidents;
+        }
+    }
+
+    pub fn select_prev_overall_panel(&mut self) {
+        let panels = self.visible_overall_panels();
+        let visible_count = if self.maintenance_panel_visible() {
+            3
+        } else {
+            2
+        };
+        let current = panels[..visible_count]
+            .iter()
+            .position(|panel| *panel == self.overall_panel_focus)
+            .unwrap_or(0);
+        let prev = if current == 0 {
+            visible_count - 1
+        } else {
+            current - 1
+        };
+        self.overall_panel_focus = panels[prev];
+    }
+
+    pub fn select_next_overall_panel(&mut self) {
+        let panels = self.visible_overall_panels();
+        let visible_count = if self.maintenance_panel_visible() {
+            3
+        } else {
+            2
+        };
+        let current = panels[..visible_count]
+            .iter()
+            .position(|panel| *panel == self.overall_panel_focus)
+            .unwrap_or(0);
+        self.overall_panel_focus = panels[(current + 1) % visible_count];
+    }
+
+    fn active_overall_scroll_mut(&mut self) -> &mut u16 {
+        match self.overall_panel_focus {
+            OverallPanelFocus::Incidents => &mut self.overall_incidents_scroll,
+            OverallPanelFocus::Degradation => &mut self.overall_degradation_scroll,
+            OverallPanelFocus::Maintenance => &mut self.overall_maintenance_scroll,
+        }
+    }
+
+    pub fn scroll_active_overall_panel_up(&mut self) {
+        let scroll = self.active_overall_scroll_mut();
+        *scroll = scroll.saturating_sub(1);
+    }
+
+    pub fn scroll_active_overall_panel_down(&mut self) {
+        let scroll = self.active_overall_scroll_mut();
+        *scroll = scroll.saturating_add(1);
+    }
+
+    pub fn scroll_active_overall_panel_top(&mut self) {
+        *self.active_overall_scroll_mut() = 0;
+    }
+
+    pub fn scroll_active_overall_panel_bottom(&mut self) {
+        *self.active_overall_scroll_mut() = u16::MAX;
+    }
+
+    pub fn page_scroll_active_overall_panel_up(&mut self) {
+        let scroll = self.active_overall_scroll_mut();
+        *scroll = scroll.saturating_sub(PAGE_SIZE as u16);
+    }
+
+    pub fn page_scroll_active_overall_panel_down(&mut self) {
+        let scroll = self.active_overall_scroll_mut();
+        *scroll = scroll.saturating_add(PAGE_SIZE as u16);
     }
 }
 
@@ -370,5 +478,53 @@ mod tests {
         assert_eq!(official, 0);
         assert_eq!(fallback, 0);
         assert!(unavailable > 0);
+    }
+
+    #[test]
+    fn overall_panel_focus_skips_maintenance_when_hidden() {
+        let mut app = StatusApp::new(&AgentsFile {
+            schema_version: 1,
+            last_scraped: None,
+            scrape_source: None,
+            agents: HashMap::new(),
+        });
+
+        app.overall_panel_focus = OverallPanelFocus::Incidents;
+        app.select_next_overall_panel();
+        assert_eq!(app.overall_panel_focus, OverallPanelFocus::Degradation);
+
+        app.select_next_overall_panel();
+        assert_eq!(app.overall_panel_focus, OverallPanelFocus::Incidents);
+    }
+
+    #[test]
+    fn overall_panel_focus_includes_maintenance_when_visible() {
+        let mut app = StatusApp::new(&AgentsFile {
+            schema_version: 1,
+            last_scraped: None,
+            scrape_source: None,
+            agents: HashMap::new(),
+        });
+
+        if let Some(entry) = app.entries.first_mut() {
+            entry.scheduled_maintenances.push(ScheduledMaintenance {
+                name: "DB maintenance".to_string(),
+                status: "scheduled".to_string(),
+                impact: "none".to_string(),
+                scheduled_for: Some("2026-03-18T12:00:00Z".to_string()),
+                scheduled_until: None,
+                affected_components: vec!["API".to_string()],
+            });
+        }
+
+        app.overall_panel_focus = OverallPanelFocus::Incidents;
+        app.select_next_overall_panel();
+        assert_eq!(app.overall_panel_focus, OverallPanelFocus::Degradation);
+
+        app.select_next_overall_panel();
+        assert_eq!(app.overall_panel_focus, OverallPanelFocus::Maintenance);
+
+        app.select_next_overall_panel();
+        assert_eq!(app.overall_panel_focus, OverallPanelFocus::Incidents);
     }
 }

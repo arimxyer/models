@@ -591,7 +591,6 @@ fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
             f,
             detail_area,
             status_app,
-            status_app.detail_scroll,
             status_app.focus == StatusFocus::Details,
         );
     } else if let Some(entry) = status_app.current_entry() {
@@ -741,242 +740,120 @@ fn sorted_components<'a>(
 
 // ── Overall Dashboard ──────────────────────────────────────────────────
 
-fn draw_overall_dashboard(
-    f: &mut Frame,
-    area: Rect,
-    status_app: &super::status_app::StatusApp,
-    detail_scroll: u16,
-    is_focused: bool,
-) {
-    let (op, deg, out, other) = status_app.health_counts();
-    let total = status_app.entries.len();
-    let attention_entries = overall_attention_entries(status_app);
-    let all_maint = status_app.all_maintenances();
-    let dark_border = Style::default().fg(Color::DarkGray);
+fn format_relative_time_from_instant(instant: std::time::Instant) -> String {
+    let elapsed = instant.elapsed();
+    let secs = elapsed.as_secs();
 
-    // Top: summary strip, Bottom: attention panel
-    let rows = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Length(4), Constraint::Min(0)])
-        .split(area);
-
-    // ── Summary strip ───────────────────────────────────────────
-    {
-        let ratio = if total > 0 {
-            op as f64 / total as f64
-        } else {
-            0.0
-        };
-
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(dark_border)
-            .title(" Overall Status ");
-        let inner = block.inner(rows[0]);
-        f.render_widget(block, rows[0]);
-
-        let inner_chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Length(1), Constraint::Length(1)])
-            .split(inner);
-
-        let gauge = LineGauge::default()
-            .filled_style(Style::default().fg(Color::Green).bg(Color::DarkGray))
-            .ratio(ratio)
-            .label(format!(" {op}/{total}  {:.0}% ", ratio * 100.0));
-        f.render_widget(gauge, inner_chunks[0]);
-
-        let mut summary_spans = vec![
-            Span::styled("● ", Style::default().fg(Color::Green)),
-            Span::raw(format!("{op} operational  ")),
-        ];
-        if deg > 0 {
-            summary_spans.push(Span::styled("◐ ", Style::default().fg(Color::Yellow)));
-            summary_spans.push(Span::raw(format!("{deg} degraded  ")));
-        }
-        if out > 0 {
-            summary_spans.push(Span::styled("✗ ", Style::default().fg(Color::Red)));
-            summary_spans.push(Span::raw(format!("{out} outage  ")));
-        }
-        if other > 0 {
-            summary_spans.push(Span::styled("? ", Style::default().fg(Color::DarkGray)));
-            summary_spans.push(Span::raw(format!("{other} other  ")));
-        }
-        f.render_widget(Paragraph::new(Line::from(summary_spans)), inner_chunks[1]);
-    }
-
-    // ── Attention Now ───────────────────────────────────────────
-    {
-        let mut lines: Vec<Line<'static>> = Vec::new();
-        if attention_entries.is_empty() {
-            lines.push(Line::from(Span::styled(
-                "No providers need attention right now",
-                Style::default().fg(Color::Green),
-            )));
-            if all_maint.is_empty() {
-                lines.push(Line::from(Span::styled(
-                    "No active incidents or reported service degradation across tracked providers",
-                    Style::default().fg(Color::DarkGray),
-                )));
-            } else {
-                lines.push(Line::from(Span::styled(
-                    format!(
-                        "{} maintenance window{} scheduled across tracked providers",
-                        all_maint.len(),
-                        if all_maint.len() == 1 { "" } else { "s" }
-                    ),
-                    Style::default().fg(Color::DarkGray),
-                )));
-                lines.push(Line::from(""));
-                lines.push(Line::from(Span::styled(
-                    "Scheduled Maintenance",
-                    Style::default().add_modifier(Modifier::BOLD),
-                )));
-                for (provider_name, maint) in all_maint.iter().take(4) {
-                    let time_str = maint
-                        .scheduled_for
-                        .as_deref()
-                        .map(format_relative_time_from_str)
-                        .unwrap_or_else(|| "time unknown".to_string());
-                    lines.push(Line::from(vec![
-                        Span::styled("◆ ", Style::default().fg(Color::Blue)),
-                        Span::styled(
-                            provider_name.to_string(),
-                            Style::default().add_modifier(Modifier::BOLD),
-                        ),
-                    ]));
-                    lines.push(Line::from(vec![
-                        Span::styled("  Maintenance: ", status_field_label_style()),
-                        Span::raw(maint.name.clone()),
-                    ]));
-                    lines.push(Line::from(vec![
-                        Span::styled("  Status: ", status_field_label_style()),
-                        Span::styled(
-                            maint.status.replace('_', " "),
-                            component_status_style(&maint.status),
-                        ),
-                        Span::styled("  Scheduled: ", status_field_label_style()),
-                        Span::styled(time_str, Style::default().fg(Color::Cyan)),
-                    ]));
-                }
-                if all_maint.len() > 4 {
-                    lines.push(Line::from(Span::styled(
-                        format!("  +{} more maintenance item(s)", all_maint.len() - 4),
-                        Style::default().fg(Color::DarkGray),
-                    )));
-                }
-            }
-        }
-
-        let incident_entries: Vec<_> = attention_entries
-            .iter()
-            .copied()
-            .filter(|entry| !entry.active_incidents().is_empty())
-            .collect();
-        let component_entries: Vec<_> = attention_entries
-            .iter()
-            .copied()
-            .filter(|entry| entry.active_incidents().is_empty())
-            .collect();
-        let body_width = usize::from(rows[1].width.saturating_sub(10)).max(28);
-
-        if !incident_entries.is_empty() {
-            lines.push(Line::from(Span::styled(
-                "Active Incidents",
-                status_section_label_style(),
-            )));
-            lines.push(Line::from(Span::styled(
-                "Providers with formal incident rows from the upstream status source",
-                Style::default().fg(Color::DarkGray),
-            )));
-            lines.push(Line::from(""));
-        }
-
-        for entry in &incident_entries {
-            render_overall_attention_entry(&mut lines, entry, body_width);
-        }
-
-        if !component_entries.is_empty() {
-            if !incident_entries.is_empty() {
-                lines.push(Line::from(""));
-            }
-            lines.push(Line::from(Span::styled(
-                "Component-Reported Degradation",
-                status_section_label_style(),
-            )));
-            lines.push(Line::from(Span::styled(
-                "Providers reporting degraded services without a formal incident row",
-                Style::default().fg(Color::DarkGray),
-            )));
-            lines.push(Line::from(""));
-        }
-
-        for entry in &component_entries {
-            render_overall_attention_entry(&mut lines, entry, body_width);
-        }
-
-        let issue_title = if attention_entries.is_empty() {
-            " Attention Now ".to_string()
-        } else {
-            format!(" Attention Now ({}) ", attention_entries.len())
-        };
-        let attention_border = if is_focused {
-            Style::default().fg(Color::Cyan)
-        } else {
-            dark_border
-        };
-        let visible_height = rows[1].height.saturating_sub(2);
-        let wrap_width = rows[1].width.saturating_sub(2) as usize;
-        let visual_total = wrapped_visual_line_count(&lines, wrap_width);
-        let max_scroll = visual_total.saturating_sub(visible_height);
-        let scroll_pos = detail_scroll.min(max_scroll);
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(attention_border)
-            .title(issue_title);
-        let paragraph = Paragraph::new(lines)
-            .block(block)
-            .wrap(Wrap { trim: false })
-            .scroll((scroll_pos, 0));
-        f.render_widget(paragraph, rows[1]);
-
-        if visual_total > visible_height {
-            let mut scrollbar_state = ScrollbarState::new(visual_total as usize)
-                .position(scroll_pos as usize)
-                .viewport_content_length(visible_height as usize);
-            f.render_stateful_widget(
-                Scrollbar::new(ScrollbarOrientation::VerticalRight),
-                rows[1].inner(Margin {
-                    vertical: 1,
-                    horizontal: 0,
-                }),
-                &mut scrollbar_state,
-            );
-        }
+    match secs {
+        0..=4 => "just now".to_string(),
+        5..=59 => format!("{secs}s ago"),
+        60..=3599 => format!("{}m ago", secs / 60),
+        3600..=86_399 => format!("{}h ago", secs / 3600),
+        _ => format!("{}d ago", secs / 86_400),
     }
 }
 
-fn render_overall_attention_entry(
-    lines: &mut Vec<Line<'static>>,
-    entry: &crate::status::ProviderStatus,
+fn overall_freshness_line(status_app: &super::status_app::StatusApp) -> Line<'static> {
+    if status_app.loading {
+        return Line::from(vec![
+            Span::styled("Refreshing status", Style::default().fg(Color::Yellow)),
+            Span::styled("...", Style::default().fg(Color::DarkGray)),
+        ]);
+    }
+
+    let freshness = status_app
+        .last_refreshed
+        .map(format_relative_time_from_instant)
+        .map(|value| format!("Updated {value}"))
+        .unwrap_or_else(|| "Waiting for status refresh".to_string());
+
+    if status_app.last_error.is_some() {
+        Line::from(vec![
+            Span::styled(freshness, Style::default().fg(Color::Cyan)),
+            Span::raw("  "),
+            Span::styled("Last refresh failed", Style::default().fg(Color::Red)),
+        ])
+    } else {
+        Line::from(Span::styled(
+            freshness,
+            Style::default().fg(Color::DarkGray),
+        ))
+    }
+}
+
+fn soft_card_divider(width: usize) -> Line<'static> {
+    let dash_count = width.max(12);
+    Line::from(Span::styled(
+        format!("  {}", "-".repeat(dash_count.saturating_sub(2))),
+        Style::default().fg(Color::DarkGray),
+    ))
+}
+
+fn push_soft_card_summary(lines: &mut Vec<Line<'static>>, summary: &str, body_width: usize) {
+    let wrapped = textwrap::wrap(summary, body_width.saturating_sub(2).max(12));
+    for line in wrapped {
+        lines.push(Line::from(Span::raw(format!("  {line}"))));
+    }
+}
+
+fn push_overall_caveat(lines: &mut Vec<Line<'static>>, note: &str, body_width: usize) {
+    let wrapped = textwrap::wrap(note, body_width.saturating_sub(2).max(12));
+    for (idx, line) in wrapped.into_iter().enumerate() {
+        let prefix = if idx == 0 { "  Note: " } else { "        " };
+        lines.push(Line::from(Span::styled(
+            format!("{prefix}{line}"),
+            Style::default().fg(Color::DarkGray),
+        )));
+    }
+}
+
+fn push_panel_empty_state(lines: &mut Vec<Line<'static>>, title: &str, description: &str) {
+    lines.push(Line::from(Span::styled(
+        title.to_string(),
+        Style::default().fg(Color::Green),
+    )));
+    lines.push(Line::from(Span::styled(
+        description.to_string(),
+        Style::default().fg(Color::DarkGray),
+    )));
+}
+
+fn build_incidents_panel_lines(
+    entries: &[&crate::status::ProviderStatus],
     body_width: usize,
-) {
-    let incidents = entry.active_incidents();
-    let non_op_components = overall_attention_components(entry);
+) -> Vec<Line<'static>> {
+    let mut lines = Vec::new();
 
-    lines.push(Line::from(vec![
-        Span::styled(
-            status_health_icon(entry.health),
-            status_health_style(entry.health),
-        ),
-        Span::raw(" "),
-        Span::styled(
-            entry.display_name.clone(),
-            Style::default().add_modifier(Modifier::BOLD),
-        ),
-    ]));
+    if entries.is_empty() {
+        push_panel_empty_state(
+            &mut lines,
+            "No active incidents reported right now",
+            "Tracked providers are not currently publishing formal incident rows.",
+        );
+        return lines;
+    }
 
-    if let Some(incident) = incidents.first() {
+    for (idx, entry) in entries.iter().enumerate() {
+        let incidents = entry.active_incidents();
+        let non_op_components = overall_attention_components(entry);
+        let incident = incidents[0];
+
+        lines.push(Line::from(vec![
+            Span::styled(
+                status_health_icon(entry.health),
+                status_health_style(entry.health),
+            ),
+            Span::raw(" "),
+            Span::styled(
+                entry.display_name.clone(),
+                Style::default().add_modifier(Modifier::BOLD),
+            ),
+        ]));
+
+        if let Some(summary) = entry.provider_summary_text() {
+            push_soft_card_summary(&mut lines, summary, body_width);
+        }
+
         lines.push(Line::from(vec![
             Span::styled("  Issue: ", status_field_label_style()),
             Span::styled(
@@ -1023,26 +900,74 @@ fn render_overall_attention_entry(
         }
 
         if !non_op_components.is_empty() {
-            push_component_scope_lines(lines, &non_op_components, 4);
+            push_component_scope_lines(&mut lines, &non_op_components, 4);
         } else if !incident.affected_components.is_empty() {
-            push_plain_scope_lines(lines, "Affected", &incident.affected_components, 4);
+            push_plain_scope_lines(&mut lines, "Affected", &incident.affected_components, 4);
         }
+
         if let Some(update) = &incident.latest_update {
-            let wrapped = textwrap::wrap(&update.body, body_width.saturating_sub(6));
+            let wrapped = textwrap::wrap(&update.body, body_width.saturating_sub(6).max(12));
             if let Some(first_line) = wrapped.first() {
                 lines.push(Line::from(vec![
                     Span::styled("  Update: ", status_field_label_style()),
                     Span::raw(first_line.to_string()),
                 ]));
             }
-            for line in wrapped.iter().skip(1).take(1) {
+            for line in wrapped.iter().skip(1).take(2) {
                 lines.push(Line::from(Span::styled(
                     format!("          {line}"),
                     Style::default().fg(Color::DarkGray),
                 )));
             }
         }
-    } else if !non_op_components.is_empty() {
+
+        if let Some(note) = entry.user_visible_caveat() {
+            push_overall_caveat(&mut lines, note, body_width);
+        }
+
+        if idx + 1 < entries.len() {
+            lines.push(soft_card_divider(body_width));
+            lines.push(Line::from(""));
+        }
+    }
+
+    lines
+}
+
+fn build_degradation_panel_lines(
+    entries: &[&crate::status::ProviderStatus],
+    body_width: usize,
+) -> Vec<Line<'static>> {
+    let mut lines = Vec::new();
+
+    if entries.is_empty() {
+        push_panel_empty_state(
+            &mut lines,
+            "No component-reported degradation right now",
+            "Tracked providers are not currently reporting degraded services without incident rows.",
+        );
+        return lines;
+    }
+
+    for (idx, entry) in entries.iter().enumerate() {
+        let non_op_components = overall_attention_components(entry);
+
+        lines.push(Line::from(vec![
+            Span::styled(
+                status_health_icon(entry.health),
+                status_health_style(entry.health),
+            ),
+            Span::raw(" "),
+            Span::styled(
+                entry.display_name.clone(),
+                Style::default().add_modifier(Modifier::BOLD),
+            ),
+        ]));
+
+        if let Some(summary) = entry.provider_summary_text() {
+            push_soft_card_summary(&mut lines, summary, body_width);
+        }
+
         lines.push(Line::from(vec![
             Span::styled("  Scope: ", status_field_label_style()),
             Span::styled(
@@ -1065,27 +990,323 @@ fn render_overall_attention_entry(
                 Style::default().fg(Color::Cyan),
             ),
         ]));
-        push_component_scope_lines(lines, &non_op_components, 4);
-    } else if let Some(note) = entry.user_visible_caveat() {
-        lines.push(Line::from(vec![
-            Span::styled("  Note: ", status_field_label_style()),
-            Span::styled(note.to_string(), Style::default().fg(Color::DarkGray)),
-        ]));
-    }
+        push_component_scope_lines(&mut lines, &non_op_components, 4);
 
-    if incidents.is_empty() && non_op_components.is_empty() {
-        if let Some((label, value)) = provider_last_meaningful_update(entry) {
-            lines.push(Line::from(vec![
-                Span::styled(
-                    format!("  {}: ", title_case_status_time_label(label)),
-                    Style::default().fg(Color::DarkGray),
-                ),
-                Span::styled(value, Style::default().fg(Color::Cyan)),
-            ]));
+        if let Some(note) = entry.user_visible_caveat() {
+            push_overall_caveat(&mut lines, note, body_width);
+        }
+
+        if idx + 1 < entries.len() {
+            lines.push(soft_card_divider(body_width));
+            lines.push(Line::from(""));
         }
     }
 
-    lines.push(Line::from(""));
+    lines
+}
+
+fn build_maintenance_panel_lines(
+    items: &[(&str, &crate::status::ScheduledMaintenance)],
+    body_width: usize,
+) -> Vec<Line<'static>> {
+    let mut lines = Vec::new();
+
+    for (idx, (provider_name, maint)) in items.iter().enumerate() {
+        lines.push(Line::from(vec![
+            Span::styled("◆", Style::default().fg(Color::Blue)),
+            Span::raw(" "),
+            Span::styled(
+                provider_name.to_string(),
+                Style::default().add_modifier(Modifier::BOLD),
+            ),
+        ]));
+        lines.push(Line::from(vec![
+            Span::styled("  Window: ", status_field_label_style()),
+            Span::styled(
+                maint.name.clone(),
+                Style::default().add_modifier(Modifier::BOLD),
+            ),
+        ]));
+
+        let mut bits = vec![Span::styled("  Status: ", status_field_label_style())];
+        bits.push(Span::styled(
+            maint.status.replace('_', " "),
+            component_status_style(&maint.status),
+        ));
+        if let Some(start) = maint.scheduled_for.as_deref() {
+            bits.push(Span::raw("  "));
+            bits.push(Span::styled("Scheduled: ", status_field_label_style()));
+            bits.push(Span::styled(
+                format_relative_time_from_str(start),
+                Style::default().fg(Color::Cyan),
+            ));
+        }
+        lines.push(Line::from(bits));
+
+        if !maint.affected_components.is_empty() {
+            push_plain_scope_lines(&mut lines, "Affected", &maint.affected_components, 3);
+        }
+
+        if idx + 1 < items.len() {
+            lines.push(soft_card_divider(body_width));
+            lines.push(Line::from(""));
+        }
+    }
+
+    lines
+}
+
+fn render_overall_panel(
+    f: &mut Frame,
+    area: Rect,
+    title: &str,
+    lines: Vec<Line<'static>>,
+    scroll: u16,
+    focused: bool,
+) {
+    let border_style = if focused {
+        Style::default().fg(Color::Cyan)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(border_style)
+        .title(format!(" {title} "));
+    let visible_height = area.height.saturating_sub(2);
+    let wrap_width = area.width.saturating_sub(2) as usize;
+    let visual_total = wrapped_visual_line_count(&lines, wrap_width);
+    let max_scroll = visual_total.saturating_sub(visible_height);
+    let scroll_pos = scroll.min(max_scroll);
+
+    let paragraph = Paragraph::new(lines)
+        .block(block)
+        .wrap(Wrap { trim: false })
+        .scroll((scroll_pos, 0));
+    f.render_widget(paragraph, area);
+
+    if visual_total > visible_height {
+        let mut scrollbar_state = ScrollbarState::new(visual_total as usize)
+            .position(scroll_pos as usize)
+            .viewport_content_length(visible_height as usize);
+        f.render_stateful_widget(
+            Scrollbar::new(ScrollbarOrientation::VerticalRight),
+            area.inner(Margin {
+                vertical: 1,
+                horizontal: 0,
+            }),
+            &mut scrollbar_state,
+        );
+    }
+}
+
+fn draw_overall_dashboard(
+    f: &mut Frame,
+    area: Rect,
+    status_app: &super::status_app::StatusApp,
+    is_focused: bool,
+) {
+    let (op, deg, out, other) = status_app.health_counts();
+    let total = status_app.entries.len();
+    let attention_entries = overall_attention_entries(status_app);
+    let incident_entries: Vec<_> = attention_entries
+        .iter()
+        .copied()
+        .filter(|entry| !entry.active_incidents().is_empty())
+        .collect();
+    let component_entries: Vec<_> = attention_entries
+        .iter()
+        .copied()
+        .filter(|entry| entry.active_incidents().is_empty())
+        .collect();
+    let all_maint = status_app.all_maintenances();
+    let maintenance_visible = !all_maint.is_empty();
+    let dark_border = Style::default().fg(Color::DarkGray);
+
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(5), Constraint::Min(0)])
+        .split(area);
+
+    {
+        let ratio = if total > 0 {
+            op as f64 / total as f64
+        } else {
+            0.0
+        };
+
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(dark_border)
+            .title(" Overall Status ");
+        let inner = block.inner(rows[0]);
+        f.render_widget(block, rows[0]);
+
+        let inner_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(1),
+                Constraint::Length(1),
+                Constraint::Length(1),
+            ])
+            .split(inner);
+
+        let gauge = LineGauge::default()
+            .filled_style(Style::default().fg(Color::Green).bg(Color::DarkGray))
+            .ratio(ratio)
+            .label(format!(" {op}/{total}  {:.0}% ", ratio * 100.0));
+        f.render_widget(gauge, inner_chunks[0]);
+
+        let mut summary_spans = vec![
+            Span::styled("● ", Style::default().fg(Color::Green)),
+            Span::raw(format!("{op} operational  ")),
+        ];
+        if deg > 0 {
+            summary_spans.push(Span::styled("◐ ", Style::default().fg(Color::Yellow)));
+            summary_spans.push(Span::raw(format!("{deg} degraded  ")));
+        }
+        if out > 0 {
+            summary_spans.push(Span::styled("✗ ", Style::default().fg(Color::Red)));
+            summary_spans.push(Span::raw(format!("{out} outage  ")));
+        }
+        if other > 0 {
+            summary_spans.push(Span::styled("? ", Style::default().fg(Color::DarkGray)));
+            summary_spans.push(Span::raw(format!("{other} other  ")));
+        }
+        f.render_widget(Paragraph::new(Line::from(summary_spans)), inner_chunks[1]);
+        f.render_widget(
+            Paragraph::new(overall_freshness_line(status_app)),
+            inner_chunks[2],
+        );
+    }
+
+    let board_area = rows[1];
+    let stacked_layout = board_area.width < 100;
+
+    if stacked_layout {
+        let mut constraints = vec![Constraint::Percentage(55), Constraint::Percentage(45)];
+        if maintenance_visible {
+            constraints = vec![
+                Constraint::Percentage(42),
+                Constraint::Percentage(34),
+                Constraint::Percentage(24),
+            ];
+        }
+        let panels = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints(constraints)
+            .split(board_area);
+
+        let incident_lines = build_incidents_panel_lines(
+            &incident_entries,
+            usize::from(panels[0].width.saturating_sub(4)).max(24),
+        );
+        render_overall_panel(
+            f,
+            panels[0],
+            "Active Incidents",
+            incident_lines,
+            status_app.overall_incidents_scroll,
+            is_focused
+                && status_app.overall_panel_focus
+                    == super::status_app::OverallPanelFocus::Incidents,
+        );
+
+        let degradation_lines = build_degradation_panel_lines(
+            &component_entries,
+            usize::from(panels[1].width.saturating_sub(4)).max(24),
+        );
+        render_overall_panel(
+            f,
+            panels[1],
+            "Service Degradation",
+            degradation_lines,
+            status_app.overall_degradation_scroll,
+            is_focused
+                && status_app.overall_panel_focus
+                    == super::status_app::OverallPanelFocus::Degradation,
+        );
+
+        if maintenance_visible {
+            let maintenance_lines = build_maintenance_panel_lines(
+                &all_maint,
+                usize::from(panels[2].width.saturating_sub(4)).max(24),
+            );
+            render_overall_panel(
+                f,
+                panels[2],
+                "Maintenance Outlook",
+                maintenance_lines,
+                status_app.overall_maintenance_scroll,
+                is_focused
+                    && status_app.overall_panel_focus
+                        == super::status_app::OverallPanelFocus::Maintenance,
+            );
+        }
+    } else {
+        let columns = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
+            .split(board_area);
+        let right_panels = if maintenance_visible {
+            Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
+                .split(columns[1])
+        } else {
+            Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Min(0)])
+                .split(columns[1])
+        };
+
+        let incident_lines = build_incidents_panel_lines(
+            &incident_entries,
+            usize::from(columns[0].width.saturating_sub(4)).max(24),
+        );
+        render_overall_panel(
+            f,
+            columns[0],
+            "Active Incidents",
+            incident_lines,
+            status_app.overall_incidents_scroll,
+            is_focused
+                && status_app.overall_panel_focus
+                    == super::status_app::OverallPanelFocus::Incidents,
+        );
+
+        let degradation_lines = build_degradation_panel_lines(
+            &component_entries,
+            usize::from(right_panels[0].width.saturating_sub(4)).max(24),
+        );
+        render_overall_panel(
+            f,
+            right_panels[0],
+            "Service Degradation",
+            degradation_lines,
+            status_app.overall_degradation_scroll,
+            is_focused
+                && status_app.overall_panel_focus
+                    == super::status_app::OverallPanelFocus::Degradation,
+        );
+
+        if maintenance_visible {
+            let maintenance_lines = build_maintenance_panel_lines(
+                &all_maint,
+                usize::from(right_panels[1].width.saturating_sub(4)).max(24),
+            );
+            render_overall_panel(
+                f,
+                right_panels[1],
+                "Maintenance Outlook",
+                maintenance_lines,
+                status_app.overall_maintenance_scroll,
+                is_focused
+                    && status_app.overall_panel_focus
+                        == super::status_app::OverallPanelFocus::Maintenance,
+            );
+        }
+    }
 }
 
 // ── Individual Provider Detail (4 subpanels) ───────────────────────────
@@ -5890,8 +6111,8 @@ mod tests {
         }
     }
 
-    fn render_status_text(app: &mut App) -> String {
-        let backend = TestBackend::new(140, 40);
+    fn render_status_text_with_size(app: &mut App, width: u16, height: u16) -> String {
+        let backend = TestBackend::new(width, height);
         let mut terminal = Terminal::new(backend).expect("terminal");
         terminal
             .draw(|frame| draw_status_main(frame, frame.area(), app))
@@ -5906,6 +6127,10 @@ mod tests {
             lines.push(line);
         }
         lines.join("\n")
+    }
+
+    fn render_status_text(app: &mut App) -> String {
+        render_status_text_with_size(app, 140, 40)
     }
 
     #[test]
@@ -6026,8 +6251,11 @@ mod tests {
         let rendered = render_status_text(&mut app);
 
         assert!(rendered.contains("Overall Status"));
-        assert!(rendered.contains("Attention Now (1)"));
         assert!(rendered.contains("Active Incidents"));
+        assert!(rendered.contains("Service Degradation"));
+        assert!(rendered.contains("Maintenance Outlook"));
+        assert!(rendered.contains("Updated just now"));
+        assert!(rendered.contains("Elevated API errors affecting chat completions."));
         assert!(rendered.contains("Elevated API errors"));
         assert!(rendered.contains("investigating"));
         assert!(rendered.contains("Services"));
@@ -6036,5 +6264,19 @@ mod tests {
         assert!(!rendered.contains("Signal Quality"));
         assert!(!rendered.contains("Active Issues"));
         assert!(!rendered.contains("need attention •"));
+    }
+
+    #[test]
+    fn overall_dashboard_uses_stacked_panels_on_narrow_widths() {
+        let mut app = make_status_app(sample_provider_status());
+        let status_app = app.status_app.as_mut().expect("status app");
+        status_app.selected = 0;
+        status_app.list_state.select(Some(0));
+
+        let rendered = render_status_text_with_size(&mut app, 90, 40);
+
+        assert!(rendered.contains("Active Incidents"));
+        assert!(rendered.contains("Service Degradation"));
+        assert!(rendered.contains("Maintenance Outlook"));
     }
 }
