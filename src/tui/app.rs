@@ -546,7 +546,7 @@ impl App {
                     if status_app.is_overall_selected() {
                         status_app.scroll_active_overall_panel_up();
                     } else {
-                        status_app.detail_scroll = status_app.detail_scroll.saturating_sub(1);
+                        status_app.detail_scroll.decrement(1);
                     }
                 }
             }
@@ -555,7 +555,7 @@ impl App {
                     if status_app.is_overall_selected() {
                         status_app.scroll_active_overall_panel_down();
                     } else {
-                        status_app.detail_scroll = status_app.detail_scroll.saturating_add(1);
+                        status_app.detail_scroll.increment(1);
                     }
                 }
             }
@@ -564,7 +564,7 @@ impl App {
                     if status_app.is_overall_selected() {
                         status_app.scroll_active_overall_panel_top();
                     } else {
-                        status_app.detail_scroll = 0;
+                        status_app.detail_scroll.jump_top();
                     }
                 }
             }
@@ -573,7 +573,7 @@ impl App {
                     if status_app.is_overall_selected() {
                         status_app.scroll_active_overall_panel_bottom();
                     } else {
-                        status_app.detail_scroll = u16::MAX; // clamped at render time
+                        status_app.detail_scroll.jump_bottom();
                     }
                 }
             }
@@ -582,8 +582,7 @@ impl App {
                     if status_app.is_overall_selected() {
                         status_app.page_scroll_active_overall_panel_up();
                     } else {
-                        status_app.detail_scroll =
-                            status_app.detail_scroll.saturating_sub(PAGE_SIZE as u16);
+                        status_app.detail_scroll.decrement(PAGE_SIZE as u16);
                     }
                 }
             }
@@ -592,8 +591,7 @@ impl App {
                     if status_app.is_overall_selected() {
                         status_app.page_scroll_active_overall_panel_down();
                     } else {
-                        status_app.detail_scroll =
-                            status_app.detail_scroll.saturating_add(PAGE_SIZE as u16);
+                        status_app.detail_scroll.increment(PAGE_SIZE as u16);
                     }
                 }
             }

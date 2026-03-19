@@ -13,6 +13,7 @@ use crate::tui::app::App;
 use crate::tui::ui::{
     caret, centered_rect_fixed, filter_toggle_spans, focus_border, selection_style,
 };
+use crate::tui::widgets::scroll_offset::ScrollOffset;
 use crate::tui::widgets::scrollable_panel::ScrollablePanel;
 
 pub(in crate::tui) fn draw_agents_main(f: &mut Frame, area: Rect, app: &mut App) {
@@ -441,7 +442,8 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &mut App) {
         .map(|a| a.detail_scroll)
         .unwrap_or(0);
 
-    let panel = ScrollablePanel::new(detail_title, lines, scroll_pos, is_focused);
+    let scroll_offset = ScrollOffset::new(scroll_pos);
+    let panel = ScrollablePanel::new(detail_title, lines, &scroll_offset, is_focused);
     let state = panel.render(f, area);
 
     // Compute visual offsets for match lines from the panel state
@@ -453,6 +455,7 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &mut App) {
     // Update match state and detail height (after lines are consumed)
     app.last_detail_height = state.visible_height;
     if let Some(ref mut agents_app) = app.agents_app {
+        agents_app.detail_scroll = scroll_offset.get();
         agents_app.update_search_matches(match_line_indices, match_visual_offsets);
     }
 }

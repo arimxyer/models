@@ -9,6 +9,7 @@ use ratatui::{
 };
 
 use crate::tui::ui::focus_border;
+use crate::tui::widgets::scroll_offset::ScrollOffset;
 use crate::tui::widgets::soft_card::SoftCard;
 
 /// Computed metadata returned after rendering a `ScrollablePanel`.
@@ -36,12 +37,17 @@ pub struct ScrollablePanel<'a> {
     lines: Option<Vec<Line<'a>>>,
     cards: Option<Vec<SoftCard>>,
     title: String,
-    scroll: u16,
+    scroll: &'a ScrollOffset,
     focused: bool,
 }
 
 impl<'a> ScrollablePanel<'a> {
-    pub fn new(title: impl Into<String>, lines: Vec<Line<'a>>, scroll: u16, focused: bool) -> Self {
+    pub fn new(
+        title: impl Into<String>,
+        lines: Vec<Line<'a>>,
+        scroll: &'a ScrollOffset,
+        focused: bool,
+    ) -> Self {
         Self {
             lines: Some(lines),
             cards: None,
@@ -55,7 +61,7 @@ impl<'a> ScrollablePanel<'a> {
     pub fn with_cards(
         title: impl Into<String>,
         cards: Vec<SoftCard>,
-        scroll: u16,
+        scroll: &'a ScrollOffset,
         focused: bool,
     ) -> Self {
         Self {
@@ -91,7 +97,7 @@ impl<'a> ScrollablePanel<'a> {
         area: ratatui::layout::Rect,
         cards: Vec<SoftCard>,
         title: &str,
-        scroll: u16,
+        scroll: &ScrollOffset,
         focused: bool,
     ) -> ScrollablePanelState {
         let border_style = focus_border(focused);
@@ -111,7 +117,8 @@ impl<'a> ScrollablePanel<'a> {
         let visual_total: u16 = card_heights.iter().copied().sum();
 
         let max_scroll = visual_total.saturating_sub(visible_height);
-        let clamped_scroll = scroll.min(max_scroll);
+        let clamped_scroll = scroll.get().min(max_scroll);
+        scroll.set(clamped_scroll);
 
         // Build visual offsets (cumulative heights)
         let mut visual_offsets = Vec::with_capacity(cards.len());
@@ -200,7 +207,7 @@ impl<'a> ScrollablePanel<'a> {
         area: ratatui::layout::Rect,
         lines: Vec<Line<'a>>,
         title: &str,
-        scroll: u16,
+        scroll: &ScrollOffset,
         focused: bool,
     ) -> ScrollablePanelState {
         let border_style = focus_border(focused);
@@ -213,7 +220,8 @@ impl<'a> ScrollablePanel<'a> {
         let wrap_width = area.width.saturating_sub(2) as usize;
         let (visual_total, visual_offsets) = wrapped_line_offsets(&lines, wrap_width);
         let max_scroll = visual_total.saturating_sub(visible_height);
-        let clamped_scroll = scroll.min(max_scroll);
+        let clamped_scroll = scroll.get().min(max_scroll);
+        scroll.set(clamped_scroll);
 
         let paragraph = Paragraph::new(lines)
             .block(block)

@@ -2,6 +2,7 @@ use crate::formatting::{format_relative_time_from_str, truncate};
 use crate::status::{ProviderHealth, StatusProvenance, StatusSourceMethod};
 use crate::tui::app::App;
 use crate::tui::ui::{caret, selection_style, status_health_icon, status_health_style};
+use crate::tui::widgets::scroll_offset::ScrollOffset;
 use crate::tui::widgets::scrollable_panel::ScrollablePanel;
 use crate::tui::widgets::soft_card::SoftCard;
 use ratatui::{
@@ -532,7 +533,6 @@ pub(in crate::tui) fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App)
         let confirmed_no_incidents = entry.confirmed_no_incidents();
         let active_incidents = sorted_active_incidents(entry);
         let components = sorted_components(entry, &active_incidents);
-        let detail_scroll = status_app.detail_scroll;
         let is_detail_focused = status_app.focus == StatusFocus::Details;
 
         draw_provider_status_detail(
@@ -555,7 +555,7 @@ pub(in crate::tui) fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App)
             &active_incidents,
             &components,
             &entry.scheduled_maintenances,
-            detail_scroll,
+            &status_app.detail_scroll,
             is_detail_focused,
         );
     } else {
@@ -987,7 +987,7 @@ fn render_overall_panel(
     title: &str,
     cards: Vec<SoftCard>,
     empty_lines: Vec<Line<'static>>,
-    scroll: u16,
+    scroll: &ScrollOffset,
     focused: bool,
 ) {
     if cards.is_empty() {
@@ -1104,7 +1104,7 @@ fn draw_overall_dashboard(
             "Active Incidents",
             incident_cards,
             incidents_empty_lines(),
-            status_app.overall_incidents_scroll,
+            &status_app.overall_incidents_scroll,
             is_focused
                 && status_app.overall_panel_focus == super::app::OverallPanelFocus::Incidents,
         );
@@ -1119,7 +1119,7 @@ fn draw_overall_dashboard(
             "Service Degradation",
             degradation_cards,
             degradation_empty_lines(),
-            status_app.overall_degradation_scroll,
+            &status_app.overall_degradation_scroll,
             is_focused
                 && status_app.overall_panel_focus == super::app::OverallPanelFocus::Degradation,
         );
@@ -1132,7 +1132,7 @@ fn draw_overall_dashboard(
                 "Maintenance Outlook",
                 maintenance_cards,
                 Vec::new(),
-                status_app.overall_maintenance_scroll,
+                &status_app.overall_maintenance_scroll,
                 is_focused
                     && status_app.overall_panel_focus == super::app::OverallPanelFocus::Maintenance,
             );
@@ -1164,7 +1164,7 @@ fn draw_overall_dashboard(
             "Active Incidents",
             incident_cards,
             incidents_empty_lines(),
-            status_app.overall_incidents_scroll,
+            &status_app.overall_incidents_scroll,
             is_focused
                 && status_app.overall_panel_focus == super::app::OverallPanelFocus::Incidents,
         );
@@ -1179,7 +1179,7 @@ fn draw_overall_dashboard(
             "Service Degradation",
             degradation_cards,
             degradation_empty_lines(),
-            status_app.overall_degradation_scroll,
+            &status_app.overall_degradation_scroll,
             is_focused
                 && status_app.overall_panel_focus == super::app::OverallPanelFocus::Degradation,
         );
@@ -1192,7 +1192,7 @@ fn draw_overall_dashboard(
                 "Maintenance Outlook",
                 maintenance_cards,
                 Vec::new(),
-                status_app.overall_maintenance_scroll,
+                &status_app.overall_maintenance_scroll,
                 is_focused
                     && status_app.overall_panel_focus == super::app::OverallPanelFocus::Maintenance,
             );
@@ -1223,7 +1223,7 @@ fn draw_provider_status_detail(
     active_incidents: &[crate::status::ActiveIncident],
     components: &[&crate::status::ComponentStatus],
     scheduled_maintenances: &[crate::status::ScheduledMaintenance],
-    detail_scroll: u16,
+    detail_scroll: &ScrollOffset,
     is_focused: bool,
 ) {
     let dark_border = Style::default().fg(Color::DarkGray);

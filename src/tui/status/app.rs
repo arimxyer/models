@@ -8,6 +8,7 @@ use crate::status::{
     status_seed_for_provider, ProviderHealth, ProviderStatus, ScheduledMaintenance,
     StatusProvenance, StatusProviderSeed, STATUS_REGISTRY,
 };
+use crate::tui::widgets::ScrollOffset;
 
 const PAGE_SIZE: usize = 10;
 
@@ -34,10 +35,10 @@ pub struct StatusApp {
     pub focus: StatusFocus,
     pub overall_panel_focus: OverallPanelFocus,
     pub search_query: String,
-    pub detail_scroll: u16,
-    pub overall_incidents_scroll: u16,
-    pub overall_degradation_scroll: u16,
-    pub overall_maintenance_scroll: u16,
+    pub detail_scroll: ScrollOffset,
+    pub overall_incidents_scroll: ScrollOffset,
+    pub overall_degradation_scroll: ScrollOffset,
+    pub overall_maintenance_scroll: ScrollOffset,
     pub loading: bool,
     pub last_refreshed: Option<Instant>,
     pub last_error: Option<String>,
@@ -73,10 +74,10 @@ impl StatusApp {
             focus: StatusFocus::default(),
             overall_panel_focus: OverallPanelFocus::default(),
             search_query: String::new(),
-            detail_scroll: 0,
-            overall_incidents_scroll: 0,
-            overall_degradation_scroll: 0,
-            overall_maintenance_scroll: 0,
+            detail_scroll: ScrollOffset::default(),
+            overall_incidents_scroll: ScrollOffset::default(),
+            overall_degradation_scroll: ScrollOffset::default(),
+            overall_maintenance_scroll: ScrollOffset::default(),
             loading: true,
             last_refreshed: None,
             last_error: None,
@@ -168,37 +169,37 @@ impl StatusApp {
         }
         self.selected = (self.selected + 1).min(self.filtered_entries.len());
         self.list_state.select(Some(self.selected));
-        self.detail_scroll = 0;
+        self.detail_scroll.jump_top();
     }
 
     pub fn prev(&mut self) {
         self.selected = self.selected.saturating_sub(1);
         self.list_state.select(Some(self.selected));
-        self.detail_scroll = 0;
+        self.detail_scroll.jump_top();
     }
 
     pub fn select_first(&mut self) {
         self.selected = 0;
         self.list_state.select(Some(0));
-        self.detail_scroll = 0;
+        self.detail_scroll.jump_top();
     }
 
     pub fn select_last(&mut self) {
         self.selected = self.filtered_entries.len(); // last provider (0 = Overall)
         self.list_state.select(Some(self.selected));
-        self.detail_scroll = 0;
+        self.detail_scroll.jump_top();
     }
 
     pub fn page_down(&mut self) {
         self.selected = (self.selected + PAGE_SIZE).min(self.filtered_entries.len());
         self.list_state.select(Some(self.selected));
-        self.detail_scroll = 0;
+        self.detail_scroll.jump_top();
     }
 
     pub fn page_up(&mut self) {
         self.selected = self.selected.saturating_sub(PAGE_SIZE);
         self.list_state.select(Some(self.selected));
-        self.detail_scroll = 0;
+        self.detail_scroll.jump_top();
     }
 
     pub fn health_counts(&self) -> (usize, usize, usize, usize) {
@@ -305,40 +306,36 @@ impl StatusApp {
         self.overall_panel_focus = panels[(current + 1) % visible_count];
     }
 
-    fn active_overall_scroll_mut(&mut self) -> &mut u16 {
+    pub fn active_overall_scroll(&self) -> &ScrollOffset {
         match self.overall_panel_focus {
-            OverallPanelFocus::Incidents => &mut self.overall_incidents_scroll,
-            OverallPanelFocus::Degradation => &mut self.overall_degradation_scroll,
-            OverallPanelFocus::Maintenance => &mut self.overall_maintenance_scroll,
+            OverallPanelFocus::Incidents => &self.overall_incidents_scroll,
+            OverallPanelFocus::Degradation => &self.overall_degradation_scroll,
+            OverallPanelFocus::Maintenance => &self.overall_maintenance_scroll,
         }
     }
 
-    pub fn scroll_active_overall_panel_up(&mut self) {
-        let scroll = self.active_overall_scroll_mut();
-        *scroll = scroll.saturating_sub(1);
+    pub fn scroll_active_overall_panel_up(&self) {
+        self.active_overall_scroll().decrement(1);
     }
 
-    pub fn scroll_active_overall_panel_down(&mut self) {
-        let scroll = self.active_overall_scroll_mut();
-        *scroll = scroll.saturating_add(1);
+    pub fn scroll_active_overall_panel_down(&self) {
+        self.active_overall_scroll().increment(1);
     }
 
-    pub fn scroll_active_overall_panel_top(&mut self) {
-        *self.active_overall_scroll_mut() = 0;
+    pub fn scroll_active_overall_panel_top(&self) {
+        self.active_overall_scroll().jump_top();
     }
 
-    pub fn scroll_active_overall_panel_bottom(&mut self) {
-        *self.active_overall_scroll_mut() = u16::MAX;
+    pub fn scroll_active_overall_panel_bottom(&self) {
+        self.active_overall_scroll().jump_bottom();
     }
 
-    pub fn page_scroll_active_overall_panel_up(&mut self) {
-        let scroll = self.active_overall_scroll_mut();
-        *scroll = scroll.saturating_sub(PAGE_SIZE as u16);
+    pub fn page_scroll_active_overall_panel_up(&self) {
+        self.active_overall_scroll().decrement(PAGE_SIZE as u16);
     }
 
-    pub fn page_scroll_active_overall_panel_down(&mut self) {
-        let scroll = self.active_overall_scroll_mut();
-        *scroll = scroll.saturating_add(PAGE_SIZE as u16);
+    pub fn page_scroll_active_overall_panel_down(&self) {
+        self.active_overall_scroll().increment(PAGE_SIZE as u16);
     }
 }
 
