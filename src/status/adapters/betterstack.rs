@@ -41,6 +41,9 @@ pub(crate) fn parse_better_stack(
                         .pointer("/attributes/status")
                         .and_then(|v| v.as_str())
                         .unwrap_or("operational");
+                    if status == "not_monitored" {
+                        return None;
+                    }
                     Some(ComponentStatus {
                         name: name.to_string(),
                         status: normalize_component_status(status),
@@ -157,11 +160,45 @@ mod tests {
             parse_better_stack(OfficialStatusSource::TogetherAi, json).expect("parses ok");
         assert_eq!(snapshot.method, StatusSourceMethod::BetterStack);
         assert_eq!(snapshot.health, ProviderHealth::Degraded);
-        assert_eq!(snapshot.components.len(), 2);
+        assert_eq!(snapshot.components.len(), 2, "should include API and Dashboard");
         assert_eq!(snapshot.components[0].name, "API");
         assert_eq!(snapshot.components[0].status, "degraded_performance");
         assert_eq!(snapshot.components[1].status, "operational");
         assert_eq!(snapshot.incidents.len(), 1);
         assert_eq!(snapshot.incidents[0].name, "API latency increase");
+    }
+
+    #[test]
+    fn filters_out_not_monitored_resources() {
+        let json = r#"{
+            "data": {
+                "id": "abc",
+                "type": "status_page",
+                "attributes": { "aggregate_state": "operational" }
+            },
+            "included": [
+                {
+                    "id": "r1",
+                    "type": "status_page_resource",
+                    "attributes": {
+                        "public_name": "helicone.ai",
+                        "status": "not_monitored"
+                    }
+                },
+                {
+                    "id": "r2",
+                    "type": "status_page_resource",
+                    "attributes": {
+                        "public_name": "api.hconeai.com",
+                        "status": "operational"
+                    }
+                }
+            ]
+        }"#;
+
+        let snapshot =
+            parse_better_stack(OfficialStatusSource::Helicone, json).expect("parses ok");
+        assert_eq!(snapshot.components.len(), 1, "not_monitored should be filtered out");
+        assert_eq!(snapshot.components[0].name, "api.hconeai.com");
     }
 }
