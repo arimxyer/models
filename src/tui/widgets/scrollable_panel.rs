@@ -253,13 +253,14 @@ impl<'a> ScrollablePanel<'a> {
 fn wrapped_line_offsets(lines: &[Line<'_>], wrap_width: usize) -> (u16, Vec<u16>) {
     let mut offsets = Vec::with_capacity(lines.len());
     let mut cumulative: u16 = 0;
+    let width = wrap_width as u16;
     for line in lines {
         offsets.push(cumulative);
-        let line_width = line.width();
-        let wrapped_lines = if wrap_width == 0 || line_width == 0 {
+        let wrapped_lines = if wrap_width == 0 {
             1
         } else {
-            line_width.div_ceil(wrap_width).max(1) as u16
+            let p = Paragraph::new(vec![line.clone()]).wrap(Wrap { trim: false });
+            (p.line_count(width) as u16).max(1)
         };
         cumulative += wrapped_lines;
     }
@@ -291,5 +292,21 @@ mod tests {
         let (total, offsets) = wrapped_line_offsets(&lines, 0);
         assert_eq!(total, 3);
         assert_eq!(offsets, vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn wrapped_line_offsets_word_boundary() {
+        // "aaaa bbbb cccc" at width 7: word wrapper produces 3 lines
+        // (div_ceil would predict 2, but words can't share a line)
+        let lines = vec![Line::from("aaaa bbbb cccc")];
+        let (total, offsets) = wrapped_line_offsets(&lines, 7);
+        assert_eq!(total, 3);
+        assert_eq!(offsets, vec![0]);
+
+        // Two lines with word wrapping
+        let lines = vec![Line::from("aaaa bbbb cccc"), Line::from("short")];
+        let (total, offsets) = wrapped_line_offsets(&lines, 7);
+        assert_eq!(total, 4); // 3 + 1
+        assert_eq!(offsets, vec![0, 3]);
     }
 }

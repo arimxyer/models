@@ -36,18 +36,11 @@ impl SoftCard {
 
     /// Count visual lines accounting for wrapping at the given content width.
     fn visual_line_count(&self, content_width: usize) -> u16 {
-        let mut total: u16 = 0;
-        for line in &self.lines {
-            let line_width = line.width();
-            let wrapped = if content_width == 0 || line_width == 0 {
-                1
-            } else {
-                line_width.div_ceil(content_width).max(1) as u16
-            };
-            total += wrapped;
+        if content_width == 0 || self.lines.is_empty() {
+            return self.lines.len() as u16;
         }
-        // An empty card still takes at least 0 content rows (separator only)
-        total
+        let p = Paragraph::new(self.lines.clone()).wrap(Wrap { trim: false });
+        (p.line_count(content_width as u16) as u16).max(self.lines.len() as u16)
     }
 }
 
@@ -188,6 +181,18 @@ mod tests {
         assert!(buf[(2u16, 0u16)].modifier.contains(Modifier::BOLD));
         // "n" at col 7 should not be bold
         assert!(!buf[(7u16, 0u16)].modifier.contains(Modifier::BOLD));
+    }
+
+    #[test]
+    fn height_accounts_for_word_boundary_wrapping() {
+        // "aaaa bbbb cccc" at content_width=5 (available_width=7, minus 2 for accent):
+        // word wrapper produces 3 lines, not div_ceil(14,5)=3 — same here, but
+        // at content_width=7 (available_width=9): div_ceil(14,7)=2 but word wrapper gives 3
+        let card = SoftCard::new(ProviderHealth::Degraded, vec![Line::from("aaaa bbbb cccc")]);
+        // available_width=9 → content_width=7
+        // Word wrapping: "aaaa" (4) + " bbbb" would be 9 > 7, wrap → "bbbb" (4) + " cccc" = 9 > 7, wrap
+        // = 3 visual lines + 1 separator = 4
+        assert_eq!(card.height(9), 4);
     }
 
     #[test]
