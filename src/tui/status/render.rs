@@ -9,7 +9,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, LineGauge, List, ListItem, Paragraph},
+    widgets::{Block, Borders, Gauge, List, ListItem, Paragraph},
     Frame,
 };
 
@@ -1035,10 +1035,10 @@ fn draw_overall_dashboard(
             .constraints([Constraint::Length(1), Constraint::Length(1)])
             .split(inner);
 
-        let gauge = LineGauge::default()
-            .filled_style(Style::default().fg(Color::Green).bg(Color::DarkGray))
+        let gauge = Gauge::default()
+            .gauge_style(Style::default().fg(Color::Green).bg(Color::DarkGray))
             .ratio(ratio)
-            .label(format!(" {op}/{total}  {:.0}% ", ratio * 100.0));
+            .label(format!("{op}/{total}  {:.0}%", ratio * 100.0));
         f.render_widget(gauge, inner_chunks[0]);
 
         let mut summary_spans = vec![
