@@ -286,7 +286,7 @@ All popups follow these rules:
 These are documented deviations from the above patterns that exist in the current codebase. New code should follow the guide, not these exceptions:
 
 1. ~~Models tab search query stored on App~~ — Fixed: moved to `ModelsApp.search_query`
-2. **Models tab** does not show `[/{query}]` in the panel title (other tabs do)
+2. ~~Models tab missing `[/{query}]` in title~~ — Fixed: now shows search query in panel title
 3. **Models right panel** (provider detail + model detail) has no focus state — always DarkGray border
 4. **Benchmarks detail panel** is never focusable (always DarkGray)
 5. ~~Status tab maintenance color~~ — Fixed: component maintenance now uses Blue consistently
