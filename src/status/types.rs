@@ -9,6 +9,18 @@ pub enum ProviderHealth {
 }
 
 impl ProviderHealth {
+    /// Map Statuspage/incident.io `indicator` enum to health.
+    pub fn from_indicator(indicator: &str) -> Self {
+        match indicator {
+            "none" => Self::Operational,
+            "minor" => Self::Degraded,
+            "major" => Self::Outage,
+            "critical" => Self::Outage,
+            "maintenance" => Self::Maintenance,
+            _ => Self::Unknown,
+        }
+    }
+
     pub fn from_api_status(status: &str) -> Self {
         let normalized = status.trim().to_lowercase();
         if normalized.is_empty() {

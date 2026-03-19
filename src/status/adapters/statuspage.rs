@@ -72,7 +72,12 @@ pub(crate) fn parse_statuspage_v2_summary(
             .or_else(|| Some(source.label().to_string()))
             .unwrap_or_else(|| source.label().to_string()),
         method: source.source_method(),
-        health: ProviderHealth::from_api_status(&payload.status.description),
+        health: payload
+            .status
+            .indicator
+            .as_deref()
+            .map(ProviderHealth::from_indicator)
+            .unwrap_or_else(|| ProviderHealth::from_api_status(&payload.status.description)),
         official_url: payload
             .page
             .url
@@ -239,6 +244,8 @@ pub(crate) struct OfficialPage {
 #[derive(Debug, Deserialize)]
 pub(crate) struct OfficialStatus {
     pub description: String,
+    #[serde(default)]
+    pub indicator: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -306,7 +313,7 @@ mod tests {
     fn parses_incident_io_summary_with_incidents() {
         let summary_json = r#"{
             "page": {"name": "OpenAI", "url": "https://status.openai.com", "updated_at": "2026-03-12T00:00:00Z"},
-            "status": {"description": "All Systems Operational"},
+            "status": {"indicator": "none", "description": "All Systems Operational"},
             "incidents": [],
             "components": [
                 {"name": "API", "status": "operational"},
