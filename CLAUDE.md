@@ -52,7 +52,7 @@ Each module has its own `CLAUDE.md` with detailed documentation. Top-level highl
 - `src/provider_category.rs` — provider categorization logic
 - `src/benchmarks/` — `store.rs` (BenchmarkStore/Entry), `fetch.rs` (CDN fetcher), `traits.rs` (AA↔models.dev matching)
 - `src/status/` — `types.rs`, `registry.rs`, `assessment.rs`, `fetch.rs`, `adapters/` (per-source-family parsers)
-- `src/tui/` — `app.rs` (App state, Message enum), `models_app.rs`/`agents_app.rs`/`benchmarks_app.rs`/`status_app.rs` (sub-app state), `event.rs` (NavAction dedup), `ui.rs` + `ui_*.rs` (per-tab rendering), `markdown.rs`, `radar.rs`
+- `src/tui/` — `app.rs` (App state, Message enum), `event.rs` (NavAction dedup), `ui.rs` (shared helpers), `markdown.rs`, per-tab subdirs: `models/`, `agents/`, `benchmarks/` (includes `radar.rs`), `status/` — each with `app.rs` (sub-app state) + `render.rs` (tab rendering)
 - `src/cli/` — `picker.rs` (shared PickerTerminal, nav helpers, style constants), `models.rs`/`benchmarks.rs`/`agents_ui.rs` (inline pickers), `styles.rs`
 - `docs/status-source-shape-audit.md` — upstream status-source families, live payload quirks, and adapter coverage notes
 - `docs/status-normalization-spec.md` — canonical status detail availability semantics and helper/UI contract
