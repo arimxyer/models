@@ -2,12 +2,14 @@ use ratatui::{
     buffer::Buffer,
     layout::Margin,
     text::Line,
-    widgets::{Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
+    widgets::{
+        Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Widget, Wrap,
+    },
     Frame,
 };
 
-use crate::tui::ui::{focus_border, status_health_style};
-use crate::tui::widgets::soft_card::AccentRegion;
+use crate::tui::ui::focus_border;
+use crate::tui::widgets::soft_card::SoftCard;
 
 /// Computed metadata returned after rendering a `ScrollablePanel`.
 #[allow(dead_code)]
@@ -28,81 +30,145 @@ pub struct ScrollablePanelState {
 /// Encapsulates the repeated pattern of:
 /// Block + Paragraph with Wrap + scroll clamping + Scrollbar.
 ///
-/// When accent regions are provided, content is shifted 2 columns right
-/// and health-colored `"▎"` stripes are painted in the left gutter.
+/// Accepts either raw lines or SoftCards. When SoftCards are provided,
+/// each card renders itself (accent stripes, content, separator).
 pub struct ScrollablePanel<'a> {
-    lines: Vec<Line<'a>>,
+    lines: Option<Vec<Line<'a>>>,
+    cards: Option<Vec<SoftCard>>,
     title: String,
     scroll: u16,
     focused: bool,
-    accent_regions: Vec<AccentRegion>,
 }
 
 impl<'a> ScrollablePanel<'a> {
     pub fn new(title: impl Into<String>, lines: Vec<Line<'a>>, scroll: u16, focused: bool) -> Self {
         Self {
-            lines,
+            lines: Some(lines),
+            cards: None,
             title: title.into(),
             scroll,
             focused,
-            accent_regions: Vec::new(),
         }
     }
 
-    /// Add accent stripe regions for health-colored left-edge painting.
-    pub fn with_accents(mut self, accents: Vec<AccentRegion>) -> Self {
-        self.accent_regions = accents;
-        self
+    /// Create a panel that renders SoftCards instead of raw lines.
+    pub fn with_cards(
+        title: impl Into<String>,
+        cards: Vec<SoftCard>,
+        scroll: u16,
+        focused: bool,
+    ) -> Self {
+        Self {
+            lines: None,
+            cards: Some(cards),
+            title: title.into(),
+            scroll,
+            focused,
+        }
     }
 
     /// Render the panel into the given area and return computed state.
     pub fn render(self, f: &mut Frame, area: ratatui::layout::Rect) -> ScrollablePanelState {
-        let border_style = focus_border(self.focused);
+        let title = self.title;
+        let scroll = self.scroll;
+        let focused = self.focused;
+        if let Some(cards) = self.cards {
+            Self::render_cards_inner(f, area, cards, &title, scroll, focused)
+        } else {
+            Self::render_lines_inner(
+                f,
+                area,
+                self.lines.unwrap_or_default(),
+                &title,
+                scroll,
+                focused,
+            )
+        }
+    }
+
+    fn render_cards_inner(
+        f: &mut Frame,
+        area: ratatui::layout::Rect,
+        cards: Vec<SoftCard>,
+        title: &str,
+        scroll: u16,
+        focused: bool,
+    ) -> ScrollablePanelState {
+        let border_style = focus_border(focused);
         let block = Block::default()
             .borders(Borders::ALL)
             .border_style(border_style)
-            .title(format!(" {} ", self.title));
+            .title(format!(" {} ", title));
 
-        let has_accents = !self.accent_regions.is_empty();
-        let accent_indent: u16 = if has_accents { 2 } else { 0 };
+        let inner = block.inner(area);
+        f.render_widget(block, area);
 
-        let visible_height = area.height.saturating_sub(2);
-        // Use narrower width for wrap calculation when accents shift content right
-        let wrap_width = area.width.saturating_sub(2).saturating_sub(accent_indent) as usize;
-        let (visual_total, visual_offsets) = wrapped_line_offsets(&self.lines, wrap_width);
+        let visible_height = inner.height;
+        let inner_width = inner.width;
+
+        // Compute card heights and total
+        let card_heights: Vec<u16> = cards.iter().map(|c| c.height(inner_width)).collect();
+        let visual_total: u16 = card_heights.iter().copied().sum();
+
         let max_scroll = visual_total.saturating_sub(visible_height);
-        let clamped_scroll = self.scroll.min(max_scroll);
+        let clamped_scroll = scroll.min(max_scroll);
 
-        if has_accents {
-            // Render block manually, then Paragraph into shifted content area
-            let inner = block.inner(area);
-            f.render_widget(block, area);
+        // Build visual offsets (cumulative heights)
+        let mut visual_offsets = Vec::with_capacity(cards.len());
+        let mut cumulative: u16 = 0;
+        for &h in &card_heights {
+            visual_offsets.push(cumulative);
+            cumulative += h;
+        }
 
-            let content_area = ratatui::layout::Rect {
-                x: inner.x + accent_indent,
-                width: inner.width.saturating_sub(accent_indent),
-                ..inner
+        // Render visible cards
+        let mut y_offset: u16 = 0;
+        for (i, card) in cards.into_iter().enumerate() {
+            let card_h = card_heights[i];
+            let card_top = y_offset;
+            let card_bottom = y_offset + card_h;
+
+            // Skip cards entirely above viewport
+            if card_bottom <= clamped_scroll {
+                y_offset += card_h;
+                continue;
+            }
+            // Stop if card starts below viewport
+            if card_top >= clamped_scroll + visible_height {
+                break;
+            }
+
+            // Calculate screen position and clipping
+            let screen_y = if card_top >= clamped_scroll {
+                inner.y + (card_top - clamped_scroll)
+            } else {
+                inner.y
             };
-            let paragraph = Paragraph::new(self.lines)
-                .wrap(Wrap { trim: false })
-                .scroll((clamped_scroll, 0));
-            f.render_widget(paragraph, content_area);
 
-            // Paint accent stripes post-render
-            paint_accent_stripes(
-                f.buffer_mut(),
-                inner,
-                &visual_offsets,
-                clamped_scroll,
-                visible_height,
-                &self.accent_regions,
-            );
-        } else {
-            let paragraph = Paragraph::new(self.lines)
-                .block(block)
-                .wrap(Wrap { trim: false })
-                .scroll((clamped_scroll, 0));
-            f.render_widget(paragraph, area);
+            let clip_top = clamped_scroll.saturating_sub(card_top);
+            let available_below = (inner.y + visible_height).saturating_sub(screen_y);
+            let render_h = card_h.saturating_sub(clip_top).min(available_below);
+
+            if render_h > 0 {
+                // Create a temporary buffer for the full card, then copy visible portion
+                let card_area = ratatui::layout::Rect::new(0, 0, inner_width, card_h);
+                let mut card_buf = Buffer::empty(card_area);
+                card.render(card_area, &mut card_buf);
+
+                // Copy visible rows from card buffer to frame buffer
+                let buf = f.buffer_mut();
+                for row in 0..render_h {
+                    let src_row = clip_top + row;
+                    let dst_y = screen_y + row;
+                    for col in 0..inner_width {
+                        let src_cell = &card_buf[(col, src_row)];
+                        let dst_cell = &mut buf[(inner.x + col, dst_y)];
+                        *dst_cell = src_cell.clone();
+                    }
+                }
+            }
+
+            y_offset += card_h;
         }
 
         // Scrollbar
@@ -128,35 +194,54 @@ impl<'a> ScrollablePanel<'a> {
             visual_offsets,
         }
     }
-}
 
-/// Paint health-colored `"▎"` accent stripes in the left gutter for visible rows.
-fn paint_accent_stripes(
-    buf: &mut Buffer,
-    inner: ratatui::layout::Rect,
-    visual_offsets: &[u16],
-    scroll: u16,
-    visible_height: u16,
-    regions: &[AccentRegion],
-) {
-    for region in regions {
-        let accent_style = status_health_style(region.health);
-        for logical_idx in region.start_line..region.end_line {
-            if logical_idx >= visual_offsets.len() {
-                break;
-            }
-            let vis_start = visual_offsets[logical_idx];
-            let vis_end = if logical_idx + 1 < visual_offsets.len() {
-                visual_offsets[logical_idx + 1]
-            } else {
-                vis_start + 1
-            };
-            for vis_row in vis_start..vis_end {
-                if vis_row >= scroll && vis_row < scroll + visible_height {
-                    let screen_row = inner.y + (vis_row - scroll);
-                    buf.set_string(inner.x, screen_row, "\u{258e}", accent_style);
-                }
-            }
+    fn render_lines_inner(
+        f: &mut Frame,
+        area: ratatui::layout::Rect,
+        lines: Vec<Line<'a>>,
+        title: &str,
+        scroll: u16,
+        focused: bool,
+    ) -> ScrollablePanelState {
+        let border_style = focus_border(focused);
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(border_style)
+            .title(format!(" {} ", title));
+
+        let visible_height = area.height.saturating_sub(2);
+        let wrap_width = area.width.saturating_sub(2) as usize;
+        let (visual_total, visual_offsets) = wrapped_line_offsets(&lines, wrap_width);
+        let max_scroll = visual_total.saturating_sub(visible_height);
+        let clamped_scroll = scroll.min(max_scroll);
+
+        let paragraph = Paragraph::new(lines)
+            .block(block)
+            .wrap(Wrap { trim: false })
+            .scroll((clamped_scroll, 0));
+        f.render_widget(paragraph, area);
+
+        // Scrollbar
+        if (visual_total as usize) > (visible_height as usize) {
+            let scroll_area = area.inner(Margin {
+                vertical: 1,
+                horizontal: 0,
+            });
+            let mut state = ScrollbarState::new(visual_total as usize)
+                .position(clamped_scroll as usize)
+                .viewport_content_length(visible_height as usize);
+            f.render_stateful_widget(
+                Scrollbar::new(ScrollbarOrientation::VerticalRight),
+                scroll_area,
+                &mut state,
+            );
+        }
+
+        ScrollablePanelState {
+            clamped_scroll,
+            visual_line_count: visual_total,
+            visible_height,
+            visual_offsets,
         }
     }
 }
