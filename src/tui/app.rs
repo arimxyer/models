@@ -13,6 +13,7 @@ use std::collections::HashMap;
 use crate::benchmarks::{BenchmarkEntry, BenchmarkStore};
 use crate::config::Config;
 use crate::data::{Provider, ProvidersMap};
+use crate::tui::widgets::scroll_offset::ScrollOffset;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
@@ -200,7 +201,7 @@ pub struct App {
     pub mode: Mode,
     pub status_message: Option<String>,
     pub show_help: bool,
-    pub help_scroll: u16,
+    pub help_scroll: ScrollOffset,
     pub current_tab: Tab,
     pub models_app: ModelsApp,
     pub agents_app: Option<AgentsApp>,
@@ -243,7 +244,7 @@ impl App {
             mode: Mode::Normal,
             status_message: None,
             show_help: false,
-            help_scroll: 0,
+            help_scroll: ScrollOffset::default(),
             current_tab: Tab::default(),
             models_app,
             agents_app,
@@ -438,16 +439,16 @@ impl App {
             Message::ToggleHelp => {
                 self.show_help = !self.show_help;
                 if self.show_help {
-                    self.help_scroll = 0; // Reset scroll when opening
+                    self.help_scroll.jump_top(); // Reset scroll when opening
                 }
             }
             Message::ScrollHelpUp => {
-                self.help_scroll = self.help_scroll.saturating_sub(1);
+                self.help_scroll.decrement(1);
             }
             Message::ScrollHelpDown => {
                 // Render-time clamping in draw_help_popup() prevents scrolling
                 // past content, so we just increment here.
-                self.help_scroll = self.help_scroll.saturating_add(1);
+                self.help_scroll.increment(1);
             }
             Message::NextTab => {
                 self.current_tab = self.current_tab.next();
@@ -1305,39 +1306,39 @@ mod tests {
     #[test]
     fn test_h2h_scroll_methods() {
         let mut app = make_test_app();
-        assert_eq!(app.benchmarks_app.h2h_scroll, 0);
+        assert_eq!(app.benchmarks_app.h2h_scroll.get(), 0);
 
         app.benchmarks_app.scroll_h2h_down();
-        assert_eq!(app.benchmarks_app.h2h_scroll, 1);
+        assert_eq!(app.benchmarks_app.h2h_scroll.get(), 1);
 
         app.benchmarks_app.scroll_h2h_down();
         app.benchmarks_app.scroll_h2h_down();
-        assert_eq!(app.benchmarks_app.h2h_scroll, 3);
+        assert_eq!(app.benchmarks_app.h2h_scroll.get(), 3);
 
         app.benchmarks_app.scroll_h2h_up();
-        assert_eq!(app.benchmarks_app.h2h_scroll, 2);
+        assert_eq!(app.benchmarks_app.h2h_scroll.get(), 2);
 
         app.benchmarks_app.scroll_h2h_top();
-        assert_eq!(app.benchmarks_app.h2h_scroll, 0);
+        assert_eq!(app.benchmarks_app.h2h_scroll.get(), 0);
 
         app.benchmarks_app.scroll_h2h_page_down(10);
-        assert_eq!(app.benchmarks_app.h2h_scroll, 10);
+        assert_eq!(app.benchmarks_app.h2h_scroll.get(), 10);
 
         app.benchmarks_app.scroll_h2h_page_up(5);
-        assert_eq!(app.benchmarks_app.h2h_scroll, 5);
+        assert_eq!(app.benchmarks_app.h2h_scroll.get(), 5);
 
         // Saturating sub: can't go below 0
         app.benchmarks_app.scroll_h2h_page_up(100);
-        assert_eq!(app.benchmarks_app.h2h_scroll, 0);
+        assert_eq!(app.benchmarks_app.h2h_scroll.get(), 0);
     }
 
     #[test]
     fn test_h2h_scroll_resets_on_view_change() {
         use super::super::benchmarks::BottomView;
         let mut app = make_test_app();
-        app.benchmarks_app.h2h_scroll = 15;
+        app.benchmarks_app.h2h_scroll.set(15);
         app.benchmarks_app.update_bottom_view(3);
         assert_eq!(app.benchmarks_app.bottom_view, BottomView::H2H);
-        assert_eq!(app.benchmarks_app.h2h_scroll, 0);
+        assert_eq!(app.benchmarks_app.h2h_scroll.get(), 0);
     }
 }

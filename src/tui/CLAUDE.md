@@ -27,7 +27,7 @@ tui/
 ├── mod.rs          (startup, event loop, async channel handling)
 ├── app.rs          (App struct, Tab, Message enum, update() logic)
 ├── event.rs        (keybinding → Message mapping, NavAction dedup)
-├── ui.rs           (draw(), shared helpers: focus_border, caret, selection_style, render_scrollbar)
+├── ui.rs           (draw(), shared helpers: focus_border, caret, selection_style)
 └── markdown.rs     (custom markdown converter, regex-based)
 ```
 
@@ -66,7 +66,7 @@ tui/
 - `focus_border(focused)` → Cyan or DarkGray `Style`
 - `caret(focused)` → `"> "` or `"  "` prefix for list items
 - `selection_style(selected)` → Yellow+BOLD or default `Style`
-- `render_scrollbar()` → Draws vertical scrollbar inside block borders when content overflows
+- `ScrollablePanel` widget → Bordered panel with scroll, scrollbar, and optional wrap; use instead of manual Block+Paragraph+Scrollbar
 - `help_line(key, desc)` → 16-char padded key (Yellow) + description for help popup
 
 ## Key Gotchas

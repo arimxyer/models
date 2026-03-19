@@ -1,13 +1,15 @@
 use ratatui::{
-    layout::{Constraint, Direction, Layout, Margin, Rect},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
+    widgets::{Clear, Paragraph},
     Frame,
 };
 
 use super::app::{App, Mode, Tab};
 use crate::status::ProviderHealth;
+use crate::tui::widgets::scroll_offset::ScrollOffset;
+use crate::tui::widgets::scrollable_panel::ScrollablePanel;
 
 /// Border style: Cyan when focused, DarkGray when not.
 pub(super) fn focus_border(focused: bool) -> Style {
@@ -44,38 +46,6 @@ fn help_line<'a>(key: &'a str, desc: &'a str) -> Line<'a> {
         Span::styled(format!("  {:<14}", key), Style::default().fg(Color::Yellow)),
         Span::raw(desc),
     ])
-}
-
-/// Render a vertical scrollbar if content exceeds viewport.
-/// `inside_block`: true when the area has `Borders::ALL` (applies vertical margin).
-pub(super) fn render_scrollbar(
-    f: &mut Frame,
-    area: Rect,
-    content_len: usize,
-    position: usize,
-    viewport_len: usize,
-    inside_block: bool,
-) {
-    if content_len <= viewport_len {
-        return;
-    }
-    let scroll_area = if inside_block {
-        area.inner(Margin {
-            vertical: 1,
-            horizontal: 0,
-        })
-    } else {
-        area
-    };
-    let max_scroll = content_len.saturating_sub(viewport_len);
-    let mut state = ScrollbarState::new(max_scroll + 1)
-        .position(position)
-        .viewport_content_length(viewport_len);
-    f.render_stateful_widget(
-        Scrollbar::new(ScrollbarOrientation::VerticalRight),
-        scroll_area,
-        &mut state,
-    );
 }
 
 pub(super) fn status_health_style(health: ProviderHealth) -> Style {
@@ -236,7 +206,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
 
     // Draw help popup on top if visible
     if app.show_help {
-        draw_help_popup(f, app.help_scroll, app.current_tab);
+        draw_help_popup(f, &app.help_scroll, app.current_tab);
     }
 
     // Draw picker modal on top if visible (agents tab only)
@@ -461,7 +431,7 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
     };
 }
 
-fn draw_help_popup(f: &mut Frame, scroll: u16, current_tab: Tab) {
+fn draw_help_popup(f: &mut Frame, scroll: &ScrollOffset, current_tab: Tab) {
     let area = centered_rect(50, 70, f.area());
 
     // Clear the area behind the popup
@@ -623,37 +593,15 @@ fn draw_help_popup(f: &mut Frame, scroll: u16, current_tab: Tab) {
     ]);
 
     let title = match current_tab {
-        Tab::Models => " Models Help - ? or Esc to close (j/k to scroll) ",
-        Tab::Agents => " Agents Help - ? or Esc to close (j/k to scroll) ",
-        Tab::Benchmarks => " Benchmarks Help - ? or Esc to close (j/k to scroll) ",
-        Tab::Status => " Status Help - ? or Esc to close (j/k to scroll) ",
+        Tab::Models => "Models Help - ? or Esc to close (j/k to scroll)",
+        Tab::Agents => "Agents Help - ? or Esc to close (j/k to scroll)",
+        Tab::Benchmarks => "Benchmarks Help - ? or Esc to close (j/k to scroll)",
+        Tab::Status => "Status Help - ? or Esc to close (j/k to scroll)",
     };
 
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Cyan))
-        .title(title);
-
-    // Clamp scroll to content bounds
-    let visible_height = area.height.saturating_sub(2); // 2 for borders
-    let content_lines = help_text.len() as u16;
-    let max_scroll = content_lines.saturating_sub(visible_height);
-    let scroll_pos = scroll.min(max_scroll);
-
-    let paragraph = Paragraph::new(help_text)
-        .block(block)
-        .scroll((scroll_pos, 0));
-    f.render_widget(paragraph, area);
-
-    // Scrollbar for help popup
-    render_scrollbar(
-        f,
-        area,
-        content_lines as usize,
-        scroll_pos as usize,
-        visible_height as usize,
-        true,
-    );
+    ScrollablePanel::new(title, help_text, scroll, true)
+        .with_wrap(false)
+        .render(f, area);
 }
 
 #[cfg(test)]

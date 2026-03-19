@@ -2,7 +2,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Borders},
     Frame,
 };
 use unicode_width::UnicodeWidthStr;
@@ -10,7 +10,7 @@ use unicode_width::UnicodeWidthStr;
 use super::render::compare_colors;
 use crate::formatting::format_tokens;
 use crate::tui::app::App;
-use crate::tui::ui::render_scrollbar;
+use crate::tui::widgets::scrollable_panel::ScrollablePanel;
 
 // ── H2H comparison table ────────────────────────────────────────────────────
 
@@ -216,28 +216,21 @@ pub(super) fn draw_h2h_table_generic(f: &mut Frame, area: Rect, app: &App) {
     }
 
     let is_focused = app.benchmarks_app.focus == super::app::BenchmarkFocus::Compare;
-    let border_color = if is_focused {
-        Color::Cyan
-    } else {
-        Color::DarkGray
-    };
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(border_color))
-        .title(" Head-to-Head ");
-    let inner = block.inner(area);
-    f.render_widget(block, area);
 
-    if inner.width < 20 || inner.height < 3 {
+    // Use a temporary inner rect to check minimum dimensions before building lines.
+    // We subtract 2 for borders to approximate inner dimensions.
+    let inner_w = area.width.saturating_sub(2);
+    let inner_h = area.height.saturating_sub(2);
+    if inner_w < 20 || inner_h < 3 {
         return;
     }
 
     let rows = h2h_rows();
     let label_w = 14_u16;
     let num_models = selections.len();
-    let available = inner.width.saturating_sub(label_w);
+    let available = inner_w.saturating_sub(label_w);
     let col_w = (available as usize / num_models).max(10);
-    let total_w = inner.width as usize;
+    let total_w = inner_w as usize;
 
     // Header row: model names
     let mut header_spans: Vec<Span> = vec![Span::styled(
@@ -598,15 +591,14 @@ pub(super) fn draw_h2h_table_generic(f: &mut Frame, area: Rect, app: &App) {
         }
     }
 
-    let content_len = lines.len();
-    let max_scroll = content_len.saturating_sub(inner.height as usize);
-    let scroll_y = app.benchmarks_app.h2h_scroll.min(max_scroll);
-    let paragraph = Paragraph::new(lines).scroll((scroll_y as u16, 0));
-    f.render_widget(paragraph, inner);
-
-    // Scrollbar for H2H table
-    let visible_h = inner.height as usize;
-    render_scrollbar(f, inner, content_len, scroll_y, visible_h, false);
+    ScrollablePanel::new(
+        "Head-to-Head",
+        lines,
+        &app.benchmarks_app.h2h_scroll,
+        is_focused,
+    )
+    .with_wrap(false)
+    .render(f, area);
 }
 
 pub(super) fn draw_scatter(f: &mut Frame, area: Rect, app: &App) {

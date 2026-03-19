@@ -5,6 +5,7 @@ use ratatui::widgets::ListState;
 
 use crate::benchmarks::{BenchmarkEntry, BenchmarkStore, ReasoningFilter};
 use crate::formatting::{cmp_opt_f64, parse_date_to_numeric};
+use crate::tui::widgets::scroll_offset::ScrollOffset;
 
 /// Page size for page up/down navigation
 const PAGE_SIZE: usize = 10;
@@ -492,7 +493,7 @@ pub struct BenchmarksApp {
     pub creator_grouping: CreatorGrouping,
     creator_info: HashMap<String, CreatorInfo>,
     pub bottom_view: BottomView,
-    pub h2h_scroll: usize,
+    pub h2h_scroll: ScrollOffset,
     pub show_detail_overlay: bool,
     pub show_creators_in_compare: bool,
     pub scatter_x: ScatterAxis,
@@ -527,7 +528,7 @@ impl BenchmarksApp {
             creator_grouping: CreatorGrouping::default(),
             creator_info: HashMap::new(),
             bottom_view: BottomView::default(),
-            h2h_scroll: 0,
+            h2h_scroll: ScrollOffset::default(),
             show_detail_overlay: false,
             show_creators_in_compare: false,
             scatter_x: ScatterAxis::default(),
@@ -973,11 +974,11 @@ impl BenchmarksApp {
     pub fn update_bottom_view(&mut self, selection_count: usize) {
         if selection_count >= 2 && self.bottom_view == BottomView::Detail {
             self.bottom_view = BottomView::H2H;
-            self.h2h_scroll = 0;
+            self.h2h_scroll.jump_top();
         } else if selection_count < 2 && self.bottom_view != BottomView::Detail {
             self.bottom_view = BottomView::Detail;
             self.show_detail_overlay = false;
-            self.h2h_scroll = 0;
+            self.h2h_scroll.jump_top();
         }
     }
 
@@ -1005,22 +1006,22 @@ impl BenchmarksApp {
     // --- H2H Scroll ---
 
     pub fn scroll_h2h_down(&mut self) {
-        self.h2h_scroll = self.h2h_scroll.saturating_add(1);
+        self.h2h_scroll.increment(1);
     }
 
     pub fn scroll_h2h_up(&mut self) {
-        self.h2h_scroll = self.h2h_scroll.saturating_sub(1);
+        self.h2h_scroll.decrement(1);
     }
 
     pub fn scroll_h2h_top(&mut self) {
-        self.h2h_scroll = 0;
+        self.h2h_scroll.jump_top();
     }
 
     pub fn scroll_h2h_page_down(&mut self, page: usize) {
-        self.h2h_scroll = self.h2h_scroll.saturating_add(page);
+        self.h2h_scroll.increment(page as u16);
     }
 
     pub fn scroll_h2h_page_up(&mut self, page: usize) {
-        self.h2h_scroll = self.h2h_scroll.saturating_sub(page);
+        self.h2h_scroll.decrement(page as u16);
     }
 }

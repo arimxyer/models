@@ -39,6 +39,7 @@ pub struct ScrollablePanel<'a> {
     title: String,
     scroll: &'a ScrollOffset,
     focused: bool,
+    wrap: bool,
 }
 
 impl<'a> ScrollablePanel<'a> {
@@ -54,6 +55,7 @@ impl<'a> ScrollablePanel<'a> {
             title: title.into(),
             scroll,
             focused,
+            wrap: true,
         }
     }
 
@@ -70,7 +72,15 @@ impl<'a> ScrollablePanel<'a> {
             title: title.into(),
             scroll,
             focused,
+            wrap: true,
         }
+    }
+
+    /// Set whether text lines are wrapped. Defaults to true.
+    /// When false, each logical line occupies exactly one visual row.
+    pub fn with_wrap(mut self, wrap: bool) -> Self {
+        self.wrap = wrap;
+        self
     }
 
     /// Render the panel into the given area and return computed state.
@@ -78,6 +88,7 @@ impl<'a> ScrollablePanel<'a> {
         let title = self.title;
         let scroll = self.scroll;
         let focused = self.focused;
+        let wrap = self.wrap;
         if let Some(cards) = self.cards {
             Self::render_cards_inner(f, area, cards, &title, scroll, focused)
         } else {
@@ -88,6 +99,7 @@ impl<'a> ScrollablePanel<'a> {
                 &title,
                 scroll,
                 focused,
+                wrap,
             )
         }
     }
@@ -209,6 +221,7 @@ impl<'a> ScrollablePanel<'a> {
         title: &str,
         scroll: &ScrollOffset,
         focused: bool,
+        wrap: bool,
     ) -> ScrollablePanelState {
         let border_style = focus_border(focused);
         let block = Block::default()
@@ -217,16 +230,28 @@ impl<'a> ScrollablePanel<'a> {
             .title(format!(" {} ", title));
 
         let visible_height = area.height.saturating_sub(2);
-        let wrap_width = area.width.saturating_sub(2) as usize;
-        let (visual_total, visual_offsets) = wrapped_line_offsets(&lines, wrap_width);
+        let (visual_total, visual_offsets) = if wrap {
+            let wrap_width = area.width.saturating_sub(2) as usize;
+            wrapped_line_offsets(&lines, wrap_width)
+        } else {
+            let total = lines.len() as u16;
+            let offsets = (0..total).collect();
+            (total, offsets)
+        };
         let max_scroll = visual_total.saturating_sub(visible_height);
         let clamped_scroll = scroll.get().min(max_scroll);
         scroll.set(clamped_scroll);
 
-        let paragraph = Paragraph::new(lines)
-            .block(block)
-            .wrap(Wrap { trim: false })
-            .scroll((clamped_scroll, 0));
+        let paragraph = if wrap {
+            Paragraph::new(lines)
+                .block(block)
+                .wrap(Wrap { trim: false })
+                .scroll((clamped_scroll, 0))
+        } else {
+            Paragraph::new(lines)
+                .block(block)
+                .scroll((clamped_scroll, 0))
+        };
         f.render_widget(paragraph, area);
 
         // Scrollbar
