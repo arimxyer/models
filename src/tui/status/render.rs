@@ -662,31 +662,21 @@ fn format_relative_time_from_instant(instant: std::time::Instant) -> String {
     }
 }
 
-fn overall_freshness_line(status_app: &super::app::StatusApp) -> Line<'static> {
+fn overall_freshness_suffix(status_app: &super::app::StatusApp) -> String {
     if status_app.loading {
-        return Line::from(vec![
-            Span::styled("Refreshing status", Style::default().fg(Color::Yellow)),
-            Span::styled("...", Style::default().fg(Color::DarkGray)),
-        ]);
+        return "Refreshing…".to_string();
     }
 
     let freshness = status_app
         .last_refreshed
         .map(format_relative_time_from_instant)
         .map(|value| format!("Updated {value}"))
-        .unwrap_or_else(|| "Waiting for status refresh".to_string());
+        .unwrap_or_else(|| "Waiting for refresh".to_string());
 
     if status_app.last_error.is_some() {
-        Line::from(vec![
-            Span::styled(freshness, Style::default().fg(Color::Cyan)),
-            Span::raw("  "),
-            Span::styled("Last refresh failed", Style::default().fg(Color::Red)),
-        ])
+        format!("{freshness} · Last refresh failed")
     } else {
-        Line::from(Span::styled(
-            freshness,
-            Style::default().fg(Color::DarkGray),
-        ))
+        freshness
     }
 }
 
@@ -1003,7 +993,7 @@ fn draw_overall_dashboard(
     status_app: &super::app::StatusApp,
     is_focused: bool,
 ) {
-    let (op, deg, out, other) = status_app.health_counts();
+    let (op, _deg, out, other) = status_app.health_counts();
     let total = status_app.entries.len();
     let attention_entries = overall_attention_entries(status_app);
     let incident_entries: Vec<_> = attention_entries
@@ -1018,11 +1008,9 @@ fn draw_overall_dashboard(
         .collect();
     let all_maint = status_app.all_maintenances();
     let maintenance_visible = !all_maint.is_empty();
-    let dark_border = Style::default().fg(Color::DarkGray);
-
     let rows = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(5), Constraint::Min(0)])
+        .constraints([Constraint::Length(4), Constraint::Min(0)])
         .split(area);
 
     {
@@ -1032,20 +1020,19 @@ fn draw_overall_dashboard(
             0.0
         };
 
+        let freshness_suffix = overall_freshness_suffix(status_app);
+        let title = format!(" Overall Status · {freshness_suffix} ");
+
         let block = Block::default()
             .borders(Borders::ALL)
-            .border_style(dark_border)
-            .title(" Overall Status ");
+            .border_style(Style::default().fg(Color::White))
+            .title(title);
         let inner = block.inner(rows[0]);
         f.render_widget(block, rows[0]);
 
         let inner_chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(1),
-                Constraint::Length(1),
-                Constraint::Length(1),
-            ])
+            .constraints([Constraint::Length(1), Constraint::Length(1)])
             .split(inner);
 
         let gauge = LineGauge::default()
@@ -1058,9 +1045,21 @@ fn draw_overall_dashboard(
             Span::styled("● ", Style::default().fg(Color::Green)),
             Span::raw(format!("{op} operational  ")),
         ];
-        if deg > 0 {
+        if !incident_entries.is_empty() {
             summary_spans.push(Span::styled("◐ ", Style::default().fg(Color::Yellow)));
-            summary_spans.push(Span::raw(format!("{deg} degraded  ")));
+            summary_spans.push(Span::raw(format!(
+                "{} active incident{}  ",
+                incident_entries.len(),
+                if incident_entries.len() == 1 { "" } else { "s" }
+            )));
+        }
+        if !component_entries.is_empty() {
+            summary_spans.push(Span::styled("◐ ", Style::default().fg(Color::Yellow)));
+            summary_spans.push(Span::raw(format!(
+                "{} service degradation{}  ",
+                component_entries.len(),
+                if component_entries.len() == 1 { "" } else { "s" }
+            )));
         }
         if out > 0 {
             summary_spans.push(Span::styled("✗ ", Style::default().fg(Color::Red)));
@@ -1071,10 +1070,6 @@ fn draw_overall_dashboard(
             summary_spans.push(Span::raw(format!("{other} other  ")));
         }
         f.render_widget(Paragraph::new(Line::from(summary_spans)), inner_chunks[1]);
-        f.render_widget(
-            Paragraph::new(overall_freshness_line(status_app)),
-            inner_chunks[2],
-        );
     }
 
     let board_area = rows[1];
@@ -1101,7 +1096,7 @@ fn draw_overall_dashboard(
         render_overall_panel(
             f,
             panels[0],
-            "Active Incidents",
+            &format!("Active Incidents ({})", incident_entries.len()),
             incident_cards,
             incidents_empty_lines(),
             &status_app.overall_incidents_scroll,
@@ -1116,7 +1111,7 @@ fn draw_overall_dashboard(
         render_overall_panel(
             f,
             panels[1],
-            "Service Degradation",
+            &format!("Service Degradation ({})", component_entries.len()),
             degradation_cards,
             degradation_empty_lines(),
             &status_app.overall_degradation_scroll,
@@ -1129,7 +1124,7 @@ fn draw_overall_dashboard(
             render_overall_panel(
                 f,
                 panels[2],
-                "Maintenance Outlook",
+                &format!("Maintenance Outlook ({})", all_maint.len()),
                 maintenance_cards,
                 Vec::new(),
                 &status_app.overall_maintenance_scroll,
@@ -1161,7 +1156,7 @@ fn draw_overall_dashboard(
         render_overall_panel(
             f,
             columns[0],
-            "Active Incidents",
+            &format!("Active Incidents ({})", incident_entries.len()),
             incident_cards,
             incidents_empty_lines(),
             &status_app.overall_incidents_scroll,
@@ -1176,7 +1171,7 @@ fn draw_overall_dashboard(
         render_overall_panel(
             f,
             right_panels[0],
-            "Service Degradation",
+            &format!("Service Degradation ({})", component_entries.len()),
             degradation_cards,
             degradation_empty_lines(),
             &status_app.overall_degradation_scroll,
@@ -1189,7 +1184,7 @@ fn draw_overall_dashboard(
             render_overall_panel(
                 f,
                 right_panels[1],
-                "Maintenance Outlook",
+                &format!("Maintenance Outlook ({})", all_maint.len()),
                 maintenance_cards,
                 Vec::new(),
                 &status_app.overall_maintenance_scroll,
