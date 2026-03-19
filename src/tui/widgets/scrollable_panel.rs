@@ -1,11 +1,13 @@
 use ratatui::{
+    buffer::Buffer,
     layout::Margin,
     text::Line,
     widgets::{Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
     Frame,
 };
 
-use crate::tui::ui::focus_border;
+use crate::tui::ui::{focus_border, status_health_style};
+use crate::tui::widgets::soft_card::AccentRegion;
 
 /// Computed metadata returned after rendering a `ScrollablePanel`.
 #[allow(dead_code)]
@@ -25,11 +27,15 @@ pub struct ScrollablePanelState {
 ///
 /// Encapsulates the repeated pattern of:
 /// Block + Paragraph with Wrap + scroll clamping + Scrollbar.
+///
+/// When accent regions are provided, content is shifted 2 columns right
+/// and health-colored `"▎"` stripes are painted in the left gutter.
 pub struct ScrollablePanel<'a> {
     lines: Vec<Line<'a>>,
     title: String,
     scroll: u16,
     focused: bool,
+    accent_regions: Vec<AccentRegion>,
 }
 
 impl<'a> ScrollablePanel<'a> {
@@ -39,7 +45,14 @@ impl<'a> ScrollablePanel<'a> {
             title: title.into(),
             scroll,
             focused,
+            accent_regions: Vec::new(),
         }
+    }
+
+    /// Add accent stripe regions for health-colored left-edge painting.
+    pub fn with_accents(mut self, accents: Vec<AccentRegion>) -> Self {
+        self.accent_regions = accents;
+        self
     }
 
     /// Render the panel into the given area and return computed state.
@@ -50,17 +63,47 @@ impl<'a> ScrollablePanel<'a> {
             .border_style(border_style)
             .title(format!(" {} ", self.title));
 
+        let has_accents = !self.accent_regions.is_empty();
+        let accent_indent: u16 = if has_accents { 2 } else { 0 };
+
         let visible_height = area.height.saturating_sub(2);
-        let wrap_width = area.width.saturating_sub(2) as usize;
+        // Use narrower width for wrap calculation when accents shift content right
+        let wrap_width = area.width.saturating_sub(2).saturating_sub(accent_indent) as usize;
         let (visual_total, visual_offsets) = wrapped_line_offsets(&self.lines, wrap_width);
         let max_scroll = visual_total.saturating_sub(visible_height);
         let clamped_scroll = self.scroll.min(max_scroll);
 
-        let paragraph = Paragraph::new(self.lines)
-            .block(block)
-            .wrap(Wrap { trim: false })
-            .scroll((clamped_scroll, 0));
-        f.render_widget(paragraph, area);
+        if has_accents {
+            // Render block manually, then Paragraph into shifted content area
+            let inner = block.inner(area);
+            f.render_widget(block, area);
+
+            let content_area = ratatui::layout::Rect {
+                x: inner.x + accent_indent,
+                width: inner.width.saturating_sub(accent_indent),
+                ..inner
+            };
+            let paragraph = Paragraph::new(self.lines)
+                .wrap(Wrap { trim: false })
+                .scroll((clamped_scroll, 0));
+            f.render_widget(paragraph, content_area);
+
+            // Paint accent stripes post-render
+            paint_accent_stripes(
+                f.buffer_mut(),
+                inner,
+                &visual_offsets,
+                clamped_scroll,
+                visible_height,
+                &self.accent_regions,
+            );
+        } else {
+            let paragraph = Paragraph::new(self.lines)
+                .block(block)
+                .wrap(Wrap { trim: false })
+                .scroll((clamped_scroll, 0));
+            f.render_widget(paragraph, area);
+        }
 
         // Scrollbar
         if (visual_total as usize) > (visible_height as usize) {
@@ -83,6 +126,37 @@ impl<'a> ScrollablePanel<'a> {
             visual_line_count: visual_total,
             visible_height,
             visual_offsets,
+        }
+    }
+}
+
+/// Paint health-colored `"▎"` accent stripes in the left gutter for visible rows.
+fn paint_accent_stripes(
+    buf: &mut Buffer,
+    inner: ratatui::layout::Rect,
+    visual_offsets: &[u16],
+    scroll: u16,
+    visible_height: u16,
+    regions: &[AccentRegion],
+) {
+    for region in regions {
+        let accent_style = status_health_style(region.health);
+        for logical_idx in region.start_line..region.end_line {
+            if logical_idx >= visual_offsets.len() {
+                break;
+            }
+            let vis_start = visual_offsets[logical_idx];
+            let vis_end = if logical_idx + 1 < visual_offsets.len() {
+                visual_offsets[logical_idx + 1]
+            } else {
+                vis_start + 1
+            };
+            for vis_row in vis_start..vis_end {
+                if vis_row >= scroll && vis_row < scroll + visible_height {
+                    let screen_row = inner.y + (vis_row - scroll);
+                    buf.set_string(inner.x, screen_row, "\u{258e}", accent_style);
+                }
+            }
         }
     }
 }

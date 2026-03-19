@@ -1,17 +1,14 @@
 use crate::formatting::{format_relative_time_from_str, truncate};
 use crate::status::{ProviderHealth, StatusProvenance, StatusSourceMethod};
 use crate::tui::app::App;
-use crate::tui::ui::{
-    caret, render_scrollbar, selection_style, status_health_icon, status_health_style,
-    visual_line_total,
-};
+use crate::tui::ui::{caret, selection_style, status_health_icon, status_health_style};
 use crate::tui::widgets::scrollable_panel::ScrollablePanel;
-use crate::tui::widgets::soft_card::SoftCard;
+use crate::tui::widgets::soft_card::{AccentRegion, SoftCard};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, LineGauge, List, ListItem, Paragraph, Wrap},
+    widgets::{Block, Borders, LineGauge, List, ListItem, Paragraph},
     Frame,
 };
 
@@ -749,8 +746,9 @@ fn push_panel_empty_state(lines: &mut Vec<Line<'static>>, title: &str, descripti
 fn build_incidents_panel_lines(
     entries: &[&crate::status::ProviderStatus],
     body_width: usize,
-) -> Vec<Line<'static>> {
+) -> (Vec<Line<'static>>, Vec<AccentRegion>) {
     let mut lines = Vec::new();
+    let mut accents = Vec::new();
 
     if entries.is_empty() {
         push_panel_empty_state(
@@ -758,7 +756,7 @@ fn build_incidents_panel_lines(
             "No active incidents reported right now",
             "Tracked providers are not currently publishing formal incident rows.",
         );
-        return lines;
+        return (lines, accents);
     }
 
     for (idx, entry) in entries.iter().enumerate() {
@@ -857,21 +855,29 @@ fn build_incidents_panel_lines(
             push_overall_caveat(&mut card_lines, note, body_width);
         }
 
-        lines.extend(SoftCard::new(entry.health, card_lines).to_lines(body_width as u16));
+        let start = lines.len();
+        let (content, health) = SoftCard::new(entry.health, card_lines).into_parts();
+        accents.push(AccentRegion {
+            start_line: start,
+            end_line: start + content.len(),
+            health,
+        });
+        lines.extend(content);
 
         if idx + 1 < entries.len() {
             lines.push(Line::from(""));
         }
     }
 
-    lines
+    (lines, accents)
 }
 
 fn build_degradation_panel_lines(
     entries: &[&crate::status::ProviderStatus],
     body_width: usize,
-) -> Vec<Line<'static>> {
+) -> (Vec<Line<'static>>, Vec<AccentRegion>) {
     let mut lines = Vec::new();
+    let mut accents = Vec::new();
 
     if entries.is_empty() {
         push_panel_empty_state(
@@ -879,7 +885,7 @@ fn build_degradation_panel_lines(
             "No component-reported degradation right now",
             "Tracked providers are not currently reporting degraded services without incident rows.",
         );
-        return lines;
+        return (lines, accents);
     }
 
     for (idx, entry) in entries.iter().enumerate() {
@@ -931,21 +937,29 @@ fn build_degradation_panel_lines(
             push_overall_caveat(&mut card_lines, note, body_width);
         }
 
-        lines.extend(SoftCard::new(entry.health, card_lines).to_lines(body_width as u16));
+        let start = lines.len();
+        let (content, health) = SoftCard::new(entry.health, card_lines).into_parts();
+        accents.push(AccentRegion {
+            start_line: start,
+            end_line: start + content.len(),
+            health,
+        });
+        lines.extend(content);
 
         if idx + 1 < entries.len() {
             lines.push(Line::from(""));
         }
     }
 
-    lines
+    (lines, accents)
 }
 
 fn build_maintenance_panel_lines(
     items: &[(&str, &crate::status::ScheduledMaintenance)],
-    body_width: usize,
-) -> Vec<Line<'static>> {
+    _body_width: usize,
+) -> (Vec<Line<'static>>, Vec<AccentRegion>) {
     let mut lines = Vec::new();
+    let mut accents = Vec::new();
 
     for (idx, (provider_name, maint)) in items.iter().enumerate() {
         let mut card_lines = Vec::new();
@@ -985,16 +999,21 @@ fn build_maintenance_panel_lines(
             push_plain_scope_lines(&mut card_lines, "Affected", &maint.affected_components, 3);
         }
 
-        lines.extend(
-            SoftCard::new(ProviderHealth::Maintenance, card_lines).to_lines(body_width as u16),
-        );
+        let start = lines.len();
+        let (content, health) = SoftCard::new(ProviderHealth::Maintenance, card_lines).into_parts();
+        accents.push(AccentRegion {
+            start_line: start,
+            end_line: start + content.len(),
+            health,
+        });
+        lines.extend(content);
 
         if idx + 1 < items.len() {
             lines.push(Line::from(""));
         }
     }
 
-    lines
+    (lines, accents)
 }
 
 fn render_overall_panel(
@@ -1002,10 +1021,13 @@ fn render_overall_panel(
     area: Rect,
     title: &str,
     lines: Vec<Line<'static>>,
+    accents: Vec<AccentRegion>,
     scroll: u16,
     focused: bool,
 ) {
-    ScrollablePanel::new(title, lines, scroll, focused).render(f, area);
+    ScrollablePanel::new(title, lines, scroll, focused)
+        .with_accents(accents)
+        .render(f, area);
 }
 
 fn draw_overall_dashboard(
@@ -1105,7 +1127,7 @@ fn draw_overall_dashboard(
             .constraints(constraints)
             .split(board_area);
 
-        let incident_lines = build_incidents_panel_lines(
+        let (incident_lines, incident_accents) = build_incidents_panel_lines(
             &incident_entries,
             usize::from(panels[0].width.saturating_sub(4)).max(24),
         );
@@ -1114,12 +1136,13 @@ fn draw_overall_dashboard(
             panels[0],
             "Active Incidents",
             incident_lines,
+            incident_accents,
             status_app.overall_incidents_scroll,
             is_focused
                 && status_app.overall_panel_focus == super::app::OverallPanelFocus::Incidents,
         );
 
-        let degradation_lines = build_degradation_panel_lines(
+        let (degradation_lines, degradation_accents) = build_degradation_panel_lines(
             &component_entries,
             usize::from(panels[1].width.saturating_sub(4)).max(24),
         );
@@ -1128,13 +1151,14 @@ fn draw_overall_dashboard(
             panels[1],
             "Service Degradation",
             degradation_lines,
+            degradation_accents,
             status_app.overall_degradation_scroll,
             is_focused
                 && status_app.overall_panel_focus == super::app::OverallPanelFocus::Degradation,
         );
 
         if maintenance_visible {
-            let maintenance_lines = build_maintenance_panel_lines(
+            let (maintenance_lines, maintenance_accents) = build_maintenance_panel_lines(
                 &all_maint,
                 usize::from(panels[2].width.saturating_sub(4)).max(24),
             );
@@ -1143,6 +1167,7 @@ fn draw_overall_dashboard(
                 panels[2],
                 "Maintenance Outlook",
                 maintenance_lines,
+                maintenance_accents,
                 status_app.overall_maintenance_scroll,
                 is_focused
                     && status_app.overall_panel_focus == super::app::OverallPanelFocus::Maintenance,
@@ -1165,7 +1190,7 @@ fn draw_overall_dashboard(
                 .split(columns[1])
         };
 
-        let incident_lines = build_incidents_panel_lines(
+        let (incident_lines, incident_accents) = build_incidents_panel_lines(
             &incident_entries,
             usize::from(columns[0].width.saturating_sub(4)).max(24),
         );
@@ -1174,12 +1199,13 @@ fn draw_overall_dashboard(
             columns[0],
             "Active Incidents",
             incident_lines,
+            incident_accents,
             status_app.overall_incidents_scroll,
             is_focused
                 && status_app.overall_panel_focus == super::app::OverallPanelFocus::Incidents,
         );
 
-        let degradation_lines = build_degradation_panel_lines(
+        let (degradation_lines, degradation_accents) = build_degradation_panel_lines(
             &component_entries,
             usize::from(right_panels[0].width.saturating_sub(4)).max(24),
         );
@@ -1188,13 +1214,14 @@ fn draw_overall_dashboard(
             right_panels[0],
             "Service Degradation",
             degradation_lines,
+            degradation_accents,
             status_app.overall_degradation_scroll,
             is_focused
                 && status_app.overall_panel_focus == super::app::OverallPanelFocus::Degradation,
         );
 
         if maintenance_visible {
-            let maintenance_lines = build_maintenance_panel_lines(
+            let (maintenance_lines, maintenance_accents) = build_maintenance_panel_lines(
                 &all_maint,
                 usize::from(right_panels[1].width.saturating_sub(4)).max(24),
             );
@@ -1203,6 +1230,7 @@ fn draw_overall_dashboard(
                 right_panels[1],
                 "Maintenance Outlook",
                 maintenance_lines,
+                maintenance_accents,
                 status_app.overall_maintenance_scroll,
                 is_focused
                     && status_app.overall_panel_focus == super::app::OverallPanelFocus::Maintenance,
@@ -1452,14 +1480,9 @@ fn draw_provider_status_detail(
         let incidents_area = panel_chunks[chunk_idx];
         chunk_idx += 1;
 
-        let incident_border = if is_focused {
-            Style::default().fg(Color::Cyan)
-        } else {
-            dark_border
-        };
-
         let body_width = usize::from(incidents_area.width.saturating_sub(4)).max(24);
         let mut lines: Vec<Line<'static>> = Vec::new();
+        let mut accents: Vec<AccentRegion> = Vec::new();
 
         if active_incidents.is_empty() {
             let incident_empty_text = incident_note.clone().unwrap_or_else(|| {
@@ -1510,37 +1533,24 @@ fn draw_provider_status_detail(
                 }
             }
 
-            lines.extend(SoftCard::new(accent_health, card_lines).to_lines(body_width as u16));
+            let start = lines.len();
+            let (content, health) = SoftCard::new(accent_health, card_lines).into_parts();
+            accents.push(AccentRegion {
+                start_line: start,
+                end_line: start + content.len(),
+                health,
+            });
+            lines.extend(content);
 
             if i + 1 < active_incidents.len() {
                 lines.push(Line::from(""));
             }
         }
 
-        let wrap_width = incidents_area.width.saturating_sub(2) as usize;
-        let visual_total = visual_line_total(&lines, wrap_width);
-        let visible_h = incidents_area.height.saturating_sub(2);
-        let max_scroll = visual_total.saturating_sub(visible_h);
-        let clamped_scroll = detail_scroll.min(max_scroll);
-
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(incident_border)
-            .title(format!(" Current Incidents ({}) ", active_incidents.len()));
-        let paragraph = Paragraph::new(lines)
-            .block(block)
-            .wrap(Wrap { trim: false })
-            .scroll((clamped_scroll, 0));
-        f.render_widget(paragraph, incidents_area);
-
-        render_scrollbar(
-            f,
-            incidents_area,
-            visual_total as usize,
-            clamped_scroll as usize,
-            visible_h as usize,
-            true,
-        );
+        let title = format!("Current Incidents ({})", active_incidents.len());
+        ScrollablePanel::new(title, lines, detail_scroll, is_focused)
+            .with_accents(accents)
+            .render(f, incidents_area);
     }
 
     // ── Maintenance ────────────────────────────────────────────

@@ -120,6 +120,7 @@ fn visual_line_height(line: &Line<'_>, wrap_width: usize) -> u16 {
 ///
 /// Uses `div_ceil(line.width(), wrap_width)` with a +1 buffer for lines that
 /// actually wrap, since ratatui's word-wrap can produce one extra visual row.
+#[allow(dead_code)]
 pub(in crate::tui) fn visual_line_total(lines: &[Line<'_>], wrap_width: usize) -> u16 {
     lines
         .iter()
