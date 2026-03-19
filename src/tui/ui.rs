@@ -67,7 +67,8 @@ pub(super) fn render_scrollbar(
     } else {
         area
     };
-    let mut state = ScrollbarState::new(content_len)
+    let max_scroll = content_len.saturating_sub(viewport_len);
+    let mut state = ScrollbarState::new(max_scroll + 1)
         .position(position)
         .viewport_content_length(viewport_len);
     f.render_stateful_widget(

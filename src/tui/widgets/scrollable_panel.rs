@@ -184,7 +184,7 @@ impl<'a> ScrollablePanel<'a> {
                 vertical: 1,
                 horizontal: 0,
             });
-            let mut state = ScrollbarState::new(visual_total as usize)
+            let mut state = ScrollbarState::new(max_scroll as usize + 1)
                 .position(clamped_scroll as usize)
                 .viewport_content_length(visible_height as usize);
             f.render_stateful_widget(
@@ -235,7 +235,7 @@ impl<'a> ScrollablePanel<'a> {
                 vertical: 1,
                 horizontal: 0,
             });
-            let mut state = ScrollbarState::new(visual_total as usize)
+            let mut state = ScrollbarState::new(max_scroll as usize + 1)
                 .position(clamped_scroll as usize)
                 .viewport_content_length(visible_height as usize);
             f.render_stateful_widget(
