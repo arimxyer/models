@@ -11,8 +11,8 @@ use crate::formatting::truncate;
 use crate::formatting::EM_DASH;
 use crate::tui::app::App;
 use crate::tui::ui::{
-    caret, centered_rect_fixed, detail_visible_height, focus_border, render_scrollbar,
-    selection_style,
+    caret, centered_rect_fixed, detail_visible_height, filter_toggle_spans, focus_border,
+    render_scrollbar, selection_style,
 };
 
 pub(in crate::tui) fn draw_agents_main(f: &mut Frame, area: Rect, app: &mut App) {
@@ -93,37 +93,12 @@ fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut App) {
         .split(inner_area);
 
     // Filter toggles row
-    let filter_line = Line::from(vec![
-        Span::styled(
-            "[1]",
-            Style::default().fg(if agents_app.filters.installed_only {
-                Color::Green
-            } else {
-                Color::DarkGray
-            }),
-        ),
-        Span::raw(" Inst "),
-        Span::styled(
-            "[2]",
-            Style::default().fg(if agents_app.filters.cli_only {
-                Color::Green
-            } else {
-                Color::DarkGray
-            }),
-        ),
-        Span::raw(" CLI "),
-        Span::styled(
-            "[3]",
-            Style::default().fg(if agents_app.filters.open_source_only {
-                Color::Green
-            } else {
-                Color::DarkGray
-            }),
-        ),
-        Span::raw(" OSS"),
-    ]);
-    let filter_para = Paragraph::new(filter_line);
-    f.render_widget(filter_para, chunks[0]);
+    let filter_line = Line::from(filter_toggle_spans(&[
+        ("1", "Inst", agents_app.filters.installed_only),
+        ("2", "CLI", agents_app.filters.cli_only),
+        ("3", "OSS", agents_app.filters.open_source_only),
+    ]));
+    f.render_widget(Paragraph::new(filter_line), chunks[0]);
 
     // Agent list
     let mut items: Vec<ListItem> = Vec::new();

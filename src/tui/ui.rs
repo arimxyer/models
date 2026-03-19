@@ -97,6 +97,84 @@ pub(super) fn status_health_icon(health: ProviderHealth) -> &'static str {
     }
 }
 
+/// Compute the visual height of a single line when word-wrapped to `wrap_width`.
+///
+/// Returns 1 for empty or zero-width lines, otherwise `div_ceil(width, wrap_width)`
+/// with +1 buffer for lines that actually wrap (ratatui's word-wrap can overshoot
+/// `div_ceil` by one row).
+fn visual_line_height(line: &Line<'_>, wrap_width: usize) -> u16 {
+    let w = line.width();
+    if wrap_width == 0 || w == 0 {
+        1
+    } else {
+        let base = w.div_ceil(wrap_width).max(1) as u16;
+        if w > wrap_width {
+            base + 1
+        } else {
+            base
+        }
+    }
+}
+
+/// Sum visual (wrapped) heights for a slice of lines.
+///
+/// Uses `div_ceil(line.width(), wrap_width)` with a +1 buffer for lines that
+/// actually wrap, since ratatui's word-wrap can produce one extra visual row.
+pub(in crate::tui) fn visual_line_total(lines: &[Line<'_>], wrap_width: usize) -> u16 {
+    lines
+        .iter()
+        .map(|line| visual_line_height(line, wrap_width))
+        .sum()
+}
+
+/// Return per-line visual (wrapped) heights for a slice of lines.
+///
+/// Callers can derive cumulative offsets by scanning the returned `Vec`.
+#[allow(dead_code)]
+pub(in crate::tui) fn visual_line_heights(lines: &[Line<'_>], wrap_width: usize) -> Vec<u16> {
+    lines
+        .iter()
+        .map(|line| visual_line_height(line, wrap_width))
+        .collect()
+}
+
+/// Build a dash-padded section header line like `"── Title ──────"`.
+///
+/// The result is styled DarkGray + BOLD, matching the models detail panel pattern.
+#[allow(dead_code)]
+pub(in crate::tui) fn section_header_line(title: &str, width: usize) -> Line<'static> {
+    let prefix = format!("\u{2500}\u{2500} {} ", title);
+    let fill_len = width.saturating_sub(prefix.chars().count());
+    let header = format!("{}{}", prefix, "\u{2500}".repeat(fill_len));
+    Line::from(Span::styled(
+        header,
+        Style::default()
+            .fg(Color::DarkGray)
+            .add_modifier(Modifier::BOLD),
+    ))
+}
+
+/// Build filter toggle spans in `[N] label` format.
+///
+/// Each tuple is `(key, label, active)`. Active keys render in Green, inactive
+/// in DarkGray. Returns a flat `Vec<Span>` ready for `Line::from(...)`.
+pub(in crate::tui) fn filter_toggle_spans(toggles: &[(&str, &str, bool)]) -> Vec<Span<'static>> {
+    let mut spans = Vec::with_capacity(toggles.len() * 2);
+    for (key, label, active) in toggles {
+        let color = if *active {
+            Color::Green
+        } else {
+            Color::DarkGray
+        };
+        spans.push(Span::styled(
+            format!("[{}]", key),
+            Style::default().fg(color),
+        ));
+        spans.push(Span::raw(format!(" {} ", label)));
+    }
+    spans
+}
+
 /// Calculate visible height for detail panel (area height minus borders)
 pub(super) fn detail_visible_height(area: Rect) -> u16 {
     area.height.saturating_sub(2) // 2 for top and bottom borders
@@ -579,4 +657,99 @@ fn draw_help_popup(f: &mut Frame, scroll: u16, current_tab: Tab) {
         visible_height as usize,
         true,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::text::Line;
+
+    #[test]
+    fn visual_line_height_empty() {
+        let line = Line::from("");
+        assert_eq!(visual_line_height(&line, 40), 1);
+    }
+
+    #[test]
+    fn visual_line_height_fits() {
+        let line = Line::from("short");
+        assert_eq!(visual_line_height(&line, 40), 1);
+    }
+
+    #[test]
+    fn visual_line_height_wraps() {
+        // 10 chars in a 4-wide viewport: div_ceil(10, 4) = 3, +1 buffer = 4
+        let line = Line::from("abcdefghij");
+        assert_eq!(visual_line_height(&line, 4), 4);
+    }
+
+    #[test]
+    fn visual_line_height_exact_fit() {
+        // Exactly fits: no +1 buffer
+        let line = Line::from("abcd");
+        assert_eq!(visual_line_height(&line, 4), 1);
+    }
+
+    #[test]
+    fn visual_line_height_zero_wrap() {
+        let line = Line::from("hello");
+        assert_eq!(visual_line_height(&line, 0), 1);
+    }
+
+    #[test]
+    fn visual_line_total_sums() {
+        let lines = vec![
+            Line::from("short"),        // fits in 40 → 1
+            Line::from(""),             // empty → 1
+            Line::from("a".repeat(80)), // wraps in 40 → div_ceil(80,40)=2 +1 = 3
+        ];
+        assert_eq!(visual_line_total(&lines, 40), 5);
+    }
+
+    #[test]
+    fn visual_line_heights_returns_per_line() {
+        let lines = vec![Line::from("short"), Line::from("a".repeat(80))];
+        let heights = visual_line_heights(&lines, 40);
+        assert_eq!(heights, vec![1, 3]);
+    }
+
+    #[test]
+    fn section_header_line_format() {
+        let line = section_header_line("Pricing", 30);
+        let text: String = line.spans.iter().map(|s| s.content.as_ref()).collect();
+        assert!(text.starts_with("\u{2500}\u{2500} Pricing "));
+        assert_eq!(text.chars().count(), 30);
+        // Verify style
+        let style = line.spans[0].style;
+        assert_eq!(style.fg, Some(Color::DarkGray));
+        assert!(style.add_modifier.contains(Modifier::BOLD));
+    }
+
+    #[test]
+    fn section_header_line_short_width() {
+        // Width shorter than prefix — no trailing dashes, no panic
+        let line = section_header_line("Title", 5);
+        let text: String = line.spans.iter().map(|s| s.content.as_ref()).collect();
+        assert!(text.contains("Title"));
+    }
+
+    #[test]
+    fn filter_toggle_spans_active_and_inactive() {
+        let spans = filter_toggle_spans(&[("1", "reasoning", true), ("2", "tools", false)]);
+        assert_eq!(spans.len(), 4);
+        // Active key is Green
+        assert_eq!(spans[0].style.fg, Some(Color::Green));
+        assert_eq!(spans[0].content.as_ref(), "[1]");
+        assert_eq!(spans[1].content.as_ref(), " reasoning ");
+        // Inactive key is DarkGray
+        assert_eq!(spans[2].style.fg, Some(Color::DarkGray));
+        assert_eq!(spans[2].content.as_ref(), "[2]");
+        assert_eq!(spans[3].content.as_ref(), " tools ");
+    }
+
+    #[test]
+    fn filter_toggle_spans_empty() {
+        let spans = filter_toggle_spans(&[]);
+        assert!(spans.is_empty());
+    }
 }

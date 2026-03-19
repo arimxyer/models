@@ -2,8 +2,11 @@ use crate::formatting::{format_relative_time_from_str, truncate};
 use crate::status::{ProviderHealth, StatusProvenance, StatusSourceMethod};
 use crate::tui::app::App;
 use crate::tui::ui::{
-    caret, focus_border, render_scrollbar, selection_style, status_health_icon, status_health_style,
+    caret, render_scrollbar, selection_style, status_health_icon, status_health_style,
+    visual_line_total,
 };
+use crate::tui::widgets::scrollable_panel::ScrollablePanel;
+use crate::tui::widgets::soft_card::SoftCard;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -395,20 +398,6 @@ fn incident_stage_style(stage: &str) -> Style {
     }
 }
 
-fn wrapped_visual_line_count(lines: &[Line<'_>], wrap_width: usize) -> u16 {
-    lines
-        .iter()
-        .map(|line| {
-            let line_width = line.width();
-            if wrap_width == 0 || line_width == 0 {
-                1
-            } else {
-                line_width.div_ceil(wrap_width).max(1) as u16
-            }
-        })
-        .sum()
-}
-
 pub(in crate::tui) fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
     use super::app::StatusFocus;
 
@@ -704,27 +693,8 @@ fn overall_freshness_line(status_app: &super::app::StatusApp) -> Line<'static> {
     }
 }
 
-/// Prepend a health-colored left-edge accent stripe (`"▎ "`) to an existing `Line`.
-fn soft_card_accent_line(line: Line<'static>, health: ProviderHealth) -> Line<'static> {
-    let accent_style = status_health_style(health);
-    let mut spans = vec![Span::styled("▎ ", accent_style)];
-    spans.extend(line.spans);
-    Line::from(spans)
-}
-
-/// Wrap a batch of lines with accent stripes and push them onto `lines`.
-fn push_soft_card_lines(
-    lines: &mut Vec<Line<'static>>,
-    card_lines: Vec<Line<'static>>,
-    health: ProviderHealth,
-) {
-    for line in card_lines {
-        lines.push(soft_card_accent_line(line, health));
-    }
-}
-
-fn push_soft_card_summary(lines: &mut Vec<Line<'static>>, summary: &str, _body_width: usize) {
-    lines.push(Line::from(Span::raw(format!("  {summary}"))));
+fn push_soft_card_summary(card_lines: &mut Vec<Line<'static>>, summary: &str) {
+    card_lines.push(Line::from(Span::raw(format!("  {summary}"))));
 }
 
 fn normalized_status_copy(text: &str) -> String {
@@ -887,7 +857,7 @@ fn build_incidents_panel_lines(
             push_overall_caveat(&mut card_lines, note, body_width);
         }
 
-        push_soft_card_lines(&mut lines, card_lines, entry.health);
+        lines.extend(SoftCard::new(entry.health, card_lines).to_lines(body_width as u16));
 
         if idx + 1 < entries.len() {
             lines.push(Line::from(""));
@@ -930,7 +900,7 @@ fn build_degradation_panel_lines(
         ]));
 
         if let Some(summary) = entry.provider_summary_text() {
-            push_soft_card_summary(&mut card_lines, summary, body_width);
+            push_soft_card_summary(&mut card_lines, summary);
         }
 
         card_lines.push(Line::from(vec![
@@ -961,7 +931,7 @@ fn build_degradation_panel_lines(
             push_overall_caveat(&mut card_lines, note, body_width);
         }
 
-        push_soft_card_lines(&mut lines, card_lines, entry.health);
+        lines.extend(SoftCard::new(entry.health, card_lines).to_lines(body_width as u16));
 
         if idx + 1 < entries.len() {
             lines.push(Line::from(""));
@@ -973,7 +943,7 @@ fn build_degradation_panel_lines(
 
 fn build_maintenance_panel_lines(
     items: &[(&str, &crate::status::ScheduledMaintenance)],
-    _body_width: usize,
+    body_width: usize,
 ) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
 
@@ -1015,7 +985,9 @@ fn build_maintenance_panel_lines(
             push_plain_scope_lines(&mut card_lines, "Affected", &maint.affected_components, 3);
         }
 
-        push_soft_card_lines(&mut lines, card_lines, ProviderHealth::Maintenance);
+        lines.extend(
+            SoftCard::new(ProviderHealth::Maintenance, card_lines).to_lines(body_width as u16),
+        );
 
         if idx + 1 < items.len() {
             lines.push(Line::from(""));
@@ -1033,31 +1005,7 @@ fn render_overall_panel(
     scroll: u16,
     focused: bool,
 ) {
-    let border_style = focus_border(focused);
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(border_style)
-        .title(format!(" {title} "));
-    let visible_height = area.height.saturating_sub(2);
-    let wrap_width = area.width.saturating_sub(2) as usize;
-    let visual_total = wrapped_visual_line_count(&lines, wrap_width);
-    let max_scroll = visual_total.saturating_sub(visible_height);
-    let scroll_pos = scroll.min(max_scroll);
-
-    let paragraph = Paragraph::new(lines)
-        .block(block)
-        .wrap(Wrap { trim: false })
-        .scroll((scroll_pos, 0));
-    f.render_widget(paragraph, area);
-
-    render_scrollbar(
-        f,
-        area,
-        visual_total as usize,
-        scroll_pos as usize,
-        visible_height as usize,
-        true,
-    );
+    ScrollablePanel::new(title, lines, scroll, focused).render(f, area);
 }
 
 fn draw_overall_dashboard(
@@ -1562,16 +1510,17 @@ fn draw_provider_status_detail(
                 }
             }
 
-            push_soft_card_lines(&mut lines, card_lines, accent_health);
+            lines.extend(SoftCard::new(accent_health, card_lines).to_lines(body_width as u16));
 
             if i + 1 < active_incidents.len() {
                 lines.push(Line::from(""));
             }
         }
 
-        let content_len = lines.len();
-        let visible_h = incidents_area.height.saturating_sub(2) as usize;
-        let max_scroll = (content_len as u16).saturating_sub(visible_h as u16);
+        let wrap_width = incidents_area.width.saturating_sub(2) as usize;
+        let visual_total = visual_line_total(&lines, wrap_width);
+        let visible_h = incidents_area.height.saturating_sub(2);
+        let max_scroll = visual_total.saturating_sub(visible_h);
         let clamped_scroll = detail_scroll.min(max_scroll);
 
         let block = Block::default()
@@ -1587,9 +1536,9 @@ fn draw_provider_status_detail(
         render_scrollbar(
             f,
             incidents_area,
-            content_len,
+            visual_total as usize,
             clamped_scroll as usize,
-            visible_h,
+            visible_h as usize,
             true,
         );
     }

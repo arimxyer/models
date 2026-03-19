@@ -17,6 +17,7 @@ pub mod markdown;
 pub mod models;
 pub mod status;
 pub mod ui;
+pub mod widgets;
 
 use crate::agents::{
     load_agents, AsyncGitHubClient, ConditionalFetchResult, GitHubCache, GitHubData,
