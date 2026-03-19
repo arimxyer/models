@@ -1,7 +1,7 @@
-use super::agents_app::AgentsApp;
-use super::benchmarks_app::BenchmarksApp;
-use super::models_app::ModelsApp;
-use super::status_app::StatusApp;
+use super::agents::AgentsApp;
+use super::benchmarks::BenchmarksApp;
+use super::models::ModelsApp;
+use super::status::StatusApp;
 
 /// Page size for page up/down navigation
 const PAGE_SIZE: usize = 10;
@@ -803,14 +803,14 @@ impl App {
             Message::OpenSortPicker => {
                 let current = self.benchmarks_app.sort_column;
                 self.benchmarks_app.sort_picker_selected =
-                    super::benchmarks_app::BenchmarkSortColumn::ALL
+                    super::benchmarks::BenchmarkSortColumn::ALL
                         .iter()
                         .position(|&c| c == current)
                         .unwrap_or(0);
                 self.benchmarks_app.show_sort_picker = true;
             }
             Message::SortPickerNext => {
-                let len = super::benchmarks_app::BenchmarkSortColumn::ALL.len();
+                let len = super::benchmarks::BenchmarkSortColumn::ALL.len();
                 self.benchmarks_app.sort_picker_selected =
                     (self.benchmarks_app.sort_picker_selected + 1).min(len - 1);
             }
@@ -819,7 +819,7 @@ impl App {
                     self.benchmarks_app.sort_picker_selected.saturating_sub(1);
             }
             Message::SortPickerConfirm => {
-                let col = super::benchmarks_app::BenchmarkSortColumn::ALL
+                let col = super::benchmarks::BenchmarkSortColumn::ALL
                     [self.benchmarks_app.sort_picker_selected];
                 self.benchmarks_app.show_sort_picker = false;
                 self.benchmarks_app
@@ -830,21 +830,21 @@ impl App {
             }
             Message::QuickSortIntelligence => {
                 self.benchmarks_app.quick_sort(
-                    super::benchmarks_app::BenchmarkSortColumn::Intelligence,
+                    super::benchmarks::BenchmarkSortColumn::Intelligence,
                     &self.benchmark_store,
                     &self.open_weights_map,
                 );
             }
             Message::QuickSortDate => {
                 self.benchmarks_app.quick_sort(
-                    super::benchmarks_app::BenchmarkSortColumn::ReleaseDate,
+                    super::benchmarks::BenchmarkSortColumn::ReleaseDate,
                     &self.benchmark_store,
                     &self.open_weights_map,
                 );
             }
             Message::QuickSortSpeed => {
                 self.benchmarks_app.quick_sort(
-                    super::benchmarks_app::BenchmarkSortColumn::Speed,
+                    super::benchmarks::BenchmarkSortColumn::Speed,
                     &self.benchmark_store,
                     &self.open_weights_map,
                 );
@@ -860,10 +860,9 @@ impl App {
                         .update_bottom_view(self.selections.len());
                     // Focus reset AFTER update_bottom_view
                     if self.selections.len() < 2
-                        && self.benchmarks_app.focus
-                            == super::benchmarks_app::BenchmarkFocus::Compare
+                        && self.benchmarks_app.focus == super::benchmarks::BenchmarkFocus::Compare
                     {
-                        self.benchmarks_app.focus = super::benchmarks_app::BenchmarkFocus::List;
+                        self.benchmarks_app.focus = super::benchmarks::BenchmarkFocus::List;
                     }
                 }
             }
@@ -871,8 +870,8 @@ impl App {
                 self.clear_selections();
                 self.benchmarks_app.update_bottom_view(0);
                 // Focus reset AFTER update_bottom_view
-                if self.benchmarks_app.focus == super::benchmarks_app::BenchmarkFocus::Compare {
-                    self.benchmarks_app.focus = super::benchmarks_app::BenchmarkFocus::List;
+                if self.benchmarks_app.focus == super::benchmarks::BenchmarkFocus::Compare {
+                    self.benchmarks_app.focus = super::benchmarks::BenchmarkFocus::List;
                 }
             }
             Message::ScrollH2HDown => {
@@ -903,11 +902,11 @@ impl App {
                 self.benchmarks_app.show_creators_in_compare =
                     !self.benchmarks_app.show_creators_in_compare;
                 // Update focus to match the new left panel
-                if self.benchmarks_app.focus != super::benchmarks_app::BenchmarkFocus::Compare {
+                if self.benchmarks_app.focus != super::benchmarks::BenchmarkFocus::Compare {
                     self.benchmarks_app.focus = if self.benchmarks_app.show_creators_in_compare {
-                        super::benchmarks_app::BenchmarkFocus::Creators
+                        super::benchmarks::BenchmarkFocus::Creators
                     } else {
-                        super::benchmarks_app::BenchmarkFocus::List
+                        super::benchmarks::BenchmarkFocus::List
                     };
                 }
             }
@@ -1173,7 +1172,7 @@ mod tests {
 
     #[test]
     fn test_update_bottom_view_transitions_to_h2h() {
-        use super::super::benchmarks_app::BottomView;
+        use super::super::benchmarks::BottomView;
         let mut app = make_test_app();
         assert_eq!(app.benchmarks_app.bottom_view, BottomView::Detail);
         app.benchmarks_app.update_bottom_view(2);
@@ -1182,7 +1181,7 @@ mod tests {
 
     #[test]
     fn test_update_bottom_view_reverts_to_detail() {
-        use super::super::benchmarks_app::BottomView;
+        use super::super::benchmarks::BottomView;
         let mut app = make_test_app();
         app.benchmarks_app.update_bottom_view(2);
         assert_eq!(app.benchmarks_app.bottom_view, BottomView::H2H);
@@ -1192,7 +1191,7 @@ mod tests {
 
     #[test]
     fn test_update_bottom_view_closes_overlay_on_revert() {
-        use super::super::benchmarks_app::BottomView;
+        use super::super::benchmarks::BottomView;
         let mut app = make_test_app();
         app.benchmarks_app.update_bottom_view(2);
         app.benchmarks_app.show_detail_overlay = true;
@@ -1203,7 +1202,7 @@ mod tests {
 
     #[test]
     fn test_cycle_bottom_view_order() {
-        use super::super::benchmarks_app::BottomView;
+        use super::super::benchmarks::BottomView;
         let mut app = make_test_app();
         // Start at H2H
         app.benchmarks_app.bottom_view = BottomView::H2H;
@@ -1217,7 +1216,7 @@ mod tests {
 
     #[test]
     fn test_cycle_bottom_view_from_detail() {
-        use super::super::benchmarks_app::BottomView;
+        use super::super::benchmarks::BottomView;
         let mut app = make_test_app();
         app.benchmarks_app.bottom_view = BottomView::Detail;
         app.benchmarks_app.cycle_bottom_view();
@@ -1226,7 +1225,7 @@ mod tests {
 
     #[test]
     fn test_scatter_axis_next_cycles() {
-        use super::super::benchmarks_app::ScatterAxis;
+        use super::super::benchmarks::ScatterAxis;
         let mut axis = ScatterAxis::Intelligence;
         axis = axis.next();
         assert_eq!(axis, ScatterAxis::Coding);
@@ -1242,7 +1241,7 @@ mod tests {
 
     #[test]
     fn test_radar_preset_next_cycles() {
-        use super::super::benchmarks_app::RadarPreset;
+        use super::super::benchmarks::RadarPreset;
         let mut preset = RadarPreset::Agentic;
         preset = preset.next();
         assert_eq!(preset, RadarPreset::Academic);
@@ -1254,7 +1253,7 @@ mod tests {
 
     #[test]
     fn test_update_bottom_view_reverts_scatter_to_detail() {
-        use super::super::benchmarks_app::BottomView;
+        use super::super::benchmarks::BottomView;
         let mut app = make_test_app();
         app.benchmarks_app.bottom_view = BottomView::Scatter;
         app.benchmarks_app.update_bottom_view(1);
@@ -1263,7 +1262,7 @@ mod tests {
 
     #[test]
     fn test_update_bottom_view_reverts_radar_to_detail() {
-        use super::super::benchmarks_app::BottomView;
+        use super::super::benchmarks::BottomView;
         let mut app = make_test_app();
         app.benchmarks_app.bottom_view = BottomView::Radar;
         app.benchmarks_app.update_bottom_view(1);
@@ -1272,7 +1271,7 @@ mod tests {
 
     #[test]
     fn test_switch_focus_browse_mode() {
-        use super::super::benchmarks_app::BenchmarkFocus;
+        use super::super::benchmarks::BenchmarkFocus;
         let mut app = make_test_app();
         app.benchmarks_app.focus = BenchmarkFocus::Creators;
         app.benchmarks_app.switch_focus(false);
@@ -1283,7 +1282,7 @@ mod tests {
 
     #[test]
     fn test_switch_focus_compare_mode() {
-        use super::super::benchmarks_app::BenchmarkFocus;
+        use super::super::benchmarks::BenchmarkFocus;
         let mut app = make_test_app();
         app.benchmarks_app.focus = BenchmarkFocus::List;
         app.benchmarks_app.switch_focus(true);
@@ -1294,7 +1293,7 @@ mod tests {
 
     #[test]
     fn test_focus_resets_when_selections_drop_below_2() {
-        use super::super::benchmarks_app::BenchmarkFocus;
+        use super::super::benchmarks::BenchmarkFocus;
         let mut app = make_test_app();
         app.benchmarks_app.focus = BenchmarkFocus::Compare;
         // Simulate clearing selections
@@ -1336,7 +1335,7 @@ mod tests {
 
     #[test]
     fn test_h2h_scroll_resets_on_view_change() {
-        use super::super::benchmarks_app::BottomView;
+        use super::super::benchmarks::BottomView;
         let mut app = make_test_app();
         app.benchmarks_app.h2h_scroll = 15;
         app.benchmarks_app.update_bottom_view(3);

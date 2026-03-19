@@ -1,9 +1,9 @@
-use super::app::App;
-use super::ui::{
-    caret, focus_border, render_scrollbar, selection_style, status_health_icon, status_health_style,
-};
 use crate::formatting::{format_relative_time_from_str, truncate};
 use crate::status::{ProviderHealth, StatusProvenance, StatusSourceMethod};
+use crate::tui::app::App;
+use crate::tui::ui::{
+    caret, focus_border, render_scrollbar, selection_style, status_health_icon, status_health_style,
+};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -133,7 +133,7 @@ fn overall_attention_components(
 }
 
 fn overall_attention_entries(
-    status_app: &super::status_app::StatusApp,
+    status_app: &super::app::StatusApp,
 ) -> Vec<&crate::status::ProviderStatus> {
     let mut entries: Vec<_> = status_app
         .entries
@@ -409,8 +409,8 @@ fn wrapped_visual_line_count(lines: &[Line<'_>], wrap_width: usize) -> u16 {
         .sum()
 }
 
-pub(super) fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
-    use super::status_app::StatusFocus;
+pub(in crate::tui) fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
+    use super::app::StatusFocus;
 
     let Some(status_app) = app.status_app.as_mut() else {
         let msg = Paragraph::new("Failed to load status data")
@@ -676,7 +676,7 @@ fn format_relative_time_from_instant(instant: std::time::Instant) -> String {
     }
 }
 
-fn overall_freshness_line(status_app: &super::status_app::StatusApp) -> Line<'static> {
+fn overall_freshness_line(status_app: &super::app::StatusApp) -> Line<'static> {
     if status_app.loading {
         return Line::from(vec![
             Span::styled("Refreshing status", Style::default().fg(Color::Yellow)),
@@ -1063,7 +1063,7 @@ fn render_overall_panel(
 fn draw_overall_dashboard(
     f: &mut Frame,
     area: Rect,
-    status_app: &super::status_app::StatusApp,
+    status_app: &super::app::StatusApp,
     is_focused: bool,
 ) {
     let (op, deg, out, other) = status_app.health_counts();
@@ -1168,8 +1168,7 @@ fn draw_overall_dashboard(
             incident_lines,
             status_app.overall_incidents_scroll,
             is_focused
-                && status_app.overall_panel_focus
-                    == super::status_app::OverallPanelFocus::Incidents,
+                && status_app.overall_panel_focus == super::app::OverallPanelFocus::Incidents,
         );
 
         let degradation_lines = build_degradation_panel_lines(
@@ -1183,8 +1182,7 @@ fn draw_overall_dashboard(
             degradation_lines,
             status_app.overall_degradation_scroll,
             is_focused
-                && status_app.overall_panel_focus
-                    == super::status_app::OverallPanelFocus::Degradation,
+                && status_app.overall_panel_focus == super::app::OverallPanelFocus::Degradation,
         );
 
         if maintenance_visible {
@@ -1199,8 +1197,7 @@ fn draw_overall_dashboard(
                 maintenance_lines,
                 status_app.overall_maintenance_scroll,
                 is_focused
-                    && status_app.overall_panel_focus
-                        == super::status_app::OverallPanelFocus::Maintenance,
+                    && status_app.overall_panel_focus == super::app::OverallPanelFocus::Maintenance,
             );
         }
     } else {
@@ -1231,8 +1228,7 @@ fn draw_overall_dashboard(
             incident_lines,
             status_app.overall_incidents_scroll,
             is_focused
-                && status_app.overall_panel_focus
-                    == super::status_app::OverallPanelFocus::Incidents,
+                && status_app.overall_panel_focus == super::app::OverallPanelFocus::Incidents,
         );
 
         let degradation_lines = build_degradation_panel_lines(
@@ -1246,8 +1242,7 @@ fn draw_overall_dashboard(
             degradation_lines,
             status_app.overall_degradation_scroll,
             is_focused
-                && status_app.overall_panel_focus
-                    == super::status_app::OverallPanelFocus::Degradation,
+                && status_app.overall_panel_focus == super::app::OverallPanelFocus::Degradation,
         );
 
         if maintenance_visible {
@@ -1262,8 +1257,7 @@ fn draw_overall_dashboard(
                 maintenance_lines,
                 status_app.overall_maintenance_scroll,
                 is_focused
-                    && status_app.overall_panel_focus
-                        == super::status_app::OverallPanelFocus::Maintenance,
+                    && status_app.overall_panel_focus == super::app::OverallPanelFocus::Maintenance,
             );
         }
     }

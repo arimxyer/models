@@ -7,10 +7,10 @@ use ratatui::{
 };
 use unicode_width::UnicodeWidthStr;
 
-use super::app::App;
-use super::ui::render_scrollbar;
-use super::ui_benchmarks::compare_colors;
+use super::render::compare_colors;
 use crate::formatting::format_tokens;
+use crate::tui::app::App;
+use crate::tui::ui::render_scrollbar;
 
 // ── H2H comparison table ────────────────────────────────────────────────────
 
@@ -215,7 +215,7 @@ pub(super) fn draw_h2h_table_generic(f: &mut Frame, area: Rect, app: &App) {
         return;
     }
 
-    let is_focused = app.benchmarks_app.focus == super::benchmarks_app::BenchmarkFocus::Compare;
+    let is_focused = app.benchmarks_app.focus == super::app::BenchmarkFocus::Compare;
     let border_color = if is_focused {
         Color::Cyan
     } else {
@@ -386,7 +386,7 @@ pub(super) fn draw_h2h_table_generic(f: &mut Frame, area: Rect, app: &App) {
             entries
                 .get(idx)
                 .map(|e| {
-                    let region = super::benchmarks_app::CreatorRegion::from_creator(&e.creator);
+                    let region = super::app::CreatorRegion::from_creator(&e.creator);
                     (region.label().to_string(), region.color())
                 })
                 .unwrap_or_default()
@@ -401,7 +401,7 @@ pub(super) fn draw_h2h_table_generic(f: &mut Frame, area: Rect, app: &App) {
             entries
                 .get(idx)
                 .map(|e| {
-                    let ct = super::benchmarks_app::CreatorType::from_creator(&e.creator);
+                    let ct = super::app::CreatorType::from_creator(&e.creator);
                     (ct.label().to_string(), ct.color())
                 })
                 .unwrap_or_default()
@@ -900,8 +900,7 @@ pub(super) fn draw_scatter(f: &mut Frame, area: Rect, app: &App) {
         Span::styled(format!("  avg:{}", fmt_avg(avg_y, y_log)), avg_style),
     ]);
 
-    let compare_focused =
-        app.benchmarks_app.focus == super::benchmarks_app::BenchmarkFocus::Compare;
+    let compare_focused = app.benchmarks_app.focus == super::app::BenchmarkFocus::Compare;
     let scatter_border = if compare_focused {
         Color::Cyan
     } else {

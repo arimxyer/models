@@ -6,11 +6,11 @@ use ratatui::{
     Frame,
 };
 
-use super::app::App;
-use super::ui::{caret, centered_rect, centered_rect_fixed, focus_border};
-use super::ui_compare::{draw_h2h_table_generic, draw_scatter};
+use super::compare::{draw_h2h_table_generic, draw_scatter};
 use crate::formatting::format_tokens;
 use crate::formatting::truncate;
+use crate::tui::app::App;
+use crate::tui::ui::{caret, centered_rect, centered_rect_fixed, focus_border};
 
 /// Color palette for selected models in comparison mode.
 pub(crate) fn compare_colors(index: usize) -> Color {
@@ -27,7 +27,7 @@ pub(crate) fn compare_colors(index: usize) -> Color {
     PALETTE[index % PALETTE.len()]
 }
 
-pub(super) fn draw_benchmarks_main(f: &mut Frame, area: Rect, app: &mut App) {
+pub(in crate::tui) fn draw_benchmarks_main(f: &mut Frame, area: Rect, app: &mut App) {
     let in_compare = app.selections.len() >= 2;
 
     if in_compare {
@@ -53,16 +53,16 @@ pub(super) fn draw_benchmarks_main(f: &mut Frame, area: Rect, app: &mut App) {
         draw_benchmark_subtab_bar(f, v_chunks[0], &app.benchmarks_app);
 
         match app.benchmarks_app.bottom_view {
-            super::benchmarks_app::BottomView::H2H => {
+            super::app::BottomView::H2H => {
                 draw_h2h_table_generic(f, v_chunks[1], app);
             }
-            super::benchmarks_app::BottomView::Scatter => {
+            super::app::BottomView::Scatter => {
                 draw_scatter(f, v_chunks[1], app);
             }
-            super::benchmarks_app::BottomView::Radar => {
+            super::app::BottomView::Radar => {
                 super::radar::draw_radar(f, v_chunks[1], app);
             }
-            super::benchmarks_app::BottomView::Detail => {
+            super::app::BottomView::Detail => {
                 draw_benchmark_detail(f, v_chunks[1], app);
             }
         }
@@ -93,12 +93,8 @@ pub(super) fn draw_benchmarks_main(f: &mut Frame, area: Rect, app: &mut App) {
     }
 }
 
-fn draw_benchmark_subtab_bar(
-    f: &mut Frame,
-    area: Rect,
-    bench_app: &super::benchmarks_app::BenchmarksApp,
-) {
-    use super::benchmarks_app::BottomView;
+fn draw_benchmark_subtab_bar(f: &mut Frame, area: Rect, bench_app: &super::app::BenchmarksApp) {
+    use super::app::BottomView;
     let views = [
         ("H2H", BottomView::H2H),
         ("Scatter", BottomView::Scatter),
@@ -119,7 +115,7 @@ fn draw_benchmark_subtab_bar(
 }
 
 fn draw_benchmark_creators(f: &mut Frame, area: Rect, app: &mut App) {
-    use super::benchmarks_app::{
+    use super::app::{
         BenchmarkFocus, CreatorGrouping, CreatorListItem, CreatorRegion, CreatorType,
     };
 
@@ -130,7 +126,7 @@ fn draw_benchmark_creators(f: &mut Frame, area: Rect, app: &mut App) {
     let border_style = focus_border(is_focused);
 
     let source_indicator = match bench_app.source_filter {
-        super::benchmarks_app::SourceFilter::All => String::new(),
+        super::app::SourceFilter::All => String::new(),
         filter => format!(" [{}]", filter.label()),
     };
     let reasoning_indicator = {
@@ -264,7 +260,7 @@ fn draw_benchmark_creators(f: &mut Frame, area: Rect, app: &mut App) {
 
 /// Compact list for compare mode: selection marker + name only, full height.
 fn draw_benchmark_list_compact(f: &mut Frame, area: Rect, app: &mut App) {
-    use super::benchmarks_app::BenchmarkFocus;
+    use super::app::BenchmarkFocus;
 
     let bench_app = &mut app.benchmarks_app;
     let store = &app.benchmark_store;
@@ -280,7 +276,7 @@ fn draw_benchmark_list_compact(f: &mut Frame, area: Rect, app: &mut App) {
     let sort_indicator = format!(" {}{}", sort_dir, bench_app.sort_column.label());
 
     let source_indicator = match bench_app.source_filter {
-        super::benchmarks_app::SourceFilter::All => String::new(),
+        super::app::SourceFilter::All => String::new(),
         filter => format!(" [{}]", filter.label()),
     };
 
@@ -327,9 +323,8 @@ fn draw_benchmark_list_compact(f: &mut Frame, area: Rect, app: &mut App) {
     let entries = store.entries();
 
     // Extra columns: marker(2) + caret(2) + reasoning(3) + source(2) + optional region/type
-    let show_region =
-        bench_app.creator_grouping == super::benchmarks_app::CreatorGrouping::ByRegion;
-    let show_type = bench_app.creator_grouping == super::benchmarks_app::CreatorGrouping::ByType;
+    let show_region = bench_app.creator_grouping == super::app::CreatorGrouping::ByRegion;
+    let show_type = bench_app.creator_grouping == super::app::CreatorGrouping::ByType;
     let extra_w: u16 = 2 + 2 + 3 + 2 + if show_region || show_type { 4 } else { 0 };
     let name_width = inner_area.width.saturating_sub(extra_w) as usize;
 
@@ -383,13 +378,13 @@ fn draw_benchmark_list_compact(f: &mut Frame, area: Rect, app: &mut App) {
 
             // Region/Type indicator when grouping is active
             if show_region {
-                let region = super::benchmarks_app::CreatorRegion::from_creator(&entry.creator);
+                let region = super::app::CreatorRegion::from_creator(&entry.creator);
                 row_spans.push(Span::styled(
                     format!("{:<4}", region.short_label()),
                     Style::default().fg(region.color()),
                 ));
             } else if show_type {
-                let ct = super::benchmarks_app::CreatorType::from_creator(&entry.creator);
+                let ct = super::app::CreatorType::from_creator(&entry.creator);
                 row_spans.push(Span::styled(
                     format!("{:<4}", ct.short_label()),
                     Style::default().fg(ct.color()),
@@ -418,7 +413,7 @@ fn draw_benchmark_list_compact(f: &mut Frame, area: Rect, app: &mut App) {
 }
 
 fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
-    use super::benchmarks_app::BenchmarkFocus;
+    use super::app::BenchmarkFocus;
 
     let bench_app = &mut app.benchmarks_app;
     let store = &app.benchmark_store;
@@ -434,7 +429,7 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
     let sort_indicator = format!(" {}{}", sort_dir, bench_app.sort_column.label());
 
     let source_indicator = match bench_app.source_filter {
-        super::benchmarks_app::SourceFilter::All => String::new(),
+        super::app::SourceFilter::All => String::new(),
         filter => format!(" [{}]", filter.label()),
     };
 
@@ -487,9 +482,8 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
     let caret_w: u16 = 2;
     let reasoning_col_w: u16 = 3;
     let source_col_w: u16 = 2;
-    let show_region =
-        bench_app.creator_grouping == super::benchmarks_app::CreatorGrouping::ByRegion;
-    let show_type = bench_app.creator_grouping == super::benchmarks_app::CreatorGrouping::ByType;
+    let show_region = bench_app.creator_grouping == super::app::CreatorGrouping::ByRegion;
+    let show_type = bench_app.creator_grouping == super::app::CreatorGrouping::ByType;
     let grouping_col_w: u16 = if show_region || show_type { 4 } else { 0 };
     let fixed_width: u16 = visible_cols
         .iter()
@@ -583,13 +577,13 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
 
         // Region/Type indicator when grouping is active
         if show_region {
-            let region = super::benchmarks_app::CreatorRegion::from_creator(&entry.creator);
+            let region = super::app::CreatorRegion::from_creator(&entry.creator);
             row_spans.push(Span::styled(
                 format!("{:<4}", region.short_label()),
                 Style::default().fg(region.color()),
             ));
         } else if show_type {
-            let ct = super::benchmarks_app::CreatorType::from_creator(&entry.creator);
+            let ct = super::app::CreatorType::from_creator(&entry.creator);
             row_spans.push(Span::styled(
                 format!("{:<4}", ct.short_label()),
                 Style::default().fg(ct.color()),
@@ -648,8 +642,8 @@ fn draw_benchmark_detail_content(
     } else {
         &entry.creator
     };
-    let region = super::benchmarks_app::CreatorRegion::from_creator(&entry.creator);
-    let creator_type = super::benchmarks_app::CreatorType::from_creator(&entry.creator);
+    let region = super::app::CreatorRegion::from_creator(&entry.creator);
+    let creator_type = super::app::CreatorType::from_creator(&entry.creator);
 
     // Line 1: Name
     lines.push(Line::from(Span::styled(
@@ -1059,8 +1053,8 @@ fn fmt_col_date(value: Option<&str>) -> String {
 }
 
 /// Fixed width for a non-Name column.
-fn benchmark_col_width(col: super::benchmarks_app::BenchmarkSortColumn) -> u16 {
-    use super::benchmarks_app::BenchmarkSortColumn::*;
+fn benchmark_col_width(col: super::app::BenchmarkSortColumn) -> u16 {
+    use super::app::BenchmarkSortColumn::*;
     match col {
         Name => 0, // dynamic
         Speed | Ttft | Ttfat => 7,
@@ -1072,11 +1066,11 @@ fn benchmark_col_width(col: super::benchmarks_app::BenchmarkSortColumn) -> u16 {
 
 /// Render a column header span for the given sort column
 fn benchmark_col_header(
-    col: super::benchmarks_app::BenchmarkSortColumn,
+    col: super::app::BenchmarkSortColumn,
     style: Style,
     name_width: usize,
 ) -> Span<'static> {
-    use super::benchmarks_app::BenchmarkSortColumn::*;
+    use super::app::BenchmarkSortColumn::*;
     match col {
         Name => Span::styled(format!("{:<width$}", "Name", width = name_width), style),
         Intelligence => Span::styled(format!("{:>6}", "Intel"), style),
@@ -1104,11 +1098,11 @@ fn benchmark_col_header(
 /// Render a column value span for the given sort column
 fn benchmark_col_value<'a>(
     entry: &crate::benchmarks::BenchmarkEntry,
-    col: super::benchmarks_app::BenchmarkSortColumn,
+    col: super::app::BenchmarkSortColumn,
     style: Style,
     name_width: usize,
 ) -> Span<'a> {
-    use super::benchmarks_app::BenchmarkSortColumn::*;
+    use super::app::BenchmarkSortColumn::*;
     match col {
         Name => Span::styled(
             format!(
@@ -1140,8 +1134,8 @@ fn benchmark_col_value<'a>(
     }
 }
 
-fn draw_sort_picker(f: &mut Frame, area: Rect, bench_app: &super::benchmarks_app::BenchmarksApp) {
-    use super::benchmarks_app::BenchmarkSortColumn;
+fn draw_sort_picker(f: &mut Frame, area: Rect, bench_app: &super::app::BenchmarksApp) {
+    use super::app::BenchmarkSortColumn;
 
     let columns = BenchmarkSortColumn::ALL;
     let selected = bench_app.sort_picker_selected;

@@ -144,16 +144,16 @@ pub fn draw(f: &mut Frame, app: &mut App) {
 
     match app.current_tab {
         Tab::Models => {
-            super::ui_models::draw_main(f, chunks[1], app);
+            super::models::render::draw_main(f, chunks[1], app);
         }
         Tab::Agents => {
-            super::ui_agents::draw_agents_main(f, chunks[1], app);
+            super::agents::render::draw_agents_main(f, chunks[1], app);
         }
         Tab::Benchmarks => {
-            super::ui_benchmarks::draw_benchmarks_main(f, chunks[1], app);
+            super::benchmarks::render::draw_benchmarks_main(f, chunks[1], app);
         }
         Tab::Status => {
-            super::ui_status::draw_status_main(f, chunks[1], app);
+            super::status::render::draw_status_main(f, chunks[1], app);
         }
     }
 
@@ -168,7 +168,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     if app.current_tab == Tab::Agents {
         if let Some(agents_app) = &app.agents_app {
             if agents_app.show_picker {
-                super::ui_agents::draw_picker_modal(f, app);
+                super::agents::render::draw_picker_modal(f, app);
             }
         }
     }
@@ -252,7 +252,7 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
                 ]),
                 Tab::Benchmarks => {
                     if app.selections.len() >= 2 {
-                        use super::benchmarks_app::{BenchmarkFocus, BottomView};
+                        use super::benchmarks::{BenchmarkFocus, BottomView};
                         let mut spans = vec![
                             Span::styled(" q ", Style::default().fg(Color::Yellow)),
                             Span::raw("quit  "),

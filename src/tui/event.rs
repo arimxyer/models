@@ -4,7 +4,7 @@ use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 
 use super::app::{App, Message, Mode};
-use super::models_app::Focus;
+use super::models::Focus;
 
 /// Shared navigation actions across all tabs
 enum NavAction {
@@ -163,7 +163,7 @@ fn handle_models_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Opti
 }
 
 fn resolve_agents_nav(app: &App, action: NavAction) -> Option<Message> {
-    use super::agents_app::AgentFocus;
+    use super::agents::AgentFocus;
     let focus = app
         .agents_app
         .as_ref()
@@ -251,10 +251,10 @@ fn handle_sort_picker_keys(code: KeyCode) -> Option<Message> {
 }
 
 fn resolve_benchmarks_nav(app: &App, action: NavAction) -> Option<Message> {
-    use super::benchmarks_app::BenchmarkFocus;
+    use super::benchmarks::BenchmarkFocus;
     let focus = app.benchmarks_app.focus;
     let is_h2h_compare = focus == BenchmarkFocus::Compare
-        && app.benchmarks_app.bottom_view == super::benchmarks_app::BottomView::H2H;
+        && app.benchmarks_app.bottom_view == super::benchmarks::BottomView::H2H;
 
     match action {
         NavAction::Down => match focus {
@@ -325,17 +325,17 @@ fn handle_benchmarks_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> 
         KeyCode::Char(' ') => Some(Message::ToggleBenchmarkSelection),
         KeyCode::Char('v') if app.selections.len() >= 2 => Some(Message::CycleBenchmarkView),
         KeyCode::Char('x')
-            if app.benchmarks_app.bottom_view == super::benchmarks_app::BottomView::Scatter =>
+            if app.benchmarks_app.bottom_view == super::benchmarks::BottomView::Scatter =>
         {
             Some(Message::CycleScatterX)
         }
         KeyCode::Char('y')
-            if app.benchmarks_app.bottom_view == super::benchmarks_app::BottomView::Scatter =>
+            if app.benchmarks_app.bottom_view == super::benchmarks::BottomView::Scatter =>
         {
             Some(Message::CycleScatterY)
         }
         KeyCode::Char('a')
-            if app.benchmarks_app.bottom_view == super::benchmarks_app::BottomView::Radar =>
+            if app.benchmarks_app.bottom_view == super::benchmarks::BottomView::Radar =>
         {
             Some(Message::CycleRadarPreset)
         }
@@ -357,7 +357,7 @@ fn handle_picker_keys(code: KeyCode) -> Option<Message> {
 }
 
 fn resolve_status_nav(app: &App, action: NavAction) -> Option<Message> {
-    use super::status_app::StatusFocus;
+    use super::status::StatusFocus;
     let focus = app
         .status_app
         .as_ref()

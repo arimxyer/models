@@ -9,20 +9,14 @@ use std::io;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 
-pub mod agents_app;
+pub mod agents;
 pub mod app;
-pub mod benchmarks_app;
+pub mod benchmarks;
 pub mod event;
 pub mod markdown;
-pub mod models_app;
-pub mod radar;
-pub mod status_app;
+pub mod models;
+pub mod status;
 pub mod ui;
-mod ui_agents;
-mod ui_benchmarks;
-mod ui_compare;
-mod ui_models;
-mod ui_status;
 
 use crate::agents::{
     load_agents, AsyncGitHubClient, ConditionalFetchResult, GitHubCache, GitHubData,
@@ -496,10 +490,10 @@ fn run_app(
                     // Show status after the update processes the cycle
                     // We need to peek at what the NEXT view will be
                     let next_view = match app.benchmarks_app.bottom_view {
-                        crate::tui::benchmarks_app::BottomView::H2H => "Scatter",
-                        crate::tui::benchmarks_app::BottomView::Scatter => "Radar",
-                        crate::tui::benchmarks_app::BottomView::Radar => "H2H",
-                        crate::tui::benchmarks_app::BottomView::Detail => "H2H",
+                        crate::tui::benchmarks::BottomView::H2H => "Scatter",
+                        crate::tui::benchmarks::BottomView::Scatter => "Radar",
+                        crate::tui::benchmarks::BottomView::Radar => "H2H",
+                        crate::tui::benchmarks::BottomView::Detail => "H2H",
                     };
                     app.set_status(format!("View: {}", next_view));
                     last_status_time = Some(std::time::Instant::now());

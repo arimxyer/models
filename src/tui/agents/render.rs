@@ -6,16 +6,16 @@ use ratatui::{
     Frame,
 };
 
-use super::app::App;
-use super::ui::{
-    caret, centered_rect_fixed, detail_visible_height, focus_border, render_scrollbar,
-    selection_style,
-};
 use crate::agents::{format_stars, FetchStatus};
 use crate::formatting::truncate;
 use crate::formatting::EM_DASH;
+use crate::tui::app::App;
+use crate::tui::ui::{
+    caret, centered_rect_fixed, detail_visible_height, focus_border, render_scrollbar,
+    selection_style,
+};
 
-pub(super) fn draw_agents_main(f: &mut Frame, area: Rect, app: &mut App) {
+pub(in crate::tui) fn draw_agents_main(f: &mut Frame, area: Rect, app: &mut App) {
     if app.agents_app.is_none() {
         let msg = Paragraph::new("Failed to load agents data")
             .block(Block::default().borders(Borders::ALL).title(" Agents "));
@@ -49,7 +49,7 @@ pub(super) fn draw_agents_main(f: &mut Frame, area: Rect, app: &mut App) {
 }
 
 fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut App) {
-    use super::agents_app::AgentFocus;
+    use super::app::AgentFocus;
 
     let agents_app = match &mut app.agents_app {
         Some(a) => a,
@@ -221,7 +221,7 @@ fn draw_agent_list(f: &mut Frame, area: Rect, app: &mut App) {
 }
 
 fn draw_agent_detail(f: &mut Frame, area: Rect, app: &mut App) {
-    use super::agents_app::AgentFocus;
+    use super::app::AgentFocus;
 
     // Extract what we need from agents_app before building lines
     let (is_focused, search_query) = match &app.agents_app {
@@ -398,14 +398,14 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &mut App) {
                 // Changelog for this release
                 if let Some(changelog) = &release.changelog {
                     if search_query.is_empty() {
-                        detail_lines.extend(super::markdown::changelog_to_lines(changelog));
+                        detail_lines.extend(crate::tui::markdown::changelog_to_lines(changelog));
                     } else {
-                        let changelog_lines = super::markdown::changelog_to_lines_highlighted(
+                        let changelog_lines = crate::tui::markdown::changelog_to_lines_highlighted(
                             changelog,
                             &search_query,
                         );
                         for cl in changelog_lines {
-                            if super::markdown::line_contains_match(&cl, &search_query) {
+                            if crate::tui::markdown::line_contains_match(&cl, &search_query) {
                                 match_line_indices.push(detail_lines.len() as u16);
                             }
                             detail_lines.push(cl);
@@ -525,7 +525,7 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &mut App) {
     }
 }
 
-pub(super) fn draw_picker_modal(f: &mut Frame, app: &App) {
+pub(in crate::tui) fn draw_picker_modal(f: &mut Frame, app: &App) {
     let agents_app = match &app.agents_app {
         Some(a) => a,
         None => return,

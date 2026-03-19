@@ -6,12 +6,12 @@ use ratatui::{
     Frame,
 };
 
-use super::app::App;
-use super::models_app::{Filters, Focus, ProviderListItem, SortOrder};
-use super::ui::{caret, focus_border};
+use super::app::{Filters, Focus, ProviderListItem, SortOrder};
 use crate::formatting::truncate;
 use crate::formatting::EM_DASH;
 use crate::provider_category::{provider_category, ProviderCategory};
+use crate::tui::app::App;
+use crate::tui::ui::{caret, focus_border};
 
 fn provider_detail_lines(app: &App) -> Vec<Line<'static>> {
     let Some(entry) = app.models_app.current_model() else {
@@ -120,7 +120,7 @@ fn draw_right_panel(f: &mut Frame, area: Rect, app: &App) {
     draw_model_detail(f, chunks[1], app);
 }
 
-pub(super) fn draw_main(f: &mut Frame, area: Rect, app: &mut App) {
+pub(in crate::tui) fn draw_main(f: &mut Frame, area: Rect, app: &mut App) {
     // 3-column layout: providers 20% | models 45% | right panel 35%
     let chunks = Layout::default()
         .direction(Direction::Horizontal)

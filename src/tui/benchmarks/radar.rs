@@ -12,7 +12,7 @@ use ratatui::{
     Frame,
 };
 
-use super::benchmarks_app::RadarPreset;
+use super::app::RadarPreset;
 use crate::benchmarks::BenchmarkEntry;
 
 /// Compute N spoke angles starting at top (-PI/2), going clockwise.
@@ -148,7 +148,7 @@ pub fn axes_for_preset(preset: RadarPreset) -> Vec<RadarAxis> {
 }
 
 /// Draw the radar chart in the given area.
-pub fn draw_radar(f: &mut Frame, area: Rect, app: &super::app::App) {
+pub fn draw_radar(f: &mut Frame, area: Rect, app: &crate::tui::app::App) {
     let axes = axes_for_preset(app.benchmarks_app.radar_preset);
     let preset_label = app.benchmarks_app.radar_preset.label();
 
@@ -217,7 +217,7 @@ pub fn draw_radar(f: &mut Frame, area: Rect, app: &super::app::App) {
 
     for (sel_idx, &store_idx) in app.selections.iter().enumerate() {
         if let Some(entry) = entries.get(store_idx) {
-            let color = super::ui_benchmarks::compare_colors(sel_idx);
+            let color = super::render::compare_colors(sel_idx);
 
             let raw_values: Vec<Option<f64>> = axes.iter().map(|ax| (ax.extract)(entry)).collect();
 
@@ -289,8 +289,7 @@ pub fn draw_radar(f: &mut Frame, area: Rect, app: &super::app::App) {
 
     // avg_raw_values used in legend table below
 
-    let compare_focused =
-        app.benchmarks_app.focus == super::benchmarks_app::BenchmarkFocus::Compare;
+    let compare_focused = app.benchmarks_app.focus == super::app::BenchmarkFocus::Compare;
     let radar_border = if compare_focused {
         Color::Cyan
     } else {
