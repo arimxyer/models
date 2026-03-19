@@ -680,10 +680,6 @@ fn overall_freshness_suffix(status_app: &super::app::StatusApp) -> String {
     }
 }
 
-fn push_soft_card_summary(card_lines: &mut Vec<Line<'static>>, summary: &str) {
-    card_lines.push(Line::from(Span::raw(format!("  {summary}"))));
-}
-
 fn normalized_status_copy(text: &str) -> String {
     text.chars()
         .filter(|ch| ch.is_ascii_alphanumeric() || ch.is_ascii_whitespace())
@@ -865,7 +861,10 @@ fn build_degradation_panel_cards(
         ]));
 
         if let Some(summary) = entry.provider_summary_text() {
-            push_soft_card_summary(&mut card_lines, summary);
+            card_lines.push(Line::from(vec![
+                Span::styled("  Summary: ", status_field_label_style()),
+                Span::raw(summary.to_string()),
+            ]));
         }
 
         card_lines.push(Line::from(vec![
