@@ -16,6 +16,9 @@ pub struct ScrollablePanelState {
     pub visual_line_count: u16,
     /// Number of visible lines in the viewport.
     pub visible_height: u16,
+    /// Cumulative visual line offset for each logical line.
+    /// `visual_offsets[i]` is the visual row where logical line `i` starts.
+    pub visual_offsets: Vec<u16>,
 }
 
 /// A bordered panel with wrapped text, scroll, and scrollbar.
@@ -49,7 +52,7 @@ impl<'a> ScrollablePanel<'a> {
 
         let visible_height = area.height.saturating_sub(2);
         let wrap_width = area.width.saturating_sub(2) as usize;
-        let visual_total = wrapped_visual_line_count(&self.lines, wrap_width);
+        let (visual_total, visual_offsets) = wrapped_line_offsets(&self.lines, wrap_width);
         let max_scroll = visual_total.saturating_sub(visible_height);
         let clamped_scroll = self.scroll.min(max_scroll);
 
@@ -79,23 +82,29 @@ impl<'a> ScrollablePanel<'a> {
             clamped_scroll,
             visual_line_count: visual_total,
             visible_height,
+            visual_offsets,
         }
     }
 }
 
-/// Count total visual (wrapped) lines for a set of lines at a given wrap width.
-fn wrapped_visual_line_count(lines: &[Line<'_>], wrap_width: usize) -> u16 {
-    lines
-        .iter()
-        .map(|line| {
-            let line_width = line.width();
-            if wrap_width == 0 || line_width == 0 {
-                1
-            } else {
-                line_width.div_ceil(wrap_width).max(1) as u16
-            }
-        })
-        .sum()
+/// Compute cumulative visual line offsets and total visual line count.
+///
+/// Returns `(total_visual_lines, offsets)` where `offsets[i]` is the visual row
+/// at which logical line `i` starts (accounting for word-wrapping).
+fn wrapped_line_offsets(lines: &[Line<'_>], wrap_width: usize) -> (u16, Vec<u16>) {
+    let mut offsets = Vec::with_capacity(lines.len());
+    let mut cumulative: u16 = 0;
+    for line in lines {
+        offsets.push(cumulative);
+        let line_width = line.width();
+        let wrapped_lines = if wrap_width == 0 || line_width == 0 {
+            1
+        } else {
+            line_width.div_ceil(wrap_width).max(1) as u16
+        };
+        cumulative += wrapped_lines;
+    }
+    (cumulative, offsets)
 }
 
 #[cfg(test)]
@@ -103,17 +112,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn wrapped_visual_line_count_basics() {
+    fn wrapped_line_offsets_basics() {
         let lines = vec![
             Line::from("short"),
             Line::from(""),
             Line::from("0123456789"), // 10 chars
         ];
-        // width 20: all fit in 1 row each = 3
-        assert_eq!(wrapped_visual_line_count(&lines, 20), 3);
-        // width 5: "0123456789" wraps to 2 rows = 4 total
-        assert_eq!(wrapped_visual_line_count(&lines, 5), 4);
-        // width 0: each line = 1 row = 3
-        assert_eq!(wrapped_visual_line_count(&lines, 0), 3);
+        // width 20: all fit in 1 row each = 3 total, offsets [0, 1, 2]
+        let (total, offsets) = wrapped_line_offsets(&lines, 20);
+        assert_eq!(total, 3);
+        assert_eq!(offsets, vec![0, 1, 2]);
+
+        // width 5: "short"=1, ""=1, "0123456789"=2 → total 4, offsets [0, 1, 2]
+        let (total, offsets) = wrapped_line_offsets(&lines, 5);
+        assert_eq!(total, 4);
+        assert_eq!(offsets, vec![0, 1, 2]);
+
+        // width 0: each line = 1 row = 3 total
+        let (total, offsets) = wrapped_line_offsets(&lines, 0);
+        assert_eq!(total, 3);
+        assert_eq!(offsets, vec![0, 1, 2]);
     }
 }

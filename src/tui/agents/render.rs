@@ -2,7 +2,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph},
     Frame,
 };
 
@@ -11,9 +11,9 @@ use crate::formatting::truncate;
 use crate::formatting::EM_DASH;
 use crate::tui::app::App;
 use crate::tui::ui::{
-    caret, centered_rect_fixed, detail_visible_height, filter_toggle_spans, focus_border,
-    render_scrollbar, selection_style,
+    caret, centered_rect_fixed, filter_toggle_spans, focus_border, selection_style,
 };
+use crate::tui::widgets::scrollable_panel::ScrollablePanel;
 
 pub(in crate::tui) fn draw_agents_main(f: &mut Frame, area: Rect, app: &mut App) {
     if app.agents_app.is_none() {
@@ -203,8 +203,6 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &mut App) {
         Some(a) => (a.focus == AgentFocus::Details, a.search_query.clone()),
         None => return,
     };
-
-    let border_style = focus_border(is_focused);
 
     let mut match_line_indices: Vec<u16> = Vec::new();
 
@@ -417,40 +415,6 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &mut App) {
         ))]
     };
 
-    // Compute visual (wrapped) line offsets for accurate scrolling
-    let visible_height = detail_visible_height(area);
-    let wrap_width = area.width.saturating_sub(2) as usize; // subtract borders
-
-    // Build a cumulative visual line offset for each logical line
-    let mut visual_offsets: Vec<u16> = Vec::with_capacity(lines.len());
-    let mut visual_total: u16 = 0;
-    for line in &lines {
-        visual_offsets.push(visual_total);
-        let line_width = line.width();
-        let wrapped_lines = if wrap_width == 0 || line_width == 0 {
-            1
-        } else {
-            line_width.div_ceil(wrap_width).max(1) as u16
-        };
-        visual_total += wrapped_lines;
-    }
-
-    // Compute visual offsets for match lines specifically
-    let match_visual_offsets: Vec<u16> = match_line_indices
-        .iter()
-        .map(|&idx| visual_offsets.get(idx as usize).copied().unwrap_or(0))
-        .collect();
-
-    // Clamp scroll to content bounds (using visual line count)
-    let max_scroll = visual_total.saturating_sub(visible_height);
-    let scroll_pos = {
-        let agents_app = match &app.agents_app {
-            Some(a) => a,
-            None => return,
-        };
-        agents_app.detail_scroll.min(max_scroll)
-    };
-
     // Build detail title with match count
     let match_count = match_line_indices.len();
     let current_match_display = app
@@ -460,41 +424,34 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &mut App) {
         .unwrap_or(0);
     let detail_title = if !search_query.is_empty() && match_count > 0 {
         format!(
-            " Details [/{} {}/{}] ",
+            "Details [/{} {}/{}]",
             search_query,
             current_match_display + 1,
             match_count
         )
     } else if !search_query.is_empty() {
-        format!(" Details [/{}] ", search_query)
+        format!("Details [/{}]", search_query)
     } else {
-        " Details ".to_string()
+        "Details".to_string()
     };
 
-    let paragraph = Paragraph::new(lines)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(border_style)
-                .title(detail_title),
-        )
-        .wrap(Wrap { trim: false })
-        .scroll((scroll_pos, 0));
+    let scroll_pos = app
+        .agents_app
+        .as_ref()
+        .map(|a| a.detail_scroll)
+        .unwrap_or(0);
 
-    f.render_widget(paragraph, area);
+    let panel = ScrollablePanel::new(detail_title, lines, scroll_pos, is_focused);
+    let state = panel.render(f, area);
 
-    // Scrollbar for detail panel
-    render_scrollbar(
-        f,
-        area,
-        visual_total as usize,
-        scroll_pos as usize,
-        visible_height as usize,
-        true,
-    );
+    // Compute visual offsets for match lines from the panel state
+    let match_visual_offsets: Vec<u16> = match_line_indices
+        .iter()
+        .map(|&idx| state.visual_offsets.get(idx as usize).copied().unwrap_or(0))
+        .collect();
 
     // Update match state and detail height (after lines are consumed)
-    app.last_detail_height = visible_height;
+    app.last_detail_height = state.visible_height;
     if let Some(ref mut agents_app) = app.agents_app {
         agents_app.update_search_matches(match_line_indices, match_visual_offsets);
     }

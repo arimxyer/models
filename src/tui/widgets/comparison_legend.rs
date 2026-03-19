@@ -6,16 +6,66 @@ use ratatui::{
     Frame,
 };
 
-use crate::tui::benchmarks::render::compare_colors;
+/// A single metric column in a legend entry.
+pub struct LegendMetric {
+    /// Column label (e.g., "Int", "Quality").
+    pub label: String,
+    /// Formatted value text.
+    pub value: String,
+    /// Style for the value text (default: White foreground).
+    pub value_style: Style,
+}
+
+impl LegendMetric {
+    pub fn new(label: impl Into<String>, value: impl Into<String>) -> Self {
+        Self {
+            label: label.into(),
+            value: value.into(),
+            value_style: Style::default().fg(Color::White),
+        }
+    }
+
+    pub fn value_style(mut self, style: Style) -> Self {
+        self.value_style = style;
+        self
+    }
+}
 
 /// A single entry in a comparison legend.
 pub struct LegendEntry {
     /// Display name of the model/item.
     pub name: String,
-    /// Index into the compare color palette.
-    pub color_index: usize,
-    /// Metric columns: (label, formatted value) pairs.
-    pub metrics: Vec<(String, String)>,
+    /// Style for the name text.
+    pub name_style: Style,
+    /// Marker character (e.g., `●`, `○`, `┅`).
+    pub marker: &'static str,
+    /// Style for the marker.
+    pub marker_style: Style,
+    /// Metric columns with styled values.
+    pub metrics: Vec<LegendMetric>,
+}
+
+impl LegendEntry {
+    /// Create a new entry with a colored `●` marker and matching name color.
+    pub fn new(name: impl Into<String>, color: Color) -> Self {
+        Self {
+            name: name.into(),
+            name_style: Style::default().fg(color),
+            marker: "\u{25cf} ",
+            marker_style: Style::default().fg(color),
+            metrics: Vec::new(),
+        }
+    }
+
+    pub fn marker(mut self, marker: &'static str) -> Self {
+        self.marker = marker;
+        self
+    }
+
+    pub fn metrics(mut self, metrics: Vec<LegendMetric>) -> Self {
+        self.metrics = metrics;
+        self
+    }
 }
 
 /// A legend table showing colored markers and metric values for compared items.
@@ -24,6 +74,7 @@ pub struct LegendEntry {
 pub struct ComparisonLegend {
     entries: Vec<LegendEntry>,
     title: String,
+    value_width: u16,
 }
 
 impl ComparisonLegend {
@@ -31,11 +82,12 @@ impl ComparisonLegend {
         Self {
             entries,
             title: " Legend ".to_string(),
+            value_width: 8,
         }
     }
 
-    pub fn title(mut self, title: impl Into<String>) -> Self {
-        self.title = title.into();
+    pub fn value_width(mut self, width: u16) -> Self {
+        self.value_width = width;
         self
     }
 
@@ -49,19 +101,18 @@ impl ComparisonLegend {
             .entries
             .iter()
             .map(|entry| {
-                let color = compare_colors(entry.color_index);
                 let mut cells = vec![
-                    Cell::from(Span::styled("\u{25cf} ", Style::default().fg(color))),
-                    Cell::from(Span::styled(entry.name.clone(), Style::default().fg(color))),
+                    Cell::from(Span::styled(entry.marker, entry.marker_style)),
+                    Cell::from(Span::styled(entry.name.clone(), entry.name_style)),
                 ];
-                for (label, value) in &entry.metrics {
+                for metric in &entry.metrics {
                     cells.push(Cell::from(Span::styled(
-                        format!("{}: ", label),
+                        format!("{}: ", metric.label),
                         Style::default().fg(Color::DarkGray),
                     )));
                     cells.push(Cell::from(Span::styled(
-                        value.clone(),
-                        Style::default().fg(Color::White),
+                        metric.value.clone(),
+                        metric.value_style,
                     )));
                 }
                 Row::new(cells)
@@ -71,9 +122,9 @@ impl ComparisonLegend {
         // Widths: marker(2) + name(fill) + (label + value) per metric
         let mut widths: Vec<Constraint> = vec![Constraint::Length(2), Constraint::Fill(1)];
         if let Some(first) = self.entries.first() {
-            for (label, _) in &first.metrics {
-                widths.push(Constraint::Length((label.len() + 2) as u16));
-                widths.push(Constraint::Length(8));
+            for metric in &first.metrics {
+                widths.push(Constraint::Length((metric.label.len() + 2) as u16));
+                widths.push(Constraint::Length(self.value_width));
             }
         }
 
@@ -92,21 +143,24 @@ mod tests {
 
     #[test]
     fn legend_entry_creation() {
-        let entry = LegendEntry {
-            name: "GPT-4".into(),
-            color_index: 0,
-            metrics: vec![
-                ("Quality".into(), "92.1".into()),
-                ("Speed".into(), "45.2".into()),
-            ],
-        };
+        let entry = LegendEntry::new("GPT-4", Color::Red).metrics(vec![
+            LegendMetric::new("Quality", "92.1"),
+            LegendMetric::new("Speed", "45.2"),
+        ]);
         assert_eq!(entry.name, "GPT-4");
         assert_eq!(entry.metrics.len(), 2);
     }
 
     #[test]
-    fn legend_with_title() {
-        let legend = ComparisonLegend::new(vec![]).title(" Custom ");
-        assert_eq!(legend.title, " Custom ");
+    fn legend_entry_custom_marker() {
+        let entry = LegendEntry::new("Avg", Color::Gray).marker("\u{2505} ");
+        assert_eq!(entry.marker, "\u{2505} ");
+    }
+
+    #[test]
+    fn legend_metric_custom_style() {
+        let metric =
+            LegendMetric::new("Int", "42.0").value_style(Style::default().fg(Color::Indexed(250)));
+        assert_eq!(metric.value, "42.0");
     }
 }

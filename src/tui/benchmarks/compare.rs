@@ -2,7 +2,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Cell, Paragraph, Row, Table},
+    widgets::{Block, Borders, Paragraph},
     Frame,
 };
 use unicode_width::UnicodeWidthStr;
@@ -944,56 +944,30 @@ pub(super) fn draw_scatter(f: &mut Frame, area: Rect, app: &App) {
 
     // Legend box below the chart
     if let Some(leg_area) = legend_area {
-        let x_lbl_w = (x_label.len() + 2) as u16; // "Label: "
-        let y_lbl_w = (y_label.len() + 2) as u16;
+        use crate::tui::widgets::comparison_legend::{ComparisonLegend, LegendEntry, LegendMetric};
 
-        let rows: Vec<Row> = legend_entries
+        let entries: Vec<LegendEntry> = legend_entries
             .iter()
             .map(|(name, color, status, raw_x, raw_y)| {
-                let marker = if *status > 0 {
-                    "\u{25cf} "
+                let (marker, fg): (&'static str, Color) = if *status > 0 {
+                    ("\u{25cf} ", *color)
                 } else {
-                    "\u{25cb} "
+                    ("\u{25cb} ", Color::DarkGray)
                 };
-                let fg = if *status > 0 { *color } else { Color::DarkGray };
                 let x_str = raw_x.map(&fmt_val).unwrap_or_else(|| "\u{2014}".into());
                 let y_str = raw_y.map(&fmt_val).unwrap_or_else(|| "\u{2014}".into());
                 let suffix = if *status == 2 { " (off-chart)" } else { "" };
                 let y_with_suffix = format!("{}{}", y_str, suffix);
 
-                Row::new(vec![
-                    Cell::from(Span::styled(marker, Style::default().fg(fg))),
-                    Cell::from(Span::styled(name.clone(), Style::default().fg(fg))),
-                    Cell::from(Span::styled(
-                        format!("{}: ", x_label),
-                        Style::default().fg(Color::DarkGray),
-                    )),
-                    Cell::from(Span::styled(x_str, Style::default().fg(Color::White))),
-                    Cell::from(Span::styled(
-                        format!("{}: ", y_label),
-                        Style::default().fg(Color::DarkGray),
-                    )),
-                    Cell::from(Span::styled(
-                        y_with_suffix,
-                        Style::default().fg(Color::White),
-                    )),
-                ])
+                LegendEntry::new(name.clone(), fg)
+                    .marker(marker)
+                    .metrics(vec![
+                        LegendMetric::new(x_label.to_string(), x_str),
+                        LegendMetric::new(y_label.to_string(), y_with_suffix),
+                    ])
             })
             .collect();
 
-        let legend_block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::DarkGray))
-            .title(" Legend ");
-        let widths = [
-            Constraint::Length(2),
-            Constraint::Fill(1),
-            Constraint::Length(x_lbl_w),
-            Constraint::Length(8),
-            Constraint::Length(y_lbl_w),
-            Constraint::Length(10),
-        ];
-        let table = Table::new(rows, widths).block(legend_block);
-        f.render_widget(table, leg_area);
+        ComparisonLegend::new(entries).render(f, leg_area);
     }
 }

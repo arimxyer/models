@@ -175,11 +175,6 @@ pub(in crate::tui) fn filter_toggle_spans(toggles: &[(&str, &str, bool)]) -> Vec
     spans
 }
 
-/// Calculate visible height for detail panel (area height minus borders)
-pub(super) fn detail_visible_height(area: Rect) -> u16 {
-    area.height.saturating_sub(2) // 2 for top and bottom borders
-}
-
 /// Create a centered rect using fixed width and height
 pub(super) fn centered_rect_fixed(width: u16, height: u16, area: Rect) -> Rect {
     let x = area.x + (area.width.saturating_sub(width)) / 2;
