@@ -85,26 +85,34 @@ fn status_io_collect_names(value: Option<&Value>) -> Vec<String> {
         .unwrap_or_default()
 }
 
-fn status_io_merge_names(primary: Vec<String>, secondary: Vec<String>) -> Vec<String> {
-    let mut merged = primary;
-    for name in secondary {
-        if !merged.contains(&name) {
-            merged.push(name);
-        }
+fn status_io_state_code_to_label(code: u64) -> &'static str {
+    match code {
+        100 => "investigating",
+        200 => "identified",
+        300 => "monitoring",
+        _ => "reported",
     }
-    merged
 }
 
 fn status_io_message_state(message: &Value) -> Option<String> {
+    // State can be numeric (100/200/300) or a string label
     message
         .get("state")
-        .and_then(|value| value.as_str())
-        .map(str::to_string)
+        .and_then(|value| {
+            value
+                .as_u64()
+                .map(|code| status_io_state_code_to_label(code).to_string())
+                .or_else(|| value.as_str().map(str::to_string))
+        })
         .or_else(|| {
             message
                 .get("status")
-                .and_then(|value| value.as_str())
-                .map(str::to_string)
+                .and_then(|value| {
+                    value
+                        .as_u64()
+                        .map(status_io_code_to_string)
+                        .or_else(|| value.as_str().map(str::to_string))
+                })
         })
 }
 
@@ -123,30 +131,29 @@ pub(crate) fn parse_status_io(
 
     let health = status_io_code_to_health(overall_code);
 
+    // Status.io groups are the services (e.g., "Background Processing", "API"),
+    // containers are infrastructure details (e.g., "Google Compute Engine").
+    // Use the worst container status as the group's status.
     let components: Vec<ComponentStatus> = result
         .get("status")
         .and_then(|v| v.as_array())
         .map(|arr| {
             arr.iter()
-                .flat_map(|status_group| {
-                    let group_name = status_group
-                        .get("name")
-                        .and_then(|v| v.as_str())
-                        .map(String::from);
-                    status_group
+                .filter_map(|status_group| {
+                    let name = status_group.get("name").and_then(|v| v.as_str())?;
+                    let worst_code = status_group
                         .get("containers")
                         .and_then(|v| v.as_array())
                         .into_iter()
                         .flatten()
-                        .filter_map(move |c| {
-                            let name = c.get("name").and_then(|v| v.as_str())?;
-                            let code = c.get("status_code").and_then(|v| v.as_u64()).unwrap_or(100);
-                            Some(ComponentStatus {
-                                name: name.to_string(),
-                                status: status_io_code_to_string(code),
-                                group_name: group_name.clone(),
-                            })
-                        })
+                        .filter_map(|c| c.get("status_code").and_then(|v| v.as_u64()))
+                        .max()
+                        .unwrap_or(100);
+                    Some(ComponentStatus {
+                        name: name.to_string(),
+                        status: status_io_code_to_string(worst_code),
+                        group_name: None,
+                    })
                 })
                 .collect()
         })
@@ -165,10 +172,9 @@ pub(crate) fn parse_status_io(
                         .cloned()
                         .unwrap_or_default();
                     let latest_message = status_io_latest_message(&messages);
-                    let affected_components = status_io_merge_names(
-                        status_io_collect_names(i.get("components_affected")),
-                        status_io_collect_names(i.get("containers_affected")),
-                    );
+                    // Use components_affected (service names) not containers_affected (infra)
+                    let affected_components =
+                        status_io_collect_names(i.get("components_affected"));
                     Some(ActiveIncident {
                         name: name.to_string(),
                         status: latest_message
@@ -176,10 +182,16 @@ pub(crate) fn parse_status_io(
                             .unwrap_or_else(|| "reported".to_string()),
                         impact: latest_message
                             .and_then(|message| {
-                                message
-                                    .get("status")
-                                    .and_then(|value| value.as_str())
-                                    .map(status_io_code_or_label_to_status)
+                                message.get("status").and_then(|value| {
+                                    value
+                                        .as_u64()
+                                        .map(status_io_code_to_string)
+                                        .or_else(|| {
+                                            value
+                                                .as_str()
+                                                .map(status_io_code_or_label_to_status)
+                                        })
+                                })
                             })
                             .unwrap_or_default(),
                         shortlink: None,
@@ -219,10 +231,8 @@ pub(crate) fn parse_status_io(
                             .cloned()
                             .unwrap_or_default();
                         let latest_message = status_io_latest_message(&messages);
-                        let affected_components = status_io_merge_names(
-                            status_io_collect_names(m.get("components_affected")),
-                            status_io_collect_names(m.get("containers_affected")),
-                        );
+                        let affected_components =
+                            status_io_collect_names(m.get("components_affected"));
                         maintenance.push(ScheduledMaintenance {
                             name: name.to_string(),
                             status: latest_message
@@ -230,10 +240,16 @@ pub(crate) fn parse_status_io(
                                 .unwrap_or_else(|| (*key).to_string()),
                             impact: latest_message
                                 .and_then(|message| {
-                                    message
-                                        .get("status")
-                                        .and_then(|value| value.as_str())
-                                        .map(status_io_code_or_label_to_status)
+                                    message.get("status").and_then(|value| {
+                                        value
+                                            .as_u64()
+                                            .map(status_io_code_to_string)
+                                            .or_else(|| {
+                                                value
+                                                    .as_str()
+                                                    .map(status_io_code_or_label_to_status)
+                                            })
+                                    })
                                 })
                                 .unwrap_or_default(),
                             scheduled_for: m
@@ -316,8 +332,8 @@ mod tests {
                         "containers_affected": [{"name": "Web"}],
                         "messages": [
                             {
-                                "state": "identified",
-                                "status": "Minor Service Outage",
+                                "state": 200,
+                                "status": 300,
                                 "details": "API latency is elevated in one region.",
                                 "datetime": "2026-03-17T00:04:00Z"
                             }
@@ -332,8 +348,8 @@ mod tests {
                         "datetime_planned_end": "2026-03-17T01:00:00Z",
                         "components_affected": [{"name": "API"}],
                         "messages": [{
-                            "state": "active",
-                            "status": "Maintenance",
+                            "state": 200,
+                            "status": 200,
                             "details": "Database migration in progress.",
                             "datetime": "2026-03-16T22:10:00Z"
                         }]
@@ -346,18 +362,16 @@ mod tests {
         let snapshot = parse_status_io(OfficialStatusSource::GitLab, json).expect("parses ok");
         assert_eq!(snapshot.method, StatusSourceMethod::StatusIo);
         assert_eq!(snapshot.health, ProviderHealth::Degraded);
-        assert_eq!(snapshot.components.len(), 2);
-        assert_eq!(snapshot.components[0].name, "Web");
-        assert_eq!(snapshot.components[0].status, "operational");
-        assert_eq!(snapshot.components[1].name, "API");
-        assert_eq!(snapshot.components[1].status, "degraded_performance");
+        assert_eq!(snapshot.components.len(), 1);
+        assert_eq!(snapshot.components[0].name, "Infrastructure");
+        assert_eq!(snapshot.components[0].status, "degraded_performance");
         assert_eq!(snapshot.incidents.len(), 1);
         assert_eq!(snapshot.incidents[0].name, "API degradation");
         assert_eq!(snapshot.incidents[0].status, "identified");
         assert_eq!(snapshot.incidents[0].impact, "degraded_performance");
         assert_eq!(
             snapshot.incidents[0].affected_components,
-            vec!["API".to_string(), "Web".to_string()]
+            vec!["API".to_string()]
         );
         assert_eq!(
             snapshot.incidents[0].updated_at.as_deref(),
@@ -372,7 +386,7 @@ mod tests {
         );
         assert_eq!(snapshot.maintenance.len(), 2);
         assert_eq!(snapshot.maintenance[0].name, "DB migration");
-        assert_eq!(snapshot.maintenance[0].status, "active");
+        assert_eq!(snapshot.maintenance[0].status, "identified");
         assert_eq!(snapshot.maintenance[0].impact, "under_maintenance");
         assert_eq!(
             snapshot.maintenance[0].scheduled_until.as_deref(),
