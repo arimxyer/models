@@ -1,6 +1,6 @@
 //! Async HTTP client for fetching benchmark data from jsDelivr CDN.
 
-use crate::benchmarks::BenchmarkEntry;
+use super::BenchmarkEntry;
 
 const CDN_URL: &str = "https://cdn.jsdelivr.net/gh/arimxyer/models@main/data/benchmarks.json";
 

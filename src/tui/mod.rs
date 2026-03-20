@@ -6,23 +6,26 @@ use crossterm::{
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
+use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 
-pub mod agents_app;
+pub mod agents;
 pub mod app;
-pub mod benchmarks_app;
+pub mod benchmarks;
 pub mod event;
 pub mod markdown;
-pub mod radar;
+pub mod models;
+pub mod status;
 pub mod ui;
+pub mod widgets;
 
 use crate::agents::{
     load_agents, AsyncGitHubClient, ConditionalFetchResult, GitHubCache, GitHubData,
 };
-use crate::benchmark_fetch::{BenchmarkFetchResult, BenchmarkFetcher};
-use crate::benchmarks::BenchmarkStore;
+use crate::benchmarks::{BenchmarkFetchResult, BenchmarkFetcher, BenchmarkStore};
 use crate::config::Config;
 use crate::data::ProvidersMap;
+use crate::status::{StatusFetchResult, StatusFetcher};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -46,6 +49,23 @@ pub enum FetchResult {
     Success(String, GitHubData),
     /// Failed fetch: (agent_id, error_message)
     Failure(String, String),
+}
+
+struct StatusRuntime {
+    rx: mpsc::Receiver<(u64, StatusFetchResult)>,
+    tx: mpsc::Sender<(u64, StatusFetchResult)>,
+    client: reqwest::Client,
+    last_fetch_time: Option<Instant>,
+    fetch_generation: u64,
+}
+
+struct RuntimeHandles {
+    github_rx: mpsc::Receiver<FetchResult>,
+    github_tx: mpsc::Sender<FetchResult>,
+    client: AsyncGitHubClient,
+    disk_cache: Arc<RwLock<GitHubCache>>,
+    bench_rx: mpsc::Receiver<BenchmarkFetchResult>,
+    status: StatusRuntime,
 }
 pub async fn run(providers: ProvidersMap) -> Result<()> {
     use crate::agents::FetchStatus;
@@ -145,16 +165,38 @@ pub async fn run(providers: ProvidersMap) -> Result<()> {
         let _ = bench_tx.send(result).await;
     });
 
-    // Main loop - pass client and sender for dynamic fetches
-    let result = run_app(
-        &mut terminal,
-        &mut app,
-        rx,
-        tx,
+    let (status_tx, status_rx) = mpsc::channel(4);
+    let status_client = reqwest::Client::builder()
+        .user_agent("models-tui")
+        .connect_timeout(Duration::from_secs(5))
+        .build()
+        .expect("Failed to build HTTP client");
+    if let Some(ref status_app) = app.status_app {
+        let seeds = status_app.fetch_seeds();
+        let tx = status_tx.clone();
+        let fetcher = StatusFetcher::with_client(status_client.clone());
+        tokio::spawn(async move {
+            let result = fetcher.fetch(&seeds).await;
+            let _ = tx.send((0, result)).await;
+        });
+    }
+
+    let status_runtime = StatusRuntime {
+        rx: status_rx,
+        tx: status_tx,
+        client: status_client,
+        last_fetch_time: None,
+        fetch_generation: 0,
+    };
+    let runtime_handles = RuntimeHandles {
+        github_rx: rx,
+        github_tx: tx,
         client,
-        disk_cache.clone(),
+        disk_cache: disk_cache.clone(),
         bench_rx,
-    );
+        status: status_runtime,
+    };
+    let result = run_app(&mut terminal, &mut app, runtime_handles);
 
     // Abort any remaining fetch tasks to allow clean shutdown
     for handle in fetch_handles {
@@ -183,11 +225,7 @@ pub async fn run(providers: ProvidersMap) -> Result<()> {
 fn run_app(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     app: &mut app::App,
-    mut github_rx: mpsc::Receiver<FetchResult>,
-    github_tx: mpsc::Sender<FetchResult>,
-    client: AsyncGitHubClient,
-    disk_cache: Arc<RwLock<GitHubCache>>,
-    mut bench_rx: mpsc::Receiver<BenchmarkFetchResult>,
+    mut runtime: RuntimeHandles,
 ) -> Result<()> {
     let mut last_status_time: Option<std::time::Instant> = None;
 
@@ -206,9 +244,9 @@ fn run_app(
         if !app.pending_fetches.is_empty() {
             let fetches = std::mem::take(&mut app.pending_fetches);
             for (agent_id, repo) in fetches {
-                let tx = github_tx.clone();
-                let client = client.clone();
-                let cache = disk_cache.clone();
+                let tx = runtime.github_tx.clone();
+                let client = runtime.client.clone();
+                let cache = runtime.disk_cache.clone();
 
                 tokio::spawn(async move {
                     let result = match client.fetch_conditional(&repo).await {
@@ -234,7 +272,7 @@ fn run_app(
         }
 
         // Check for GitHub updates (non-blocking)
-        while let Ok(result) = github_rx.try_recv() {
+        while let Ok(result) = runtime.github_rx.try_recv() {
             match result {
                 FetchResult::Success(id, data) => {
                     app.update(app::Message::GitHubDataReceived(id, data));
@@ -246,13 +284,56 @@ fn run_app(
         }
 
         // Check for benchmark data updates (non-blocking)
-        if let Ok(result) = bench_rx.try_recv() {
+        if let Ok(result) = runtime.bench_rx.try_recv() {
             match result {
                 BenchmarkFetchResult::Fresh(entries) => {
                     app.update(app::Message::BenchmarkDataReceived(entries));
                 }
                 BenchmarkFetchResult::Error => {
                     app.update(app::Message::BenchmarkFetchFailed);
+                }
+            }
+        }
+
+        if app.pending_status_refresh {
+            app.pending_status_refresh = false;
+            let force = app.force_status_refresh;
+            app.force_status_refresh = false;
+            let stale = runtime
+                .status
+                .last_fetch_time
+                .is_none_or(|t| t.elapsed() > Duration::from_secs(60));
+            let recent = runtime
+                .status
+                .last_fetch_time
+                .is_some_and(|t| t.elapsed() < Duration::from_secs(2));
+            if force || (stale && !recent) {
+                if let Some(ref status_app) = app.status_app {
+                    runtime.status.fetch_generation += 1;
+                    let gen = runtime.status.fetch_generation;
+                    runtime.status.last_fetch_time = Some(Instant::now());
+                    let seeds = status_app.fetch_seeds();
+                    let tx = runtime.status.tx.clone();
+                    let fetcher = StatusFetcher::with_client(runtime.status.client.clone());
+                    tokio::spawn(async move {
+                        let result = fetcher.fetch(&seeds).await;
+                        let _ = tx.send((gen, result)).await;
+                    });
+                }
+            } else if let Some(ref mut status_app) = app.status_app {
+                status_app.loading = false;
+            }
+        }
+
+        if let Ok((gen, result)) = runtime.status.rx.try_recv() {
+            if gen >= runtime.status.fetch_generation {
+                match result {
+                    StatusFetchResult::Fresh(entries) => {
+                        app.update(app::Message::StatusDataReceived(entries));
+                    }
+                    StatusFetchResult::Error(error) => {
+                        app.update(app::Message::StatusFetchFailed(error));
+                    }
                 }
             }
         }
@@ -344,6 +425,19 @@ fn run_app(
                         last_status_time = Some(std::time::Instant::now());
                     }
                 }
+                app::Message::OpenStatusPage => {
+                    if let Some(entry) = app.status_app.as_ref().and_then(|a| a.current_entry()) {
+                        if let Some(url) = entry.best_open_url() {
+                            let _ = open::that_in_background(url);
+                            app.set_status(format!("Opened: {}", url));
+                            last_status_time = Some(std::time::Instant::now());
+                        }
+                    }
+                }
+                app::Message::RefreshStatus => {
+                    app.set_status("Refreshing provider status…".to_string());
+                    last_status_time = Some(std::time::Instant::now());
+                }
                 app::Message::PickerSave => {
                     // Picker save sets its own status message via app.update
                     last_status_time = Some(std::time::Instant::now());
@@ -397,10 +491,10 @@ fn run_app(
                     // Show status after the update processes the cycle
                     // We need to peek at what the NEXT view will be
                     let next_view = match app.benchmarks_app.bottom_view {
-                        crate::tui::benchmarks_app::BottomView::H2H => "Scatter",
-                        crate::tui::benchmarks_app::BottomView::Scatter => "Radar",
-                        crate::tui::benchmarks_app::BottomView::Radar => "H2H",
-                        crate::tui::benchmarks_app::BottomView::Detail => "H2H",
+                        crate::tui::benchmarks::BottomView::H2H => "Scatter",
+                        crate::tui::benchmarks::BottomView::Scatter => "Radar",
+                        crate::tui::benchmarks::BottomView::Radar => "H2H",
+                        crate::tui::benchmarks::BottomView::Detail => "H2H",
                     };
                     app.set_status(format!("View: {}", next_view));
                     last_status_time = Some(std::time::Instant::now());

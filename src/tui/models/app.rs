@@ -1,0 +1,602 @@
+use ratatui::widgets::ListState;
+
+use crate::data::{Model, Provider};
+use crate::provider_category::{provider_category, ProviderCategory};
+
+/// Page size for page up/down navigation
+const PAGE_SIZE: usize = 10;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Focus {
+    Providers,
+    Models,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SortOrder {
+    #[default]
+    Default,
+    ReleaseDate,
+    Cost,
+    Context,
+}
+
+impl SortOrder {
+    pub fn next(self) -> Self {
+        match self {
+            SortOrder::Default => SortOrder::ReleaseDate,
+            SortOrder::ReleaseDate => SortOrder::Cost,
+            SortOrder::Cost => SortOrder::Context,
+            SortOrder::Context => SortOrder::Default,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Filters {
+    pub reasoning: bool,
+    pub tools: bool,
+    pub open_weights: bool,
+    pub free: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProviderListItem {
+    All,
+    CategoryHeader(ProviderCategory),
+    Provider(usize), // Index into providers
+}
+
+#[derive(Debug, Clone)]
+pub struct ModelEntry {
+    pub id: String,
+    pub model: Model,
+    pub provider_id: String,
+}
+
+pub struct ModelsApp {
+    pub selected_provider: usize,
+    pub selected_model: usize,
+    pub provider_list_state: ListState,
+    pub model_list_state: ListState,
+    pub focus: Focus,
+    pub sort_order: SortOrder,
+    pub sort_ascending: bool,
+    pub filters: Filters,
+    pub search_query: String,
+    pub provider_category_filter: ProviderCategory,
+    pub group_by_category: bool,
+    pub provider_list_items: Vec<ProviderListItem>,
+    filtered_models: Vec<ModelEntry>,
+}
+
+impl ModelsApp {
+    pub fn new(providers: &[(String, Provider)]) -> Self {
+        let mut provider_list_state = ListState::default();
+        provider_list_state.select(Some(0));
+        let mut model_list_state = ListState::default();
+        model_list_state.select(Some(1)); // +1 for header row
+
+        let mut app = Self {
+            selected_provider: 0, // Start with "All"
+            selected_model: 0,
+            provider_list_state,
+            model_list_state,
+            focus: Focus::Providers,
+            sort_order: SortOrder::Default,
+            sort_ascending: false,
+            filters: Filters::default(),
+            search_query: String::new(),
+            provider_category_filter: ProviderCategory::All,
+            group_by_category: false,
+            provider_list_items: Vec::new(),
+            filtered_models: Vec::new(),
+        };
+
+        app.update_provider_list(providers);
+        app.update_filtered_models(providers);
+        app
+    }
+
+    pub fn is_all_selected(&self) -> bool {
+        matches!(
+            self.provider_list_items.get(self.selected_provider),
+            Some(ProviderListItem::All)
+        )
+    }
+
+    pub fn provider_list_len(&self) -> usize {
+        self.provider_list_items.len()
+    }
+
+    pub fn selected_provider_data<'a>(
+        &self,
+        providers: &'a [(String, Provider)],
+    ) -> Option<&'a (String, Provider)> {
+        match self.provider_list_items.get(self.selected_provider) {
+            Some(ProviderListItem::Provider(idx)) => providers.get(*idx),
+            _ => None,
+        }
+    }
+
+    pub fn update_provider_list(&mut self, providers: &[(String, Provider)]) {
+        self.provider_list_items.clear();
+        self.provider_list_items.push(ProviderListItem::All);
+
+        if self.group_by_category {
+            let categories = [
+                ProviderCategory::Origin,
+                ProviderCategory::Cloud,
+                ProviderCategory::Inference,
+                ProviderCategory::Gateway,
+                ProviderCategory::Tool,
+            ];
+
+            for cat in &categories {
+                if self.provider_category_filter != ProviderCategory::All
+                    && self.provider_category_filter != *cat
+                {
+                    continue;
+                }
+
+                let mut indices: Vec<usize> = providers
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, (id, _))| provider_category(id) == *cat)
+                    .map(|(idx, _)| idx)
+                    .collect();
+
+                if indices.is_empty() {
+                    continue;
+                }
+
+                indices.sort_by(|a, b| providers[*a].0.cmp(&providers[*b].0));
+
+                self.provider_list_items
+                    .push(ProviderListItem::CategoryHeader(*cat));
+                for idx in indices {
+                    self.provider_list_items
+                        .push(ProviderListItem::Provider(idx));
+                }
+            }
+        } else {
+            for (idx, (id, _)) in providers.iter().enumerate() {
+                if self.provider_category_filter != ProviderCategory::All
+                    && provider_category(id) != self.provider_category_filter
+                {
+                    continue;
+                }
+                self.provider_list_items
+                    .push(ProviderListItem::Provider(idx));
+            }
+        }
+    }
+
+    pub fn find_selectable_index(&self, from: usize, forward: bool) -> usize {
+        let len = self.provider_list_items.len();
+        if len == 0 {
+            return 0;
+        }
+
+        let mut idx = from;
+        loop {
+            if !matches!(
+                self.provider_list_items.get(idx),
+                Some(ProviderListItem::CategoryHeader(_))
+            ) {
+                return idx;
+            }
+            if forward {
+                if idx >= len - 1 {
+                    return self.find_selectable_index(from.saturating_sub(1), false);
+                }
+                idx += 1;
+            } else {
+                if idx == 0 {
+                    return 0;
+                }
+                idx -= 1;
+            }
+        }
+    }
+
+    fn passes_filters(&self, model: &Model) -> bool {
+        if self.filters.reasoning && !model.reasoning {
+            return false;
+        }
+        if self.filters.tools && !model.tool_call {
+            return false;
+        }
+        if self.filters.open_weights && !model.open_weights {
+            return false;
+        }
+        if self.filters.free && !model.is_free() {
+            return false;
+        }
+        true
+    }
+
+    pub fn update_filtered_models(&mut self, providers: &[(String, Provider)]) {
+        let query_lower = self.search_query.to_lowercase();
+        let cat_filter = self.provider_category_filter;
+
+        self.filtered_models = if self.is_all_selected() {
+            let mut entries: Vec<ModelEntry> = providers
+                .iter()
+                .filter(|(id, _)| {
+                    cat_filter == ProviderCategory::All || provider_category(id) == cat_filter
+                })
+                .flat_map(|(provider_id, provider)| {
+                    provider.models.iter().filter_map(|(model_id, model)| {
+                        let search_matches = query_lower.is_empty()
+                            || model_id.to_lowercase().contains(&query_lower)
+                            || model.name.to_lowercase().contains(&query_lower)
+                            || provider_id.to_lowercase().contains(&query_lower);
+
+                        if search_matches && self.passes_filters(model) {
+                            Some(ModelEntry {
+                                id: model_id.clone(),
+                                model: model.clone(),
+                                provider_id: provider_id.clone(),
+                            })
+                        } else {
+                            None
+                        }
+                    })
+                })
+                .collect();
+
+            self.sort_entries(&mut entries);
+            entries
+        } else {
+            let provider_data = self.selected_provider_data(providers).cloned();
+            if let Some((provider_id, provider)) = provider_data {
+                let mut entries: Vec<ModelEntry> = provider
+                    .models
+                    .iter()
+                    .filter_map(|(model_id, model)| {
+                        let search_matches = query_lower.is_empty()
+                            || model_id.to_lowercase().contains(&query_lower)
+                            || model.name.to_lowercase().contains(&query_lower);
+
+                        if search_matches && self.passes_filters(model) {
+                            Some(ModelEntry {
+                                id: model_id.clone(),
+                                model: model.clone(),
+                                provider_id: provider_id.clone(),
+                            })
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                self.sort_entries(&mut entries);
+                entries
+            } else {
+                Vec::new()
+            }
+        };
+    }
+
+    fn sort_entries(&self, entries: &mut [ModelEntry]) {
+        match self.sort_order {
+            SortOrder::Default => {
+                entries.sort_by(|a, b| a.provider_id.cmp(&b.provider_id).then(a.id.cmp(&b.id)));
+            }
+            SortOrder::ReleaseDate => {
+                entries.sort_by(
+                    |a, b| match (&b.model.release_date, &a.model.release_date) {
+                        (Some(b_date), Some(a_date)) => {
+                            if self.sort_ascending {
+                                a_date.cmp(b_date)
+                            } else {
+                                b_date.cmp(a_date)
+                            }
+                        }
+                        (Some(_), None) => std::cmp::Ordering::Less,
+                        (None, Some(_)) => std::cmp::Ordering::Greater,
+                        (None, None) => a.id.cmp(&b.id),
+                    },
+                );
+            }
+            SortOrder::Cost => {
+                entries.sort_by(|a, b| {
+                    let a_cost = a.model.cost.as_ref().and_then(|c| c.input);
+                    let b_cost = b.model.cost.as_ref().and_then(|c| c.input);
+                    match (a_cost, b_cost) {
+                        (Some(a_val), Some(b_val)) => {
+                            let cmp = a_val
+                                .partial_cmp(&b_val)
+                                .unwrap_or(std::cmp::Ordering::Equal);
+                            if self.sort_ascending {
+                                cmp.reverse()
+                            } else {
+                                cmp
+                            }
+                        }
+                        (Some(_), None) => std::cmp::Ordering::Less,
+                        (None, Some(_)) => std::cmp::Ordering::Greater,
+                        (None, None) => a.id.cmp(&b.id),
+                    }
+                });
+            }
+            SortOrder::Context => {
+                entries.sort_by(|a, b| {
+                    let a_ctx = a.model.limit.as_ref().and_then(|l| l.context);
+                    let b_ctx = b.model.limit.as_ref().and_then(|l| l.context);
+                    match (b_ctx, a_ctx) {
+                        (Some(b_val), Some(a_val)) => {
+                            if self.sort_ascending {
+                                a_val.cmp(&b_val)
+                            } else {
+                                b_val.cmp(&a_val)
+                            }
+                        }
+                        (Some(_), None) => std::cmp::Ordering::Less,
+                        (None, Some(_)) => std::cmp::Ordering::Greater,
+                        (None, None) => a.id.cmp(&b.id),
+                    }
+                });
+            }
+        }
+    }
+
+    pub fn select_provider_at_index(&mut self, index: usize, providers: &[(String, Provider)]) {
+        self.selected_provider = index;
+        self.selected_model = 0;
+        self.provider_list_state
+            .select(Some(self.selected_provider));
+        self.update_filtered_models(providers);
+        self.model_list_state.select(Some(self.selected_model + 1));
+        // +1 for header
+    }
+
+    pub fn current_model(&self) -> Option<&ModelEntry> {
+        self.filtered_models.get(self.selected_model)
+    }
+
+    pub fn filtered_models(&self) -> &[ModelEntry] {
+        &self.filtered_models
+    }
+
+    pub fn total_model_count(&self, providers: &[(String, Provider)]) -> usize {
+        providers.iter().map(|(_, p)| p.models.len()).sum()
+    }
+
+    pub fn filtered_model_count(&self, providers: &[(String, Provider)]) -> usize {
+        if self.provider_category_filter == ProviderCategory::All {
+            self.total_model_count(providers)
+        } else {
+            providers
+                .iter()
+                .filter(|(id, _)| provider_category(id) == self.provider_category_filter)
+                .map(|(_, p)| p.models.len())
+                .sum()
+        }
+    }
+
+    pub fn get_copy_full(&self) -> Option<String> {
+        self.current_model()
+            .map(|entry| format!("{}/{}", entry.provider_id, entry.id))
+    }
+
+    pub fn get_copy_model_id(&self) -> Option<String> {
+        self.current_model().map(|entry| entry.id.clone())
+    }
+
+    pub fn get_provider_doc(&self, providers: &[(String, Provider)]) -> Option<String> {
+        self.current_model().and_then(|entry| {
+            providers
+                .iter()
+                .find(|(id, _)| id == &entry.provider_id)
+                .and_then(|(_, provider)| provider.doc.clone())
+        })
+    }
+
+    pub fn get_provider_api(&self, providers: &[(String, Provider)]) -> Option<String> {
+        self.current_model().and_then(|entry| {
+            providers
+                .iter()
+                .find(|(id, _)| id == &entry.provider_id)
+                .and_then(|(_, provider)| provider.api.clone())
+        })
+    }
+
+    // --- Navigation handlers called from App::update ---
+
+    pub fn next_provider(&mut self, providers: &[(String, Provider)]) {
+        if self.selected_provider < self.provider_list_len().saturating_sub(1) {
+            let next = self.find_selectable_index(self.selected_provider + 1, true);
+            if next != self.selected_provider {
+                self.select_provider_at_index(next, providers);
+            }
+        }
+    }
+
+    pub fn prev_provider(&mut self, providers: &[(String, Provider)]) {
+        if self.selected_provider > 0 {
+            let prev = self.find_selectable_index(self.selected_provider - 1, false);
+            if prev != self.selected_provider {
+                self.select_provider_at_index(prev, providers);
+            }
+        }
+    }
+
+    pub fn select_first_provider(&mut self, providers: &[(String, Provider)]) {
+        let first = self.find_selectable_index(0, true);
+        if first != self.selected_provider {
+            self.select_provider_at_index(first, providers);
+        }
+    }
+
+    pub fn select_last_provider(&mut self, providers: &[(String, Provider)]) {
+        let last_raw = self.provider_list_len().saturating_sub(1);
+        let last = self.find_selectable_index(last_raw, false);
+        if last != self.selected_provider {
+            self.select_provider_at_index(last, providers);
+        }
+    }
+
+    pub fn page_down_provider(&mut self, providers: &[(String, Provider)]) {
+        let last_index = self.provider_list_len().saturating_sub(1);
+        let raw = (self.selected_provider + PAGE_SIZE).min(last_index);
+        let next = self.find_selectable_index(raw, true);
+        if next != self.selected_provider {
+            self.select_provider_at_index(next, providers);
+        }
+    }
+
+    pub fn page_up_provider(&mut self, providers: &[(String, Provider)]) {
+        let raw = self.selected_provider.saturating_sub(PAGE_SIZE);
+        let next = self.find_selectable_index(raw, false);
+        if next != self.selected_provider {
+            self.select_provider_at_index(next, providers);
+        }
+    }
+
+    pub fn next_model(&mut self) {
+        if self.selected_model < self.filtered_models.len().saturating_sub(1) {
+            self.selected_model += 1;
+            self.model_list_state.select(Some(self.selected_model + 1));
+            // +1 for header
+        }
+    }
+
+    pub fn prev_model(&mut self) {
+        if self.selected_model > 0 {
+            self.selected_model -= 1;
+            self.model_list_state.select(Some(self.selected_model + 1));
+            // +1 for header
+        }
+    }
+
+    pub fn select_first_model(&mut self) {
+        if self.selected_model > 0 {
+            self.selected_model = 0;
+            self.model_list_state.select(Some(self.selected_model + 1));
+        }
+    }
+
+    pub fn select_last_model(&mut self) {
+        if self.selected_model < self.filtered_models.len().saturating_sub(1) {
+            self.selected_model = self.filtered_models.len().saturating_sub(1);
+            self.model_list_state.select(Some(self.selected_model + 1));
+        }
+    }
+
+    pub fn page_down_model(&mut self) {
+        let last_index = self.filtered_models.len().saturating_sub(1);
+        let next = (self.selected_model + PAGE_SIZE).min(last_index);
+        if next != self.selected_model {
+            self.selected_model = next;
+            self.model_list_state.select(Some(self.selected_model + 1));
+        }
+    }
+
+    pub fn page_up_model(&mut self) {
+        let next = self.selected_model.saturating_sub(PAGE_SIZE);
+        if next != self.selected_model {
+            self.selected_model = next;
+            self.model_list_state.select(Some(self.selected_model + 1));
+        }
+    }
+
+    pub fn switch_focus(&mut self) {
+        self.focus = match self.focus {
+            Focus::Providers => Focus::Models,
+            Focus::Models => Focus::Providers,
+        };
+    }
+
+    pub fn cycle_sort(&mut self, providers: &[(String, Provider)]) {
+        self.sort_order = self.sort_order.next();
+        self.sort_ascending = false;
+        self.selected_model = 0;
+        self.update_filtered_models(providers);
+        self.model_list_state.select(Some(self.selected_model + 1));
+    }
+
+    pub fn toggle_sort_dir(&mut self, providers: &[(String, Provider)]) {
+        if self.sort_order != SortOrder::Default {
+            self.sort_ascending = !self.sort_ascending;
+            self.selected_model = 0;
+            self.update_filtered_models(providers);
+            self.model_list_state.select(Some(self.selected_model + 1));
+        }
+    }
+
+    pub fn toggle_reasoning(&mut self, providers: &[(String, Provider)]) {
+        self.filters.reasoning = !self.filters.reasoning;
+        self.selected_model = 0;
+        self.update_filtered_models(providers);
+        self.model_list_state.select(Some(self.selected_model + 1));
+    }
+
+    pub fn toggle_tools(&mut self, providers: &[(String, Provider)]) {
+        self.filters.tools = !self.filters.tools;
+        self.selected_model = 0;
+        self.update_filtered_models(providers);
+        self.model_list_state.select(Some(self.selected_model + 1));
+    }
+
+    pub fn toggle_open_weights(&mut self, providers: &[(String, Provider)]) {
+        self.filters.open_weights = !self.filters.open_weights;
+        self.selected_model = 0;
+        self.update_filtered_models(providers);
+        self.model_list_state.select(Some(self.selected_model + 1));
+    }
+
+    pub fn toggle_free(&mut self, providers: &[(String, Provider)]) {
+        self.filters.free = !self.filters.free;
+        self.selected_model = 0;
+        self.update_filtered_models(providers);
+        self.model_list_state.select(Some(self.selected_model + 1));
+    }
+
+    pub fn cycle_provider_category(&mut self, providers: &[(String, Provider)]) {
+        self.provider_category_filter = self.provider_category_filter.next();
+        self.update_provider_list(providers);
+        self.selected_provider = self.find_selectable_index(0, true);
+        self.provider_list_state
+            .select(Some(self.selected_provider));
+        self.selected_model = 0;
+        self.update_filtered_models(providers);
+        self.model_list_state.select(Some(self.selected_model + 1));
+    }
+
+    pub fn toggle_grouping(&mut self, providers: &[(String, Provider)]) {
+        self.group_by_category = !self.group_by_category;
+        self.update_provider_list(providers);
+        self.selected_provider = self.find_selectable_index(0, true);
+        self.provider_list_state
+            .select(Some(self.selected_provider));
+        self.selected_model = 0;
+        self.update_filtered_models(providers);
+        self.model_list_state.select(Some(self.selected_model + 1));
+    }
+
+    pub fn search_input(&mut self, c: char, providers: &[(String, Provider)]) {
+        self.search_query.push(c);
+        self.selected_model = 0;
+        self.update_filtered_models(providers);
+        self.model_list_state.select(Some(self.selected_model + 1));
+        // +1 for header
+    }
+
+    pub fn search_backspace(&mut self, providers: &[(String, Provider)]) {
+        self.search_query.pop();
+        self.selected_model = 0;
+        self.update_filtered_models(providers);
+        self.model_list_state.select(Some(self.selected_model + 1));
+        // +1 for header
+    }
+
+    pub fn clear_search(&mut self, providers: &[(String, Provider)]) {
+        self.search_query.clear();
+        self.selected_model = 0;
+        self.update_filtered_models(providers);
+        self.model_list_state.select(Some(self.selected_model + 1));
+        // +1 for header
+    }
+}

@@ -1,12 +1,12 @@
 mod agents;
 mod api;
-mod benchmark_fetch;
 mod benchmarks;
 mod cli;
 mod config;
 mod data;
-mod model_traits;
+mod formatting;
 mod provider_category;
+mod status;
 mod tui;
 
 use anyhow::Result;

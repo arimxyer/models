@@ -1,9 +1,8 @@
-use std::{io, time::Duration};
+use std::time::Duration;
 
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
-    backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::{Line, Span},
@@ -11,8 +10,11 @@ use ratatui::{
         Block, Borders, Cell as TuiCell, HighlightSpacing, Paragraph, Row as TuiRow,
         Table as TuiTable, TableState, Wrap,
     },
-    Frame, Terminal, TerminalOptions, Viewport,
+    Frame,
 };
+
+use super::picker::{self, PickerTerminal};
+use crate::formatting::truncate;
 
 #[derive(Clone)]
 pub struct ReleaseBrowserItem {
@@ -45,34 +47,6 @@ pub struct AgentSourceItem {
     pub release_frequency: String,
 }
 
-const VIEWPORT_HEIGHT: u16 = 14;
-
-struct PickerTerminal {
-    terminal: Terminal<CrosstermBackend<io::Stdout>>,
-}
-
-impl PickerTerminal {
-    fn new() -> Result<Self> {
-        crossterm::terminal::enable_raw_mode()?;
-        let backend = CrosstermBackend::new(io::stdout());
-        let terminal = Terminal::with_options(
-            backend,
-            TerminalOptions {
-                viewport: Viewport::Inline(VIEWPORT_HEIGHT),
-            },
-        )?;
-        Ok(Self { terminal })
-    }
-}
-
-impl Drop for PickerTerminal {
-    fn drop(&mut self) {
-        let _ = self.terminal.clear();
-        let _ = crossterm::terminal::disable_raw_mode();
-        let _ = self.terminal.show_cursor();
-    }
-}
-
 struct ReleaseBrowser {
     items: Vec<ReleaseBrowserItem>,
     show_agent: bool,
@@ -99,33 +73,19 @@ impl ReleaseBrowser {
     }
 
     fn next(&mut self) {
-        let Some(current) = self.state.selected() else {
-            return;
-        };
-        let last = self.items.len().saturating_sub(1);
-        self.state.select(Some((current + 1).min(last)));
+        picker::nav_next(&mut self.state, self.items.len());
     }
 
     fn previous(&mut self) {
-        let Some(current) = self.state.selected() else {
-            return;
-        };
-        self.state.select(Some(current.saturating_sub(1)));
+        picker::nav_previous(&mut self.state);
     }
 
     fn page_down(&mut self) {
-        let Some(current) = self.state.selected() else {
-            return;
-        };
-        let last = self.items.len().saturating_sub(1);
-        self.state.select(Some((current + 10).min(last)));
+        picker::nav_page_down(&mut self.state, self.items.len(), 10);
     }
 
     fn page_up(&mut self) {
-        let Some(current) = self.state.selected() else {
-            return;
-        };
-        self.state.select(Some(current.saturating_sub(10)));
+        picker::nav_page_up(&mut self.state, 10);
     }
 
     fn draw(&mut self, frame: &mut Frame<'_>) {
@@ -156,7 +116,7 @@ impl ReleaseBrowser {
         let rows = self.items.iter().map(|item| {
             if self.show_agent {
                 TuiRow::new(vec![
-                    TuiCell::from(truncate_text(&item.agent_name, 24)),
+                    TuiCell::from(truncate(&item.agent_name, 24)),
                     TuiCell::from(item.version.clone()),
                     TuiCell::from(item.released.clone()),
                     TuiCell::from(item.ago.clone()),
@@ -177,25 +137,15 @@ impl ReleaseBrowser {
         };
 
         let table = TuiTable::new(rows, widths)
-            .header(
-                TuiRow::new(headers).style(
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD),
-                ),
-            )
+            .header(TuiRow::new(headers).style(picker::HEADER_STYLE))
             .column_spacing(1)
-            .highlight_symbol(">> ")
+            .highlight_symbol(picker::HIGHLIGHT_SYMBOL)
             .highlight_spacing(HighlightSpacing::Always)
-            .row_highlight_style(
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            )
+            .row_highlight_style(picker::ROW_HIGHLIGHT_STYLE)
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::Cyan))
+                    .border_style(picker::ACTIVE_BORDER_STYLE)
                     .title(format!("{} ({} releases)", self.title, self.items.len())),
             );
 
@@ -205,7 +155,7 @@ impl ReleaseBrowser {
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
-                        .border_style(Style::default().fg(Color::DarkGray))
+                        .border_style(picker::PREVIEW_BORDER_STYLE)
                         .title(" Changelog Preview "),
                 )
                 .wrap(Wrap { trim: false }),
@@ -271,18 +221,11 @@ impl SourcePicker {
     }
 
     fn next(&mut self) {
-        let Some(current) = self.state.selected() else {
-            return;
-        };
-        let last = self.items.len().saturating_sub(1);
-        self.state.select(Some((current + 1).min(last)));
+        picker::nav_next(&mut self.state, self.items.len());
     }
 
     fn previous(&mut self) {
-        let Some(current) = self.state.selected() else {
-            return;
-        };
-        self.state.select(Some(current.saturating_sub(1)));
+        picker::nav_previous(&mut self.state);
     }
 
     fn toggle_current(&mut self) {
@@ -308,8 +251,8 @@ impl SourcePicker {
             TuiRow::new(vec![
                 TuiCell::from(if item.tracked { "[x]" } else { "[ ]" }),
                 TuiCell::from(item.id.clone()),
-                TuiCell::from(truncate_text(&item.name, 22)),
-                TuiCell::from(truncate_text(&item.cli_binary, 14)),
+                TuiCell::from(truncate(&item.name, 22)),
+                TuiCell::from(truncate(&item.cli_binary, 14)),
             ])
         });
 
@@ -322,25 +265,15 @@ impl SourcePicker {
                 Constraint::Percentage(27),
             ],
         )
-        .header(
-            TuiRow::new(vec!["Track", "ID", "Name", "CLI"]).style(
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        )
+        .header(TuiRow::new(vec!["Track", "ID", "Name", "CLI"]).style(picker::HEADER_STYLE))
         .column_spacing(1)
-        .highlight_symbol(">> ")
+        .highlight_symbol(picker::HIGHLIGHT_SYMBOL)
         .highlight_spacing(HighlightSpacing::Always)
-        .row_highlight_style(
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD),
-        )
+        .row_highlight_style(picker::ROW_HIGHLIGHT_STYLE)
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Cyan))
+                .border_style(picker::ACTIVE_BORDER_STYLE)
                 .title(format!("{} ({} agents)", self.title, self.items.len())),
         );
 
@@ -350,7 +283,7 @@ impl SourcePicker {
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
-                        .border_style(Style::default().fg(Color::DarkGray))
+                        .border_style(picker::PREVIEW_BORDER_STYLE)
                         .title(" Agent "),
                 )
                 .wrap(Wrap { trim: false }),
@@ -388,14 +321,9 @@ impl SourcePicker {
             source_tag,
         ];
         if let Some(stars) = item.stars {
-            let s = if stars >= 1000 {
-                format!("{:.1}k", stars as f64 / 1000.0)
-            } else {
-                stars.to_string()
-            };
             header.push(Span::raw("  "));
             header.push(Span::styled(
-                format!("\u{2605} {s}"),
+                format!("\u{2605} {}", crate::formatting::format_stars(stars)),
                 Style::default().fg(Color::Yellow),
             ));
         }
@@ -595,16 +523,4 @@ fn changelog_preview_lines(body: Option<&str>) -> Vec<Line<'static>> {
     }
 
     lines
-}
-
-fn truncate_text(value: &str, max_chars: usize) -> String {
-    let char_count = value.chars().count();
-    if char_count <= max_chars {
-        return value.to_string();
-    }
-    if max_chars <= 3 {
-        return value.chars().take(max_chars).collect();
-    }
-    let visible: String = value.chars().take(max_chars - 3).collect();
-    format!("{visible}...")
 }
