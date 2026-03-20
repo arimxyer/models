@@ -185,12 +185,10 @@ impl Config {
         }
     }
 
-    #[allow(dead_code)]
     pub fn is_status_tracked(&self, slug: &str) -> bool {
         self.status.tracked.contains(slug)
     }
 
-    #[allow(dead_code)]
     pub fn set_status_tracked(&mut self, slug: &str, tracked: bool) {
         if tracked {
             self.status.tracked.insert(slug.to_string());
@@ -235,5 +233,26 @@ mod tests {
         assert!(!config.is_tracked("claude-code"));
         // Still tracked
         assert!(config.is_tracked("codex"));
+    }
+
+    #[test]
+    fn test_status_default_tracks_all_providers() {
+        use crate::status::STATUS_REGISTRY;
+        let config = Config::default();
+        assert_eq!(config.status.tracked.len(), STATUS_REGISTRY.len());
+        for entry in STATUS_REGISTRY {
+            assert!(config.is_status_tracked(entry.slug));
+        }
+    }
+
+    #[test]
+    fn test_set_status_tracked() {
+        let mut config = Config::default();
+        // Untrack a provider
+        config.set_status_tracked("openai", false);
+        assert!(!config.is_status_tracked("openai"));
+        // Re-track it
+        config.set_status_tracked("openai", true);
+        assert!(config.is_status_tracked("openai"));
     }
 }

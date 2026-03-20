@@ -81,6 +81,15 @@ fn handle_normal_mode(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Opti
             }
         }
     }
+    if app.current_tab == super::app::Tab::Status
+        && app
+            .status_app
+            .as_ref()
+            .map(|a| a.show_picker)
+            .unwrap_or(false)
+    {
+        return handle_picker_keys(code);
+    }
     if app.current_tab == super::app::Tab::Benchmarks && app.benchmarks_app.show_sort_picker {
         return handle_sort_picker_keys(code);
     }
@@ -443,6 +452,7 @@ fn handle_status_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Opti
     match code {
         KeyCode::Char('o') => Some(Message::OpenStatusPage),
         KeyCode::Char('r') => Some(Message::RefreshStatus),
+        KeyCode::Char('a') => Some(Message::OpenStatusPicker),
         _ => None,
     }
 }

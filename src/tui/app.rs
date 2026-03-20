@@ -185,6 +185,7 @@ pub enum Message {
     ScrollH2HPageDown,
     ScrollH2HPageUp,
     // Status tab messages
+    OpenStatusPicker,
     NextStatusProvider,
     PrevStatusProvider,
     SelectFirstStatusProvider,
@@ -249,7 +250,7 @@ impl App {
 
         let config = config.unwrap_or_default();
         let agents_app = agents_file.map(|af| AgentsApp::new(af, &config));
-        let status_app = agents_file.map(StatusApp::new);
+        let status_app = Some(StatusApp::new(&config));
         let open_weights_map =
             crate::benchmarks::build_open_weights_map(&providers, benchmark_store.entries());
         crate::benchmarks::apply_model_traits(&providers, benchmark_store.entries_mut());
@@ -670,28 +671,69 @@ impl App {
                     agents_app.open_picker();
                 }
             }
+            Message::OpenStatusPicker => {
+                if let Some(ref mut status_app) = self.status_app {
+                    status_app.open_picker();
+                }
+            }
             Message::ClosePicker => {
-                if let Some(ref mut agents_app) = self.agents_app {
+                if self.current_tab == Tab::Status {
+                    if let Some(ref mut status_app) = self.status_app {
+                        status_app.close_picker();
+                    }
+                } else if let Some(ref mut agents_app) = self.agents_app {
                     agents_app.close_picker();
                 }
             }
             Message::PickerNext => {
-                if let Some(ref mut agents_app) = self.agents_app {
+                if self.current_tab == Tab::Status {
+                    if let Some(ref mut status_app) = self.status_app {
+                        status_app.picker_next();
+                    }
+                } else if let Some(ref mut agents_app) = self.agents_app {
                     agents_app.picker_next();
                 }
             }
             Message::PickerPrev => {
-                if let Some(ref mut agents_app) = self.agents_app {
+                if self.current_tab == Tab::Status {
+                    if let Some(ref mut status_app) = self.status_app {
+                        status_app.picker_prev();
+                    }
+                } else if let Some(ref mut agents_app) = self.agents_app {
                     agents_app.picker_prev();
                 }
             }
             Message::PickerToggle => {
-                if let Some(ref mut agents_app) = self.agents_app {
+                if self.current_tab == Tab::Status {
+                    if let Some(ref mut status_app) = self.status_app {
+                        status_app.picker_toggle_current();
+                    }
+                } else if let Some(ref mut agents_app) = self.agents_app {
                     agents_app.picker_toggle_current();
                 }
             }
             Message::PickerSave => {
-                if let Some(ref mut agents_app) = self.agents_app {
+                if self.current_tab == Tab::Status {
+                    if let Some(ref mut status_app) = self.status_app {
+                        match status_app.picker_save(&mut self.config) {
+                            Ok(newly_tracked) => {
+                                if newly_tracked.is_empty() {
+                                    self.set_status("Tracked providers saved".to_string());
+                                } else {
+                                    self.set_status(format!(
+                                        "Tracked providers saved, fetching {} new...",
+                                        newly_tracked.len()
+                                    ));
+                                    self.pending_status_refresh = true;
+                                    self.force_status_refresh = true;
+                                }
+                            }
+                            Err(e) => {
+                                self.set_status(e);
+                            }
+                        }
+                    }
+                } else if let Some(ref mut agents_app) = self.agents_app {
                     match agents_app.picker_save(&mut self.config) {
                         Ok(newly_tracked) => {
                             if newly_tracked.is_empty() {
