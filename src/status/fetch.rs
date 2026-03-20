@@ -25,7 +25,6 @@ const GOOGLE_PRODUCTS_URL: &str = "https://status.cloud.google.com/products.json
 #[derive(Debug)]
 pub enum StatusFetchResult {
     Fresh(Vec<ProviderStatus>),
-    Error(String),
 }
 
 #[derive(Debug, Clone)]
@@ -99,10 +98,8 @@ impl StatusFetcher {
 
         let entries: Vec<ProviderStatus> = results.into_iter().map(|(_, s)| s).collect();
 
-        if entries.iter().all(|e| e.health == ProviderHealth::Unknown) {
-            return StatusFetchResult::Error("Failed to fetch provider statuses".to_string());
-        }
-
+        // Return per-provider entries even when all are Unknown — they contain
+        // individual error details and URLs that the UI can display.
         StatusFetchResult::Fresh(entries)
     }
 }

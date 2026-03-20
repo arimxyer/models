@@ -6,7 +6,7 @@ use ratatui::widgets::ListState;
 use crate::config::Config;
 use crate::status::{
     status_seed_for_provider, ProviderHealth, ProviderStatus, ScheduledMaintenance,
-    StatusProvenance, StatusProviderSeed, STATUS_REGISTRY,
+    StatusLoadState, StatusProvenance, StatusProviderSeed, STATUS_REGISTRY,
 };
 use crate::tui::widgets::ScrollOffset;
 
@@ -121,6 +121,9 @@ impl StatusApp {
     }
 
     pub fn apply_fetch(&mut self, fetched: Vec<ProviderStatus>) {
+        if fetched.is_empty() {
+            return;
+        }
         // Merge by slug: update fetched entries, reset untracked to placeholder
         let fetched_map: HashMap<String, ProviderStatus> =
             fetched.into_iter().map(|e| (e.slug.clone(), e)).collect();
@@ -132,6 +135,9 @@ impl StatusApp {
                 *entry = ProviderStatus::placeholder(&status_seed_for_provider(&entry.slug));
             }
         }
+
+        // Preserve selected provider across re-sort
+        let selected_slug = self.current_entry().map(|e| e.slug.clone());
 
         self.entries.sort_by(|a, b| {
             a.health
@@ -146,11 +152,19 @@ impl StatusApp {
         self.last_error = None;
         self.normalize_overall_panel_focus();
         self.update_filtered();
-    }
 
-    pub fn apply_error(&mut self, error: String) {
-        self.loading = false;
-        self.last_error = Some(error);
+        // Restore selection to the same provider after re-sort
+        if let Some(slug) = selected_slug {
+            if let Some(pos) = self
+                .filtered_entries
+                .iter()
+                .position(|&idx| self.entries[idx].slug == slug)
+            {
+                // +1 because selected=0 is "Overall"
+                self.selected = pos + 1;
+                self.list_state.select(Some(self.selected));
+            }
+        }
     }
 
     // ── Picker modal methods ───────────────────────────────────
@@ -217,6 +231,14 @@ impl StatusApp {
         if let Err(e) = config.save() {
             self.close_picker();
             return Err(format!("Failed to save config: {}", e));
+        }
+
+        // Reset untracked entries to placeholder health
+        for entry in &mut self.entries {
+            if !self.tracked.contains(&entry.slug) {
+                entry.health = ProviderHealth::Unknown;
+                entry.load_state = StatusLoadState::Placeholder;
+            }
         }
 
         self.close_picker();
