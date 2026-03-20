@@ -1,19 +1,16 @@
 use crate::formatting::{format_relative_time_from_str, truncate};
-use crate::status::{ProviderHealth, StatusProvenance, StatusSourceMethod};
+use crate::status::{ProviderHealth, StatusSourceMethod};
 use crate::tui::app::App;
 use crate::tui::ui::{caret, selection_style, status_health_icon, status_health_style};
-use crate::tui::widgets::scroll_offset::ScrollOffset;
-use crate::tui::widgets::scrollable_panel::ScrollablePanel;
-use crate::tui::widgets::soft_card::SoftCard;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Gauge, List, ListItem, Paragraph},
+    widgets::{Block, Borders, List, ListItem, Paragraph},
     Frame,
 };
 
-fn component_status_icon(status: &str) -> &'static str {
+pub(super) fn component_status_icon(status: &str) -> &'static str {
     let s = status.to_lowercase();
     if s.contains("operational") {
         "●"
@@ -28,7 +25,7 @@ fn component_status_icon(status: &str) -> &'static str {
     }
 }
 
-fn component_status_style(status: &str) -> Style {
+pub(super) fn component_status_style(status: &str) -> Style {
     let s = status.to_lowercase();
     if s.contains("operational") {
         Style::default().fg(Color::Green)
@@ -45,7 +42,7 @@ fn component_status_style(status: &str) -> Style {
 
 /// 6-char left-aligned gutter tag (padded with spaces, DarkGray) + content spans at column 7.
 #[allow(dead_code)]
-fn gutter_line<'a>(tag: &str, spans: Vec<Span<'a>>) -> Line<'a> {
+pub(super) fn gutter_line<'a>(tag: &str, spans: Vec<Span<'a>>) -> Line<'a> {
     let padded = format!("{:<6}", tag);
     let mut all = vec![Span::styled(padded, Style::default().fg(Color::DarkGray))];
     all.extend(spans);
@@ -56,7 +53,7 @@ fn gutter_line<'a>(tag: &str, spans: Vec<Span<'a>>) -> Line<'a> {
 const CHINESE_NAME_MAP: &[(&str, &str)] =
     &[("API 服务", "API Service"), ("网页对话服务", "Web Chat")];
 
-fn translate_component_name(name: &str) -> String {
+pub(super) fn translate_component_name(name: &str) -> String {
     for &(chinese, english) in CHINESE_NAME_MAP {
         if name == chinese {
             return format!("{} ({})", english, chinese);
@@ -65,7 +62,7 @@ fn translate_component_name(name: &str) -> String {
     name.to_string()
 }
 
-fn provider_last_meaningful_update(
+pub(super) fn provider_last_meaningful_update(
     entry: &crate::status::ProviderStatus,
 ) -> Option<(&'static str, String)> {
     let latest = entry
@@ -102,7 +99,7 @@ fn provider_last_meaningful_update(
     })
 }
 
-fn title_case_status_time_label(label: &str) -> &'static str {
+pub(super) fn title_case_status_time_label(label: &str) -> &'static str {
     match label {
         "latest event" => "Latest event",
         "source updated" => "Source updated",
@@ -111,7 +108,7 @@ fn title_case_status_time_label(label: &str) -> &'static str {
     }
 }
 
-fn overall_non_operational_components(
+pub(super) fn overall_non_operational_components(
     entry: &crate::status::ProviderStatus,
 ) -> Vec<&crate::status::ComponentStatus> {
     entry
@@ -124,7 +121,7 @@ fn overall_non_operational_components(
         .collect()
 }
 
-fn overall_attention_components(
+pub(super) fn overall_attention_components(
     entry: &crate::status::ProviderStatus,
 ) -> Vec<&crate::status::ComponentStatus> {
     overall_non_operational_components(entry)
@@ -133,7 +130,7 @@ fn overall_attention_components(
         .collect()
 }
 
-fn overall_attention_entries(
+pub(super) fn overall_attention_entries(
     status_app: &super::app::StatusApp,
 ) -> Vec<&crate::status::ProviderStatus> {
     let mut entries: Vec<_> = status_app
@@ -152,7 +149,7 @@ fn overall_attention_entries(
     entries
 }
 
-fn component_scope_name(component: &crate::status::ComponentStatus) -> String {
+pub(super) fn component_scope_name(component: &crate::status::ComponentStatus) -> String {
     component
         .group_name
         .as_deref()
@@ -161,7 +158,7 @@ fn component_scope_name(component: &crate::status::ComponentStatus) -> String {
         .to_string()
 }
 
-fn component_display_name(component: &crate::status::ComponentStatus) -> String {
+pub(super) fn component_display_name(component: &crate::status::ComponentStatus) -> String {
     let name = translate_component_name(&component.name);
     match component.group_name.as_deref() {
         Some(group) if !group.is_empty() && group != component.name => {
@@ -171,7 +168,7 @@ fn component_display_name(component: &crate::status::ComponentStatus) -> String 
     }
 }
 
-fn component_only_scope_title(components: &[&crate::status::ComponentStatus]) -> String {
+pub(super) fn component_only_scope_title(components: &[&crate::status::ComponentStatus]) -> String {
     let mut scopes: Vec<String> = Vec::new();
     for component in components {
         let scope = component_scope_name(component);
@@ -187,7 +184,7 @@ fn component_only_scope_title(components: &[&crate::status::ComponentStatus]) ->
     }
 }
 
-fn provider_health_label(health: ProviderHealth) -> &'static str {
+pub(super) fn provider_health_label(health: ProviderHealth) -> &'static str {
     match health {
         ProviderHealth::Operational => "operational",
         ProviderHealth::Degraded => "degraded",
@@ -197,7 +194,7 @@ fn provider_health_label(health: ProviderHealth) -> &'static str {
     }
 }
 
-fn sparse_incident_metadata(incident: &crate::status::ActiveIncident) -> bool {
+pub(super) fn sparse_incident_metadata(incident: &crate::status::ActiveIncident) -> bool {
     incident.created_at.is_none()
         && incident.updated_at.is_none()
         && incident.latest_update.is_none()
@@ -205,7 +202,7 @@ fn sparse_incident_metadata(incident: &crate::status::ActiveIncident) -> bool {
         && incident.affected_components.is_empty()
 }
 
-fn incident_status_value(incident: &crate::status::ActiveIncident) -> String {
+pub(super) fn incident_status_value(incident: &crate::status::ActiveIncident) -> String {
     if sparse_incident_metadata(incident) && incident.status.eq_ignore_ascii_case("investigating") {
         "reported".to_string()
     } else {
@@ -213,7 +210,7 @@ fn incident_status_value(incident: &crate::status::ActiveIncident) -> String {
     }
 }
 
-fn incident_time_value(
+pub(super) fn incident_time_value(
     entry: &crate::status::ProviderStatus,
     incident: &crate::status::ActiveIncident,
 ) -> Option<(&'static str, String)> {
@@ -241,7 +238,7 @@ fn incident_time_value(
     })
 }
 
-fn incident_impact_style(impact: &str) -> Style {
+pub(super) fn incident_impact_style(impact: &str) -> Style {
     let normalized = impact.to_lowercase();
     if normalized.contains("critical") || normalized.contains("major") {
         Style::default().fg(Color::Red)
@@ -254,17 +251,17 @@ fn incident_impact_style(impact: &str) -> Style {
     }
 }
 
-fn status_field_label_style() -> Style {
+pub(super) fn status_field_label_style() -> Style {
     Style::default().fg(Color::Blue)
 }
 
-fn status_section_label_style() -> Style {
+pub(super) fn status_section_label_style() -> Style {
     Style::default()
         .fg(Color::Blue)
         .add_modifier(Modifier::BOLD)
 }
 
-fn push_component_scope_lines(
+pub(super) fn push_component_scope_lines(
     lines: &mut Vec<Line<'static>>,
     components: &[&crate::status::ComponentStatus],
     max_items: usize,
@@ -300,7 +297,7 @@ fn push_component_scope_lines(
     }
 }
 
-fn push_plain_scope_lines(
+pub(super) fn push_plain_scope_lines(
     lines: &mut Vec<Line<'static>>,
     label: &str,
     items: &[String],
@@ -331,7 +328,7 @@ fn push_plain_scope_lines(
     }
 }
 
-fn push_wrapped_bullet_lines(
+pub(super) fn push_wrapped_bullet_lines(
     lines: &mut Vec<Line<'static>>,
     text: &str,
     body_width: usize,
@@ -359,7 +356,7 @@ fn push_wrapped_bullet_lines(
     }
 }
 
-fn status_verdict_copy(health: ProviderHealth) -> &'static str {
+pub(super) fn status_verdict_copy(health: ProviderHealth) -> &'static str {
     match health {
         ProviderHealth::Operational => "All systems operational",
         ProviderHealth::Degraded => "Some services degraded",
@@ -370,7 +367,7 @@ fn status_verdict_copy(health: ProviderHealth) -> &'static str {
 }
 
 /// Map incident stage to a `ProviderHealth` for accent stripe coloring.
-fn incident_stage_health(stage: &str) -> ProviderHealth {
+pub(super) fn incident_stage_health(stage: &str) -> ProviderHealth {
     let normalized = stage.to_lowercase();
     if normalized.contains("resolved") {
         ProviderHealth::Operational
@@ -383,7 +380,7 @@ fn incident_stage_health(stage: &str) -> ProviderHealth {
     }
 }
 
-fn incident_stage_style(stage: &str) -> Style {
+pub(super) fn incident_stage_style(stage: &str) -> Style {
     let normalized = stage.to_lowercase();
     if normalized.contains("resolved") {
         Style::default().fg(Color::Green)
@@ -394,6 +391,63 @@ fn incident_stage_style(stage: &str) -> Style {
     } else {
         Style::default().fg(Color::Yellow)
     }
+}
+
+pub(super) fn normalized_status_copy(text: &str) -> String {
+    text.chars()
+        .filter(|ch| ch.is_ascii_alphanumeric() || ch.is_ascii_whitespace())
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
+}
+
+pub(super) fn summary_duplicates_issue(summary: &str, issue: &str) -> bool {
+    let normalized_summary = normalized_status_copy(summary);
+    let normalized_issue = normalized_status_copy(issue);
+
+    !normalized_summary.is_empty() && normalized_summary == normalized_issue
+}
+
+pub(super) fn update_duplicates_summary_or_issue(
+    update: &str,
+    summary: Option<&str>,
+    issue: &str,
+) -> bool {
+    let normalized_update = normalized_status_copy(update);
+    if normalized_update.is_empty() {
+        return true;
+    }
+
+    if summary.is_some_and(|summary| summary_duplicates_issue(summary, update)) {
+        return true;
+    }
+
+    summary_duplicates_issue(update, issue)
+}
+
+pub(super) fn push_overall_caveat(lines: &mut Vec<Line<'static>>, note: &str, body_width: usize) {
+    let _ = body_width;
+    lines.push(Line::from(vec![
+        Span::styled("  Note: ", status_field_label_style()),
+        Span::styled(note.to_string(), Style::default().fg(Color::DarkGray)),
+    ]));
+}
+
+pub(super) fn push_panel_empty_state(
+    lines: &mut Vec<Line<'static>>,
+    title: &str,
+    description: &str,
+) {
+    lines.push(Line::from(Span::styled(
+        title.to_string(),
+        Style::default().fg(Color::Green),
+    )));
+    lines.push(Line::from(Span::styled(
+        description.to_string(),
+        Style::default().fg(Color::DarkGray),
+    )));
 }
 
 pub(in crate::tui) fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App) {
@@ -497,7 +551,7 @@ pub(in crate::tui) fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App)
     let detail_area = chunks[1];
 
     if status_app.is_overall_selected() {
-        draw_overall_dashboard(
+        super::overall::draw_overall_dashboard(
             f,
             detail_area,
             status_app,
@@ -525,17 +579,18 @@ pub(in crate::tui) fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App)
         let maintenance_note =
             entry.detail_state_message(&entry.scheduled_maintenances_state, "Maintenance details");
         let maintenance_problem = entry.scheduled_maintenances_state.is_fetch_failed();
+        let provider_summary = entry.provider_summary_text().map(str::to_string);
         let caveat = service_note
             .clone()
             .or_else(|| incident_note.clone())
             .or_else(|| entry.user_visible_caveat().map(str::to_string));
         let confirmed_no_components = entry.confirmed_no_components();
         let confirmed_no_incidents = entry.confirmed_no_incidents();
-        let active_incidents = sorted_active_incidents(entry);
-        let components = sorted_components(entry, &active_incidents);
+        let active_incidents = super::detail::sorted_active_incidents(entry);
+        let components = super::detail::sorted_components(entry, &active_incidents);
         let is_detail_focused = status_app.focus == StatusFocus::Details;
 
-        draw_provider_status_detail(
+        super::detail::draw_provider_status_detail(
             f,
             detail_area,
             &display_name,
@@ -546,6 +601,7 @@ pub(in crate::tui) fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App)
             time_label,
             &time_value,
             &caveat,
+            &provider_summary,
             &service_note,
             &incident_note,
             &maintenance_note,
@@ -575,967 +631,6 @@ pub(in crate::tui) fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App)
                 .title(" Status "),
         );
         f.render_widget(paragraph, detail_area);
-    }
-}
-
-/// Sort active incidents by impact severity, then recency.
-fn sorted_active_incidents(
-    entry: &crate::status::ProviderStatus,
-) -> Vec<crate::status::ActiveIncident> {
-    let mut items: Vec<_> = entry.active_incidents().into_iter().cloned().collect();
-    items.sort_by(|a, b| {
-        let impact_rank = |impact: &str| -> u8 {
-            let impact = impact.to_lowercase();
-            if impact.contains("critical") || impact.contains("major") {
-                0
-            } else if impact.contains("minor") || impact.contains("partial") {
-                1
-            } else {
-                2
-            }
-        };
-        let ts = |raw: Option<&str>| {
-            raw.and_then(crate::agents::helpers::parse_date)
-                .map(|dt| dt.timestamp())
-                .unwrap_or(0)
-        };
-        impact_rank(&a.impact)
-            .cmp(&impact_rank(&b.impact))
-            .then_with(|| {
-                ts(b.updated_at.as_deref().or(b.created_at.as_deref()))
-                    .cmp(&ts(a.updated_at.as_deref().or(a.created_at.as_deref())))
-            })
-    });
-    items
-}
-
-/// Sort components by severity, then alphabetically.
-fn sorted_components<'a>(
-    entry: &'a crate::status::ProviderStatus,
-    active_incidents: &[crate::status::ActiveIncident],
-) -> Vec<&'a crate::status::ComponentStatus> {
-    if !entry.component_detail_available() {
-        return Vec::new();
-    }
-    let mut component_incident_map: std::collections::HashSet<&str> =
-        std::collections::HashSet::new();
-    for incident in active_incidents {
-        for component in &incident.affected_components {
-            component_incident_map.insert(component.as_str());
-        }
-    }
-    for maint in &entry.scheduled_maintenances {
-        for component in &maint.affected_components {
-            component_incident_map.insert(component.as_str());
-        }
-    }
-    let mut components: Vec<_> = entry.components.iter().collect();
-    components.sort_by(|a, b| {
-        let severity = |status: &str| -> u8 {
-            match component_status_icon(status) {
-                "✗" => 0,
-                "◐" => 1,
-                "◆" => 2,
-                "●" => 3,
-                _ => 4,
-            }
-        };
-        severity(&a.status)
-            .cmp(&severity(&b.status))
-            .then_with(|| translate_component_name(&a.name).cmp(&translate_component_name(&b.name)))
-    });
-    components
-}
-
-// ── Overall Dashboard ──────────────────────────────────────────────────
-
-fn format_relative_time_from_instant(instant: std::time::Instant) -> String {
-    let elapsed = instant.elapsed();
-    let secs = elapsed.as_secs();
-
-    match secs {
-        0..=4 => "just now".to_string(),
-        5..=59 => format!("{secs}s ago"),
-        60..=3599 => format!("{}m ago", secs / 60),
-        3600..=86_399 => format!("{}h ago", secs / 3600),
-        _ => format!("{}d ago", secs / 86_400),
-    }
-}
-
-fn overall_freshness_suffix(status_app: &super::app::StatusApp) -> String {
-    if status_app.loading {
-        return "Refreshing…".to_string();
-    }
-
-    let freshness = status_app
-        .last_refreshed
-        .map(format_relative_time_from_instant)
-        .map(|value| format!("Updated {value}"))
-        .unwrap_or_else(|| "Waiting for refresh".to_string());
-
-    if status_app.last_error.is_some() {
-        format!("{freshness} · Last refresh failed")
-    } else {
-        freshness
-    }
-}
-
-fn normalized_status_copy(text: &str) -> String {
-    text.chars()
-        .filter(|ch| ch.is_ascii_alphanumeric() || ch.is_ascii_whitespace())
-        .collect::<String>()
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .to_lowercase()
-}
-
-fn summary_duplicates_issue(summary: &str, issue: &str) -> bool {
-    let normalized_summary = normalized_status_copy(summary);
-    let normalized_issue = normalized_status_copy(issue);
-
-    !normalized_summary.is_empty() && normalized_summary == normalized_issue
-}
-
-fn update_duplicates_summary_or_issue(update: &str, summary: Option<&str>, issue: &str) -> bool {
-    let normalized_update = normalized_status_copy(update);
-    if normalized_update.is_empty() {
-        return true;
-    }
-
-    if summary.is_some_and(|summary| summary_duplicates_issue(summary, update)) {
-        return true;
-    }
-
-    summary_duplicates_issue(update, issue)
-}
-
-fn push_overall_caveat(lines: &mut Vec<Line<'static>>, note: &str, body_width: usize) {
-    let _ = body_width;
-    lines.push(Line::from(vec![
-        Span::styled("  Note: ", status_field_label_style()),
-        Span::styled(note.to_string(), Style::default().fg(Color::DarkGray)),
-    ]));
-}
-
-fn push_panel_empty_state(lines: &mut Vec<Line<'static>>, title: &str, description: &str) {
-    lines.push(Line::from(Span::styled(
-        title.to_string(),
-        Style::default().fg(Color::Green),
-    )));
-    lines.push(Line::from(Span::styled(
-        description.to_string(),
-        Style::default().fg(Color::DarkGray),
-    )));
-}
-
-fn build_incidents_panel_cards(
-    entries: &[&crate::status::ProviderStatus],
-    body_width: usize,
-) -> Vec<SoftCard> {
-    let mut cards = Vec::new();
-
-    for entry in entries.iter() {
-        let incidents = entry.active_incidents();
-        let non_op_components = overall_attention_components(entry);
-        let incident = incidents[0];
-        let summary = entry.provider_summary_text();
-
-        let mut card_lines = Vec::new();
-
-        card_lines.push(Line::from(vec![
-            Span::styled(
-                status_health_icon(entry.health),
-                status_health_style(entry.health),
-            ),
-            Span::raw(" "),
-            Span::styled(
-                entry.display_name.clone(),
-                Style::default().add_modifier(Modifier::BOLD),
-            ),
-        ]));
-
-        card_lines.push(Line::from(vec![
-            Span::styled("  Issue: ", status_field_label_style()),
-            Span::styled(
-                incident.name.clone(),
-                Style::default().add_modifier(Modifier::BOLD),
-            ),
-        ]));
-
-        let mut metadata_spans = vec![Span::raw("  ")];
-        metadata_spans.push(Span::styled("Status: ", status_field_label_style()));
-        metadata_spans.push(Span::styled(
-            incident_status_value(incident),
-            incident_stage_style(&incident.status),
-        ));
-
-        let impact_lower = incident.impact.to_lowercase();
-        if !impact_lower.is_empty() && impact_lower != "none" {
-            metadata_spans.push(Span::raw("  "));
-            metadata_spans.push(Span::styled("Impact: ", status_field_label_style()));
-            metadata_spans.push(Span::styled(
-                incident.impact.clone(),
-                incident_impact_style(&incident.impact),
-            ));
-        }
-
-        if let Some((label, value)) = incident_time_value(entry, incident) {
-            metadata_spans.push(Span::raw("  "));
-            metadata_spans.push(Span::styled(
-                format!("{label}: "),
-                status_field_label_style(),
-            ));
-            metadata_spans.push(Span::styled(value, Style::default().fg(Color::Cyan)));
-        }
-        card_lines.push(Line::from(metadata_spans));
-
-        if incidents.len() > 1 {
-            card_lines.push(Line::from(vec![
-                Span::styled("  Additional incidents: ", status_field_label_style()),
-                Span::styled(
-                    format!("{} more", incidents.len() - 1),
-                    Style::default().fg(Color::DarkGray),
-                ),
-            ]));
-        }
-
-        if !non_op_components.is_empty() {
-            push_component_scope_lines(&mut card_lines, &non_op_components, 4);
-        } else if !incident.affected_components.is_empty() {
-            push_plain_scope_lines(
-                &mut card_lines,
-                "Affected",
-                &incident.affected_components,
-                4,
-            );
-        }
-
-        if let Some(update) = &incident.latest_update {
-            if !update_duplicates_summary_or_issue(&update.body, summary, &incident.name) {
-                card_lines.push(Line::from(Span::styled(
-                    "  Latest Update",
-                    status_section_label_style(),
-                )));
-                push_wrapped_bullet_lines(
-                    &mut card_lines,
-                    &update.body,
-                    body_width,
-                    "    - ",
-                    "      ",
-                );
-            }
-        }
-
-        if let Some(note) = entry.user_visible_caveat() {
-            push_overall_caveat(&mut card_lines, note, body_width);
-        }
-
-        cards.push(SoftCard::new(entry.health, card_lines));
-    }
-
-    cards
-}
-
-fn build_degradation_panel_cards(
-    entries: &[&crate::status::ProviderStatus],
-    body_width: usize,
-) -> Vec<SoftCard> {
-    let mut cards = Vec::new();
-
-    for entry in entries.iter() {
-        let non_op_components = overall_attention_components(entry);
-
-        let mut card_lines = Vec::new();
-
-        card_lines.push(Line::from(vec![
-            Span::styled(
-                status_health_icon(entry.health),
-                status_health_style(entry.health),
-            ),
-            Span::raw(" "),
-            Span::styled(
-                entry.display_name.clone(),
-                Style::default().add_modifier(Modifier::BOLD),
-            ),
-        ]));
-
-        if let Some(summary) = entry.provider_summary_text() {
-            card_lines.push(Line::from(vec![
-                Span::styled("  Summary: ", status_field_label_style()),
-                Span::raw(summary.to_string()),
-            ]));
-        }
-
-        card_lines.push(Line::from(vec![
-            Span::styled("  Scope: ", status_field_label_style()),
-            Span::styled(
-                component_only_scope_title(&non_op_components),
-                Style::default().add_modifier(Modifier::BOLD),
-            ),
-        ]));
-        card_lines.push(Line::from(vec![
-            Span::styled("  Status: ", status_field_label_style()),
-            Span::styled(
-                provider_health_label(entry.health),
-                status_health_style(entry.health),
-            ),
-            Span::raw("  "),
-            Span::styled("Updated: ", status_field_label_style()),
-            Span::styled(
-                provider_last_meaningful_update(entry)
-                    .map(|(_, value)| value)
-                    .unwrap_or_else(|| "recently updated".to_string()),
-                Style::default().fg(Color::Cyan),
-            ),
-        ]));
-        push_component_scope_lines(&mut card_lines, &non_op_components, 4);
-
-        if let Some(note) = entry.user_visible_caveat() {
-            push_overall_caveat(&mut card_lines, note, body_width);
-        }
-
-        cards.push(SoftCard::new(entry.health, card_lines));
-    }
-
-    cards
-}
-
-fn build_maintenance_panel_cards(
-    items: &[(&str, &crate::status::ScheduledMaintenance)],
-) -> Vec<SoftCard> {
-    let mut cards = Vec::new();
-
-    for (provider_name, maint) in items.iter() {
-        let mut card_lines = Vec::new();
-
-        card_lines.push(Line::from(vec![
-            Span::styled("◆", Style::default().fg(Color::Blue)),
-            Span::raw(" "),
-            Span::styled(
-                provider_name.to_string(),
-                Style::default().add_modifier(Modifier::BOLD),
-            ),
-        ]));
-        card_lines.push(Line::from(vec![
-            Span::styled("  Window: ", status_field_label_style()),
-            Span::styled(
-                maint.name.clone(),
-                Style::default().add_modifier(Modifier::BOLD),
-            ),
-        ]));
-
-        let mut bits = vec![Span::styled("  Status: ", status_field_label_style())];
-        bits.push(Span::styled(
-            maint.status.replace('_', " "),
-            component_status_style(&maint.status),
-        ));
-        if let Some(start) = maint.scheduled_for.as_deref() {
-            bits.push(Span::raw("  "));
-            bits.push(Span::styled("Scheduled: ", status_field_label_style()));
-            bits.push(Span::styled(
-                format_relative_time_from_str(start),
-                Style::default().fg(Color::Cyan),
-            ));
-        }
-        card_lines.push(Line::from(bits));
-
-        if !maint.affected_components.is_empty() {
-            push_plain_scope_lines(&mut card_lines, "Affected", &maint.affected_components, 3);
-        }
-
-        cards.push(SoftCard::new(ProviderHealth::Maintenance, card_lines));
-    }
-
-    cards
-}
-
-fn incidents_empty_lines() -> Vec<Line<'static>> {
-    let mut lines = Vec::new();
-    push_panel_empty_state(
-        &mut lines,
-        "No active incidents reported right now",
-        "Tracked providers are not currently publishing formal incident rows.",
-    );
-    lines
-}
-
-fn degradation_empty_lines() -> Vec<Line<'static>> {
-    let mut lines = Vec::new();
-    push_panel_empty_state(
-        &mut lines,
-        "No component-reported degradation right now",
-        "Tracked providers are not currently reporting degraded services without incident rows.",
-    );
-    lines
-}
-
-fn render_overall_panel(
-    f: &mut Frame,
-    area: Rect,
-    title: &str,
-    cards: Vec<SoftCard>,
-    empty_lines: Vec<Line<'static>>,
-    scroll: &ScrollOffset,
-    focused: bool,
-) {
-    if cards.is_empty() {
-        ScrollablePanel::new(title, empty_lines, scroll, focused).render(f, area);
-    } else {
-        ScrollablePanel::with_cards(title, cards, scroll, focused).render(f, area);
-    }
-}
-
-fn draw_overall_dashboard(
-    f: &mut Frame,
-    area: Rect,
-    status_app: &super::app::StatusApp,
-    is_focused: bool,
-) {
-    let (op, _deg, out, other) = status_app.health_counts();
-    let total = status_app.entries.len();
-    let attention_entries = overall_attention_entries(status_app);
-    let incident_entries: Vec<_> = attention_entries
-        .iter()
-        .copied()
-        .filter(|entry| !entry.active_incidents().is_empty())
-        .collect();
-    let component_entries: Vec<_> = attention_entries
-        .iter()
-        .copied()
-        .filter(|entry| entry.active_incidents().is_empty())
-        .collect();
-    let all_maint = status_app.all_maintenances();
-    let maintenance_visible = !all_maint.is_empty();
-    let rows = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Length(4), Constraint::Min(0)])
-        .split(area);
-
-    {
-        let ratio = if total > 0 {
-            op as f64 / total as f64
-        } else {
-            0.0
-        };
-
-        let freshness_suffix = overall_freshness_suffix(status_app);
-        let title = format!(" Overall Status · {freshness_suffix} ");
-
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::White))
-            .title(title);
-        let inner = block.inner(rows[0]);
-        f.render_widget(block, rows[0]);
-
-        let inner_chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Length(1), Constraint::Length(1)])
-            .split(inner);
-
-        let gauge = Gauge::default()
-            .gauge_style(Style::default().fg(Color::Green).bg(Color::DarkGray))
-            .ratio(ratio)
-            .label(format!("{op}/{total}  {:.0}%", ratio * 100.0));
-        f.render_widget(gauge, inner_chunks[0]);
-
-        let mut summary_spans = vec![
-            Span::styled("● ", Style::default().fg(Color::Green)),
-            Span::raw(format!("{op} operational  ")),
-        ];
-        if !incident_entries.is_empty() {
-            summary_spans.push(Span::styled("◐ ", Style::default().fg(Color::Yellow)));
-            summary_spans.push(Span::raw(format!(
-                "{} active incident{}  ",
-                incident_entries.len(),
-                if incident_entries.len() == 1 { "" } else { "s" }
-            )));
-        }
-        if !component_entries.is_empty() {
-            summary_spans.push(Span::styled("◐ ", Style::default().fg(Color::Yellow)));
-            summary_spans.push(Span::raw(format!(
-                "{} service degradation{}  ",
-                component_entries.len(),
-                if component_entries.len() == 1 { "" } else { "s" }
-            )));
-        }
-        if out > 0 {
-            summary_spans.push(Span::styled("✗ ", Style::default().fg(Color::Red)));
-            summary_spans.push(Span::raw(format!("{out} outage  ")));
-        }
-        if other > 0 {
-            summary_spans.push(Span::styled("? ", Style::default().fg(Color::DarkGray)));
-            summary_spans.push(Span::raw(format!("{other} other  ")));
-        }
-        f.render_widget(Paragraph::new(Line::from(summary_spans)), inner_chunks[1]);
-    }
-
-    let board_area = rows[1];
-    let stacked_layout = board_area.width < 100;
-
-    if stacked_layout {
-        let mut constraints = vec![Constraint::Percentage(55), Constraint::Percentage(45)];
-        if maintenance_visible {
-            constraints = vec![
-                Constraint::Percentage(42),
-                Constraint::Percentage(34),
-                Constraint::Percentage(24),
-            ];
-        }
-        let panels = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints(constraints)
-            .split(board_area);
-
-        let incident_cards = build_incidents_panel_cards(
-            &incident_entries,
-            usize::from(panels[0].width.saturating_sub(4)).max(24),
-        );
-        render_overall_panel(
-            f,
-            panels[0],
-            &format!("Active Incidents ({})", incident_entries.len()),
-            incident_cards,
-            incidents_empty_lines(),
-            &status_app.overall_incidents_scroll,
-            is_focused
-                && status_app.overall_panel_focus == super::app::OverallPanelFocus::Incidents,
-        );
-
-        let degradation_cards = build_degradation_panel_cards(
-            &component_entries,
-            usize::from(panels[1].width.saturating_sub(4)).max(24),
-        );
-        render_overall_panel(
-            f,
-            panels[1],
-            &format!("Service Degradation ({})", component_entries.len()),
-            degradation_cards,
-            degradation_empty_lines(),
-            &status_app.overall_degradation_scroll,
-            is_focused
-                && status_app.overall_panel_focus == super::app::OverallPanelFocus::Degradation,
-        );
-
-        if maintenance_visible {
-            let maintenance_cards = build_maintenance_panel_cards(&all_maint);
-            render_overall_panel(
-                f,
-                panels[2],
-                &format!("Maintenance Outlook ({})", all_maint.len()),
-                maintenance_cards,
-                Vec::new(),
-                &status_app.overall_maintenance_scroll,
-                is_focused
-                    && status_app.overall_panel_focus == super::app::OverallPanelFocus::Maintenance,
-            );
-        }
-    } else {
-        let columns = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
-            .split(board_area);
-        let right_panels = if maintenance_visible {
-            Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
-                .split(columns[1])
-        } else {
-            Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([Constraint::Min(0)])
-                .split(columns[1])
-        };
-
-        let incident_cards = build_incidents_panel_cards(
-            &incident_entries,
-            usize::from(columns[0].width.saturating_sub(4)).max(24),
-        );
-        render_overall_panel(
-            f,
-            columns[0],
-            &format!("Active Incidents ({})", incident_entries.len()),
-            incident_cards,
-            incidents_empty_lines(),
-            &status_app.overall_incidents_scroll,
-            is_focused
-                && status_app.overall_panel_focus == super::app::OverallPanelFocus::Incidents,
-        );
-
-        let degradation_cards = build_degradation_panel_cards(
-            &component_entries,
-            usize::from(right_panels[0].width.saturating_sub(4)).max(24),
-        );
-        render_overall_panel(
-            f,
-            right_panels[0],
-            &format!("Service Degradation ({})", component_entries.len()),
-            degradation_cards,
-            degradation_empty_lines(),
-            &status_app.overall_degradation_scroll,
-            is_focused
-                && status_app.overall_panel_focus == super::app::OverallPanelFocus::Degradation,
-        );
-
-        if maintenance_visible {
-            let maintenance_cards = build_maintenance_panel_cards(&all_maint);
-            render_overall_panel(
-                f,
-                right_panels[1],
-                &format!("Maintenance Outlook ({})", all_maint.len()),
-                maintenance_cards,
-                Vec::new(),
-                &status_app.overall_maintenance_scroll,
-                is_focused
-                    && status_app.overall_panel_focus == super::app::OverallPanelFocus::Maintenance,
-            );
-        }
-    }
-}
-
-// ── Individual Provider Detail (4 subpanels) ───────────────────────────
-
-#[allow(clippy::too_many_arguments)]
-fn draw_provider_status_detail(
-    f: &mut Frame,
-    area: Rect,
-    display_name: &str,
-    health: ProviderHealth,
-    provenance: StatusProvenance,
-    error_msg: &Option<String>,
-    source_display: &str,
-    time_label: &str,
-    time_value: &str,
-    caveat: &Option<String>,
-    service_note: &Option<String>,
-    incident_note: &Option<String>,
-    maintenance_note: &Option<String>,
-    confirmed_no_components: bool,
-    confirmed_no_incidents: bool,
-    maintenance_problem: bool,
-    active_incidents: &[crate::status::ActiveIncident],
-    components: &[&crate::status::ComponentStatus],
-    scheduled_maintenances: &[crate::status::ScheduledMaintenance],
-    detail_scroll: &ScrollOffset,
-    is_focused: bool,
-) {
-    let dark_border = Style::default().fg(Color::DarkGray);
-
-    // Compute dynamic subpanel heights
-    // Base: 4 content lines (name, verdict, issue_summary, source) + 2 borders = 6
-    let mut status_h: u16 = 6;
-    if caveat.is_some() || provenance == StatusProvenance::Unavailable {
-        status_h += 1;
-    }
-    if error_msg.is_some() {
-        status_h += 1;
-    }
-
-    let has_components =
-        !components.is_empty() || service_note.is_some() || confirmed_no_components;
-    // Count non-operational components for the services panel
-    let non_op_comp_count = components
-        .iter()
-        .filter(|c| {
-            let s = c.status.to_lowercase();
-            !s.contains("operational") && s != "unknown" && !s.is_empty()
-        })
-        .count();
-    let healthy_comp_count = components.len() - non_op_comp_count;
-    // Service rows: one per non-operational component + optional summary line
-    let service_rows = if has_components {
-        let base = non_op_comp_count as u16;
-        let summary = if healthy_comp_count > 0 { 1u16 } else { 0 };
-        (base + summary).max(1) // at least 1 row
-    } else {
-        0
-    };
-
-    let has_maintenance = !scheduled_maintenances.is_empty() || maintenance_problem;
-    let maint_lines = if has_maintenance {
-        if scheduled_maintenances.is_empty() {
-            1
-        } else {
-            (scheduled_maintenances.len() * 2) as u16
-        }
-    } else {
-        0
-    };
-
-    let mut constraints: Vec<Constraint> = vec![Constraint::Length(status_h)];
-    if has_components {
-        constraints.push(Constraint::Length(service_rows + 2)); // rows + borders
-    }
-    constraints.push(Constraint::Min(0)); // Incidents (scrollable)
-    if has_maintenance {
-        constraints.push(Constraint::Length(maint_lines + 2)); // lines + borders
-    }
-
-    let panel_chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints(constraints)
-        .split(area);
-
-    let mut chunk_idx = 0;
-
-    // ── Status header ──────────────────────────────────────────
-    {
-        let status_area = panel_chunks[chunk_idx];
-        chunk_idx += 1;
-
-        let issue_summary = match (
-            incident_note.as_deref(),
-            active_incidents.len(),
-            scheduled_maintenances.len(),
-        ) {
-            (Some(note), 0, 0) => note.to_string(),
-            (Some(note), 0, maintenance) => format!(
-                "{note} • {maintenance} maintenance item{}",
-                if maintenance == 1 { "" } else { "s" }
-            ),
-            (None, 0, 0) => "0 active incidents".to_string(),
-            (None, incidents, 0) => format!(
-                "{incidents} active incident{}",
-                if incidents == 1 { "" } else { "s" }
-            ),
-            (None, 0, maintenance) => format!(
-                "0 active incidents • {maintenance} maintenance item{}",
-                if maintenance == 1 { "" } else { "s" }
-            ),
-            (None, incidents, maintenance) => format!(
-                "{incidents} active incident{} • {maintenance} maintenance item{}",
-                if incidents == 1 { "" } else { "s" },
-                if maintenance == 1 { "" } else { "s" },
-            ),
-            (Some(note), incidents, maintenance) => format!(
-                "{incidents} active incident{} • {maintenance} maintenance item{} • {note}",
-                if incidents == 1 { "" } else { "s" },
-                if maintenance == 1 { "" } else { "s" },
-            ),
-        };
-        let support_line = format!("Source: {source_display} • {time_label}: {time_value}");
-
-        let mut lines: Vec<Line<'static>> = vec![
-            Line::from(vec![
-                Span::styled(status_health_icon(health), status_health_style(health)),
-                Span::raw(" "),
-                Span::styled(
-                    display_name.to_string(),
-                    Style::default()
-                        .fg(Color::White)
-                        .add_modifier(Modifier::BOLD),
-                ),
-            ]),
-            Line::from(Span::styled(
-                status_verdict_copy(health),
-                status_health_style(health).add_modifier(Modifier::BOLD),
-            )),
-            Line::from(Span::styled(
-                issue_summary,
-                if active_incidents.is_empty() {
-                    Style::default().fg(Color::DarkGray)
-                } else {
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD)
-                },
-            )),
-            Line::from(Span::styled(
-                support_line,
-                Style::default().fg(Color::DarkGray),
-            )),
-        ];
-
-        // Optional caveat/notes line
-        if let Some(caveat_text) = caveat {
-            lines.push(Line::from(Span::styled(
-                caveat_text.clone(),
-                Style::default().fg(Color::Yellow),
-            )));
-        } else if provenance == StatusProvenance::Unavailable {
-            lines.push(Line::from(Span::styled(
-                "Status unavailable",
-                Style::default().fg(Color::Yellow),
-            )));
-        }
-        if let Some(err) = error_msg {
-            lines.push(Line::from(Span::styled(
-                err.clone(),
-                Style::default().fg(Color::Red),
-            )));
-        }
-
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(dark_border)
-            .title(" Status ");
-        f.render_widget(Paragraph::new(lines).block(block), status_area);
-    }
-
-    // ── Services (non-operational highlighted, healthy summarized) ─
-    if has_components {
-        let services_area = panel_chunks[chunk_idx];
-        chunk_idx += 1;
-
-        let mut lines: Vec<Line<'static>> = Vec::new();
-
-        if let Some(note) = service_note {
-            lines.push(Line::from(Span::styled(
-                note.clone(),
-                Style::default().fg(Color::DarkGray),
-            )));
-        } else if confirmed_no_components {
-            lines.push(Line::from(Span::styled(
-                "No service-level issues reported",
-                Style::default().fg(Color::DarkGray),
-            )));
-        } else {
-            for comp in components {
-                let s = comp.status.to_lowercase();
-                if s.contains("operational") || s == "unknown" || s.is_empty() {
-                    continue;
-                }
-                let name = translate_component_name(&comp.name);
-                lines.push(Line::from(vec![
-                    Span::styled(
-                        component_status_icon(&comp.status),
-                        component_status_style(&comp.status),
-                    ),
-                    Span::raw(" "),
-                    Span::styled(name, Style::default().add_modifier(Modifier::BOLD)),
-                    Span::styled(
-                        format!("  {}", comp.status.replace('_', " ")),
-                        Style::default().fg(Color::DarkGray),
-                    ),
-                ]));
-            }
-
-            if healthy_comp_count > 0 {
-                lines.push(Line::from(vec![
-                    Span::styled("●", Style::default().fg(Color::Green)),
-                    Span::raw(format!(
-                        " {} service{} operational",
-                        healthy_comp_count,
-                        if healthy_comp_count == 1 { "" } else { "s" }
-                    )),
-                ]));
-            }
-        }
-
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(dark_border)
-            .title(format!(" Services ({}) ", components.len()));
-        f.render_widget(Paragraph::new(lines).block(block), services_area);
-    }
-
-    // ── Current Incidents (scrollable, focusable) ──────────────
-    {
-        let incidents_area = panel_chunks[chunk_idx];
-        chunk_idx += 1;
-
-        let body_width = usize::from(incidents_area.width.saturating_sub(4)).max(24);
-        let title = format!("Current Incidents ({})", active_incidents.len());
-
-        if active_incidents.is_empty() {
-            let incident_empty_text = incident_note.clone().unwrap_or_else(|| {
-                if confirmed_no_incidents {
-                    "No active incidents".to_string()
-                } else {
-                    "Incident details unavailable".to_string()
-                }
-            });
-            let lines = vec![Line::from(Span::styled(
-                incident_empty_text,
-                Style::default().fg(Color::DarkGray),
-            ))];
-            ScrollablePanel::new(title, lines, detail_scroll, is_focused).render(f, incidents_area);
-        } else {
-            let mut cards = Vec::new();
-
-            for incident in active_incidents.iter() {
-                let accent_health = incident_stage_health(&incident.status);
-                let mut card_lines = Vec::new();
-
-                card_lines.push(Line::from(vec![
-                    Span::styled("◉ ", incident_stage_style(&incident.status)),
-                    Span::styled(
-                        incident.name.clone(),
-                        Style::default().add_modifier(Modifier::BOLD),
-                    ),
-                ]));
-                let mut detail_bits = vec![incident.status.clone()];
-                if let Some(updated_at) = incident
-                    .updated_at
-                    .as_deref()
-                    .or(incident.created_at.as_deref())
-                {
-                    detail_bits.push(format_relative_time_from_str(updated_at));
-                }
-                if !incident.affected_components.is_empty() {
-                    detail_bits.push(incident.affected_components.join(", "));
-                }
-                card_lines.push(Line::from(Span::styled(
-                    format!("  {}", detail_bits.join(" • ")),
-                    Style::default().fg(Color::DarkGray),
-                )));
-                if let Some(update) = &incident.latest_update {
-                    for line in textwrap::wrap(&update.body, body_width.saturating_sub(2))
-                        .iter()
-                        .take(3)
-                    {
-                        card_lines.push(Line::from(Span::raw(format!("  {line}"))));
-                    }
-                }
-
-                cards.push(SoftCard::new(accent_health, card_lines));
-            }
-
-            ScrollablePanel::with_cards(title, cards, detail_scroll, is_focused)
-                .render(f, incidents_area);
-        }
-    }
-
-    // ── Maintenance ────────────────────────────────────────────
-    if has_maintenance {
-        let maint_area = panel_chunks[chunk_idx];
-        let mut lines: Vec<Line<'static>> = Vec::new();
-        if maintenance_problem {
-            lines.push(Line::from(Span::styled(
-                maintenance_note
-                    .clone()
-                    .unwrap_or_else(|| "Maintenance details failed to load".to_string()),
-                Style::default().fg(Color::DarkGray),
-            )));
-        } else {
-            for maint in scheduled_maintenances {
-                lines.push(Line::from(vec![
-                    Span::styled("◆ ", Style::default().fg(Color::Blue)),
-                    Span::styled(
-                        maint.name.clone(),
-                        Style::default().add_modifier(Modifier::BOLD),
-                    ),
-                ]));
-                let mut maint_bits = vec![maint.status.clone()];
-                if let Some(start) = maint.scheduled_for.as_deref() {
-                    maint_bits.push(format_relative_time_from_str(start));
-                }
-                if !maint.affected_components.is_empty() {
-                    maint_bits.push(maint.affected_components.join(", "));
-                }
-                lines.push(Line::from(Span::styled(
-                    format!("  {}", maint_bits.join(" • ")),
-                    Style::default().fg(Color::DarkGray),
-                )));
-            }
-        }
-
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(dark_border)
-            .title(format!(" Maintenance ({}) ", scheduled_maintenances.len()));
-        f.render_widget(Paragraph::new(lines).block(block), maint_area);
     }
 }
 
