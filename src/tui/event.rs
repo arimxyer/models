@@ -363,11 +363,6 @@ fn resolve_status_nav(app: &App, action: NavAction) -> Option<Message> {
         .as_ref()
         .map(|a| a.focus)
         .unwrap_or(StatusFocus::List);
-    let overall_selected = app
-        .status_app
-        .as_ref()
-        .is_some_and(|s| s.is_overall_selected());
-
     match action {
         NavAction::Down => {
             if focus == StatusFocus::List {
@@ -412,14 +407,14 @@ fn resolve_status_nav(app: &App, action: NavAction) -> Option<Message> {
             }
         }
         NavAction::FocusLeft => {
-            if focus == StatusFocus::Details && overall_selected {
+            if focus == StatusFocus::Details {
                 Some(Message::PrevOverallStatusPanel)
             } else {
                 Some(Message::SwitchStatusFocus)
             }
         }
         NavAction::FocusRight => {
-            if focus == StatusFocus::Details && overall_selected {
+            if focus == StatusFocus::Details {
                 Some(Message::NextOverallStatusPanel)
             } else {
                 Some(Message::SwitchStatusFocus)
