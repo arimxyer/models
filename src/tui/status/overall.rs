@@ -122,15 +122,15 @@ fn build_incidents_panel_cards(
             ]));
         }
 
-        if !non_op_components.is_empty() {
-            push_component_scope_lines(&mut card_lines, &non_op_components, 4);
-        } else if !incident.affected_components.is_empty() {
+        if !incident.affected_components.is_empty() {
             push_plain_scope_lines(
                 &mut card_lines,
                 "Affected",
                 &incident.affected_components,
                 4,
             );
+        } else if !non_op_components.is_empty() {
+            push_component_scope_lines(&mut card_lines, &non_op_components, 4);
         }
 
         if let Some(update) = &incident.latest_update {

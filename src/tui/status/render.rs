@@ -901,8 +901,8 @@ mod tests {
         assert!(rendered.contains("Updated just now"));
         assert!(rendered.contains("Elevated API errors"));
         assert!(rendered.contains("investigating"));
-        assert!(rendered.contains("Services"));
-        assert!(rendered.contains("API (partial outage)"));
+        assert!(rendered.contains("Affected"));
+        assert!(rendered.contains("API"));
         assert!(rendered.contains("Update"));
         assert!(!rendered.contains("Signal Quality"));
         assert!(!rendered.contains("Active Issues"));
