@@ -33,6 +33,11 @@ pub static AGENT_SERVICE_MAPPINGS: &[AgentServiceMapping] = &[
         provider_slug: "moonshot",
         component_name: None,
     },
+    AgentServiceMapping {
+        agent_id: "zed",
+        provider_slug: "zed",
+        component_name: None,
+    },
 ];
 
 pub fn service_mapping_for_agent(agent_id: &str) -> Option<&'static AgentServiceMapping> {
