@@ -375,7 +375,7 @@ impl StatusApp {
 
     fn visible_detail_panels(&self) -> Vec<DetailPanelFocus> {
         let mut panels = Vec::new();
-        if self.detail_has_services() && self.services_expanded {
+        if self.detail_has_services() {
             panels.push(DetailPanelFocus::Services);
         }
         panels.push(DetailPanelFocus::Incidents);
