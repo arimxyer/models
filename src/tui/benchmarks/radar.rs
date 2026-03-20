@@ -7,12 +7,12 @@ use ratatui::{
     text::Span,
     widgets::{
         canvas::{Canvas, Line as CanvasLine},
-        Block, Borders, Cell, Row, Table,
+        Block, Borders,
     },
     Frame,
 };
 
-use super::benchmarks_app::RadarPreset;
+use super::app::RadarPreset;
 use crate::benchmarks::BenchmarkEntry;
 
 /// Compute N spoke angles starting at top (-PI/2), going clockwise.
@@ -148,7 +148,7 @@ pub fn axes_for_preset(preset: RadarPreset) -> Vec<RadarAxis> {
 }
 
 /// Draw the radar chart in the given area.
-pub fn draw_radar(f: &mut Frame, area: Rect, app: &super::app::App) {
+pub fn draw_radar(f: &mut Frame, area: Rect, app: &crate::tui::app::App) {
     let axes = axes_for_preset(app.benchmarks_app.radar_preset);
     let preset_label = app.benchmarks_app.radar_preset.label();
 
@@ -217,7 +217,7 @@ pub fn draw_radar(f: &mut Frame, area: Rect, app: &super::app::App) {
 
     for (sel_idx, &store_idx) in app.selections.iter().enumerate() {
         if let Some(entry) = entries.get(store_idx) {
-            let color = super::ui::compare_colors(sel_idx);
+            let color = super::render::compare_colors(sel_idx);
 
             let raw_values: Vec<Option<f64>> = axes.iter().map(|ax| (ax.extract)(entry)).collect();
 
@@ -289,8 +289,7 @@ pub fn draw_radar(f: &mut Frame, area: Rect, app: &super::app::App) {
 
     // avg_raw_values used in legend table below
 
-    let compare_focused =
-        app.benchmarks_app.focus == super::benchmarks_app::BenchmarkFocus::Compare;
+    let compare_focused = app.benchmarks_app.focus == super::app::BenchmarkFocus::Compare;
     let radar_border = if compare_focused {
         Color::Cyan
     } else {
@@ -377,6 +376,8 @@ pub fn draw_radar(f: &mut Frame, area: Rect, app: &super::app::App) {
 
     // Legend table below the radar chart
     if let Some(leg_area) = legend_area {
+        use crate::tui::widgets::comparison_legend::{ComparisonLegend, LegendEntry, LegendMetric};
+
         let fmt_axis_val = |v: Option<f64>, key: &str| -> String {
             match v {
                 Some(val) if key.ends_with("_index") => format!("{:.1}", val),
@@ -385,58 +386,46 @@ pub fn draw_radar(f: &mut Frame, area: Rect, app: &super::app::App) {
             }
         };
 
-        let mut rows: Vec<Row> = legend_entries
+        let mut entries: Vec<LegendEntry> = legend_entries
             .iter()
             .map(|(name, color, raw_vals)| {
-                let mut cells = vec![
-                    Cell::from(Span::styled("\u{25cf} ", Style::default().fg(*color))),
-                    Cell::from(Span::styled(name.clone(), Style::default().fg(*color))),
-                ];
-                for (i, ax) in axes.iter().enumerate() {
-                    cells.push(Cell::from(Span::styled(
-                        format!("{}: ", ax.short),
-                        Style::default().fg(Color::DarkGray),
-                    )));
-                    cells.push(Cell::from(Span::styled(
-                        fmt_axis_val(raw_vals.get(i).copied().flatten(), ax.key),
-                        Style::default().fg(Color::White),
-                    )));
-                }
-                Row::new(cells)
+                let metrics: Vec<LegendMetric> = axes
+                    .iter()
+                    .enumerate()
+                    .map(|(i, ax)| {
+                        LegendMetric::new(
+                            ax.short.to_string(),
+                            fmt_axis_val(raw_vals.get(i).copied().flatten(), ax.key),
+                        )
+                    })
+                    .collect();
+                LegendEntry::new(name.clone(), *color).metrics(metrics)
             })
             .collect();
 
         // Average row
-        let avg_color = Color::Indexed(250); // light gray, distinct from model colors
-        let mut avg_cells = vec![
-            Cell::from(Span::styled("\u{2505} ", Style::default().fg(avg_color))),
-            Cell::from(Span::styled("Avg", Style::default().fg(avg_color))),
-        ];
-        for (i, ax) in axes.iter().enumerate() {
-            avg_cells.push(Cell::from(Span::styled(
-                format!("{}: ", ax.short),
-                Style::default().fg(Color::DarkGray),
-            )));
-            avg_cells.push(Cell::from(Span::styled(
-                fmt_axis_val(Some(avg_raw_values[i]), ax.key),
-                Style::default().fg(avg_color),
-            )));
-        }
-        rows.push(Row::new(avg_cells));
+        let avg_color = Color::Indexed(250);
+        let avg_style = Style::default().fg(avg_color);
+        let avg_metrics: Vec<LegendMetric> = axes
+            .iter()
+            .enumerate()
+            .map(|(i, ax)| {
+                LegendMetric::new(
+                    ax.short.to_string(),
+                    fmt_axis_val(Some(avg_raw_values[i]), ax.key),
+                )
+                .value_style(avg_style)
+            })
+            .collect();
+        entries.push(
+            LegendEntry::new("Avg", avg_color)
+                .marker("\u{2505} ")
+                .metrics(avg_metrics),
+        );
 
-        // Widths: marker(2) + name(fill) + (short_label + value) per axis
-        let mut widths: Vec<Constraint> = vec![Constraint::Length(2), Constraint::Fill(1)];
-        for ax in &axes {
-            widths.push(Constraint::Length((ax.short.len() + 2) as u16));
-            widths.push(Constraint::Length(6));
-        }
-
-        let legend_block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::DarkGray))
-            .title(" Legend ");
-        let table = Table::new(rows, widths).block(legend_block);
-        f.render_widget(table, leg_area);
+        ComparisonLegend::new(entries)
+            .value_width(6)
+            .render(f, leg_area);
     }
 }
 

@@ -1,11 +1,10 @@
-use std::{collections::HashMap, io, time::Duration};
+use std::{collections::HashMap, time::Duration};
 
 use anyhow::{bail, Result};
 use clap::{CommandFactory, Parser, ValueEnum};
 use comfy_table::{presets::UTF8_FULL_CONDENSED, Table as ComfyTable};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
-    backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::Line,
@@ -13,12 +12,17 @@ use ratatui::{
         Block, Borders, Cell as TuiCell, HighlightSpacing, Paragraph, Row as TuiRow,
         Table as TuiTable, TableState, Wrap,
     },
-    Frame, Terminal, TerminalOptions, Viewport,
+    Frame,
 };
 use serde::Serialize;
 
-use crate::benchmark_fetch::{BenchmarkFetchResult, BenchmarkFetcher};
-use crate::benchmarks::{BenchmarkEntry, BenchmarkStore, ReasoningFilter, ReasoningStatus};
+use super::picker::{self, PickerTerminal};
+
+use crate::benchmarks::{
+    BenchmarkEntry, BenchmarkFetchResult, BenchmarkFetcher, BenchmarkStore, ReasoningFilter,
+    ReasoningStatus,
+};
+use crate::formatting::{cmp_opt_f64, parse_date_to_numeric, truncate};
 
 #[derive(Parser, Debug)]
 #[command(name = "benchmarks")]
@@ -251,7 +255,6 @@ enum ResolveEntry<'a> {
     Ambiguous(Vec<&'a BenchmarkEntry>),
 }
 
-const PICKER_VIEWPORT_HEIGHT: u16 = 14;
 const PICKER_SORTS: [BenchmarkSort; 9] = [
     BenchmarkSort::Intelligence,
     BenchmarkSort::Coding,
@@ -304,45 +307,27 @@ impl<'a> BenchmarkPicker<'a> {
     }
 
     fn next(&mut self) {
-        let Some(current) = self.state.selected() else {
-            return;
-        };
-        let last = self.visible_entries.len().saturating_sub(1);
-        self.state.select(Some((current + 1).min(last)));
+        picker::nav_next(&mut self.state, self.visible_entries.len());
     }
 
     fn previous(&mut self) {
-        let Some(current) = self.state.selected() else {
-            return;
-        };
-        self.state.select(Some(current.saturating_sub(1)));
+        picker::nav_previous(&mut self.state);
     }
 
     fn first(&mut self) {
-        if !self.visible_entries.is_empty() {
-            self.state.select(Some(0));
-        }
+        picker::nav_first(&mut self.state, self.visible_entries.len());
     }
 
     fn last(&mut self) {
-        if !self.visible_entries.is_empty() {
-            self.state.select(Some(self.visible_entries.len() - 1));
-        }
+        picker::nav_last(&mut self.state, self.visible_entries.len());
     }
 
     fn page_down(&mut self) {
-        let Some(current) = self.state.selected() else {
-            return;
-        };
-        let last = self.visible_entries.len().saturating_sub(1);
-        self.state.select(Some((current + 10).min(last)));
+        picker::nav_page_down(&mut self.state, self.visible_entries.len(), 10);
     }
 
     fn page_up(&mut self) {
-        let Some(current) = self.state.selected() else {
-            return;
-        };
-        self.state.select(Some(current.saturating_sub(10)));
+        picker::nav_page_up(&mut self.state, 10);
     }
 
     fn cycle_sort(&mut self) {
@@ -406,9 +391,6 @@ impl<'a> BenchmarkPicker<'a> {
             .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(55), Constraint::Percentage(45)])
             .split(outer[0]);
-        let header_style = Style::default()
-            .fg(Color::Cyan)
-            .add_modifier(Modifier::BOLD);
         let rows = self.visible_entries.iter().map(|entry| {
             use ratatui::text::Span;
 
@@ -427,8 +409,8 @@ impl<'a> BenchmarkPicker<'a> {
                 None => TuiCell::from(""),
             };
             TuiRow::new(vec![
-                TuiCell::from(truncate_picker_text(&entry.display_name, 28)),
-                TuiCell::from(truncate_picker_text(creator_label(entry), 14)),
+                TuiCell::from(truncate(&entry.display_name, 28)),
+                TuiCell::from(truncate(creator_label(entry), 14)),
                 TuiCell::from(
                     entry
                         .release_date
@@ -450,19 +432,17 @@ impl<'a> BenchmarkPicker<'a> {
                 Constraint::Length(3),
             ],
         )
-        .header(TuiRow::new(vec!["Name", "Creator", "Release", "R", "S"]).style(header_style))
-        .column_spacing(1)
-        .highlight_symbol(">> ")
-        .highlight_spacing(HighlightSpacing::Always)
-        .row_highlight_style(
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD),
+        .header(
+            TuiRow::new(vec!["Name", "Creator", "Release", "R", "S"]).style(picker::HEADER_STYLE),
         )
+        .column_spacing(1)
+        .highlight_symbol(picker::HIGHLIGHT_SYMBOL)
+        .highlight_spacing(HighlightSpacing::Always)
+        .row_highlight_style(picker::ROW_HIGHLIGHT_STYLE)
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Cyan))
+                .border_style(picker::ACTIVE_BORDER_STYLE)
                 .title(self.title_text()),
         );
 
@@ -472,7 +452,7 @@ impl<'a> BenchmarkPicker<'a> {
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::DarkGray))
+                    .border_style(picker::PREVIEW_BORDER_STYLE)
                     .title(" Preview "),
             )
             .wrap(Wrap { trim: false });
@@ -483,33 +463,14 @@ impl<'a> BenchmarkPicker<'a> {
     }
 
     fn title_text(&self) -> String {
-        let results = if self.query.is_empty() {
-            format!("{} results", self.visible_entries.len())
-        } else {
-            format!(
-                "{} / {} results",
-                self.visible_entries.len(),
-                self.entries.len()
-            )
-        };
-        if self.query.is_empty() {
-            format!(
-                "{} ({}) | {} {}",
-                self.title,
-                results,
-                picker_sort_label(self.sort),
-                if self.descending { "desc" } else { "asc" }
-            )
-        } else {
-            format!(
-                "{} ({}) | {} {} | / {}",
-                self.title,
-                results,
-                picker_sort_label(self.sort),
-                if self.descending { "desc" } else { "asc" },
-                self.query
-            )
-        }
+        picker::picker_title(
+            &self.title,
+            self.visible_entries.len(),
+            self.entries.len(),
+            picker_sort_label(self.sort),
+            self.descending,
+            &self.query,
+        )
     }
 
     fn preview_lines(&self) -> Vec<Line<'static>> {
@@ -639,32 +600,6 @@ impl<'a> BenchmarkPicker<'a> {
         } else {
             Line::from("Enter inspect   / filter   s sort   S reverse   q quit   ↑↓/j/k move")
         }
-    }
-}
-
-struct PickerTerminal {
-    terminal: Terminal<CrosstermBackend<io::Stdout>>,
-}
-
-impl PickerTerminal {
-    fn new() -> Result<Self> {
-        crossterm::terminal::enable_raw_mode()?;
-        let backend = CrosstermBackend::new(io::stdout());
-        let terminal = Terminal::with_options(
-            backend,
-            TerminalOptions {
-                viewport: Viewport::Inline(PICKER_VIEWPORT_HEIGHT),
-            },
-        )?;
-        Ok(Self { terminal })
-    }
-}
-
-impl Drop for PickerTerminal {
-    fn drop(&mut self) {
-        let _ = self.terminal.clear();
-        let _ = crossterm::terminal::disable_raw_mode();
-        let _ = self.terminal.show_cursor();
     }
 }
 
@@ -852,9 +787,9 @@ fn load_benchmarks() -> Result<LoadedBenchmarks> {
     };
 
     let mut store = BenchmarkStore::from_entries(entries);
-    crate::model_traits::apply_model_traits(&provider_vec, store.entries_mut());
+    crate::benchmarks::apply_model_traits(&provider_vec, store.entries_mut());
     let open_weights_map =
-        crate::model_traits::build_open_weights_map(&provider_vec, store.entries());
+        crate::benchmarks::build_open_weights_map(&provider_vec, store.entries());
 
     Ok(LoadedBenchmarks {
         store,
@@ -1284,41 +1219,6 @@ fn pick_benchmark<'a>(
             }
             _ => {}
         }
-    }
-}
-
-fn truncate_picker_text(value: &str, max_chars: usize) -> String {
-    let char_count = value.chars().count();
-    if char_count <= max_chars {
-        return value.to_string();
-    }
-    if max_chars <= 3 {
-        return value.chars().take(max_chars).collect();
-    }
-    let visible: String = value.chars().take(max_chars - 3).collect();
-    format!("{visible}...")
-}
-
-fn parse_date_to_numeric(date: &str) -> Option<f64> {
-    let parts: Vec<&str> = date.split('-').collect();
-    if parts.len() != 3 {
-        return None;
-    }
-
-    let year = parts[0].parse::<u32>().ok()?;
-    let month = parts[1].parse::<u32>().ok()?;
-    let day = parts[2].parse::<u32>().ok()?;
-    Some((year * 10000 + month * 100 + day) as f64)
-}
-
-fn cmp_opt_f64(a: Option<f64>, b: Option<f64>) -> std::cmp::Ordering {
-    match (a, b) {
-        (Some(a_val), Some(b_val)) => a_val
-            .partial_cmp(&b_val)
-            .unwrap_or(std::cmp::Ordering::Equal),
-        (Some(_), None) => std::cmp::Ordering::Less,
-        (None, Some(_)) => std::cmp::Ordering::Greater,
-        (None, None) => std::cmp::Ordering::Equal,
     }
 }
 

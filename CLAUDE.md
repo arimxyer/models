@@ -20,44 +20,42 @@ mise run fmt && mise run clippy && mise run test
 ## Architecture
 
 ### Tabs
-- **Models Tab** (`src/tui/app.rs`, `src/tui/ui.rs`) — browse models from models.dev API with 3-column layout (20% providers | 45% model list | 35% detail panel), RTFO capability indicators, adaptive provider panel
-- **Benchmarks Tab** (`src/tui/benchmarks_app.rs`) — compare model benchmarks from Artificial Analysis with browse/compare modes, H2H table, scatter plot, radar chart views
-- **Agents Tab** (`src/tui/agents_app.rs`) — track AI coding assistants with GitHub integration
+- **Models Tab** (`src/tui/models/`) — browse models from models.dev API with 3-column layout (20% providers | 45% model list | 35% detail panel), RTFO capability indicators, adaptive provider panel
+- **Benchmarks Tab** (`src/tui/benchmarks/`) — compare model benchmarks from Artificial Analysis with browse/compare modes, H2H table, scatter plot, radar chart views
+- **Agents Tab** (`src/tui/agents/`) — track AI coding assistants with GitHub integration
+- **Status Tab** (`src/tui/status/`) — live provider health monitoring with detail view for incidents, components, and scheduled maintenance
 
 ### Data Flow
 - Model data: fetched from models.dev API at startup (`src/api.rs`)
-- Benchmark data: fetched fresh from jsDelivr CDN on every launch (`src/benchmark_fetch.rs`)
+- Benchmark data: fetched fresh from jsDelivr CDN on every launch (`src/benchmarks/fetch.rs`)
 - Agent/GitHub data: disk-cached with ETag conditional fetching (`src/agents/cache.rs`, `src/agents/github.rs`)
 - CLI agents: uses `fetch_releases_only` (1 API call, no repo metadata) — TUI uses full `fetch_conditional` (2 calls, includes stars/issues/license)
+- Status data: fetched from each provider's official status page (Statuspage, BetterStack, Instatus, etc.) with apistatuscheck.com as fallback (`src/status/fetch.rs`), provider registry and strategy mapping in `src/status/registry.rs`
+- Status source contract and normalization rules are documented in `docs/status-source-shape-audit.md` and `docs/status-normalization-spec.md`
 
 ### Async Pattern
 Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message` variants processed in the main loop (`src/tui/mod.rs`). The app never blocks on network calls.
 
-### Agents CLI
-- `src/cli/agents.rs` — clap subcommands, dispatch, tool resolution, all agent commands
-- `src/cli/agents_ui.rs` — inline release browser, source picker, agent disambiguation picker (ratatui `Viewport::Inline`)
-- `src/agents/changelog_parser.rs` — comrak-backed markdown parser producing normalized IR (`ChangelogBlock` enum: `Heading`/`Bullet`/`Paragraph`)
-- `src/agents/helpers.rs` — relative time formatting, release frequency, date parsing
+### Agents & CLI
+See `src/agents/CLAUDE.md` and `src/cli/CLAUDE.md` for detailed module docs.
 - Binary aliases: `models agents <cmd>` or `agents <cmd>` via argv[0] symlink detection
-- Commands: `status`, `latest`, `list-sources`, `<tool>` (with `--latest`, `--list`, `--pick`, `--version`, `--web`)
-- Uses termimad for styled markdown output in TTY, plain text when piped
-
-### CLI Inline Pickers
-- `src/cli/models.rs` — interactive model picker with `/` filter, `s`/`S` sort, preview pane
-- `src/cli/benchmarks.rs` — interactive benchmark picker with filter, sort, detail preview
-- `src/cli/agents_ui.rs` — release browser with changelog preview, source picker with tracking management
-- All use `PickerTerminal` wrapper (ratatui `Viewport::Inline`) for raw mode lifecycle
+- Commands: `list`, `search`, `show`, `benchmarks`, `completions <shell>`, full agents suite (`status`, `latest`, `list-sources`, `<tool>`)
+- CLI pickers use shared `PickerTerminal` infrastructure in `src/cli/picker.rs`
 
 ### Key Files
-- `src/tui/mod.rs` — startup, event loop, async channel handling
-- `src/tui/app.rs` — App state, Message enum, update logic
-- `src/tui/event.rs` — keybinding → Message mapping
-- `src/tui/ui.rs` — rendering
-- `src/tui/markdown.rs` — custom markdown-to-ratatui converter (headers, bullets, bold, code, URLs, search highlighting)
-- `src/benchmarks.rs` — BenchmarkStore, BenchmarkEntry
-- `src/benchmark_fetch.rs` — jsDelivr CDN fetcher (no cache, no ETag)
-- `src/model_traits.rs` — runtime matching of AA entries to models.dev for open/closed status, reasoning, tool_call, and context limits
-- `src/tui/benchmarks_app.rs` — BenchmarksApp state, compare mode, H2H/scatter/radar views
+
+Each module has its own `CLAUDE.md` with detailed documentation. Top-level highlights:
+
+- `src/formatting.rs` — shared utilities: `truncate`, `parse_date`, `format_tokens`, `format_stars`, `EM_DASH`, `cmp_opt_f64`
+- `src/data.rs` — Provider/Model data structures from models.dev API
+- `src/config.rs` — user config file (agents, cache, display settings)
+- `src/provider_category.rs` — provider categorization logic
+- `src/benchmarks/` — `store.rs` (BenchmarkStore/Entry), `fetch.rs` (CDN fetcher), `traits.rs` (AA↔models.dev matching)
+- `src/status/` — `types.rs`, `registry.rs`, `assessment.rs`, `fetch.rs`, `adapters/` (per-source-family parsers)
+- `src/tui/` — `app.rs` (App state, Message enum), `event.rs` (NavAction dedup), `ui.rs` (shared helpers), `markdown.rs`, `widgets/` (ScrollablePanel, SoftCard, ScrollOffset, ComparisonLegend), per-tab subdirs: `models/`, `agents/`, `benchmarks/` (includes `radar.rs`), `status/` — each with `app.rs` (sub-app state) + `render.rs` (tab rendering)
+- `src/cli/` — `picker.rs` (shared PickerTerminal, nav helpers, style constants), `models.rs`/`benchmarks.rs`/`agents_ui.rs` (inline pickers), `styles.rs`
+- `docs/status-source-shape-audit.md` — upstream status-source families, live payload quirks, and adapter coverage notes
+- `docs/status-normalization-spec.md` — canonical status detail availability semantics and helper/UI contract
 
 ### GitHub Actions
 - `ci.yml` — runs on PR/push: fmt check, clippy, test
@@ -71,6 +69,7 @@ Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message`
 - No disk cache — benchmark data fetched fresh from CDN on every launch, empty store until CDN responds
 - `BenchmarkEntry` must derive both `Serialize` and `Deserialize`
 - New `BenchmarkEntry` fields require `#[serde(default)]`
+- Status detail semantics use parallel `*_state` metadata on `ProviderStatus`; UI and assessment logic should use helper methods instead of inferring meaning from empty vectors
 
 ## Gotchas
 - clippy `-D warnings` treats unused enum variant fields as errors — if a Message variant's payload is only passed through (e.g., error strings logged nowhere), use a unit variant instead
@@ -83,6 +82,7 @@ Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message`
 - `Paragraph::scroll((y, 0))` with `.wrap(Wrap { trim: false })` counts **visual (wrapped) lines**, not logical lines — scroll positions must account for line wrapping when jumping to specific content
 - Use `line.width()` (unicode-aware) not `.len()` (byte count) when computing wrapped line heights — ratatui wraps on display width, not byte length. Word-wrapping needs +1 buffer per wrapped line since `div_ceil` underestimates
 - TLS uses `rustls-tls-native-roots` (not `rustls-tls`) — loads certificates from the OS trust store to support corporate TLS-inspecting proxies
+- Status-source quirks to preserve: Better Stack resources use `public_name`; Status.io `status_code = 400` means degraded; incident.io incidents and Instatus components need second fetches; the Google adapter is currently summary-derived rather than preserving raw incident rows
 
 ## Releasing
 1. Bump version in `Cargo.toml`
@@ -95,4 +95,3 @@ Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message`
 - `AA_API_KEY` — Artificial Analysis API key (GitHub repo secret, local `.env`)
 - `AUR_SSH_PRIVATE_KEY` — SSH key for pushing to AUR (`~/.ssh/aur`)
 - `CARGO_REGISTRY_TOKEN` — crates.io publish token (GitHub repo secret)
-- `TAP_GITHUB_TOKEN` — for updating the Scoop bucket repo

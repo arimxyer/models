@@ -1,24 +1,8 @@
 use chrono::{DateTime, Utc};
 
+/// Re-export from the shared formatting module for backwards compatibility.
 pub fn format_relative_time(dt: &DateTime<Utc>) -> String {
-    let delta = Utc::now().signed_duration_since(*dt);
-    let minutes = delta.num_minutes();
-    let hours = delta.num_hours();
-    let days = delta.num_days();
-    let weeks = days / 7;
-    let months = days / 30;
-
-    if months > 0 {
-        format!("{}mo ago", months)
-    } else if weeks > 0 {
-        format!("{}w ago", weeks)
-    } else if days > 0 {
-        format!("{}d ago", days)
-    } else if hours > 0 {
-        format!("{}h ago", hours)
-    } else {
-        format!("{}m ago", minutes.max(1))
-    }
+    crate::formatting::format_relative_time(dt)
 }
 
 pub fn calculate_release_frequency(dates: &[DateTime<Utc>]) -> String {
@@ -48,14 +32,9 @@ pub fn is_within_24h(dt: &DateTime<Utc>) -> bool {
     Utc::now().signed_duration_since(*dt).num_hours() < 24
 }
 
+/// Re-export from the shared formatting module for backwards compatibility.
 pub fn parse_date(date_str: &str) -> Option<DateTime<Utc>> {
-    if let Ok(dt) = date_str.parse::<DateTime<Utc>>() {
-        return Some(dt);
-    }
-    chrono::NaiveDate::parse_from_str(date_str, "%Y-%m-%d")
-        .ok()
-        .and_then(|d| d.and_hms_opt(0, 0, 0))
-        .map(|ndt| DateTime::from_naive_utc_and_offset(ndt, Utc))
+    crate::formatting::parse_date(date_str)
 }
 
 #[cfg(test)]
