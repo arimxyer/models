@@ -9,8 +9,8 @@
 TUI and CLI for browsing AI models, benchmarks, coding agents, and statuses for AI providers. 
 
 - **Models Tab**: Browse 3,000+ models across 85+ providers from [models.dev](https://models.dev) with capability indicators, adaptive layouts, and provider categorization
-- **Benchmarks Tab**: Compare model performance across 15+ benchmarks from [Artificial Analysis](https://artificialanalysis.ai), with head-to-head tables, scatter plots, radar charts, and creator filtering
 - **Agents Tab**: Track AI coding assistants (Claude Code, Aider, Cursor, etc.) with version detection, changelogs, and GitHub integration
+- **Benchmarks Tab**: Compare model performance across 15+ benchmarks from [Artificial Analysis](https://artificialanalysis.ai), with head-to-head tables, scatter plots, radar charts, and creator filtering
 - **Status Tab**: Monitor provider health with live incident tracking and scheduled maintenance across 21+ providers
 
 <video src="https://github.com/user-attachments/assets/07c750f4-ca47-4f89-8a32-99e0be5004d8" controls width="100%"></video>
