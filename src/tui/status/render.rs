@@ -1,12 +1,14 @@
 use crate::formatting::{format_relative_time_from_str, truncate};
-use crate::status::{ProviderHealth, StatusSourceMethod};
+use crate::status::{ProviderHealth, StatusSourceMethod, STATUS_REGISTRY};
 use crate::tui::app::App;
-use crate::tui::ui::{caret, selection_style, status_health_icon, status_health_style};
+use crate::tui::ui::{
+    caret, centered_rect_fixed, selection_style, status_health_icon, status_health_style,
+};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, Paragraph},
+    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph},
     Frame,
 };
 
@@ -138,6 +140,7 @@ pub(super) fn overall_attention_entries(
     let mut entries: Vec<_> = status_app
         .entries
         .iter()
+        .filter(|entry| status_app.tracked.contains(&entry.slug))
         .filter(|entry| {
             !entry.active_incidents().is_empty()
                 || !overall_attention_components(entry).is_empty()
@@ -628,6 +631,102 @@ pub(in crate::tui) fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App)
         );
         f.render_widget(paragraph, detail_area);
     }
+
+    // Render picker modal overlay if active
+    if app
+        .status_app
+        .as_ref()
+        .map(|a| a.show_picker)
+        .unwrap_or(false)
+    {
+        draw_status_picker_modal(f, app);
+    }
+}
+
+fn draw_status_picker_modal(f: &mut Frame, app: &App) {
+    let status_app = match &app.status_app {
+        Some(a) => a,
+        None => return,
+    };
+
+    let num_providers = STATUS_REGISTRY.len();
+
+    let popup_width = std::cmp::min(60, f.area().width.saturating_sub(4));
+    let popup_height = std::cmp::min(
+        (num_providers + 4) as u16,
+        f.area().height.saturating_sub(4),
+    );
+
+    let area = centered_rect_fixed(popup_width, popup_height, f.area());
+
+    f.render_widget(Clear, area);
+
+    let items: Vec<ListItem> = STATUS_REGISTRY
+        .iter()
+        .enumerate()
+        .map(|(idx, reg_entry)| {
+            let is_tracked = status_app
+                .picker_changes
+                .get(reg_entry.slug)
+                .copied()
+                .unwrap_or_else(|| status_app.tracked.contains(reg_entry.slug));
+
+            let checkbox = if is_tracked { "[x]" } else { "[ ]" };
+
+            // Show health icon if tracked and data loaded
+            let health_icon = if is_tracked {
+                status_app
+                    .entries
+                    .iter()
+                    .find(|e| e.slug == reg_entry.slug)
+                    .map(|e| {
+                        let icon = status_health_icon(e.health);
+                        let style = status_health_style(e.health);
+                        Span::styled(format!(" {}", icon), style)
+                    })
+            } else {
+                Some(Span::styled(" ?", Style::default().fg(Color::DarkGray)))
+            };
+
+            let line = Line::from(vec![
+                Span::raw(format!("{} ", checkbox)),
+                Span::styled(
+                    format!("{:<30}", truncate(reg_entry.display_name, 30)),
+                    Style::default().add_modifier(Modifier::BOLD),
+                ),
+                health_icon.unwrap_or_else(|| Span::raw("")),
+            ]);
+
+            if idx == status_app.picker_selected {
+                ListItem::new(line).style(
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                )
+            } else {
+                ListItem::new(line)
+            }
+        })
+        .collect();
+
+    let list = List::new(items)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Cyan))
+                .title(" Track Providers ")
+                .title_bottom(Line::from(" Space: toggle | Enter: save | Esc: cancel ").centered()),
+        )
+        .highlight_style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        );
+
+    let mut list_state = ListState::default();
+    list_state.select(Some(status_app.picker_selected));
+
+    f.render_stateful_widget(list, area, &mut list_state);
 }
 
 #[cfg(test)]
@@ -638,7 +737,6 @@ mod tests {
 
     use super::*;
     use crate::{
-        agents::AgentsFile,
         benchmarks::BenchmarkStore,
         status::{
             ActiveIncident, ComponentStatus, IncidentUpdate, ProviderStatus, ScheduledMaintenance,
@@ -648,17 +746,7 @@ mod tests {
     };
 
     fn make_status_app(entry: ProviderStatus) -> App {
-        let mut app = App::new(
-            HashMap::new(),
-            Some(&AgentsFile {
-                schema_version: 1,
-                last_scraped: None,
-                scrape_source: None,
-                agents: HashMap::new(),
-            }),
-            None,
-            BenchmarkStore::empty(),
-        );
+        let mut app = App::new(HashMap::new(), None, None, BenchmarkStore::empty());
         app.current_tab = Tab::Status;
         let status_app = app.status_app.as_mut().expect("status app");
         status_app.entries = vec![entry];

@@ -233,6 +233,16 @@ pub const STATUS_REGISTRY: &[StatusRegistryEntry] = &[
         },
         support_tier: StatusSupportTier::Curated,
     },
+    StatusRegistryEntry {
+        slug: "zed",
+        display_name: "Zed",
+        source_slug: "zed",
+        strategy: StatusStrategy::OfficialFirst {
+            official: OfficialStatusSource::Zed,
+            fallback_source_slug: None,
+        },
+        support_tier: StatusSupportTier::Curated,
+    },
 ];
 
 pub fn canonical_status_slug(slug: &str) -> &str {

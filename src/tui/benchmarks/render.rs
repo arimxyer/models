@@ -235,7 +235,7 @@ fn draw_benchmark_creators(f: &mut Frame, area: Rect, app: &mut App) {
                 let name = truncate(display_name, max_name);
                 let mut spans = vec![
                     Span::raw(format!("{} ", name)),
-                    Span::styled(count_str, Style::default().fg(Color::DarkGray)),
+                    Span::styled(count_str, Style::default().fg(Color::Gray)),
                 ];
                 if let Some((label, color)) = tag {
                     spans.push(Span::raw(" "));
@@ -921,7 +921,7 @@ fn push_meta_row(
                 indent = cw.indent as usize,
                 w = cw.label as usize
             ),
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(Color::Gray),
         ),
         Span::styled(
             format!("{:<w$}", left.1, w = cw.value as usize),
@@ -932,7 +932,7 @@ fn push_meta_row(
     if !right.0.is_empty() {
         spans.push(Span::styled(
             format!("{:<w$}", right.0, w = cw.label2 as usize),
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(Color::Gray),
         ));
         spans.push(Span::styled(right.1.to_string(), style_for(right.2)));
     }

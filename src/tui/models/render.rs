@@ -45,19 +45,19 @@ fn provider_detail_lines(app: &App) -> Vec<Line<'static>> {
                 .add_modifier(Modifier::BOLD),
         )]),
         Line::from(vec![
-            Span::styled("Category: ", Style::default().fg(Color::DarkGray)),
+            Span::styled("Category: ", Style::default().fg(Color::Gray)),
             Span::styled(cat.label(), Style::default().fg(cat.color())),
         ]),
         Line::from(vec![
-            Span::styled("Docs: ", Style::default().fg(Color::DarkGray)),
+            Span::styled("Docs: ", Style::default().fg(Color::Gray)),
             Span::raw(provider.doc.clone().unwrap_or_else(|| EM_DASH.into())),
         ]),
         Line::from(vec![
-            Span::styled("API:  ", Style::default().fg(Color::DarkGray)),
+            Span::styled("API:  ", Style::default().fg(Color::Gray)),
             Span::raw(provider.api.clone().unwrap_or_else(|| EM_DASH.into())),
         ]),
         Line::from(vec![
-            Span::styled("Env:  ", Style::default().fg(Color::DarkGray)),
+            Span::styled("Env:  ", Style::default().fg(Color::Gray)),
             Span::raw(if provider.env.is_empty() {
                 EM_DASH.to_string()
             } else {
@@ -211,11 +211,15 @@ fn draw_providers(f: &mut Frame, area: Rect, app: &mut App) {
             ProviderListItem::Provider(idx) => {
                 if let Some((id, provider)) = app.providers.get(*idx) {
                     let cat = provider_category(id);
-                    let short = cat.short_label();
+                    let initial = &cat.short_label()[..1];
                     let color = cat.color();
                     let line = Line::from(vec![
-                        Span::raw(format!("{} ({}) ", id, provider.models.len())),
-                        Span::styled(short, Style::default().fg(color)),
+                        Span::styled(initial, Style::default().fg(color)),
+                        Span::raw(format!(" {} ", id)),
+                        Span::styled(
+                            format!("({})", provider.models.len()),
+                            Style::default().fg(Color::Gray),
+                        ),
                     ]);
                     items.push(ListItem::new(line));
                 }
@@ -464,7 +468,7 @@ struct LabelValue<'a> {
 
 /// Build a line with two label-value pairs, manually padded to fill the width.
 fn two_pair_line(left: LabelValue<'_>, right: LabelValue<'_>, col_w: usize) -> Line<'static> {
-    let label_color = Color::DarkGray;
+    let label_color = Color::Gray;
     let pad1 = col_w.saturating_sub(left.label.len() + left.value.len());
     let pad2 = col_w.saturating_sub(right.label.len() + right.value.len());
     Line::from(vec![
@@ -493,7 +497,7 @@ fn model_detail_lines(app: &App, width: u16) -> Vec<Line<'static>> {
     } else {
         Color::White
     };
-    let label_color = Color::DarkGray;
+    let label_color = Color::Gray;
     let em = EM_DASH;
     let col_w = (width as usize) / 2;
 

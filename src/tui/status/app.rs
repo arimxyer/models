@@ -1,9 +1,9 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::time::Instant;
 
 use ratatui::widgets::ListState;
 
-use crate::agents::AgentsFile;
+use crate::config::Config;
 use crate::status::{
     status_seed_for_provider, ProviderHealth, ProviderStatus, ScheduledMaintenance,
     StatusProvenance, StatusProviderSeed, STATUS_REGISTRY,
@@ -53,10 +53,18 @@ pub struct StatusApp {
     pub loading: bool,
     pub last_refreshed: Option<Instant>,
     pub last_error: Option<String>,
+    /// Slugs of providers to track (fetch status for)
+    pub tracked: HashSet<String>,
+    // Picker modal state
+    pub show_picker: bool,
+    pub picker_selected: usize,
+    pub picker_changes: HashMap<String, bool>,
 }
 
 impl StatusApp {
-    pub fn new(_agents_file: &AgentsFile) -> Self {
+    pub fn new(config: &Config) -> Self {
+        let tracked = config.status.tracked.clone();
+
         let mut by_slug: BTreeMap<String, StatusProviderSeed> = BTreeMap::new();
 
         for entry in STATUS_REGISTRY {
@@ -95,6 +103,10 @@ impl StatusApp {
             loading: true,
             last_refreshed: None,
             last_error: None,
+            tracked,
+            show_picker: false,
+            picker_selected: 0,
+            picker_changes: HashMap::new(),
         };
         app.update_filtered();
         app
@@ -103,12 +115,25 @@ impl StatusApp {
     pub fn fetch_seeds(&self) -> Vec<StatusProviderSeed> {
         self.entries
             .iter()
+            .filter(|entry| self.tracked.contains(&entry.slug))
             .map(|entry| status_seed_for_provider(&entry.slug))
             .collect()
     }
 
-    pub fn apply_fetch(&mut self, mut entries: Vec<ProviderStatus>) {
-        entries.sort_by(|a, b| {
+    pub fn apply_fetch(&mut self, fetched: Vec<ProviderStatus>) {
+        // Merge by slug: update fetched entries, reset untracked to placeholder
+        let fetched_map: HashMap<String, ProviderStatus> =
+            fetched.into_iter().map(|e| (e.slug.clone(), e)).collect();
+
+        for entry in &mut self.entries {
+            if let Some(fetched_entry) = fetched_map.get(&entry.slug) {
+                *entry = fetched_entry.clone();
+            } else if !self.tracked.contains(&entry.slug) {
+                *entry = ProviderStatus::placeholder(&status_seed_for_provider(&entry.slug));
+            }
+        }
+
+        self.entries.sort_by(|a, b| {
             a.health
                 .sort_rank()
                 .cmp(&b.health.sort_rank())
@@ -116,7 +141,6 @@ impl StatusApp {
                 .then_with(|| a.provenance.sort_rank().cmp(&b.provenance.sort_rank()))
                 .then_with(|| a.display_name.cmp(&b.display_name))
         });
-        self.entries = entries;
         self.loading = false;
         self.last_refreshed = Some(Instant::now());
         self.last_error = None;
@@ -129,6 +153,77 @@ impl StatusApp {
         self.last_error = Some(error);
     }
 
+    // ── Picker modal methods ───────────────────────────────────
+
+    pub fn open_picker(&mut self) {
+        self.show_picker = true;
+        self.picker_selected = 0;
+        self.picker_changes.clear();
+        // Initialize with current tracked states
+        for entry in STATUS_REGISTRY {
+            let is_tracked = self.tracked.contains(entry.slug);
+            self.picker_changes
+                .insert(entry.slug.to_string(), is_tracked);
+        }
+    }
+
+    pub fn close_picker(&mut self) {
+        self.show_picker = false;
+        self.picker_changes.clear();
+    }
+
+    pub fn picker_toggle_current(&mut self) {
+        let slugs: Vec<&str> = STATUS_REGISTRY.iter().map(|e| e.slug).collect();
+        if let Some(&slug) = slugs.get(self.picker_selected) {
+            let current = self
+                .picker_changes
+                .get(slug)
+                .copied()
+                .unwrap_or_else(|| self.tracked.contains(slug));
+            self.picker_changes.insert(slug.to_string(), !current);
+        }
+    }
+
+    pub fn picker_next(&mut self) {
+        let max = STATUS_REGISTRY.len().saturating_sub(1);
+        if self.picker_selected < max {
+            self.picker_selected += 1;
+        }
+    }
+
+    pub fn picker_prev(&mut self) {
+        if self.picker_selected > 0 {
+            self.picker_selected -= 1;
+        }
+    }
+
+    /// Save picker changes, update tracked set, save config. Returns newly-tracked slugs.
+    pub fn picker_save(&mut self, config: &mut Config) -> Result<Vec<String>, String> {
+        let mut newly_tracked = Vec::new();
+
+        for (slug, &tracked) in &self.picker_changes {
+            let was_tracked = config.is_status_tracked(slug);
+            config.set_status_tracked(slug, tracked);
+            if tracked && !was_tracked {
+                newly_tracked.push(slug.clone());
+            }
+            if tracked {
+                self.tracked.insert(slug.clone());
+            } else {
+                self.tracked.remove(slug.as_str());
+            }
+        }
+
+        if let Err(e) = config.save() {
+            self.close_picker();
+            return Err(format!("Failed to save config: {}", e));
+        }
+
+        self.close_picker();
+        self.update_filtered();
+        Ok(newly_tracked)
+    }
+
     /// `selected` is a display index: 0 = Overall, 1+ = provider at `filtered_entries[selected - 1]`.
     pub fn update_filtered(&mut self) {
         let query = self.search_query.to_lowercase();
@@ -137,6 +232,10 @@ impl StatusApp {
             .iter()
             .enumerate()
             .filter(|(_, entry)| {
+                // Only show tracked providers
+                if !self.tracked.contains(&entry.slug) {
+                    return false;
+                }
                 query.is_empty()
                     || entry.display_name.to_lowercase().contains(&query)
                     || entry.slug.to_lowercase().contains(&query)
@@ -228,7 +327,11 @@ impl StatusApp {
         let mut deg = 0;
         let mut out = 0;
         let mut other = 0;
-        for entry in &self.entries {
+        for entry in self
+            .entries
+            .iter()
+            .filter(|e| self.tracked.contains(&e.slug))
+        {
             match entry.health {
                 ProviderHealth::Operational => op += 1,
                 ProviderHealth::Degraded => deg += 1,
@@ -258,6 +361,7 @@ impl StatusApp {
     pub fn all_maintenances(&self) -> Vec<(&str, &ScheduledMaintenance)> {
         self.entries
             .iter()
+            .filter(|entry| self.tracked.contains(&entry.slug))
             .flat_map(|entry| {
                 entry
                     .scheduled_maintenances
@@ -454,62 +558,12 @@ impl StatusApp {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
-    use crate::agents::{Agent, AgentsFile};
-
     use super::*;
+    use crate::config::Config;
 
     #[test]
     fn builds_unique_provider_entries_from_catalog() {
-        let mut agents = HashMap::new();
-        agents.insert(
-            "a".to_string(),
-            Agent {
-                name: "A".to_string(),
-                repo: "owner/a".to_string(),
-                categories: vec![],
-                installation_method: None,
-                pricing: None,
-                supported_providers: vec!["openai".to_string(), "google".to_string()],
-                platform_support: vec![],
-                open_source: true,
-                cli_binary: None,
-                alt_binaries: vec![],
-                version_command: vec![],
-                version_regex: None,
-                config_files: vec![],
-                homepage: None,
-                docs: None,
-            },
-        );
-        agents.insert(
-            "b".to_string(),
-            Agent {
-                name: "B".to_string(),
-                repo: "owner/b".to_string(),
-                categories: vec![],
-                installation_method: None,
-                pricing: None,
-                supported_providers: vec!["openai".to_string()],
-                platform_support: vec![],
-                open_source: true,
-                cli_binary: None,
-                alt_binaries: vec![],
-                version_command: vec![],
-                version_regex: None,
-                config_files: vec![],
-                homepage: None,
-                docs: None,
-            },
-        );
-
-        let app = StatusApp::new(&AgentsFile {
-            schema_version: 1,
-            last_scraped: None,
-            scrape_source: None,
-            agents,
-        });
+        let app = StatusApp::new(&Config::default());
 
         let slugs: Vec<_> = app
             .entries
@@ -527,6 +581,7 @@ mod tests {
                 .map(|entry| entry.source_slug.as_str()),
             Some("gemini")
         );
+        // All providers tracked by default, so fetch_seeds returns google
         assert_eq!(
             app.fetch_seeds()
                 .iter()
@@ -538,34 +593,7 @@ mod tests {
 
     #[test]
     fn health_counts_tallies_all_entries() {
-        let mut agents = HashMap::new();
-        agents.insert(
-            "a".to_string(),
-            Agent {
-                name: "A".to_string(),
-                repo: "owner/a".to_string(),
-                categories: vec![],
-                installation_method: None,
-                pricing: None,
-                supported_providers: vec![],
-                platform_support: vec![],
-                open_source: true,
-                cli_binary: None,
-                alt_binaries: vec![],
-                version_command: vec![],
-                version_regex: None,
-                config_files: vec![],
-                homepage: None,
-                docs: None,
-            },
-        );
-
-        let app = StatusApp::new(&AgentsFile {
-            schema_version: 1,
-            last_scraped: None,
-            scrape_source: None,
-            agents,
-        });
+        let app = StatusApp::new(&Config::default());
 
         // All entries start as Unknown health (from placeholders)
         let (op, deg, out, other) = app.health_counts();
@@ -577,12 +605,7 @@ mod tests {
 
     #[test]
     fn provenance_counts_tallies_all_entries() {
-        let app = StatusApp::new(&AgentsFile {
-            schema_version: 1,
-            last_scraped: None,
-            scrape_source: None,
-            agents: HashMap::new(),
-        });
+        let app = StatusApp::new(&Config::default());
 
         let (official, fallback, unavailable) = app.provenance_counts();
         assert_eq!(official, 0);
@@ -592,12 +615,7 @@ mod tests {
 
     #[test]
     fn overall_panel_focus_skips_maintenance_when_hidden() {
-        let mut app = StatusApp::new(&AgentsFile {
-            schema_version: 1,
-            last_scraped: None,
-            scrape_source: None,
-            agents: HashMap::new(),
-        });
+        let mut app = StatusApp::new(&Config::default());
 
         app.overall_panel_focus = OverallPanelFocus::Incidents;
         app.select_next_overall_panel();
@@ -609,12 +627,7 @@ mod tests {
 
     #[test]
     fn overall_panel_focus_includes_maintenance_when_visible() {
-        let mut app = StatusApp::new(&AgentsFile {
-            schema_version: 1,
-            last_scraped: None,
-            scrape_source: None,
-            agents: HashMap::new(),
-        });
+        let mut app = StatusApp::new(&Config::default());
 
         if let Some(entry) = app.entries.first_mut() {
             entry.scheduled_maintenances.push(ScheduledMaintenance {
@@ -637,5 +650,25 @@ mod tests {
 
         app.select_next_overall_panel();
         assert_eq!(app.overall_panel_focus, OverallPanelFocus::Incidents);
+    }
+
+    #[test]
+    fn fetch_seeds_respects_tracked() {
+        let mut config = Config::default();
+        // Only track openai
+        config.status.tracked.clear();
+        config.status.tracked.insert("openai".to_string());
+
+        let app = StatusApp::new(&config);
+        let seeds = app.fetch_seeds();
+        assert_eq!(seeds.len(), 1);
+        assert_eq!(seeds[0].slug, "openai");
+    }
+
+    #[test]
+    fn fetch_seeds_all_tracked_by_default() {
+        let app = StatusApp::new(&Config::default());
+        let seeds = app.fetch_seeds();
+        assert_eq!(seeds.len(), STATUS_REGISTRY.len());
     }
 }

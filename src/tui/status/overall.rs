@@ -322,7 +322,11 @@ pub(super) fn draw_overall_dashboard(
     is_focused: bool,
 ) {
     let (op, _deg, out, other) = status_app.health_counts();
-    let total = status_app.entries.len();
+    let total = status_app
+        .entries
+        .iter()
+        .filter(|e| status_app.tracked.contains(&e.slug))
+        .count();
     let attention_entries = overall_attention_entries(status_app);
     let incident_entries: Vec<_> = attention_entries
         .iter()

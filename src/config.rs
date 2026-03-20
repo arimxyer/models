@@ -13,6 +13,8 @@ pub struct Config {
     pub cache: CacheConfig,
     #[serde(default)]
     pub display: DisplayConfig,
+    #[serde(default)]
+    pub status: StatusConfig,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -99,6 +101,28 @@ fn default_github_ttl() -> u64 {
     3600
 }
 
+/// Default: all status providers tracked.
+fn default_tracked_providers() -> HashSet<String> {
+    crate::status::STATUS_REGISTRY
+        .iter()
+        .map(|e| e.slug.to_string())
+        .collect()
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct StatusConfig {
+    #[serde(default = "default_tracked_providers")]
+    pub tracked: HashSet<String>,
+}
+
+impl Default for StatusConfig {
+    fn default() -> Self {
+        Self {
+            tracked: default_tracked_providers(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct DisplayConfig {
     #[serde(default)]
@@ -126,8 +150,6 @@ impl Config {
         toml::from_str(&content).context("Failed to parse config.toml")
     }
 
-    /// Save config to disk (for future add/remove picker)
-    #[allow(dead_code)]
     pub fn save(&self) -> Result<()> {
         let path = match Self::config_path() {
             Some(p) => p,
@@ -153,8 +175,6 @@ impl Config {
         self.agents.tracked.contains(agent_id)
     }
 
-    /// Set agent tracking status (for future add/remove picker)
-    #[allow(dead_code)]
     pub fn set_tracked(&mut self, agent_id: &str, tracked: bool) {
         if tracked {
             self.agents.tracked.insert(agent_id.to_string());
@@ -162,6 +182,18 @@ impl Config {
         } else {
             self.agents.tracked.remove(agent_id);
             self.agents.excluded.insert(agent_id.to_string());
+        }
+    }
+
+    pub fn is_status_tracked(&self, slug: &str) -> bool {
+        self.status.tracked.contains(slug)
+    }
+
+    pub fn set_status_tracked(&mut self, slug: &str, tracked: bool) {
+        if tracked {
+            self.status.tracked.insert(slug.to_string());
+        } else {
+            self.status.tracked.remove(slug);
         }
     }
 }
@@ -201,5 +233,26 @@ mod tests {
         assert!(!config.is_tracked("claude-code"));
         // Still tracked
         assert!(config.is_tracked("codex"));
+    }
+
+    #[test]
+    fn test_status_default_tracks_all_providers() {
+        use crate::status::STATUS_REGISTRY;
+        let config = Config::default();
+        assert_eq!(config.status.tracked.len(), STATUS_REGISTRY.len());
+        for entry in STATUS_REGISTRY {
+            assert!(config.is_status_tracked(entry.slug));
+        }
+    }
+
+    #[test]
+    fn test_set_status_tracked() {
+        let mut config = Config::default();
+        // Untrack a provider
+        config.set_status_tracked("openai", false);
+        assert!(!config.is_status_tracked("openai"));
+        // Re-track it
+        config.set_status_tracked("openai", true);
+        assert!(config.is_status_tracked("openai"));
     }
 }

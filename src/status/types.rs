@@ -170,6 +170,7 @@ pub enum OfficialStatusSource {
     Perplexity,
     HuggingFace,
     TogetherAi,
+    Zed,
 }
 
 impl OfficialStatusSource {
@@ -196,6 +197,7 @@ impl OfficialStatusSource {
             Self::Perplexity => "Perplexity Status",
             Self::HuggingFace => "Hugging Face Status",
             Self::TogetherAi => "Together AI Status",
+            Self::Zed => "Zed Status",
         }
     }
 
@@ -222,6 +224,7 @@ impl OfficialStatusSource {
             Self::Perplexity => "https://status.perplexity.com/summary.json",
             Self::HuggingFace => "https://status.huggingface.co/index.json",
             Self::TogetherAi => "https://status.together.ai/index.json",
+            Self::Zed => "https://status.zed.dev/summary.json",
         }
     }
 
@@ -250,6 +253,7 @@ impl OfficialStatusSource {
             Self::Perplexity => "https://status.perplexity.com",
             Self::HuggingFace => "https://status.huggingface.co",
             Self::TogetherAi => "https://status.together.ai",
+            Self::Zed => "https://status.zed.dev",
         }
     }
 
@@ -278,7 +282,7 @@ impl OfficialStatusSource {
 
             Self::GitLab => StatusSourceMethod::StatusIo,
 
-            Self::Perplexity => StatusSourceMethod::Instatus,
+            Self::Perplexity | Self::Zed => StatusSourceMethod::Instatus,
 
             Self::GoogleGeminiJson => StatusSourceMethod::GoogleCloudJson,
         }

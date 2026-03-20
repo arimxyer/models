@@ -440,6 +440,27 @@ fn run_status() -> Result<()> {
     let runtime = tokio::runtime::Runtime::new()?;
     let batch_results = get_github_data_batch(&batch_input, &mut disk_cache, &runtime);
 
+    // Fetch service health for mapped agents
+    let status_entries: Vec<crate::status::ProviderStatus> = {
+        use crate::agents::health::AGENT_SERVICE_MAPPINGS;
+        use crate::status::registry::status_seed_for_provider;
+        let slugs: std::collections::HashSet<&str> = AGENT_SERVICE_MAPPINGS
+            .iter()
+            .map(|m| m.provider_slug)
+            .collect();
+        let seeds: Vec<_> = slugs.iter().map(|s| status_seed_for_provider(s)).collect();
+        let client = reqwest::Client::builder()
+            .user_agent("models-cli")
+            .connect_timeout(std::time::Duration::from_secs(5))
+            .build()
+            .expect("Failed to build HTTP client");
+        let fetcher = crate::status::StatusFetcher::with_client(client);
+        match runtime.block_on(fetcher.fetch(&seeds)) {
+            crate::status::StatusFetchResult::Fresh(entries) => entries,
+            crate::status::StatusFetchResult::Error(_) => Vec::new(),
+        }
+    };
+
     let mut table = comfy_table::Table::new();
     table.load_preset(comfy_table::presets::UTF8_FULL);
     table.set_header(vec![
@@ -449,9 +470,29 @@ fn run_status() -> Result<()> {
         styles::header_cell("Latest"),
         styles::header_cell("Updated"),
         styles::header_cell("Freq."),
+        styles::header_cell("Status"),
     ]);
 
-    for (entry, (_, github, installed)) in entries.iter().zip(batch_results.iter()) {
+    // Sort by most recently updated (newest first), with missing dates last
+    let mut rows: Vec<_> = entries.iter().zip(batch_results.iter()).collect();
+    rows.sort_by(|(_, (_, g_a, _)), (_, (_, g_b, _))| {
+        let date_a = g_a
+            .as_ref()
+            .and_then(|g| g.latest_release())
+            .and_then(|r| r.date.as_deref());
+        let date_b = g_b
+            .as_ref()
+            .and_then(|g| g.latest_release())
+            .and_then(|r| r.date.as_deref());
+        match (date_b, date_a) {
+            (Some(b), Some(a)) => b.cmp(a),
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => std::cmp::Ordering::Equal,
+        }
+    });
+
+    for (entry, (_, github, installed)) in rows {
         let latest_version = github
             .as_ref()
             .and_then(|g| g.latest_version())
@@ -496,6 +537,35 @@ fn run_status() -> Result<()> {
             styles::yellow_cell(&installed_str)
         };
 
+        let service_cell = {
+            use crate::agents::health::resolve_agent_service_health;
+            use crate::status::ProviderHealth;
+            match resolve_agent_service_health(&entry.id, &status_entries) {
+                Some(resolved) => {
+                    let (icon, label) = match resolved.health {
+                        ProviderHealth::Operational => ("\u{25CF}", "Ok"),
+                        ProviderHealth::Degraded => ("\u{25D0}", "Degraded"),
+                        ProviderHealth::Outage => ("\u{2717}", "Outage"),
+                        ProviderHealth::Maintenance => ("\u{25C6}", "Maint."),
+                        ProviderHealth::Unknown => ("?", "Unknown"),
+                    };
+                    let text = format!("{} {}", icon, label);
+                    match resolved.health {
+                        ProviderHealth::Operational => styles::green_cell(&text),
+                        ProviderHealth::Degraded => styles::yellow_cell(&text),
+                        ProviderHealth::Outage => {
+                            comfy_table::Cell::new(&text).fg(comfy_table::Color::Red)
+                        }
+                        ProviderHealth::Maintenance => {
+                            comfy_table::Cell::new(&text).fg(comfy_table::Color::Blue)
+                        }
+                        ProviderHealth::Unknown => styles::dim_cell(&text),
+                    }
+                }
+                None => styles::dim_cell("\u{2014}"),
+            }
+        };
+
         table.add_row(vec![
             styles::bold_cell(&entry.agent.name),
             if is_24h {
@@ -505,8 +575,9 @@ fn run_status() -> Result<()> {
             },
             installed_cell,
             styles::bold_cell(latest_version),
-            styles::dim_cell(&updated),
-            styles::dim_cell(&freq),
+            comfy_table::Cell::new(&updated),
+            comfy_table::Cell::new(&freq),
+            service_cell,
         ]);
     }
 
