@@ -18,13 +18,11 @@ TUI and CLI for browsing AI models, benchmarks, and coding agents.
 
 ## What's New
 
-- **Status tab** — live provider health monitoring with incidents, maintenance, and grouped services for 21+ providers
+- **Status tab** — live provider health monitoring with incidents, maintenance, and customizable provider tracking
+- **Agent service health** — live operational status from provider status pages in the agents detail panel and CLI
 - **Scrollable detail panels** — Models and Benchmarks detail panels are now navigable and scrollable
-- **Models tab redesign** — capability indicators, adaptive provider panel, and detailed model info at a glance
-- **Benchmark compare mode** — head-to-head tables, scatter plots, and radar charts for selected models
-- **Benchmarks CLI** — list and inspect benchmark data directly from the terminal
-- **Linux packages** — native .deb and .rpm packages for x86_64 and aarch64
-- **Agents CLI** — track agent releases, view changelogs, and compare versions from the terminal
+- **CLI revamp** — all three inline pickers (models, benchmarks, agents) redesigned with side-by-side layouts and rich previews
+- **Benchmarks CLI** — query benchmark data directly from the terminal with interactive picker and JSON output
 
 ## Features
 
@@ -40,8 +38,10 @@ TUI and CLI for browsing AI models, benchmarks, and coding agents.
 - **Curated catalog** of 12+ AI coding assistants
 - **Version detection** — automatically detects installed agents
 - **GitHub integration** — stars, releases, changelogs, update availability
+- **Service health** — live operational status from provider status pages for mapped agents
 - **Styled changelogs** — markdown rendering with syntax highlighting in the detail pane
 - **Changelog search** — search across changelogs with highlighted matches and `n`/`N` jump-to-match
+- **Scrollable detail panel** — navigate and scroll release metadata, service health, and changelogs
 - **Persistent cache** — instant startup with ETag-based conditional fetching
 - **Customizable tracking** — choose which agents to monitor
 
@@ -62,7 +62,7 @@ TUI and CLI for browsing AI models, benchmarks, and coding agents.
 - **Customizable tracking** — choose which providers to monitor (press `a` to open the tracking picker)
 
 ### Agents CLI
-- **Status table** — see installed vs latest version, 24h release indicator, and release frequency at a glance
+- **Status table** — see installed vs latest version, 24h release indicator, release frequency, and live service health icons at a glance, sorted by most recently updated
 - **Inline release browser** — `agents <tool>` opens an interactive version browser with changelog preview
 - **Changelogs** — view release notes for any agent by name, latest version, or explicit version
 - **Tracked-agent manager** — `agents list-sources` can now manage which curated agents are tracked from the CLI
