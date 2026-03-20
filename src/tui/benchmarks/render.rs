@@ -11,6 +11,7 @@ use crate::formatting::format_tokens;
 use crate::formatting::truncate;
 use crate::tui::app::App;
 use crate::tui::ui::{caret, centered_rect, centered_rect_fixed, focus_border};
+use crate::tui::widgets::scrollable_panel::ScrollablePanel;
 
 /// Color palette for selected models in comparison mode.
 pub(crate) fn compare_colors(index: usize) -> Color {
@@ -606,35 +607,38 @@ fn draw_benchmark_list(f: &mut Frame, area: Rect, app: &mut App) {
 }
 
 fn draw_benchmark_detail(f: &mut Frame, area: Rect, app: &App) {
+    use super::app::BenchmarkFocus;
     let bench_app = &app.benchmarks_app;
     let store = &app.benchmark_store;
-
-    let block = Block::default().borders(Borders::ALL).title(" Details ");
+    let focused = bench_app.focus == BenchmarkFocus::Details;
 
     let entry = match bench_app.current_entry(store) {
         Some(e) => e,
         None => {
-            let msg = Paragraph::new("No benchmark selected").block(block);
-            f.render_widget(msg, area);
+            let lines = vec![Line::from(Span::styled(
+                "No benchmark selected",
+                Style::default().fg(Color::DarkGray),
+            ))];
+            ScrollablePanel::new("Details", lines, &bench_app.detail_scroll, focused)
+                .render(f, area);
             return;
         }
     };
 
-    let inner = block.inner(area);
-    f.render_widget(block, area);
-    draw_benchmark_detail_content(f, inner, entry, app);
+    let inner_w = area.width.saturating_sub(2);
+    let lines = build_benchmark_detail_lines(inner_w, entry, app);
+    ScrollablePanel::new("Details", lines, &bench_app.detail_scroll, focused).render(f, area);
 }
 
-fn draw_benchmark_detail_content(
-    f: &mut Frame,
-    area: Rect,
-    entry: &crate::benchmarks::BenchmarkEntry,
-    app: &App,
-) {
+fn build_benchmark_detail_lines<'a>(
+    width: u16,
+    entry: &'a crate::benchmarks::BenchmarkEntry,
+    app: &'a App,
+) -> Vec<Line<'a>> {
     let mut lines: Vec<Line> = Vec::new();
 
     // Dynamic column widths via ratatui's constraint solver
-    let cw = ColumnWidths::from_width(area.width);
+    let cw = ColumnWidths::from_width(width);
 
     // Name + creator + metadata on first lines
     let creator_display = if !entry.creator_name.is_empty() {
@@ -820,8 +824,7 @@ fn draw_benchmark_detail_content(
         Span::styled("open AA", Style::default().fg(Color::DarkGray)),
     ]));
 
-    let paragraph = Paragraph::new(lines).wrap(Wrap { trim: false });
-    f.render_widget(paragraph, area);
+    lines
 }
 
 fn draw_detail_overlay(f: &mut Frame, area: Rect, app: &App) {
@@ -850,7 +853,9 @@ fn draw_detail_overlay(f: &mut Frame, area: Rect, app: &App) {
 
     let inner = block.inner(overlay_area);
     f.render_widget(block, overlay_area);
-    draw_benchmark_detail_content(f, inner, entry, app);
+    let lines = build_benchmark_detail_lines(inner.width, entry, app);
+    let paragraph = Paragraph::new(lines).wrap(Wrap { trim: false });
+    f.render_widget(paragraph, inner);
 }
 
 /// Push a section header line like "─── Title ───"

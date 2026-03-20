@@ -288,7 +288,7 @@ These are documented deviations from the above patterns that exist in the curren
 1. ~~Models tab search query stored on App~~ — Fixed: moved to `ModelsApp.search_query`
 2. ~~Models tab missing `[/{query}]` in title~~ — Fixed: now shows search query in panel title
 3. ~~Models right panel has no focus state~~ — Fixed: model detail panel now focusable and scrollable via `Focus::Details`
-4. **Benchmarks detail panel** is never focusable (always DarkGray)
+4. ~~Benchmarks detail panel is never focusable~~ — Fixed: detail panel now focusable and scrollable via `BenchmarkFocus::Details`
 5. ~~Status tab maintenance color~~ — Fixed: component maintenance now uses Blue consistently
 6. ~~No scrollbar widgets~~ — Fixed: all scrollable panels now use `ScrollablePanel` widget with `ScrollOffset` writeback
 7. ~~Footer hints vary~~ — Fixed: Benchmarks now includes `q quit`
