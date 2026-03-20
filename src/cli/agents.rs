@@ -451,7 +451,26 @@ fn run_status() -> Result<()> {
         styles::header_cell("Freq."),
     ]);
 
-    for (entry, (_, github, installed)) in entries.iter().zip(batch_results.iter()) {
+    // Sort by most recently updated (newest first), with missing dates last
+    let mut rows: Vec<_> = entries.iter().zip(batch_results.iter()).collect();
+    rows.sort_by(|(_, (_, g_a, _)), (_, (_, g_b, _))| {
+        let date_a = g_a
+            .as_ref()
+            .and_then(|g| g.latest_release())
+            .and_then(|r| r.date.as_deref());
+        let date_b = g_b
+            .as_ref()
+            .and_then(|g| g.latest_release())
+            .and_then(|r| r.date.as_deref());
+        match (date_b, date_a) {
+            (Some(b), Some(a)) => b.cmp(a),
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => std::cmp::Ordering::Equal,
+        }
+    });
+
+    for (entry, (_, github, installed)) in rows {
         let latest_version = github
             .as_ref()
             .and_then(|g| g.latest_version())
@@ -505,8 +524,8 @@ fn run_status() -> Result<()> {
             },
             installed_cell,
             styles::bold_cell(latest_version),
-            styles::dim_cell(&updated),
-            styles::dim_cell(&freq),
+            comfy_table::Cell::new(&updated),
+            comfy_table::Cell::new(&freq),
         ]);
     }
 
