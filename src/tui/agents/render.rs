@@ -285,6 +285,45 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &mut App) {
             Span::raw(entry.release_frequency()),
         ]));
 
+        // Service health from status data
+        if crate::agents::health::service_mapping_for_agent(&entry.id).is_some() {
+            let status_entries = app
+                .status_app
+                .as_ref()
+                .map(|s| s.entries.as_slice())
+                .unwrap_or(&[]);
+            let health_spans =
+                match crate::agents::health::resolve_agent_service_health(&entry.id, status_entries)
+                {
+                    Some(resolved) => {
+                        let icon = crate::tui::ui::status_health_icon(resolved.health);
+                        let style = crate::tui::ui::status_health_style(resolved.health);
+                        let attribution = match resolved.component_name {
+                            Some(comp) => format!("({} \u{2014} {})", resolved.provider_name, comp),
+                            None => format!("({})", resolved.provider_name),
+                        };
+                        vec![
+                            Span::styled("Service: ", Style::default().fg(Color::DarkGray)),
+                            Span::styled(format!("{} {}", icon, resolved.health.label()), style),
+                            Span::styled(
+                                format!("  {}", attribution),
+                                Style::default().fg(Color::DarkGray),
+                            ),
+                        ]
+                    }
+                    None => {
+                        vec![
+                            Span::styled("Service: ", Style::default().fg(Color::DarkGray)),
+                            Span::styled(
+                                "? Loading...",
+                                Style::default().fg(Color::DarkGray),
+                            ),
+                        ]
+                    }
+                };
+            detail_lines.push(Line::from(health_spans));
+        }
+
         // Show status indicator based on fetch_status
         match &entry.fetch_status {
             FetchStatus::Loading => {

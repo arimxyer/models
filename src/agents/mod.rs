@@ -3,6 +3,7 @@ pub mod changelog_parser;
 pub mod data;
 pub mod detect;
 pub mod github;
+pub mod health;
 pub mod helpers;
 pub mod loader;
 
