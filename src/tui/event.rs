@@ -433,21 +433,6 @@ fn handle_status_keys(app: &App, code: KeyCode, modifiers: KeyModifiers) -> Opti
     match code {
         KeyCode::Char('o') => Some(Message::OpenStatusPage),
         KeyCode::Char('r') => Some(Message::RefreshStatus),
-        KeyCode::Char('e') => {
-            let is_detail = app
-                .status_app
-                .as_ref()
-                .is_some_and(|s| s.focus == super::status::StatusFocus::Details);
-            let is_provider = app
-                .status_app
-                .as_ref()
-                .is_some_and(|s| !s.is_overall_selected());
-            if is_detail && is_provider {
-                Some(Message::ToggleServicesExpanded)
-            } else {
-                None
-            }
-        }
         _ => None,
     }
 }

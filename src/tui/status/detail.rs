@@ -146,13 +146,10 @@ pub(super) fn draw_provider_status_detail(
     scheduled_maintenances: &[crate::status::ScheduledMaintenance],
     detail_scroll: &ScrollOffset,
     is_focused: bool,
-    services_expanded: bool,
     services_scroll: &ScrollOffset,
     detail_panel_focus: super::app::DetailPanelFocus,
     maintenance_scroll: &ScrollOffset,
 ) {
-    let dark_border = Style::default().fg(Color::DarkGray);
-
     // Compute dynamic subpanel heights
     // Base: gauge + legend + 2 borders = 4
     let mut status_h: u16 = 4;
@@ -165,34 +162,20 @@ pub(super) fn draw_provider_status_detail(
 
     let has_components =
         !components.is_empty() || service_note.is_some() || confirmed_no_components;
-    // Count non-operational components for the services panel
-    let non_op_comp_count = components
+    let healthy_comp_count = components
         .iter()
         .filter(|c| {
             let s = c.status.to_lowercase();
-            !s.contains("operational") && s != "unknown" && !s.is_empty()
+            s.contains("operational") || s == "unknown" || s.is_empty()
         })
         .count();
-    let healthy_comp_count = components.len() - non_op_comp_count;
-    // Service rows: one per non-operational component + optional summary line
-    let service_rows = if has_components {
-        let base = non_op_comp_count as u16;
-        let summary = if healthy_comp_count > 0 { 1u16 } else { 0 };
-        (base + summary).max(1) // at least 1 row
-    } else {
-        0
-    };
 
     let has_maintenance = !scheduled_maintenances.is_empty() || maintenance_problem;
 
     let mut constraints: Vec<Constraint> = vec![Constraint::Length(status_h)];
     if has_components {
-        if services_expanded {
-            let expanded_h = (components.len() as u16 + 2).min(12);
-            constraints.push(Constraint::Length(expanded_h));
-        } else {
-            constraints.push(Constraint::Length(service_rows + 2)); // rows + borders
-        }
+        let services_h = (components.len() as u16 + 2).min(12);
+        constraints.push(Constraint::Length(services_h));
     }
     // Bottom area: incidents (+ maintenance if present) share remaining space
     constraints.push(Constraint::Min(0));
@@ -378,30 +361,8 @@ pub(super) fn draw_provider_status_detail(
                 "No service-level issues reported",
                 Style::default().fg(Color::DarkGray),
             )));
-        } else if services_expanded {
-            // Expanded: show ALL services with status icon + name
-            for comp in components {
-                let name = translate_component_name(&comp.name);
-                lines.push(Line::from(vec![
-                    Span::styled(
-                        component_status_icon(&comp.status),
-                        component_status_style(&comp.status),
-                    ),
-                    Span::raw(" "),
-                    Span::styled(name, Style::default().add_modifier(Modifier::BOLD)),
-                    Span::styled(
-                        format!("  {}", comp.status.replace('_', " ")),
-                        Style::default().fg(Color::DarkGray),
-                    ),
-                ]));
-            }
         } else {
-            // Collapsed: only non-operational + summary line
             for comp in components {
-                let s = comp.status.to_lowercase();
-                if s.contains("operational") || s == "unknown" || s.is_empty() {
-                    continue;
-                }
                 let name = translate_component_name(&comp.name);
                 lines.push(Line::from(vec![
                     Span::styled(
@@ -416,27 +377,12 @@ pub(super) fn draw_provider_status_detail(
                     ),
                 ]));
             }
-
-            // Title icons already communicate healthy count — no summary line needed
         }
 
         let services_focused =
             is_focused && detail_panel_focus == super::app::DetailPanelFocus::Services;
-        if services_expanded {
-            ScrollablePanel::new(services_title, lines, services_scroll, services_focused)
-                .render(f, services_area);
-        } else {
-            let border = if services_focused {
-                Style::default().fg(Color::Cyan)
-            } else {
-                dark_border
-            };
-            let block = Block::default()
-                .borders(Borders::ALL)
-                .border_style(border)
-                .title(services_title);
-            f.render_widget(Paragraph::new(lines).block(block), services_area);
-        }
+        ScrollablePanel::new(services_title, lines, services_scroll, services_focused)
+            .render(f, services_area);
     }
 
     // ── Bottom area: Incidents + Maintenance ──────────────────

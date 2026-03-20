@@ -378,7 +378,7 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
                     }
                 }
                 Tab::Status => {
-                    let mut hints = vec![
+                    let hints = vec![
                         Span::styled(" q ", Style::default().fg(Color::Yellow)),
                         Span::raw("quit  "),
                         Span::styled(" / ", Style::default().fg(Color::Yellow)),
@@ -390,15 +390,6 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
                         Span::styled(" r ", Style::default().fg(Color::Yellow)),
                         Span::raw("refresh"),
                     ];
-                    let has_services = app
-                        .status_app
-                        .as_ref()
-                        .is_some_and(|s| !s.is_overall_selected());
-                    if has_services {
-                        hints.push(Span::raw("  "));
-                        hints.push(Span::styled(" e ", Style::default().fg(Color::Yellow)));
-                        hints.push(Span::raw("expand"));
-                    }
                     Line::from(hints)
                 }
             };

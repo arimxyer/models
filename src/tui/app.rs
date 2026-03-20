@@ -185,7 +185,6 @@ pub enum Message {
     ScrollStatusDetailBottom,
     PageScrollStatusDetailUp,
     PageScrollStatusDetailDown,
-    ToggleServicesExpanded,
     // Async data messages
     GitHubDataReceived(String, GitHubData),
     GitHubFetchFailed(String, String), // (agent_id, error_message)
@@ -603,12 +602,6 @@ impl App {
                     } else {
                         status_app.page_scroll_active_detail_panel_down();
                     }
-                }
-            }
-            Message::ToggleServicesExpanded => {
-                if let Some(ref mut status_app) = self.status_app {
-                    status_app.services_expanded = !status_app.services_expanded;
-                    status_app.services_scroll.jump_top();
                 }
             }
             Message::SwitchAgentFocus => {
