@@ -553,18 +553,42 @@ fn model_detail_lines(app: &App, width: u16) -> Vec<Line<'static>> {
     };
     let (tmp_val, tmp_col) = cap_val(model.temperature, Color::White);
     lines.push(two_pair_line(
-        LabelValue { label: "Reasoning: ", value: r_val, color: r_col },
-        LabelValue { label: "Tools: ", value: t_val, color: t_col },
+        LabelValue {
+            label: "Reasoning: ",
+            value: r_val,
+            color: r_col,
+        },
+        LabelValue {
+            label: "Tools: ",
+            value: t_val,
+            color: t_col,
+        },
         col_w,
     ));
     lines.push(two_pair_line(
-        LabelValue { label: "Source: ", value: ow_val, color: ow_col },
-        LabelValue { label: "Files: ", value: f_val, color: f_col },
+        LabelValue {
+            label: "Source: ",
+            value: ow_val,
+            color: ow_col,
+        },
+        LabelValue {
+            label: "Files: ",
+            value: f_val,
+            color: f_col,
+        },
         col_w,
     ));
     lines.push(two_pair_line(
-        LabelValue { label: "Temp: ", value: tmp_val, color: tmp_col },
-        LabelValue { label: "", value: "", color: Color::DarkGray },
+        LabelValue {
+            label: "Temp: ",
+            value: tmp_val,
+            color: tmp_col,
+        },
+        LabelValue {
+            label: "",
+            value: "",
+            color: Color::DarkGray,
+        },
         col_w,
     ));
 
@@ -601,13 +625,29 @@ fn model_detail_lines(app: &App, width: u16) -> Vec<Line<'static>> {
     let (cache_write_str, cache_write_color) =
         fmt_cost(model.cost.as_ref().and_then(|c| c.cache_write));
     lines.push(two_pair_line(
-        LabelValue { label: "Input: ", value: &input_str, color: input_color },
-        LabelValue { label: "Output: ", value: &output_str, color: output_color },
+        LabelValue {
+            label: "Input: ",
+            value: &input_str,
+            color: input_color,
+        },
+        LabelValue {
+            label: "Output: ",
+            value: &output_str,
+            color: output_color,
+        },
         col_w,
     ));
     lines.push(two_pair_line(
-        LabelValue { label: "Cache Read: ", value: &cache_read_str, color: cache_read_color },
-        LabelValue { label: "Cache Write: ", value: &cache_write_str, color: cache_write_color },
+        LabelValue {
+            label: "Cache Read: ",
+            value: &cache_read_str,
+            color: cache_read_color,
+        },
+        LabelValue {
+            label: "Cache Write: ",
+            value: &cache_write_str,
+            color: cache_write_color,
+        },
         col_w,
     ));
 
@@ -693,8 +733,16 @@ fn model_detail_lines(app: &App, width: u16) -> Vec<Line<'static>> {
         text_color
     };
     lines.push(two_pair_line(
-        LabelValue { label: "Released: ", value: released, color: rel_color },
-        LabelValue { label: "Knowledge: ", value: knowledge, color: know_color },
+        LabelValue {
+            label: "Released: ",
+            value: released,
+            color: rel_color,
+        },
+        LabelValue {
+            label: "Knowledge: ",
+            value: knowledge,
+            color: know_color,
+        },
         col_w,
     ));
     if let Some(updated) = &model.last_updated {
@@ -704,8 +752,16 @@ fn model_detail_lines(app: &App, width: u16) -> Vec<Line<'static>> {
             text_color
         };
         lines.push(two_pair_line(
-            LabelValue { label: "Updated: ", value: updated, color: upd_color },
-            LabelValue { label: "", value: "", color: Color::DarkGray },
+            LabelValue {
+                label: "Updated: ",
+                value: updated,
+                color: upd_color,
+            },
+            LabelValue {
+                label: "",
+                value: "",
+                color: Color::DarkGray,
+            },
             col_w,
         ));
     }
@@ -718,8 +774,7 @@ fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
     // Inner width for line building (area width minus 2 for borders)
     let inner_w = area.width.saturating_sub(2);
     let lines = model_detail_lines(app, inner_w);
-    ScrollablePanel::new("Details", lines, &app.models_app.detail_scroll, focused)
-        .render(f, area);
+    ScrollablePanel::new("Details", lines, &app.models_app.detail_scroll, focused).render(f, area);
 }
 
 /// Unicode-safe truncation with ellipsis for table cells.
