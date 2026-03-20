@@ -36,7 +36,7 @@ pub static AGENT_SERVICE_MAPPINGS: &[AgentServiceMapping] = &[
     AgentServiceMapping {
         agent_id: "zed",
         provider_slug: "zed",
-        component_name: None,
+        component_name: Some("Agent"),
     },
 ];
 
