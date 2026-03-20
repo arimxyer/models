@@ -32,7 +32,7 @@ All 3 pickers (models, benchmarks, agents) follow the same lifecycle:
 - `models search <query>` — keyword match, interactive picker for selection
 - `models show <name>` — single-model detail view with benchmarks/capabilities
 - `models benchmarks` — interactive picker, can output JSON via --json
-- `agents status|latest|list-sources` — table output
+- `agents status|latest|list-sources` — table output; `agents status` sorts by most recently updated and includes a "Status" column with service health icons
 - `agents <tool>` — release browser with changelog search (agents_ui.rs)
 
 Tool-specific flags parsed manually in `ToolArgs::parse_from()` (not clap, since tools are `external_subcommand`).

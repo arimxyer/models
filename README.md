@@ -59,6 +59,7 @@ TUI and CLI for browsing AI models, benchmarks, and coding agents.
 - **Overall dashboard** — health gauge, incident and maintenance cards at a glance
 - **Provider detail** — grouped services, incidents, and scheduled maintenance
 - **Multi-source** — unified status from Statuspage, BetterStack, Instatus, incident.io, and more
+- **Customizable tracking** — choose which providers to monitor (press `a` to open the tracking picker)
 
 ### Agents CLI
 - **Status table** — see installed vs latest version, 24h release indicator, and release frequency at a glance
@@ -299,6 +300,7 @@ See [Custom Agents](docs/custom-agents.md) for the full reference.
 |-----|--------|
 | `Tab` / `h` / `l` | Switch focus (List ↔ Detail) |
 | `h` / `l` | Cycle detail sub-panels (Services / Incidents / Maintenance) |
+| `a` | Add/remove tracked providers |
 | `o` | Open provider status page |
 | `r` | Refresh provider status |
 | `/` | Search providers |
