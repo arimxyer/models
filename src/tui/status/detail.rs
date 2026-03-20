@@ -8,7 +8,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Borders, Gauge, Paragraph},
     Frame,
 };
 
@@ -132,11 +132,9 @@ pub(super) fn draw_provider_status_detail(
     health: ProviderHealth,
     provenance: StatusProvenance,
     error_msg: &Option<String>,
-    source_display: &str,
     time_label: &str,
     time_value: &str,
     caveat: &Option<String>,
-    provider_summary: &Option<String>,
     service_note: &Option<String>,
     incident_note: &Option<String>,
     maintenance_note: &Option<String>,
@@ -154,12 +152,9 @@ pub(super) fn draw_provider_status_detail(
     let dark_border = Style::default().fg(Color::DarkGray);
 
     // Compute dynamic subpanel heights
-    // Base: 4 content lines (name, verdict, issue_summary, source) + 2 borders = 6
-    let mut status_h: u16 = 6;
+    // Base: gauge + verdict + issue_summary + 2 borders = 5
+    let mut status_h: u16 = 5;
     if caveat.is_some() || provenance == StatusProvenance::Unavailable {
-        status_h += 1;
-    }
-    if provider_summary.is_some() {
         status_h += 1;
     }
     if error_msg.is_some() {
@@ -197,12 +192,8 @@ pub(super) fn draw_provider_status_detail(
             constraints.push(Constraint::Length(service_rows + 2)); // rows + borders
         }
     }
-    if has_maintenance {
-        constraints.push(Constraint::Percentage(60)); // Incidents
-        constraints.push(Constraint::Percentage(40)); // Maintenance
-    } else {
-        constraints.push(Constraint::Min(0)); // Incidents (all remaining space)
-    }
+    // Bottom area: incidents (+ maintenance if present) share remaining space
+    constraints.push(Constraint::Min(0));
 
     let panel_chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -215,6 +206,8 @@ pub(super) fn draw_provider_status_detail(
     {
         let status_area = panel_chunks[chunk_idx];
         chunk_idx += 1;
+
+        let title = format!(" {display_name} · {time_label}: {time_value} ");
 
         let issue_summary = match (
             incident_note.as_deref(),
@@ -246,24 +239,63 @@ pub(super) fn draw_provider_status_detail(
                 if maintenance == 1 { "" } else { "s" },
             ),
         };
-        let support_line = format!("Source: {source_display} • {time_label}: {time_value}");
 
-        let mut lines: Vec<Line<'static>> = vec![
-            Line::from(vec![
-                Span::styled(status_health_icon(health), status_health_style(health)),
-                Span::raw(" "),
-                Span::styled(
-                    display_name.to_string(),
-                    Style::default()
-                        .fg(Color::White)
-                        .add_modifier(Modifier::BOLD),
-                ),
-            ]),
-            Line::from(Span::styled(
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::White))
+            .title(title);
+        let inner = block.inner(status_area);
+        f.render_widget(block, status_area);
+
+        let mut inner_constraints = vec![
+            Constraint::Length(1), // gauge
+            Constraint::Length(1), // verdict + issue summary
+        ];
+        if caveat.is_some() || provenance == StatusProvenance::Unavailable {
+            inner_constraints.push(Constraint::Length(1));
+        }
+        if error_msg.is_some() {
+            inner_constraints.push(Constraint::Length(1));
+        }
+        let inner_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints(inner_constraints)
+            .split(inner);
+
+        // Gauge: operational components / total
+        let total = components.len();
+        let ratio = if total > 0 {
+            healthy_comp_count as f64 / total as f64
+        } else {
+            match health {
+                ProviderHealth::Operational => 1.0,
+                ProviderHealth::Unknown => 1.0,
+                _ => 0.5,
+            }
+        };
+        let gauge_label = if total > 0 {
+            format!(
+                "{} {}  {:.0}%",
+                status_health_icon(health),
                 status_verdict_copy(health),
-                status_health_style(health).add_modifier(Modifier::BOLD),
-            )),
-            Line::from(Span::styled(
+                ratio * 100.0
+            )
+        } else {
+            format!("{} {}", status_health_icon(health), status_verdict_copy(health))
+        };
+        let gauge = Gauge::default()
+            .gauge_style(
+                Style::default()
+                    .fg(status_health_style(health).fg.unwrap_or(Color::Green))
+                    .bg(Color::DarkGray),
+            )
+            .ratio(ratio)
+            .label(gauge_label);
+        f.render_widget(gauge, inner_chunks[0]);
+
+        // Issue summary line
+        f.render_widget(
+            Paragraph::new(Line::from(Span::styled(
                 issue_summary,
                 if active_incidents.is_empty() {
                     Style::default().fg(Color::DarkGray)
@@ -272,44 +304,40 @@ pub(super) fn draw_provider_status_detail(
                         .fg(Color::Yellow)
                         .add_modifier(Modifier::BOLD)
                 },
-            )),
-            Line::from(Span::styled(
-                support_line,
-                Style::default().fg(Color::DarkGray),
-            )),
-        ];
+            ))),
+            inner_chunks[1],
+        );
 
-        if let Some(summary) = provider_summary {
-            lines.push(Line::from(vec![
-                Span::styled("Summary: ", status_field_label_style()),
-                Span::raw(summary.clone()),
-            ]));
-        }
-
-        // Optional caveat/notes line
+        // Optional caveat/notes
+        let mut extra_idx = 2;
         if let Some(caveat_text) = caveat {
-            lines.push(Line::from(Span::styled(
-                caveat_text.clone(),
-                Style::default().fg(Color::Yellow),
-            )));
+            f.render_widget(
+                Paragraph::new(Line::from(Span::styled(
+                    caveat_text.clone(),
+                    Style::default().fg(Color::Yellow),
+                ))),
+                inner_chunks[extra_idx],
+            );
+            extra_idx += 1;
         } else if provenance == StatusProvenance::Unavailable {
-            lines.push(Line::from(Span::styled(
-                "Status unavailable",
-                Style::default().fg(Color::Yellow),
-            )));
+            f.render_widget(
+                Paragraph::new(Line::from(Span::styled(
+                    "Status unavailable",
+                    Style::default().fg(Color::Yellow),
+                ))),
+                inner_chunks[extra_idx],
+            );
+            extra_idx += 1;
         }
         if let Some(err) = error_msg {
-            lines.push(Line::from(Span::styled(
-                err.clone(),
-                Style::default().fg(Color::Red),
-            )));
+            f.render_widget(
+                Paragraph::new(Line::from(Span::styled(
+                    err.clone(),
+                    Style::default().fg(Color::Red),
+                ))),
+                inner_chunks[extra_idx],
+            );
         }
-
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::White))
-            .title(" Status ");
-        f.render_widget(Paragraph::new(lines).block(block), status_area);
     }
 
     // ── Services (non-operational highlighted, healthy summarized) ─
@@ -395,11 +423,28 @@ pub(super) fn draw_provider_status_detail(
         }
     }
 
-    // ── Current Incidents (scrollable, focusable) ──────────────
+    // ── Bottom area: Incidents + Maintenance ──────────────────
     {
-        let incidents_area = panel_chunks[chunk_idx];
-        chunk_idx += 1;
+        let bottom_area = panel_chunks[chunk_idx];
 
+        // Split horizontally when wide enough and maintenance exists, else stack
+        let (incidents_area, maint_area) = if has_maintenance && bottom_area.width >= 60 {
+            let cols = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
+                .split(bottom_area);
+            (cols[0], Some(cols[1]))
+        } else if has_maintenance {
+            let rows = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
+                .split(bottom_area);
+            (rows[0], Some(rows[1]))
+        } else {
+            (bottom_area, None)
+        };
+
+        // ── Incidents ──
         let body_width = usize::from(incidents_area.width.saturating_sub(4)).max(24);
         let title = format!("Current Incidents ({})", active_incidents.len());
 
@@ -495,75 +540,76 @@ pub(super) fn draw_provider_status_detail(
             ScrollablePanel::with_cards(title, cards, detail_scroll, is_focused)
                 .render(f, incidents_area);
         }
-    }
 
-    // ── Maintenance ────────────────────────────────────────────
-    if has_maintenance {
-        let maint_area = panel_chunks[chunk_idx];
-        let title = format!("Maintenance ({})", scheduled_maintenances.len());
+        // ── Maintenance ──
+        if let Some(maint_area) = maint_area {
+            let title = format!("Maintenance ({})", scheduled_maintenances.len());
 
-        if maintenance_problem || scheduled_maintenances.is_empty() {
-            let lines = vec![Line::from(Span::styled(
-                maintenance_note
-                    .clone()
-                    .unwrap_or_else(|| "Maintenance details failed to load".to_string()),
-                Style::default().fg(Color::DarkGray),
-            ))];
-            ScrollablePanel::new(title, lines, detail_scroll, false).render(f, maint_area);
-        } else {
-            let mut cards = Vec::new();
+            if maintenance_problem || scheduled_maintenances.is_empty() {
+                let lines = vec![Line::from(Span::styled(
+                    maintenance_note
+                        .clone()
+                        .unwrap_or_else(|| "Maintenance details failed to load".to_string()),
+                    Style::default().fg(Color::DarkGray),
+                ))];
+                ScrollablePanel::new(title, lines, detail_scroll, false).render(f, maint_area);
+            } else {
+                let mut cards = Vec::new();
 
-            for maint in scheduled_maintenances {
-                let mut card_lines = Vec::new();
+                for maint in scheduled_maintenances {
+                    let mut card_lines = Vec::new();
 
-                card_lines.push(Line::from(vec![
-                    Span::styled("◆ ", Style::default().fg(Color::Blue)),
-                    Span::styled(
-                        maint.name.clone(),
-                        Style::default().add_modifier(Modifier::BOLD),
-                    ),
-                ]));
-
-                let mut status_spans = vec![
-                    Span::styled("  Status: ", status_field_label_style()),
-                    Span::styled(
-                        maint.status.replace('_', " "),
-                        component_status_style(&maint.status),
-                    ),
-                ];
-                if let Some(start) = maint.scheduled_for.as_deref() {
-                    status_spans.push(Span::raw("  "));
-                    status_spans.push(Span::styled("Scheduled: ", status_field_label_style()));
-                    status_spans.push(Span::styled(
-                        format_relative_time_from_str(start),
-                        Style::default().fg(Color::Cyan),
-                    ));
-                }
-                card_lines.push(Line::from(status_spans));
-
-                if let Some(until) = maint.scheduled_until.as_deref() {
                     card_lines.push(Line::from(vec![
-                        Span::styled("  Until: ", status_field_label_style()),
+                        Span::styled("◆ ", Style::default().fg(Color::Blue)),
                         Span::styled(
-                            format_relative_time_from_str(until),
-                            Style::default().fg(Color::Cyan),
+                            maint.name.clone(),
+                            Style::default().add_modifier(Modifier::BOLD),
                         ),
                     ]));
+
+                    let mut status_spans = vec![
+                        Span::styled("  Status: ", status_field_label_style()),
+                        Span::styled(
+                            maint.status.replace('_', " "),
+                            component_status_style(&maint.status),
+                        ),
+                    ];
+                    if let Some(start) = maint.scheduled_for.as_deref() {
+                        status_spans.push(Span::raw("  "));
+                        status_spans
+                            .push(Span::styled("Scheduled: ", status_field_label_style()));
+                        status_spans.push(Span::styled(
+                            format_relative_time_from_str(start),
+                            Style::default().fg(Color::Cyan),
+                        ));
+                    }
+                    card_lines.push(Line::from(status_spans));
+
+                    if let Some(until) = maint.scheduled_until.as_deref() {
+                        card_lines.push(Line::from(vec![
+                            Span::styled("  Until: ", status_field_label_style()),
+                            Span::styled(
+                                format_relative_time_from_str(until),
+                                Style::default().fg(Color::Cyan),
+                            ),
+                        ]));
+                    }
+
+                    if !maint.affected_components.is_empty() {
+                        push_plain_scope_lines(
+                            &mut card_lines,
+                            "Affected",
+                            &maint.affected_components,
+                            3,
+                        );
+                    }
+
+                    cards.push(SoftCard::new(ProviderHealth::Maintenance, card_lines));
                 }
 
-                if !maint.affected_components.is_empty() {
-                    push_plain_scope_lines(
-                        &mut card_lines,
-                        "Affected",
-                        &maint.affected_components,
-                        3,
-                    );
-                }
-
-                cards.push(SoftCard::new(ProviderHealth::Maintenance, card_lines));
+                ScrollablePanel::with_cards(title, cards, detail_scroll, false)
+                    .render(f, maint_area);
             }
-
-            ScrollablePanel::with_cards(title, cards, detail_scroll, false).render(f, maint_area);
         }
     }
 }

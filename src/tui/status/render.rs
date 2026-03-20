@@ -562,15 +562,6 @@ pub(in crate::tui) fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App)
         let health = entry.health;
         let provenance = entry.provenance;
         let error_msg = entry.error_summary();
-        let source_name = entry
-            .source_label
-            .clone()
-            .unwrap_or_else(|| "Unavailable".to_string());
-        let source_display = if entry.official_url.is_some() {
-            format!("{source_name} • official page")
-        } else {
-            source_name
-        };
         let (time_label, time_value) = provider_last_meaningful_update(entry)
             .map(|(label, value)| (title_case_status_time_label(label), value))
             .unwrap_or(("Source updated", "Unknown".to_string()));
@@ -579,7 +570,6 @@ pub(in crate::tui) fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App)
         let maintenance_note =
             entry.detail_state_message(&entry.scheduled_maintenances_state, "Maintenance details");
         let maintenance_problem = entry.scheduled_maintenances_state.is_fetch_failed();
-        let provider_summary = entry.provider_summary_text().map(str::to_string);
         let caveat = service_note
             .clone()
             .or_else(|| incident_note.clone())
@@ -597,11 +587,9 @@ pub(in crate::tui) fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App)
             health,
             provenance,
             &error_msg,
-            &source_display,
             time_label,
             &time_value,
             &caveat,
-            &provider_summary,
             &service_note,
             &incident_note,
             &maintenance_note,
@@ -790,8 +778,6 @@ mod tests {
 
         assert!(rendered.contains("Status"));
         assert!(rendered.contains("Some services degraded"));
-        assert!(rendered.contains("API Status Check"));
-        assert!(rendered.contains("official page"));
         assert!(rendered.contains("1 active incident"));
         assert!(!rendered.contains("Narrative"));
         assert!(!rendered.contains("Status page"));
