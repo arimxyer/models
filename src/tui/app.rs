@@ -535,12 +535,20 @@ impl App {
             }
             Message::PrevOverallStatusPanel => {
                 if let Some(ref mut status_app) = self.status_app {
-                    status_app.select_prev_overall_panel();
+                    if status_app.is_overall_selected() {
+                        status_app.select_prev_overall_panel();
+                    } else {
+                        status_app.select_prev_detail_panel();
+                    }
                 }
             }
             Message::NextOverallStatusPanel => {
                 if let Some(ref mut status_app) = self.status_app {
-                    status_app.select_next_overall_panel();
+                    if status_app.is_overall_selected() {
+                        status_app.select_next_overall_panel();
+                    } else {
+                        status_app.select_next_detail_panel();
+                    }
                 }
             }
             Message::ScrollStatusDetailUp => {
@@ -548,7 +556,7 @@ impl App {
                     if status_app.is_overall_selected() {
                         status_app.scroll_active_overall_panel_up();
                     } else {
-                        status_app.detail_scroll.decrement(1);
+                        status_app.scroll_active_detail_panel_up();
                     }
                 }
             }
@@ -557,7 +565,7 @@ impl App {
                     if status_app.is_overall_selected() {
                         status_app.scroll_active_overall_panel_down();
                     } else {
-                        status_app.detail_scroll.increment(1);
+                        status_app.scroll_active_detail_panel_down();
                     }
                 }
             }
@@ -566,7 +574,7 @@ impl App {
                     if status_app.is_overall_selected() {
                         status_app.scroll_active_overall_panel_top();
                     } else {
-                        status_app.detail_scroll.jump_top();
+                        status_app.scroll_active_detail_panel_top();
                     }
                 }
             }
@@ -575,7 +583,7 @@ impl App {
                     if status_app.is_overall_selected() {
                         status_app.scroll_active_overall_panel_bottom();
                     } else {
-                        status_app.detail_scroll.jump_bottom();
+                        status_app.scroll_active_detail_panel_bottom();
                     }
                 }
             }
@@ -584,7 +592,7 @@ impl App {
                     if status_app.is_overall_selected() {
                         status_app.page_scroll_active_overall_panel_up();
                     } else {
-                        status_app.detail_scroll.decrement(PAGE_SIZE as u16);
+                        status_app.page_scroll_active_detail_panel_up();
                     }
                 }
             }
@@ -593,7 +601,7 @@ impl App {
                     if status_app.is_overall_selected() {
                         status_app.page_scroll_active_overall_panel_down();
                     } else {
-                        status_app.detail_scroll.increment(PAGE_SIZE as u16);
+                        status_app.page_scroll_active_detail_panel_down();
                     }
                 }
             }

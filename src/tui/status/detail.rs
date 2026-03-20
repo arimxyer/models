@@ -148,6 +148,8 @@ pub(super) fn draw_provider_status_detail(
     is_focused: bool,
     services_expanded: bool,
     services_scroll: &ScrollOffset,
+    detail_panel_focus: super::app::DetailPanelFocus,
+    maintenance_scroll: &ScrollOffset,
 ) {
     let dark_border = Style::default().fg(Color::DarkGray);
 
@@ -418,13 +420,20 @@ pub(super) fn draw_provider_status_detail(
             // Title icons already communicate healthy count — no summary line needed
         }
 
+        let services_focused =
+            is_focused && detail_panel_focus == super::app::DetailPanelFocus::Services;
         if services_expanded {
-            ScrollablePanel::new(services_title, lines, services_scroll, false)
+            ScrollablePanel::new(services_title, lines, services_scroll, services_focused)
                 .render(f, services_area);
         } else {
+            let border = if services_focused {
+                Style::default().fg(Color::Cyan)
+            } else {
+                dark_border
+            };
             let block = Block::default()
                 .borders(Borders::ALL)
-                .border_style(dark_border)
+                .border_style(border)
                 .title(services_title);
             f.render_widget(Paragraph::new(lines).block(block), services_area);
         }
@@ -452,6 +461,8 @@ pub(super) fn draw_provider_status_detail(
         };
 
         // ── Incidents ──
+        let incidents_focused =
+            is_focused && detail_panel_focus == super::app::DetailPanelFocus::Incidents;
         let body_width = usize::from(incidents_area.width.saturating_sub(4)).max(24);
         let title = format!("Current Incidents ({})", active_incidents.len());
 
@@ -467,7 +478,8 @@ pub(super) fn draw_provider_status_detail(
                 incident_empty_text,
                 Style::default().fg(Color::DarkGray),
             ))];
-            ScrollablePanel::new(title, lines, detail_scroll, is_focused).render(f, incidents_area);
+            ScrollablePanel::new(title, lines, detail_scroll, incidents_focused)
+                .render(f, incidents_area);
         } else {
             let mut cards = Vec::new();
 
@@ -544,12 +556,14 @@ pub(super) fn draw_provider_status_detail(
                 cards.push(SoftCard::new(accent_health, card_lines));
             }
 
-            ScrollablePanel::with_cards(title, cards, detail_scroll, is_focused)
+            ScrollablePanel::with_cards(title, cards, detail_scroll, incidents_focused)
                 .render(f, incidents_area);
         }
 
         // ── Maintenance ──
         if let Some(maint_area) = maint_area {
+            let maint_focused =
+                is_focused && detail_panel_focus == super::app::DetailPanelFocus::Maintenance;
             let title = format!("Maintenance ({})", scheduled_maintenances.len());
 
             if maintenance_problem || scheduled_maintenances.is_empty() {
@@ -559,7 +573,8 @@ pub(super) fn draw_provider_status_detail(
                         .unwrap_or_else(|| "Maintenance details failed to load".to_string()),
                     Style::default().fg(Color::DarkGray),
                 ))];
-                ScrollablePanel::new(title, lines, detail_scroll, false).render(f, maint_area);
+                ScrollablePanel::new(title, lines, maintenance_scroll, maint_focused)
+                    .render(f, maint_area);
             } else {
                 let mut cards = Vec::new();
 
@@ -613,7 +628,7 @@ pub(super) fn draw_provider_status_detail(
                     cards.push(SoftCard::new(ProviderHealth::Maintenance, card_lines));
                 }
 
-                ScrollablePanel::with_cards(title, cards, detail_scroll, false)
+                ScrollablePanel::with_cards(title, cards, maintenance_scroll, maint_focused)
                     .render(f, maint_area);
             }
         }

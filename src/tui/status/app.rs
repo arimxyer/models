@@ -27,6 +27,14 @@ pub enum OverallPanelFocus {
     Maintenance,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DetailPanelFocus {
+    Services,
+    #[default]
+    Incidents,
+    Maintenance,
+}
+
 pub struct StatusApp {
     pub entries: Vec<ProviderStatus>,
     pub filtered_entries: Vec<usize>,
@@ -34,6 +42,7 @@ pub struct StatusApp {
     pub list_state: ListState,
     pub focus: StatusFocus,
     pub overall_panel_focus: OverallPanelFocus,
+    pub detail_panel_focus: DetailPanelFocus,
     pub search_query: String,
     pub detail_scroll: ScrollOffset,
     pub overall_incidents_scroll: ScrollOffset,
@@ -41,6 +50,7 @@ pub struct StatusApp {
     pub overall_maintenance_scroll: ScrollOffset,
     pub services_expanded: bool,
     pub services_scroll: ScrollOffset,
+    pub maintenance_scroll: ScrollOffset,
     pub loading: bool,
     pub last_refreshed: Option<Instant>,
     pub last_error: Option<String>,
@@ -75,6 +85,7 @@ impl StatusApp {
             list_state,
             focus: StatusFocus::default(),
             overall_panel_focus: OverallPanelFocus::default(),
+            detail_panel_focus: DetailPanelFocus::default(),
             search_query: String::new(),
             detail_scroll: ScrollOffset::default(),
             overall_incidents_scroll: ScrollOffset::default(),
@@ -82,6 +93,7 @@ impl StatusApp {
             overall_maintenance_scroll: ScrollOffset::default(),
             services_expanded: false,
             services_scroll: ScrollOffset::default(),
+            maintenance_scroll: ScrollOffset::default(),
             loading: true,
             last_refreshed: None,
             last_error: None,
@@ -167,43 +179,50 @@ impl StatusApp {
             .and_then(|&idx| self.entries.get(idx))
     }
 
+    fn reset_detail_scrolls(&mut self) {
+        self.detail_scroll.jump_top();
+        self.services_scroll.jump_top();
+        self.maintenance_scroll.jump_top();
+        self.normalize_detail_panel_focus();
+    }
+
     pub fn next(&mut self) {
         if self.filtered_entries.is_empty() {
             return;
         }
         self.selected = (self.selected + 1).min(self.filtered_entries.len());
         self.list_state.select(Some(self.selected));
-        self.detail_scroll.jump_top();
+        self.reset_detail_scrolls();
     }
 
     pub fn prev(&mut self) {
         self.selected = self.selected.saturating_sub(1);
         self.list_state.select(Some(self.selected));
-        self.detail_scroll.jump_top();
+        self.reset_detail_scrolls();
     }
 
     pub fn select_first(&mut self) {
         self.selected = 0;
         self.list_state.select(Some(0));
-        self.detail_scroll.jump_top();
+        self.reset_detail_scrolls();
     }
 
     pub fn select_last(&mut self) {
         self.selected = self.filtered_entries.len(); // last provider (0 = Overall)
         self.list_state.select(Some(self.selected));
-        self.detail_scroll.jump_top();
+        self.reset_detail_scrolls();
     }
 
     pub fn page_down(&mut self) {
         self.selected = (self.selected + PAGE_SIZE).min(self.filtered_entries.len());
         self.list_state.select(Some(self.selected));
-        self.detail_scroll.jump_top();
+        self.reset_detail_scrolls();
     }
 
     pub fn page_up(&mut self) {
         self.selected = self.selected.saturating_sub(PAGE_SIZE);
         self.list_state.select(Some(self.selected));
-        self.detail_scroll.jump_top();
+        self.reset_detail_scrolls();
     }
 
     pub fn health_counts(&self) -> (usize, usize, usize, usize) {
@@ -340,6 +359,98 @@ impl StatusApp {
 
     pub fn page_scroll_active_overall_panel_down(&self) {
         self.active_overall_scroll().increment(PAGE_SIZE as u16);
+    }
+
+    // ── Detail panel focus (individual provider view) ─────────
+
+    fn detail_has_services(&self) -> bool {
+        self.current_entry()
+            .is_some_and(|entry| entry.component_detail_available() || !entry.components.is_empty())
+    }
+
+    fn detail_has_maintenance(&self) -> bool {
+        self.current_entry()
+            .is_some_and(|entry| !entry.scheduled_maintenances.is_empty())
+    }
+
+    fn visible_detail_panels(&self) -> Vec<DetailPanelFocus> {
+        let mut panels = Vec::new();
+        if self.detail_has_services() && self.services_expanded {
+            panels.push(DetailPanelFocus::Services);
+        }
+        panels.push(DetailPanelFocus::Incidents);
+        if self.detail_has_maintenance() {
+            panels.push(DetailPanelFocus::Maintenance);
+        }
+        panels
+    }
+
+    pub fn normalize_detail_panel_focus(&mut self) {
+        let panels = self.visible_detail_panels();
+        if !panels.contains(&self.detail_panel_focus) {
+            self.detail_panel_focus = DetailPanelFocus::Incidents;
+        }
+    }
+
+    pub fn select_prev_detail_panel(&mut self) {
+        let panels = self.visible_detail_panels();
+        if panels.is_empty() {
+            return;
+        }
+        let current = panels
+            .iter()
+            .position(|p| *p == self.detail_panel_focus)
+            .unwrap_or(0);
+        let prev = if current == 0 {
+            panels.len() - 1
+        } else {
+            current - 1
+        };
+        self.detail_panel_focus = panels[prev];
+    }
+
+    pub fn select_next_detail_panel(&mut self) {
+        let panels = self.visible_detail_panels();
+        if panels.is_empty() {
+            return;
+        }
+        let current = panels
+            .iter()
+            .position(|p| *p == self.detail_panel_focus)
+            .unwrap_or(0);
+        self.detail_panel_focus = panels[(current + 1) % panels.len()];
+    }
+
+    pub fn active_detail_scroll(&self) -> &ScrollOffset {
+        match self.detail_panel_focus {
+            DetailPanelFocus::Services => &self.services_scroll,
+            DetailPanelFocus::Incidents => &self.detail_scroll,
+            DetailPanelFocus::Maintenance => &self.maintenance_scroll,
+        }
+    }
+
+    pub fn scroll_active_detail_panel_up(&self) {
+        self.active_detail_scroll().decrement(1);
+    }
+
+    pub fn scroll_active_detail_panel_down(&self) {
+        self.active_detail_scroll().increment(1);
+    }
+
+    pub fn scroll_active_detail_panel_top(&self) {
+        self.active_detail_scroll().jump_top();
+    }
+
+    pub fn scroll_active_detail_panel_bottom(&self) {
+        self.active_detail_scroll().jump_bottom();
+    }
+
+    pub fn page_scroll_active_detail_panel_up(&self) {
+        self.active_detail_scroll().decrement(PAGE_SIZE as u16);
+    }
+
+    pub fn page_scroll_active_detail_panel_down(&self) {
+        self.active_detail_scroll().increment(PAGE_SIZE as u16);
     }
 }
 
