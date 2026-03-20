@@ -29,7 +29,9 @@ pub(super) fn component_status_style(status: &str) -> Style {
     let s = status.to_lowercase();
     if s.contains("operational") {
         Style::default().fg(Color::Green)
-    } else if s.contains("degraded") || s.contains("partial") {
+    } else if s.contains("partial") {
+        Style::default().fg(Color::Red)
+    } else if s.contains("degraded") {
         Style::default().fg(Color::Yellow)
     } else if s.contains("outage") || s.contains("major") || s.contains("down") {
         Style::default().fg(Color::Red)
