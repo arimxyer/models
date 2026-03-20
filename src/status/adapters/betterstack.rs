@@ -35,7 +35,11 @@ pub(crate) fn parse_better_stack(
                     item.get("type").and_then(|v| v.as_str()) == Some("status_page_section")
                 })
                 .filter_map(|item| {
-                    let id = item.get("id").and_then(|v| v.as_str())?.parse::<u64>().ok()?;
+                    let id = item
+                        .get("id")
+                        .and_then(|v| v.as_str())?
+                        .parse::<u64>()
+                        .ok()?;
                     let name = item
                         .pointer("/attributes/name")
                         .and_then(|v| v.as_str())
@@ -209,7 +213,11 @@ mod tests {
             parse_better_stack(OfficialStatusSource::TogetherAi, json).expect("parses ok");
         assert_eq!(snapshot.method, StatusSourceMethod::BetterStack);
         assert_eq!(snapshot.health, ProviderHealth::Degraded);
-        assert_eq!(snapshot.components.len(), 2, "should include API and Dashboard");
+        assert_eq!(
+            snapshot.components.len(),
+            2,
+            "should include API and Dashboard"
+        );
         assert_eq!(snapshot.components[0].name, "API");
         assert_eq!(snapshot.components[0].status, "degraded_performance");
         assert_eq!(snapshot.components[1].status, "operational");
@@ -286,8 +294,7 @@ mod tests {
             ]
         }"#;
 
-        let snapshot =
-            parse_better_stack(OfficialStatusSource::Helicone, json).expect("parses ok");
+        let snapshot = parse_better_stack(OfficialStatusSource::Helicone, json).expect("parses ok");
         assert_eq!(snapshot.incidents.len(), 1);
         assert_eq!(snapshot.incidents[0].created_at, None);
         assert_eq!(snapshot.incidents[0].updated_at, None);
@@ -341,7 +348,8 @@ mod tests {
             ]
         }"#;
 
-        let snapshot = parse_better_stack(OfficialStatusSource::TogetherAi, json).expect("parses ok");
+        let snapshot =
+            parse_better_stack(OfficialStatusSource::TogetherAi, json).expect("parses ok");
         assert_eq!(snapshot.components.len(), 3);
 
         let playground = &snapshot.components[0];
@@ -385,7 +393,10 @@ mod tests {
 
         let snapshot = parse_better_stack(OfficialStatusSource::Helicone, json).expect("parses ok");
         assert_eq!(snapshot.components.len(), 1);
-        assert_eq!(snapshot.components[0].group_name, None, "empty section name should not set group_name");
+        assert_eq!(
+            snapshot.components[0].group_name, None,
+            "empty section name should not set group_name"
+        );
     }
 
     #[test]
@@ -416,9 +427,12 @@ mod tests {
             ]
         }"#;
 
-        let snapshot =
-            parse_better_stack(OfficialStatusSource::Helicone, json).expect("parses ok");
-        assert_eq!(snapshot.components.len(), 1, "not_monitored should be filtered out");
+        let snapshot = parse_better_stack(OfficialStatusSource::Helicone, json).expect("parses ok");
+        assert_eq!(
+            snapshot.components.len(),
+            1,
+            "not_monitored should be filtered out"
+        );
         assert_eq!(snapshot.components[0].name, "api.hconeai.com");
     }
 }

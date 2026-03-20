@@ -105,14 +105,12 @@ fn status_io_message_state(message: &Value) -> Option<String> {
                 .or_else(|| value.as_str().map(str::to_string))
         })
         .or_else(|| {
-            message
-                .get("status")
-                .and_then(|value| {
-                    value
-                        .as_u64()
-                        .map(status_io_code_to_string)
-                        .or_else(|| value.as_str().map(str::to_string))
-                })
+            message.get("status").and_then(|value| {
+                value
+                    .as_u64()
+                    .map(status_io_code_to_string)
+                    .or_else(|| value.as_str().map(str::to_string))
+            })
         })
 }
 
@@ -173,8 +171,7 @@ pub(crate) fn parse_status_io(
                         .unwrap_or_default();
                     let latest_message = status_io_latest_message(&messages);
                     // Use components_affected (service names) not containers_affected (infra)
-                    let affected_components =
-                        status_io_collect_names(i.get("components_affected"));
+                    let affected_components = status_io_collect_names(i.get("components_affected"));
                     Some(ActiveIncident {
                         name: name.to_string(),
                         status: latest_message
@@ -183,14 +180,9 @@ pub(crate) fn parse_status_io(
                         impact: latest_message
                             .and_then(|message| {
                                 message.get("status").and_then(|value| {
-                                    value
-                                        .as_u64()
-                                        .map(status_io_code_to_string)
-                                        .or_else(|| {
-                                            value
-                                                .as_str()
-                                                .map(status_io_code_or_label_to_status)
-                                        })
+                                    value.as_u64().map(status_io_code_to_string).or_else(|| {
+                                        value.as_str().map(status_io_code_or_label_to_status)
+                                    })
                                 })
                             })
                             .unwrap_or_default(),
@@ -241,14 +233,9 @@ pub(crate) fn parse_status_io(
                             impact: latest_message
                                 .and_then(|message| {
                                     message.get("status").and_then(|value| {
-                                        value
-                                            .as_u64()
-                                            .map(status_io_code_to_string)
-                                            .or_else(|| {
-                                                value
-                                                    .as_str()
-                                                    .map(status_io_code_or_label_to_status)
-                                            })
+                                        value.as_u64().map(status_io_code_to_string).or_else(|| {
+                                            value.as_str().map(status_io_code_or_label_to_status)
+                                        })
                                     })
                                 })
                                 .unwrap_or_default(),

@@ -49,10 +49,7 @@ pub(crate) fn parse_instatus_summary(
                             .and_then(|v| v.as_str())
                             .unwrap_or_default()
                             .to_string(),
-                        shortlink: i
-                            .get("url")
-                            .and_then(|v| v.as_str())
-                            .map(|s| s.to_string()),
+                        shortlink: i.get("url").and_then(|v| v.as_str()).map(|s| s.to_string()),
                         created_at: i
                             .get("started")
                             .and_then(|v| v.as_str())
