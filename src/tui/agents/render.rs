@@ -233,7 +233,7 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &mut App) {
         let repo = entry.agent.repo.clone();
         let stars_str = entry.github.stars.map(format_stars).unwrap_or_default();
         detail_lines.push(Line::from(vec![
-            Span::styled(repo, Style::default().fg(Color::DarkGray)),
+            Span::styled(repo, Style::default().fg(Color::Gray)),
             Span::raw("  "),
             Span::styled(
                 format!("★ {}", stars_str),
@@ -258,7 +258,7 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &mut App) {
         };
 
         detail_lines.push(Line::from(vec![
-            Span::styled("Installed: ", Style::default().fg(Color::DarkGray)),
+            Span::styled("Installed: ", Style::default().fg(Color::Gray)),
             Span::raw(installed_str),
             status,
         ]));
@@ -272,16 +272,16 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &mut App) {
             .latest_release_relative_time()
             .unwrap_or_else(|| "\u{2014}".to_string());
         detail_lines.push(Line::from(vec![
-            Span::styled("Latest release: ", Style::default().fg(Color::DarkGray)),
+            Span::styled("Latest release: ", Style::default().fg(Color::Gray)),
             Span::raw(latest_release_date),
             Span::styled(
                 format!(" ({})", updated_str),
-                Style::default().fg(Color::DarkGray),
+                Style::default().fg(Color::Gray),
             ),
         ]));
 
         detail_lines.push(Line::from(vec![
-            Span::styled("Release cadence: ", Style::default().fg(Color::DarkGray)),
+            Span::styled("Release cadence: ", Style::default().fg(Color::Gray)),
             Span::raw(entry.release_frequency()),
         ]));
 
@@ -303,17 +303,17 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &mut App) {
                             None => format!("({})", resolved.provider_name),
                         };
                         vec![
-                            Span::styled("Service: ", Style::default().fg(Color::DarkGray)),
+                            Span::styled("Service: ", Style::default().fg(Color::Gray)),
                             Span::styled(format!("{} {}", icon, resolved.health.label()), style),
                             Span::styled(
                                 format!("  {}", attribution),
-                                Style::default().fg(Color::DarkGray),
+                                Style::default().fg(Color::Gray),
                             ),
                         ]
                     }
                     None => {
                         vec![
-                            Span::styled("Service: ", Style::default().fg(Color::DarkGray)),
+                            Span::styled("Service: ", Style::default().fg(Color::Gray)),
                             Span::styled(
                                 "? Loading...",
                                 Style::default().fg(Color::DarkGray),
@@ -369,7 +369,7 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &mut App) {
             )));
             detail_lines.push(Line::from(Span::styled(
                 "───────────────────────────────────",
-                Style::default().fg(Color::DarkGray),
+                Style::default().fg(Color::Gray),
             )));
 
             let installed_version = entry.installed.version.as_deref();
@@ -393,7 +393,7 @@ fn draw_agent_detail(f: &mut Frame, area: Rect, app: &mut App) {
                         .unwrap_or_else(|| date.clone());
                     version_spans.push(Span::styled(
                         format!("  {}", display_date),
-                        Style::default().fg(Color::DarkGray),
+                        Style::default().fg(Color::Gray),
                     ));
                 }
 
