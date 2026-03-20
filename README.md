@@ -11,12 +11,15 @@ TUI and CLI for browsing AI models, benchmarks, and coding agents.
 - **Models Tab**: Browse 3,000+ models across 85+ providers from [models.dev](https://models.dev) with capability indicators, adaptive layouts, and provider categorization
 - **Benchmarks Tab**: Compare model performance across 15+ benchmarks from [Artificial Analysis](https://artificialanalysis.ai), with head-to-head tables, scatter plots, radar charts, and creator filtering
 - **Agents Tab**: Track AI coding assistants (Claude Code, Aider, Cursor, etc.) with version detection, changelogs, and GitHub integration
+- **Status Tab**: Monitor provider health with live incident tracking and scheduled maintenance across 21+ providers
 
 <video src="https://github.com/user-attachments/assets/07c750f4-ca47-4f89-8a32-99e0be5004d8" controls width="100%"></video>
 > **Video (and screenshots below) are out-of-sync with the current state of the app, I've been moving fast on making changes and so I'll have to record a new one!**
 
 ## What's New
 
+- **Status tab** — live provider health monitoring with incidents, maintenance, and grouped services for 21+ providers
+- **Scrollable detail panels** — Models and Benchmarks detail panels are now navigable and scrollable
 - **Models tab redesign** — capability indicators, adaptive provider panel, and detailed model info at a glance
 - **Benchmark compare mode** — head-to-head tables, scatter plots, and radar charts for selected models
 - **Benchmarks CLI** — list and inspect benchmark data directly from the terminal
@@ -49,6 +52,13 @@ TUI and CLI for browsing AI models, benchmarks, and coding agents.
 - **Creator sidebar** with 40+ creators — filter by region, type, or open/closed source
 - **Sort & filter** — sort by any metric, filter by reasoning capability, source type, and more
 - **Detail panel** — full benchmark breakdown with indexes, scores, performance, and pricing
+
+### Status Tab
+- **Live provider health** — monitor 21+ AI providers across 7 status page platforms
+- **Health indicators** — operational (●), degraded (◐), outage (✗), maintenance (◆)
+- **Overall dashboard** — health gauge, incident and maintenance cards at a glance
+- **Provider detail** — grouped services, incidents, and scheduled maintenance
+- **Multi-source** — unified status from Statuspage, BetterStack, Instatus, incident.io, and more
 
 ### Agents CLI
 - **Status table** — see installed vs latest version, 24h release indicator, and release frequency at a glance
@@ -148,7 +158,7 @@ models
 **Global**
 | Key | Action |
 |-----|--------|
-| `]` / `[` | Switch tabs (Models / Agents / Benchmarks) |
+| `]` / `[` | Switch tabs (Models / Agents / Benchmarks / Status) |
 | `?` | Show context-aware help |
 | `q` | Quit |
 
@@ -282,6 +292,16 @@ See [Custom Agents](docs/custom-agents.md) for the full reference.
 | Key | Action |
 |-----|--------|
 | `o` | Open Artificial Analysis page |
+
+### Status Tab
+
+| Key | Action |
+|-----|--------|
+| `Tab` / `h` / `l` | Switch focus (List ↔ Detail) |
+| `h` / `l` | Cycle detail sub-panels (Services / Incidents / Maintenance) |
+| `o` | Open provider status page |
+| `r` | Refresh provider status |
+| `/` | Search providers |
 
 ---
 
