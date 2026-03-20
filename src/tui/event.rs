@@ -111,30 +111,35 @@ fn resolve_models_nav(app: &App, action: NavAction) -> Option<Message> {
         NavAction::Down => match app.models_app.focus {
             Focus::Providers => Some(Message::NextProvider),
             Focus::Models => Some(Message::NextModel),
+            Focus::Details => Some(Message::ScrollModelDetailDown),
         },
         NavAction::Up => match app.models_app.focus {
             Focus::Providers => Some(Message::PrevProvider),
             Focus::Models => Some(Message::PrevModel),
+            Focus::Details => Some(Message::ScrollModelDetailUp),
         },
         NavAction::First => match app.models_app.focus {
             Focus::Providers => Some(Message::SelectFirstProvider),
             Focus::Models => Some(Message::SelectFirstModel),
+            Focus::Details => Some(Message::ScrollModelDetailTop),
         },
         NavAction::Last => match app.models_app.focus {
             Focus::Providers => Some(Message::SelectLastProvider),
             Focus::Models => Some(Message::SelectLastModel),
+            Focus::Details => Some(Message::ScrollModelDetailBottom),
         },
         NavAction::PageDown => match app.models_app.focus {
             Focus::Providers => Some(Message::PageDownProvider),
             Focus::Models => Some(Message::PageDownModel),
+            Focus::Details => Some(Message::PageScrollModelDetailDown),
         },
         NavAction::PageUp => match app.models_app.focus {
             Focus::Providers => Some(Message::PageUpProvider),
             Focus::Models => Some(Message::PageUpModel),
+            Focus::Details => Some(Message::PageScrollModelDetailUp),
         },
-        NavAction::FocusLeft | NavAction::FocusRight | NavAction::FocusNext => {
-            Some(Message::SwitchFocus)
-        }
+        NavAction::FocusLeft => Some(Message::FocusModelLeft),
+        NavAction::FocusRight | NavAction::FocusNext => Some(Message::FocusModelRight),
         NavAction::Search => Some(Message::EnterSearch),
         NavAction::ClearEsc => Some(Message::ClearSearch),
     }
@@ -260,41 +265,46 @@ fn resolve_benchmarks_nav(app: &App, action: NavAction) -> Option<Message> {
         NavAction::Down => match focus {
             BenchmarkFocus::Creators => Some(Message::NextBenchmarkCreator),
             BenchmarkFocus::List => Some(Message::NextBenchmark),
+            BenchmarkFocus::Details => Some(Message::ScrollBenchmarkDetailDown),
             BenchmarkFocus::Compare if is_h2h_compare => Some(Message::ScrollH2HDown),
             BenchmarkFocus::Compare => None,
         },
         NavAction::Up => match focus {
             BenchmarkFocus::Creators => Some(Message::PrevBenchmarkCreator),
             BenchmarkFocus::List => Some(Message::PrevBenchmark),
+            BenchmarkFocus::Details => Some(Message::ScrollBenchmarkDetailUp),
             BenchmarkFocus::Compare if is_h2h_compare => Some(Message::ScrollH2HUp),
             BenchmarkFocus::Compare => None,
         },
         NavAction::First => match focus {
             BenchmarkFocus::Creators => Some(Message::SelectFirstBenchmarkCreator),
             BenchmarkFocus::List => Some(Message::SelectFirstBenchmark),
+            BenchmarkFocus::Details => Some(Message::ScrollBenchmarkDetailTop),
             BenchmarkFocus::Compare if is_h2h_compare => Some(Message::ScrollH2HTop),
             BenchmarkFocus::Compare => None,
         },
         NavAction::Last => match focus {
             BenchmarkFocus::Creators => Some(Message::SelectLastBenchmarkCreator),
             BenchmarkFocus::List => Some(Message::SelectLastBenchmark),
+            BenchmarkFocus::Details => Some(Message::ScrollBenchmarkDetailBottom),
             BenchmarkFocus::Compare => None,
         },
         NavAction::PageDown => match focus {
             BenchmarkFocus::Creators => Some(Message::PageDownBenchmarkCreator),
             BenchmarkFocus::List => Some(Message::PageDownBenchmark),
+            BenchmarkFocus::Details => Some(Message::PageScrollBenchmarkDetailDown),
             BenchmarkFocus::Compare if is_h2h_compare => Some(Message::ScrollH2HPageDown),
             BenchmarkFocus::Compare => None,
         },
         NavAction::PageUp => match focus {
             BenchmarkFocus::Creators => Some(Message::PageUpBenchmarkCreator),
             BenchmarkFocus::List => Some(Message::PageUpBenchmark),
+            BenchmarkFocus::Details => Some(Message::PageScrollBenchmarkDetailUp),
             BenchmarkFocus::Compare if is_h2h_compare => Some(Message::ScrollH2HPageUp),
             BenchmarkFocus::Compare => None,
         },
-        NavAction::FocusLeft | NavAction::FocusRight | NavAction::FocusNext => {
-            Some(Message::SwitchBenchmarkFocus)
-        }
+        NavAction::FocusLeft => Some(Message::FocusBenchmarkLeft),
+        NavAction::FocusRight | NavAction::FocusNext => Some(Message::FocusBenchmarkRight),
         NavAction::Search => Some(Message::EnterSearch),
         NavAction::ClearEsc => {
             if app.benchmarks_app.show_detail_overlay {

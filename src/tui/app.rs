@@ -65,7 +65,6 @@ pub enum Message {
     PageUpProvider,
     PageDownModel,
     PageUpModel,
-    SwitchFocus,
     EnterSearch,
     ExitSearch,
     SearchInput(char),
@@ -120,6 +119,16 @@ pub enum Message {
     PrevSearchMatch,
     // Agent sort
     CycleAgentSort,
+    // Models detail panel scrolling
+    ScrollModelDetailUp,
+    ScrollModelDetailDown,
+    ScrollModelDetailTop,
+    ScrollModelDetailBottom,
+    PageScrollModelDetailUp,
+    PageScrollModelDetailDown,
+    // Models focus
+    FocusModelLeft,
+    FocusModelRight,
     // Provider categories
     CycleProviderCategory,
     ToggleGrouping,
@@ -136,7 +145,15 @@ pub enum Message {
     SelectLastBenchmarkCreator,
     PageDownBenchmarkCreator,
     PageUpBenchmarkCreator,
-    SwitchBenchmarkFocus,
+    FocusBenchmarkLeft,
+    FocusBenchmarkRight,
+    // Benchmarks detail panel scrolling
+    ScrollBenchmarkDetailUp,
+    ScrollBenchmarkDetailDown,
+    ScrollBenchmarkDetailTop,
+    ScrollBenchmarkDetailBottom,
+    PageScrollBenchmarkDetailUp,
+    PageScrollBenchmarkDetailDown,
     CycleBenchmarkSource,
     CycleReasoningFilter,
     ToggleRegionGrouping,
@@ -328,8 +345,29 @@ impl App {
             Message::PageUpModel => {
                 self.models_app.page_up_model();
             }
-            Message::SwitchFocus => {
-                self.models_app.switch_focus();
+            Message::FocusModelLeft => {
+                self.models_app.focus_left();
+            }
+            Message::FocusModelRight => {
+                self.models_app.focus_right();
+            }
+            Message::ScrollModelDetailUp => {
+                self.models_app.detail_scroll.decrement(1);
+            }
+            Message::ScrollModelDetailDown => {
+                self.models_app.detail_scroll.increment(1);
+            }
+            Message::ScrollModelDetailTop => {
+                self.models_app.detail_scroll.jump_top();
+            }
+            Message::ScrollModelDetailBottom => {
+                self.models_app.detail_scroll.jump_bottom();
+            }
+            Message::PageScrollModelDetailUp => {
+                self.models_app.detail_scroll.decrement(PAGE_SIZE as u16);
+            }
+            Message::PageScrollModelDetailDown => {
+                self.models_app.detail_scroll.increment(PAGE_SIZE as u16);
             }
             Message::EnterSearch => {
                 self.mode = Mode::Search;
@@ -783,9 +821,35 @@ impl App {
                 self.benchmarks_app
                     .update_filtered(&self.benchmark_store, &self.open_weights_map);
             }
-            Message::SwitchBenchmarkFocus => {
+            Message::FocusBenchmarkRight => {
                 let has_compare = self.selections.len() >= 2;
-                self.benchmarks_app.switch_focus(has_compare);
+                self.benchmarks_app.focus_right(has_compare);
+            }
+            Message::FocusBenchmarkLeft => {
+                let has_compare = self.selections.len() >= 2;
+                self.benchmarks_app.focus_left(has_compare);
+            }
+            Message::ScrollBenchmarkDetailUp => {
+                self.benchmarks_app.detail_scroll.decrement(1);
+            }
+            Message::ScrollBenchmarkDetailDown => {
+                self.benchmarks_app.detail_scroll.increment(1);
+            }
+            Message::ScrollBenchmarkDetailTop => {
+                self.benchmarks_app.detail_scroll.jump_top();
+            }
+            Message::ScrollBenchmarkDetailBottom => {
+                self.benchmarks_app.detail_scroll.jump_bottom();
+            }
+            Message::PageScrollBenchmarkDetailUp => {
+                self.benchmarks_app
+                    .detail_scroll
+                    .decrement(PAGE_SIZE as u16);
+            }
+            Message::PageScrollBenchmarkDetailDown => {
+                self.benchmarks_app
+                    .detail_scroll
+                    .increment(PAGE_SIZE as u16);
             }
             Message::CycleBenchmarkSource => {
                 self.benchmarks_app
@@ -1277,24 +1341,39 @@ mod tests {
     }
 
     #[test]
-    fn test_switch_focus_browse_mode() {
+    fn test_focus_right_browse_mode() {
         use super::super::benchmarks::BenchmarkFocus;
         let mut app = make_test_app();
         app.benchmarks_app.focus = BenchmarkFocus::Creators;
-        app.benchmarks_app.switch_focus(false);
+        app.benchmarks_app.focus_right(false);
         assert_eq!(app.benchmarks_app.focus, BenchmarkFocus::List);
-        app.benchmarks_app.switch_focus(false);
+        app.benchmarks_app.focus_right(false);
+        assert_eq!(app.benchmarks_app.focus, BenchmarkFocus::Details);
+        app.benchmarks_app.focus_right(false);
         assert_eq!(app.benchmarks_app.focus, BenchmarkFocus::Creators);
     }
 
     #[test]
-    fn test_switch_focus_compare_mode() {
+    fn test_focus_left_browse_mode() {
+        use super::super::benchmarks::BenchmarkFocus;
+        let mut app = make_test_app();
+        app.benchmarks_app.focus = BenchmarkFocus::Creators;
+        app.benchmarks_app.focus_left(false);
+        assert_eq!(app.benchmarks_app.focus, BenchmarkFocus::Details);
+        app.benchmarks_app.focus_left(false);
+        assert_eq!(app.benchmarks_app.focus, BenchmarkFocus::List);
+        app.benchmarks_app.focus_left(false);
+        assert_eq!(app.benchmarks_app.focus, BenchmarkFocus::Creators);
+    }
+
+    #[test]
+    fn test_focus_right_compare_mode() {
         use super::super::benchmarks::BenchmarkFocus;
         let mut app = make_test_app();
         app.benchmarks_app.focus = BenchmarkFocus::List;
-        app.benchmarks_app.switch_focus(true);
+        app.benchmarks_app.focus_right(true);
         assert_eq!(app.benchmarks_app.focus, BenchmarkFocus::Compare);
-        app.benchmarks_app.switch_focus(true);
+        app.benchmarks_app.focus_right(true);
         assert_eq!(app.benchmarks_app.focus, BenchmarkFocus::List);
     }
 
