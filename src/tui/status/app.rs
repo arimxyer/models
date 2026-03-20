@@ -621,6 +621,7 @@ mod tests {
                 name: "DB maintenance".to_string(),
                 status: "scheduled".to_string(),
                 impact: "none".to_string(),
+                shortlink: None,
                 scheduled_for: Some("2026-03-18T12:00:00Z".to_string()),
                 scheduled_until: None,
                 affected_components: vec!["API".to_string()],

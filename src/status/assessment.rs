@@ -498,6 +498,8 @@ mod tests {
             name: "API".to_string(),
             status: "major_outage".to_string(),
             group_name: None,
+            position: None,
+            only_show_if_degraded: false,
         });
         status.incidents.push(ActiveIncident {
             name: "API elevated errors".to_string(),
@@ -610,11 +612,15 @@ mod tests {
             name: "Claude".to_string(),
             status: "operational".to_string(),
             group_name: None,
+            position: None,
+            only_show_if_degraded: false,
         });
         status.components.push(ComponentStatus {
             name: "API".to_string(),
             status: "operational".to_string(),
             group_name: None,
+            position: None,
+            only_show_if_degraded: false,
         });
 
         assert_eq!(

@@ -46,6 +46,8 @@ pub(crate) fn parse_statuspage_v2_summary(
                 name: c.name.clone(),
                 status: c.status.clone(),
                 group_name,
+                position: c.position,
+                only_show_if_degraded: c.only_show_if_degraded,
             }
         })
         .collect();
@@ -76,6 +78,7 @@ pub(crate) fn parse_statuspage_v2_summary(
             name: m.name.clone(),
             status: m.status.clone(),
             impact: m.impact.clone().unwrap_or_default(),
+            shortlink: m.shortlink.clone(),
             scheduled_for: m.scheduled_for.clone(),
             scheduled_until: m.scheduled_until.clone(),
             affected_components: m.components.iter().map(|c| c.name.clone()).collect(),
@@ -224,6 +227,10 @@ pub(crate) fn parse_maintenances_json(body: &str) -> Result<Vec<ScheduledMainten
                         .and_then(|v| v.as_str())
                         .unwrap_or_default()
                         .to_string(),
+                    shortlink: m
+                        .get("shortlink")
+                        .and_then(|v| v.as_str())
+                        .map(String::from),
                     scheduled_for: m
                         .get("scheduled_for")
                         .and_then(|v| v.as_str())
@@ -417,10 +424,8 @@ pub(crate) struct OfficialComponent {
     #[serde(default)]
     pub group_id: Option<String>,
     #[serde(default)]
-    #[allow(dead_code)]
     pub position: Option<u16>,
     #[serde(default)]
-    #[allow(dead_code)]
     pub only_show_if_degraded: bool,
 }
 
@@ -431,7 +436,6 @@ pub(crate) struct OfficialScheduledMaintenance {
     #[serde(default)]
     pub impact: Option<String>,
     #[serde(default)]
-    #[allow(dead_code)]
     pub shortlink: Option<String>,
     #[serde(default)]
     pub scheduled_for: Option<String>,

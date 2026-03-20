@@ -580,6 +580,8 @@ pub(in crate::tui) fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App)
         let components = super::detail::sorted_components(entry, &active_incidents);
         let is_detail_focused = status_app.focus == StatusFocus::Details;
 
+        let status_note = entry.status_note_text().map(str::to_string);
+
         super::detail::draw_provider_status_detail(
             f,
             detail_area,
@@ -587,6 +589,7 @@ pub(in crate::tui) fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App)
             health,
             provenance,
             &error_msg,
+            &status_note,
             time_label,
             &time_value,
             &caveat,
@@ -689,11 +692,15 @@ mod tests {
                     name: "API".to_string(),
                     status: "partial_outage".to_string(),
                     group_name: None,
+                    position: None,
+                    only_show_if_degraded: false,
                 },
                 ComponentStatus {
                     name: "Auth".to_string(),
                     status: "operational".to_string(),
                     group_name: None,
+                    position: None,
+                    only_show_if_degraded: false,
                 },
             ],
             components_state: crate::status::StatusDetailState {
@@ -726,6 +733,7 @@ mod tests {
                 name: "Database maintenance".to_string(),
                 status: "scheduled".to_string(),
                 impact: "none".to_string(),
+                shortlink: None,
                 scheduled_for: Some("2026-03-17T03:00:00Z".to_string()),
                 scheduled_until: Some("2026-03-17T04:00:00Z".to_string()),
                 affected_components: vec!["Auth".to_string()],

@@ -85,6 +85,8 @@ pub(crate) fn parse_better_stack(
                         name: name.to_string(),
                         status: normalize_component_status(status),
                         group_name,
+                        position: None,
+                        only_show_if_degraded: false,
                     })
                 })
                 .collect()

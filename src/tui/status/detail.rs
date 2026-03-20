@@ -69,7 +69,18 @@ pub(super) fn sorted_components<'a>(
             component_incident_map.insert(component.as_str());
         }
     }
-    let mut components: Vec<_> = entry.components.iter().collect();
+    let mut components: Vec<_> = entry
+        .components
+        .iter()
+        .filter(|c| {
+            // Hide components marked only_show_if_degraded when they are operational
+            if c.only_show_if_degraded {
+                let s = c.status.to_lowercase();
+                return !s.contains("operational");
+            }
+            true
+        })
+        .collect();
     components.sort_by(|a, b| {
         let severity = |status: &str| -> u8 {
             match component_status_icon(status) {
@@ -82,6 +93,11 @@ pub(super) fn sorted_components<'a>(
         };
         severity(&a.status)
             .cmp(&severity(&b.status))
+            .then_with(|| {
+                a.position
+                    .unwrap_or(u16::MAX)
+                    .cmp(&b.position.unwrap_or(u16::MAX))
+            })
             .then_with(|| translate_component_name(&a.name).cmp(&translate_component_name(&b.name)))
     });
     components
@@ -132,6 +148,7 @@ pub(super) fn draw_provider_status_detail(
     health: ProviderHealth,
     provenance: StatusProvenance,
     error_msg: &Option<String>,
+    status_note: &Option<String>,
     time_label: &str,
     time_value: &str,
     caveat: &Option<String>,
@@ -153,6 +170,9 @@ pub(super) fn draw_provider_status_detail(
     // Compute dynamic subpanel heights
     // Base: gauge + legend + 2 borders = 4
     let mut status_h: u16 = 4;
+    if status_note.is_some() {
+        status_h += 1;
+    }
     if caveat.is_some() || provenance == StatusProvenance::Unavailable {
         status_h += 1;
     }
@@ -205,6 +225,9 @@ pub(super) fn draw_provider_status_detail(
             Constraint::Length(1), // gauge
             Constraint::Length(1), // legend (icon+count summary)
         ];
+        if status_note.is_some() {
+            inner_constraints.push(Constraint::Length(1));
+        }
         if caveat.is_some() || provenance == StatusProvenance::Unavailable {
             inner_constraints.push(Constraint::Length(1));
         }
@@ -298,8 +321,20 @@ pub(super) fn draw_provider_status_detail(
         }
         f.render_widget(Paragraph::new(Line::from(legend_spans)), inner_chunks[1]);
 
-        // Optional caveat/notes
+        // Optional status note (e.g. BetterStack announcements, Google adapter notes)
         let mut extra_idx = 2;
+        if let Some(note_text) = status_note {
+            f.render_widget(
+                Paragraph::new(Line::from(Span::styled(
+                    note_text.clone(),
+                    Style::default().fg(Color::DarkGray),
+                ))),
+                inner_chunks[extra_idx],
+            );
+            extra_idx += 1;
+        }
+
+        // Optional caveat/notes
         if let Some(caveat_text) = caveat {
             f.render_widget(
                 Paragraph::new(Line::from(Span::styled(
@@ -638,6 +673,18 @@ pub(super) fn draw_provider_status_detail(
                             Span::styled(
                                 format_relative_time_from_str(until),
                                 Style::default().fg(Color::Cyan),
+                            ),
+                        ]));
+                    }
+
+                    if let Some(shortlink) = &maint.shortlink {
+                        card_lines.push(Line::from(vec![
+                            Span::styled("  Link: ", status_field_label_style()),
+                            Span::styled(
+                                shortlink.clone(),
+                                Style::default()
+                                    .fg(Color::Cyan)
+                                    .add_modifier(Modifier::UNDERLINED),
                             ),
                         ]));
                     }

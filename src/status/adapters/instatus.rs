@@ -113,6 +113,7 @@ pub(crate) fn parse_instatus_summary(
                             .unwrap_or_default()
                             .to_string(),
                         impact: String::new(),
+                        shortlink: None,
                         // Instatus uses "start" (not "scheduled_for") for the maintenance start time
                         scheduled_for: start_str.map(|s| s.to_string()),
                         scheduled_until: compute_scheduled_until(start_str, duration_str),
@@ -171,6 +172,8 @@ pub(crate) fn parse_instatus_components(body: &str) -> Result<Vec<ComponentStatu
                 name: name.to_string(),
                 status: normalize_component_status(status),
                 group_name: None,
+                position: None,
+                only_show_if_degraded: false,
             })
         })
         .collect())

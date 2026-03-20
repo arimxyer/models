@@ -151,6 +151,8 @@ pub(crate) fn parse_status_io(
                         name: name.to_string(),
                         status: status_io_code_to_string(worst_code),
                         group_name: None,
+                        position: None,
+                        only_show_if_degraded: false,
                     })
                 })
                 .collect()
@@ -239,6 +241,7 @@ pub(crate) fn parse_status_io(
                                     })
                                 })
                                 .unwrap_or_default(),
+                            shortlink: None,
                             scheduled_for: m
                                 .get("datetime_planned_start")
                                 .and_then(status_io_datetime)

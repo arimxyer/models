@@ -44,6 +44,8 @@ pub(crate) fn parse_onlineornot(
                         name: name.to_string(),
                         status: normalize_component_status(status),
                         group_name: None,
+                        position: None,
+                        only_show_if_degraded: false,
                     })
                 })
                 .collect()
@@ -95,6 +97,7 @@ pub(crate) fn parse_onlineornot(
                             .unwrap_or_default()
                             .to_string(),
                         impact: String::new(),
+                        shortlink: None,
                         scheduled_for: None,
                         scheduled_until: None,
                         affected_components: Vec::new(),

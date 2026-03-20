@@ -488,6 +488,8 @@ pub struct ComponentStatus {
     pub name: String,
     pub status: String,
     pub group_name: Option<String>,
+    pub position: Option<u16>,
+    pub only_show_if_degraded: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -514,6 +516,7 @@ pub struct ScheduledMaintenance {
     pub name: String,
     pub status: String,
     pub impact: String,
+    pub shortlink: Option<String>,
     pub scheduled_for: Option<String>,
     pub scheduled_until: Option<String>,
     pub affected_components: Vec<String>,
