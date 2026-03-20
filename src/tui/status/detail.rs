@@ -108,15 +108,21 @@ pub(super) fn sorted_components<'a>(
 fn build_services_title(components: &[&crate::status::ComponentStatus]) -> Line<'static> {
     let mut op = 0u16;
     let mut degraded = 0u16;
+    let mut partial = 0u16;
     let mut outage = 0u16;
     let mut maintenance = 0u16;
     for comp in components {
-        match component_status_icon(&comp.status) {
-            "●" => op += 1,
-            "◐" => degraded += 1,
-            "✗" => outage += 1,
-            "◆" => maintenance += 1,
-            _ => {}
+        let s = comp.status.to_lowercase();
+        if s.contains("operational") {
+            op += 1;
+        } else if s.contains("partial") {
+            partial += 1;
+        } else if s.contains("degraded") {
+            degraded += 1;
+        } else if s.contains("outage") || s.contains("major") || s.contains("down") {
+            outage += 1;
+        } else if s.contains("maint") {
+            maintenance += 1;
         }
     }
 
@@ -128,6 +134,10 @@ fn build_services_title(components: &[&crate::status::ComponentStatus]) -> Line<
     if degraded > 0 {
         spans.push(Span::styled(" ◐ ", Style::default().fg(Color::Yellow)));
         spans.push(Span::raw(format!("{degraded} ")));
+    }
+    if partial > 0 {
+        spans.push(Span::styled(" ◐ ", Style::default().fg(Color::Red)));
+        spans.push(Span::raw(format!("{partial} ")));
     }
     if outage > 0 {
         spans.push(Span::styled(" ✗ ", Style::default().fg(Color::Red)));
@@ -275,11 +285,12 @@ pub(super) fn draw_provider_status_detail(
             .iter()
             .filter(|c| {
                 let s = c.status.to_lowercase();
-                !s.contains("operational")
-                    && !s.contains("maint")
-                    && s != "unknown"
-                    && !s.is_empty()
+                s.contains("degraded") && !s.contains("maint")
             })
+            .count();
+        let partial_comp_count = components
+            .iter()
+            .filter(|c| c.status.to_lowercase().contains("partial"))
             .count();
 
         let mut legend_spans: Vec<Span<'static>> = Vec::new();
@@ -297,7 +308,11 @@ pub(super) fn draw_provider_status_detail(
         }
         if degraded_comp_count > 0 {
             legend_spans.push(Span::styled("◐ ", Style::default().fg(Color::Yellow)));
-            legend_spans.push(Span::raw(format!("{degraded_comp_count} degraded  ",)));
+            legend_spans.push(Span::raw(format!("{degraded_comp_count} degraded  ")));
+        }
+        if partial_comp_count > 0 {
+            legend_spans.push(Span::styled("◐ ", Style::default().fg(Color::Red)));
+            legend_spans.push(Span::raw(format!("{partial_comp_count} partial outage  ")));
         }
         if !scheduled_maintenances.is_empty() {
             legend_spans.push(Span::styled("◇ ", Style::default().fg(Color::Blue)));
