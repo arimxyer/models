@@ -65,7 +65,6 @@ pub enum Message {
     PageUpProvider,
     PageDownModel,
     PageUpModel,
-    SwitchFocus,
     EnterSearch,
     ExitSearch,
     SearchInput(char),
@@ -120,6 +119,16 @@ pub enum Message {
     PrevSearchMatch,
     // Agent sort
     CycleAgentSort,
+    // Models detail panel scrolling
+    ScrollModelDetailUp,
+    ScrollModelDetailDown,
+    ScrollModelDetailTop,
+    ScrollModelDetailBottom,
+    PageScrollModelDetailUp,
+    PageScrollModelDetailDown,
+    // Models focus
+    FocusModelLeft,
+    FocusModelRight,
     // Provider categories
     CycleProviderCategory,
     ToggleGrouping,
@@ -328,8 +337,29 @@ impl App {
             Message::PageUpModel => {
                 self.models_app.page_up_model();
             }
-            Message::SwitchFocus => {
-                self.models_app.switch_focus();
+            Message::FocusModelLeft => {
+                self.models_app.focus_left();
+            }
+            Message::FocusModelRight => {
+                self.models_app.focus_right();
+            }
+            Message::ScrollModelDetailUp => {
+                self.models_app.detail_scroll.decrement(1);
+            }
+            Message::ScrollModelDetailDown => {
+                self.models_app.detail_scroll.increment(1);
+            }
+            Message::ScrollModelDetailTop => {
+                self.models_app.detail_scroll.jump_top();
+            }
+            Message::ScrollModelDetailBottom => {
+                self.models_app.detail_scroll.jump_bottom();
+            }
+            Message::PageScrollModelDetailUp => {
+                self.models_app.detail_scroll.decrement(PAGE_SIZE as u16);
+            }
+            Message::PageScrollModelDetailDown => {
+                self.models_app.detail_scroll.increment(PAGE_SIZE as u16);
             }
             Message::EnterSearch => {
                 self.mode = Mode::Search;
