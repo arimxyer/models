@@ -377,18 +377,30 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
                         ])
                     }
                 }
-                Tab::Status => Line::from(vec![
-                    Span::styled(" q ", Style::default().fg(Color::Yellow)),
-                    Span::raw("quit  "),
-                    Span::styled(" / ", Style::default().fg(Color::Yellow)),
-                    Span::raw("search  "),
-                    Span::styled(" Tab ", Style::default().fg(Color::Yellow)),
-                    Span::raw("focus  "),
-                    Span::styled(" o ", Style::default().fg(Color::Yellow)),
-                    Span::raw("open page  "),
-                    Span::styled(" r ", Style::default().fg(Color::Yellow)),
-                    Span::raw("refresh"),
-                ]),
+                Tab::Status => {
+                    let mut hints = vec![
+                        Span::styled(" q ", Style::default().fg(Color::Yellow)),
+                        Span::raw("quit  "),
+                        Span::styled(" / ", Style::default().fg(Color::Yellow)),
+                        Span::raw("search  "),
+                        Span::styled(" Tab ", Style::default().fg(Color::Yellow)),
+                        Span::raw("focus  "),
+                        Span::styled(" o ", Style::default().fg(Color::Yellow)),
+                        Span::raw("open page  "),
+                        Span::styled(" r ", Style::default().fg(Color::Yellow)),
+                        Span::raw("refresh"),
+                    ];
+                    let has_services = app
+                        .status_app
+                        .as_ref()
+                        .is_some_and(|s| !s.is_overall_selected());
+                    if has_services {
+                        hints.push(Span::raw("  "));
+                        hints.push(Span::styled(" e ", Style::default().fg(Color::Yellow)));
+                        hints.push(Span::raw("expand"));
+                    }
+                    Line::from(hints)
+                }
             };
 
             let right_content = Line::from(vec![
@@ -576,6 +588,7 @@ fn draw_help_popup(f: &mut Frame, scroll: &ScrollOffset, current_tab: Tab) {
                 help_section("Status view"),
                 help_line("Tab/h/l", "Switch list/details focus"),
                 help_line("/", "Search providers"),
+                help_line("e", "Expand/collapse services"),
                 Line::from(""),
             ]);
         }

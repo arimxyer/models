@@ -613,6 +613,8 @@ pub(in crate::tui) fn draw_status_main(f: &mut Frame, area: Rect, app: &mut App)
             &entry.scheduled_maintenances,
             &status_app.detail_scroll,
             is_detail_focused,
+            status_app.services_expanded,
+            &status_app.services_scroll,
         );
     } else {
         let detail_border = if status_app.focus == StatusFocus::Details {

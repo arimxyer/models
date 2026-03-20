@@ -87,6 +87,43 @@ pub(super) fn sorted_components<'a>(
     components
 }
 
+/// Build a services panel title with health summary icons.
+/// Example: ` Services (23)  ● 18  ◐ 3  ✗ 1  ◆ 1 `
+fn build_services_title(components: &[&crate::status::ComponentStatus]) -> Line<'static> {
+    let mut op = 0u16;
+    let mut degraded = 0u16;
+    let mut outage = 0u16;
+    let mut maintenance = 0u16;
+    for comp in components {
+        match component_status_icon(&comp.status) {
+            "●" => op += 1,
+            "◐" => degraded += 1,
+            "✗" => outage += 1,
+            "◆" => maintenance += 1,
+            _ => {}
+        }
+    }
+
+    let mut spans = vec![Span::raw(format!(" Services ({}) ", components.len()))];
+    if op > 0 {
+        spans.push(Span::styled(" ● ", Style::default().fg(Color::Green)));
+        spans.push(Span::raw(format!("{op} ")));
+    }
+    if degraded > 0 {
+        spans.push(Span::styled(" ◐ ", Style::default().fg(Color::Yellow)));
+        spans.push(Span::raw(format!("{degraded} ")));
+    }
+    if outage > 0 {
+        spans.push(Span::styled(" ✗ ", Style::default().fg(Color::Red)));
+        spans.push(Span::raw(format!("{outage} ")));
+    }
+    if maintenance > 0 {
+        spans.push(Span::styled(" ◆ ", Style::default().fg(Color::Blue)));
+        spans.push(Span::raw(format!("{maintenance} ")));
+    }
+    Line::from(spans)
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(super) fn draw_provider_status_detail(
     f: &mut Frame,
@@ -111,6 +148,8 @@ pub(super) fn draw_provider_status_detail(
     scheduled_maintenances: &[crate::status::ScheduledMaintenance],
     detail_scroll: &ScrollOffset,
     is_focused: bool,
+    services_expanded: bool,
+    services_scroll: &ScrollOffset,
 ) {
     let dark_border = Style::default().fg(Color::DarkGray);
 
@@ -151,7 +190,12 @@ pub(super) fn draw_provider_status_detail(
 
     let mut constraints: Vec<Constraint> = vec![Constraint::Length(status_h)];
     if has_components {
-        constraints.push(Constraint::Length(service_rows + 2)); // rows + borders
+        if services_expanded {
+            let expanded_h = (components.len() as u16 + 2).min(12);
+            constraints.push(Constraint::Length(expanded_h));
+        } else {
+            constraints.push(Constraint::Length(service_rows + 2)); // rows + borders
+        }
     }
     if has_maintenance {
         constraints.push(Constraint::Percentage(60)); // Incidents
@@ -273,6 +317,9 @@ pub(super) fn draw_provider_status_detail(
         let services_area = panel_chunks[chunk_idx];
         chunk_idx += 1;
 
+        // Build title with health summary icons
+        let services_title = build_services_title(components);
+
         let mut lines: Vec<Line<'static>> = Vec::new();
 
         if let Some(note) = service_note {
@@ -285,7 +332,25 @@ pub(super) fn draw_provider_status_detail(
                 "No service-level issues reported",
                 Style::default().fg(Color::DarkGray),
             )));
+        } else if services_expanded {
+            // Expanded: show ALL services with status icon + name
+            for comp in components {
+                let name = translate_component_name(&comp.name);
+                lines.push(Line::from(vec![
+                    Span::styled(
+                        component_status_icon(&comp.status),
+                        component_status_style(&comp.status),
+                    ),
+                    Span::raw(" "),
+                    Span::styled(name, Style::default().add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        format!("  {}", comp.status.replace('_', " ")),
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                ]));
+            }
         } else {
+            // Collapsed: only non-operational + summary line
             for comp in components {
                 let s = comp.status.to_lowercase();
                 if s.contains("operational") || s == "unknown" || s.is_empty() {
@@ -318,11 +383,16 @@ pub(super) fn draw_provider_status_detail(
             }
         }
 
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(dark_border)
-            .title(format!(" Services ({}) ", components.len()));
-        f.render_widget(Paragraph::new(lines).block(block), services_area);
+        if services_expanded {
+            ScrollablePanel::new(services_title, lines, services_scroll, false)
+                .render(f, services_area);
+        } else {
+            let block = Block::default()
+                .borders(Borders::ALL)
+                .border_style(dark_border)
+                .title(services_title);
+            f.render_widget(Paragraph::new(lines).block(block), services_area);
+        }
     }
 
     // ── Current Incidents (scrollable, focusable) ──────────────
