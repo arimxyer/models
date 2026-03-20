@@ -440,10 +440,32 @@ fn run_status() -> Result<()> {
     let runtime = tokio::runtime::Runtime::new()?;
     let batch_results = get_github_data_batch(&batch_input, &mut disk_cache, &runtime);
 
+    // Fetch service health for mapped agents
+    let status_entries: Vec<crate::status::ProviderStatus> = {
+        use crate::agents::health::AGENT_SERVICE_MAPPINGS;
+        use crate::status::registry::status_seed_for_provider;
+        let slugs: std::collections::HashSet<&str> = AGENT_SERVICE_MAPPINGS
+            .iter()
+            .map(|m| m.provider_slug)
+            .collect();
+        let seeds: Vec<_> = slugs.iter().map(|s| status_seed_for_provider(s)).collect();
+        let client = reqwest::Client::builder()
+            .user_agent("models-cli")
+            .connect_timeout(std::time::Duration::from_secs(5))
+            .build()
+            .expect("Failed to build HTTP client");
+        let fetcher = crate::status::StatusFetcher::with_client(client);
+        match runtime.block_on(fetcher.fetch(&seeds)) {
+            crate::status::StatusFetchResult::Fresh(entries) => entries,
+            crate::status::StatusFetchResult::Error(_) => Vec::new(),
+        }
+    };
+
     let mut table = comfy_table::Table::new();
     table.load_preset(comfy_table::presets::UTF8_FULL);
     table.set_header(vec![
         styles::header_cell("Tool"),
+        styles::header_cell("Service"),
         styles::header_cell("24h"),
         styles::header_cell("Installed"),
         styles::header_cell("Latest"),
@@ -515,8 +537,33 @@ fn run_status() -> Result<()> {
             styles::yellow_cell(&installed_str)
         };
 
+        let service_cell = {
+            use crate::agents::health::resolve_agent_service_health;
+            use crate::status::ProviderHealth;
+            match resolve_agent_service_health(&entry.id, &status_entries) {
+                Some(resolved) => {
+                    let label = resolved.health.label();
+                    match resolved.health {
+                        ProviderHealth::Operational => styles::green_cell(label),
+                        ProviderHealth::Degraded => styles::yellow_cell(label),
+                        ProviderHealth::Outage => {
+                            comfy_table::Cell::new(label)
+                                .fg(comfy_table::Color::Red)
+                        }
+                        ProviderHealth::Maintenance => {
+                            comfy_table::Cell::new(label)
+                                .fg(comfy_table::Color::Blue)
+                        }
+                        ProviderHealth::Unknown => styles::dim_cell(label),
+                    }
+                }
+                None => styles::dim_cell("\u{2014}"),
+            }
+        };
+
         table.add_row(vec![
             styles::bold_cell(&entry.agent.name),
+            service_cell,
             if is_24h {
                 styles::green_cell("\u{2713}")
             } else {
