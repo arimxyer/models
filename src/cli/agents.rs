@@ -458,10 +458,9 @@ fn run_status() -> Result<()> {
             .build()
             .expect("Failed to build HTTP client");
         let fetcher = crate::status::StatusFetcher::with_client(client);
-        match runtime.block_on(fetcher.fetch(&seeds)) {
-            crate::status::StatusFetchResult::Fresh(entries) => entries,
-            crate::status::StatusFetchResult::Error(_) => Vec::new(),
-        }
+        let crate::status::StatusFetchResult::Fresh(entries) =
+            runtime.block_on(fetcher.fetch(&seeds));
+        entries
     };
 
     let mut table = comfy_table::Table::new();

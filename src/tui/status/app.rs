@@ -136,6 +136,9 @@ impl StatusApp {
             }
         }
 
+        // Preserve selected provider across re-sort
+        let selected_slug = self.current_entry().map(|e| e.slug.clone());
+
         self.entries.sort_by(|a, b| {
             a.health
                 .sort_rank()
@@ -149,11 +152,19 @@ impl StatusApp {
         self.last_error = None;
         self.normalize_overall_panel_focus();
         self.update_filtered();
-    }
 
-    pub fn apply_error(&mut self, error: String) {
-        self.loading = false;
-        self.last_error = Some(error);
+        // Restore selection to the same provider after re-sort
+        if let Some(slug) = selected_slug {
+            if let Some(pos) = self
+                .filtered_entries
+                .iter()
+                .position(|&idx| self.entries[idx].slug == slug)
+            {
+                // +1 because selected=0 is "Overall"
+                self.selected = pos + 1;
+                self.list_state.select(Some(self.selected));
+            }
+        }
     }
 
     // ── Picker modal methods ───────────────────────────────────

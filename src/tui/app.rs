@@ -211,7 +211,6 @@ pub enum Message {
     BenchmarkFetchFailed,
     // Provider status data messages
     StatusDataReceived(Vec<crate::status::ProviderStatus>),
-    StatusFetchFailed(String),
 }
 
 pub struct App {
@@ -1092,11 +1091,6 @@ impl App {
             Message::StatusDataReceived(entries) => {
                 if let Some(ref mut status_app) = self.status_app {
                     status_app.apply_fetch(entries);
-                }
-            }
-            Message::StatusFetchFailed(error) => {
-                if let Some(ref mut status_app) = self.status_app {
-                    status_app.apply_error(error);
                 }
             }
         }
