@@ -4822,9 +4822,9 @@
     "math_500": null,
     "aime": null,
     "aime_25": null,
-    "output_tps": 77.518,
-    "ttft": 0.75,
-    "ttfat": 26.551,
+    "output_tps": 78.438,
+    "ttft": 0.743,
+    "ttfat": 26.241,
     "price_input": 1,
     "price_output": 3.2,
     "price_blended": 1.55
