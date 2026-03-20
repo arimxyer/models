@@ -120,7 +120,13 @@ pub(crate) fn parse_instatus_summary(
 }
 
 pub(crate) fn parse_instatus_components(body: &str) -> Result<Vec<ComponentStatus>, String> {
-    let arr: Vec<Value> = serde_json::from_str(body).map_err(|err| err.to_string())?;
+    let v: Value = serde_json::from_str(body).map_err(|err| err.to_string())?;
+    // Handle both {"components": [...]} (Instatus v2) and [...] (bare array)
+    let arr = v
+        .get("components")
+        .and_then(|v| v.as_array())
+        .or_else(|| v.as_array())
+        .ok_or("expected array or {components: [...]}")?;
     Ok(arr
         .iter()
         .filter_map(|c| {
