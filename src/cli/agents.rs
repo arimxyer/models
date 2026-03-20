@@ -465,12 +465,12 @@ fn run_status() -> Result<()> {
     table.load_preset(comfy_table::presets::UTF8_FULL);
     table.set_header(vec![
         styles::header_cell("Tool"),
-        styles::header_cell("Service"),
         styles::header_cell("24h"),
         styles::header_cell("Installed"),
         styles::header_cell("Latest"),
         styles::header_cell("Updated"),
         styles::header_cell("Freq."),
+        styles::header_cell("Status"),
     ]);
 
     // Sort by most recently updated (newest first), with missing dates last
@@ -542,19 +542,24 @@ fn run_status() -> Result<()> {
             use crate::status::ProviderHealth;
             match resolve_agent_service_health(&entry.id, &status_entries) {
                 Some(resolved) => {
-                    let label = resolved.health.label();
+                    let (icon, label) = match resolved.health {
+                        ProviderHealth::Operational => ("\u{25CF}", "Ok"),
+                        ProviderHealth::Degraded => ("\u{25D0}", "Degraded"),
+                        ProviderHealth::Outage => ("\u{2717}", "Outage"),
+                        ProviderHealth::Maintenance => ("\u{25C6}", "Maint."),
+                        ProviderHealth::Unknown => ("?", "Unknown"),
+                    };
+                    let text = format!("{} {}", icon, label);
                     match resolved.health {
-                        ProviderHealth::Operational => styles::green_cell(label),
-                        ProviderHealth::Degraded => styles::yellow_cell(label),
+                        ProviderHealth::Operational => styles::green_cell(&text),
+                        ProviderHealth::Degraded => styles::yellow_cell(&text),
                         ProviderHealth::Outage => {
-                            comfy_table::Cell::new(label)
-                                .fg(comfy_table::Color::Red)
+                            comfy_table::Cell::new(&text).fg(comfy_table::Color::Red)
                         }
                         ProviderHealth::Maintenance => {
-                            comfy_table::Cell::new(label)
-                                .fg(comfy_table::Color::Blue)
+                            comfy_table::Cell::new(&text).fg(comfy_table::Color::Blue)
                         }
-                        ProviderHealth::Unknown => styles::dim_cell(label),
+                        ProviderHealth::Unknown => styles::dim_cell(&text),
                     }
                 }
                 None => styles::dim_cell("\u{2014}"),
@@ -563,7 +568,6 @@ fn run_status() -> Result<()> {
 
         table.add_row(vec![
             styles::bold_cell(&entry.agent.name),
-            service_cell,
             if is_24h {
                 styles::green_cell("\u{2713}")
             } else {
@@ -573,6 +577,7 @@ fn run_status() -> Result<()> {
             styles::bold_cell(latest_version),
             comfy_table::Cell::new(&updated),
             comfy_table::Cell::new(&freq),
+            service_cell,
         ]);
     }
 
