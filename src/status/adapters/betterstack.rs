@@ -17,6 +17,12 @@ pub(crate) fn parse_better_stack(
         .and_then(|v| v.as_str())
         .unwrap_or("unknown");
 
+    let status_note = v
+        .pointer("/data/attributes/announcement")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+
     let health = match aggregate_state {
         "operational" => ProviderHealth::Operational,
         "degraded" => ProviderHealth::Degraded,
@@ -62,7 +68,6 @@ pub(crate) fn parse_better_stack(
                 .filter_map(|item| {
                     let name = item
                         .pointer("/attributes/public_name")
-                        .or_else(|| item.pointer("/attributes/resource_name"))
                         .and_then(|v| v.as_str())?;
                     let status = item
                         .pointer("/attributes/status")
@@ -150,7 +155,7 @@ pub(crate) fn parse_better_stack(
             .and_then(|v| v.as_str())
             .map(str::to_string),
         provider_summary: summary,
-        status_note: None,
+        status_note,
         components_state,
         components,
         incidents_state,
@@ -187,7 +192,7 @@ mod tests {
                     "id": "r2",
                     "type": "status_page_resource",
                     "attributes": {
-                        "resource_name": "Dashboard",
+                        "public_name": "Dashboard",
                         "status": "operational"
                     }
                 },
@@ -434,5 +439,46 @@ mod tests {
             "not_monitored should be filtered out"
         );
         assert_eq!(snapshot.components[0].name, "api.hconeai.com");
+    }
+
+    #[test]
+    fn surfaces_announcement_as_status_note() {
+        let json = r#"{
+            "data": {
+                "id": "abc",
+                "type": "status_page",
+                "attributes": {
+                    "aggregate_state": "operational",
+                    "announcement": "Scheduled maintenance on March 25th"
+                }
+            },
+            "included": []
+        }"#;
+
+        let snapshot =
+            parse_better_stack(OfficialStatusSource::TogetherAi, json).expect("parses ok");
+        assert_eq!(
+            snapshot.status_note.as_deref(),
+            Some("Scheduled maintenance on March 25th")
+        );
+    }
+
+    #[test]
+    fn null_announcement_produces_no_status_note() {
+        let json = r#"{
+            "data": {
+                "id": "abc",
+                "type": "status_page",
+                "attributes": {
+                    "aggregate_state": "operational",
+                    "announcement": null
+                }
+            },
+            "included": []
+        }"#;
+
+        let snapshot =
+            parse_better_stack(OfficialStatusSource::TogetherAi, json).expect("parses ok");
+        assert_eq!(snapshot.status_note, None);
     }
 }

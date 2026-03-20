@@ -9,11 +9,14 @@ use super::adapters::google::{build_google_snapshot, GoogleIncident, GoogleProdu
 use super::adapters::instatus::fetch_instatus_with_components;
 use super::adapters::onlineornot::parse_onlineornot;
 use super::adapters::status_io::parse_status_io;
-use super::adapters::statuspage::{fetch_incident_io_shim, parse_statuspage_v2_summary};
+use super::adapters::statuspage::{
+    fetch_incident_io_shim, fetch_maintenance_enrichment, parse_statuspage_v2_summary,
+};
 use super::types::{
-    FallbackSnapshot, OfficialSnapshot, OfficialStatusSource, ProviderHealth, ProviderStatus,
-    StatusDetailAvailability, StatusDetailSource, StatusDetailState, StatusLoadState,
-    StatusProvenance, StatusProviderSeed, StatusSourceMethod, StatusStrategy,
+    available_detail_state, FallbackSnapshot, OfficialSnapshot, OfficialStatusSource,
+    ProviderHealth, ProviderStatus, StatusDetailAvailability, StatusDetailSource,
+    StatusDetailState, StatusLoadState, StatusProvenance, StatusProviderSeed, StatusSourceMethod,
+    StatusStrategy,
 };
 
 const API_STATUS_CHECK_URL: &str = "https://apistatuscheck.com/api/status?api=";
@@ -139,7 +142,26 @@ async fn fetch_official(
     match source.source_method() {
         StatusSourceMethod::StatuspageV2 => {
             let body = fetch_text(client, source.endpoint_url()).await?;
-            parse_statuspage_v2_summary(source, &body)
+            let mut snapshot = parse_statuspage_v2_summary(source, &body)?;
+
+            // Enrich maintenance if summary returned none
+            if snapshot.maintenance.is_empty() {
+                match fetch_maintenance_enrichment(client, source.page_url()).await {
+                    Ok(maintenances) => {
+                        snapshot.maintenance = maintenances;
+                        snapshot.maintenance_state = available_detail_state(
+                            &snapshot.maintenance,
+                            StatusDetailSource::Enrichment,
+                        );
+                    }
+                    Err(_) => {
+                        // Keep the inline state (NoneReported/Inline) — enrichment
+                        // failure is not worth surfacing when inline already succeeded.
+                    }
+                }
+            }
+
+            Ok(snapshot)
         }
         StatusSourceMethod::IncidentIoShim => fetch_incident_io_shim(client, source).await,
         StatusSourceMethod::BetterStack => {
