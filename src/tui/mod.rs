@@ -327,14 +327,8 @@ fn run_app(
 
         if let Ok((gen, result)) = runtime.status.rx.try_recv() {
             if gen >= runtime.status.fetch_generation {
-                match result {
-                    StatusFetchResult::Fresh(entries) => {
-                        app.update(app::Message::StatusDataReceived(entries));
-                    }
-                    StatusFetchResult::Error(error) => {
-                        app.update(app::Message::StatusFetchFailed(error));
-                    }
-                }
+                let StatusFetchResult::Fresh(entries) = result;
+                app.update(app::Message::StatusDataReceived(entries));
             }
         }
 
