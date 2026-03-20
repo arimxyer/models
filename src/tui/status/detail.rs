@@ -366,15 +366,19 @@ pub(super) fn draw_provider_status_detail(
             let has_groups = groups.iter().any(|(k, _)| k.is_some());
 
             if has_groups {
-                // Sort: ungrouped first (important top-level services), then named groups
-                groups.sort_by(|(a, _), (b, _)| match (a, b) {
-                    (None, Some(_)) => std::cmp::Ordering::Less,
-                    (Some(_), None) => std::cmp::Ordering::Greater,
-                    _ => std::cmp::Ordering::Equal,
+                // Sort: groups with degraded components first, then by name
+                groups.sort_by(|(a_name, a_members), (b_name, b_members)| {
+                    let a_degraded = a_members
+                        .iter()
+                        .any(|c| !c.status.to_lowercase().contains("operational"));
+                    let b_degraded = b_members
+                        .iter()
+                        .any(|c| !c.status.to_lowercase().contains("operational"));
+                    b_degraded.cmp(&a_degraded).then_with(|| a_name.cmp(b_name))
                 });
 
                 for (group_name, members) in &groups {
-                    let group_label = group_name.as_deref().unwrap_or("Ungrouped");
+                    let group_label = group_name.as_deref().unwrap_or("Other");
                     let group_op = members
                         .iter()
                         .filter(|c| c.status.to_lowercase().contains("operational"))
