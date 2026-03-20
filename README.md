@@ -524,6 +524,7 @@ Lots of gratitude to the companies who do all the hard work! Shout out to the so
 - **Benchmark data**: Fetched from [Artificial Analysis](https://artificialanalysis.ai) — quality indexes, benchmark scores, speed, and pricing for ~400 model entries
 - **Agent data**: Curated catalog in [`data/agents.json`](data/agents.json) — contributions welcome!
 - **GitHub data**: Fetched from GitHub API (stars, releases, changelogs)
+- **Status data**: Fetched from each provider's official status page — [Statuspage](https://www.atlassian.com/software/statuspage), [BetterStack](https://betterstack.com), [Instatus](https://instatus.com), [incident.io](https://incident.io), and others — with [apistatuscheck.com](https://apistatuscheck.com) as fallback
 
 ## Roadmap
 
