@@ -209,37 +209,6 @@ pub(super) fn draw_provider_status_detail(
 
         let title = format!(" {display_name} · {time_label}: {time_value} ");
 
-        let issue_summary = match (
-            incident_note.as_deref(),
-            active_incidents.len(),
-            scheduled_maintenances.len(),
-        ) {
-            (Some(note), 0, 0) => note.to_string(),
-            (Some(note), 0, maintenance) => format!(
-                "{note} • {maintenance} maintenance item{}",
-                if maintenance == 1 { "" } else { "s" }
-            ),
-            (None, 0, 0) => "0 active incidents".to_string(),
-            (None, incidents, 0) => format!(
-                "{incidents} active incident{}",
-                if incidents == 1 { "" } else { "s" }
-            ),
-            (None, 0, maintenance) => format!(
-                "0 active incidents • {maintenance} maintenance item{}",
-                if maintenance == 1 { "" } else { "s" }
-            ),
-            (None, incidents, maintenance) => format!(
-                "{incidents} active incident{} • {maintenance} maintenance item{}",
-                if incidents == 1 { "" } else { "s" },
-                if maintenance == 1 { "" } else { "s" },
-            ),
-            (Some(note), incidents, maintenance) => format!(
-                "{incidents} active incident{} • {maintenance} maintenance item{} • {note}",
-                if incidents == 1 { "" } else { "s" },
-                if maintenance == 1 { "" } else { "s" },
-            ),
-        };
-
         let block = Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Color::White))
@@ -249,7 +218,7 @@ pub(super) fn draw_provider_status_detail(
 
         let mut inner_constraints = vec![
             Constraint::Length(1), // gauge
-            Constraint::Length(1), // verdict + issue summary
+            Constraint::Length(1), // legend (icon+count summary)
         ];
         if caveat.is_some() || provenance == StatusProvenance::Unavailable {
             inner_constraints.push(Constraint::Length(1));
@@ -281,7 +250,11 @@ pub(super) fn draw_provider_status_detail(
                 ratio * 100.0
             )
         } else {
-            format!("{} {}", status_health_icon(health), status_verdict_copy(health))
+            format!(
+                "{} {}",
+                status_health_icon(health),
+                status_verdict_copy(health)
+            )
         };
         let gauge = Gauge::default()
             .gauge_style(
@@ -293,20 +266,45 @@ pub(super) fn draw_provider_status_detail(
             .label(gauge_label);
         f.render_widget(gauge, inner_chunks[0]);
 
-        // Issue summary line
-        f.render_widget(
-            Paragraph::new(Line::from(Span::styled(
-                issue_summary,
-                if active_incidents.is_empty() {
-                    Style::default().fg(Color::DarkGray)
-                } else {
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD)
-                },
-            ))),
-            inner_chunks[1],
-        );
+        // Legend line: icon+count for each category (matching Overall panel style)
+        let mut legend_spans: Vec<Span<'static>> = Vec::new();
+        if !active_incidents.is_empty() {
+            legend_spans.push(Span::styled("◐ ", Style::default().fg(Color::Yellow)));
+            legend_spans.push(Span::raw(format!(
+                "{} active incident{}  ",
+                active_incidents.len(),
+                if active_incidents.len() == 1 { "" } else { "s" }
+            )));
+        }
+        if non_op_comp_count > 0 && active_incidents.is_empty() {
+            legend_spans.push(Span::styled("◐ ", Style::default().fg(Color::Yellow)));
+            legend_spans.push(Span::raw(format!(
+                "{} service degradation{}  ",
+                non_op_comp_count,
+                if non_op_comp_count == 1 { "" } else { "s" }
+            )));
+        }
+        if !scheduled_maintenances.is_empty() {
+            legend_spans.push(Span::styled("◆ ", Style::default().fg(Color::Blue)));
+            legend_spans.push(Span::raw(format!(
+                "{} maintenance  ",
+                scheduled_maintenances.len()
+            )));
+        }
+        if legend_spans.is_empty() {
+            if let Some(note) = incident_note.as_deref() {
+                legend_spans.push(Span::styled(
+                    note.to_string(),
+                    Style::default().fg(Color::DarkGray),
+                ));
+            } else {
+                legend_spans.push(Span::styled(
+                    "No active issues",
+                    Style::default().fg(Color::DarkGray),
+                ));
+            }
+        }
+        f.render_widget(Paragraph::new(Line::from(legend_spans)), inner_chunks[1]);
 
         // Optional caveat/notes
         let mut extra_idx = 2;
@@ -399,16 +397,7 @@ pub(super) fn draw_provider_status_detail(
                 ]));
             }
 
-            if healthy_comp_count > 0 {
-                lines.push(Line::from(vec![
-                    Span::styled("●", Style::default().fg(Color::Green)),
-                    Span::raw(format!(
-                        " {} service{} operational",
-                        healthy_comp_count,
-                        if healthy_comp_count == 1 { "" } else { "s" }
-                    )),
-                ]));
-            }
+            // Title icons already communicate healthy count — no summary line needed
         }
 
         if services_expanded {
@@ -576,8 +565,7 @@ pub(super) fn draw_provider_status_detail(
                     ];
                     if let Some(start) = maint.scheduled_for.as_deref() {
                         status_spans.push(Span::raw("  "));
-                        status_spans
-                            .push(Span::styled("Scheduled: ", status_field_label_style()));
+                        status_spans.push(Span::styled("Scheduled: ", status_field_label_style()));
                         status_spans.push(Span::styled(
                             format_relative_time_from_str(start),
                             Style::default().fg(Color::Cyan),
