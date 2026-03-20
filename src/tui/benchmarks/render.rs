@@ -235,7 +235,7 @@ fn draw_benchmark_creators(f: &mut Frame, area: Rect, app: &mut App) {
                 let name = truncate(display_name, max_name);
                 let mut spans = vec![
                     Span::raw(format!("{} ", name)),
-                    Span::styled(count_str, Style::default().fg(Color::DarkGray)),
+                    Span::styled(count_str, Style::default().fg(Color::Gray)),
                 ];
                 if let Some((label, color)) = tag {
                     spans.push(Span::raw(" "));

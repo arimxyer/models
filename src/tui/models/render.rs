@@ -215,7 +215,11 @@ fn draw_providers(f: &mut Frame, area: Rect, app: &mut App) {
                     let color = cat.color();
                     let line = Line::from(vec![
                         Span::styled(initial, Style::default().fg(color)),
-                        Span::raw(format!(" {} ({})", id, provider.models.len())),
+                        Span::raw(format!(" {} ", id)),
+                        Span::styled(
+                            format!("({})", provider.models.len()),
+                            Style::default().fg(Color::Gray),
+                        ),
                     ]);
                     items.push(ListItem::new(line));
                 }
