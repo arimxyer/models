@@ -22,8 +22,16 @@ tui/
 │   └── radar.rs   (draw_radar, spoke_angles, polygon_vertices, axes_for_preset)
 ├── status/
 │   ├── mod.rs     (pub use app::*)
-│   ├── app.rs     (StatusApp state, StatusFocus, OverallPanelFocus)
-│   └── render.rs  (draw_status_main)
+│   ├── app.rs     (StatusApp state, StatusFocus, OverallPanelFocus, DetailPanelFocus)
+│   ├── render.rs  (draw_status_main, shared pub(super) helpers)
+│   ├── overall.rs (draw_overall_dashboard, card builders)
+│   └── detail.rs  (draw_provider_status_detail, sorted_*, build_services_title)
+├── widgets/
+│   ├── mod.rs              (re-exports)
+│   ├── scrollable_panel.rs (ScrollablePanel — bordered scroll with Line title support)
+│   ├── scroll_offset.rs    (ScrollOffset — Cell<u16> newtype for render-time writeback)
+│   ├── soft_card.rs        (SoftCard — health-colored accent stripe cards)
+│   └── comparison_legend.rs(ComparisonLegend — benchmarks compare views)
 ├── mod.rs          (startup, event loop, async channel handling)
 ├── app.rs          (App struct, Tab, Message enum, update() logic)
 ├── event.rs        (keybinding → Message mapping, NavAction dedup)
