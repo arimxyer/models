@@ -2,7 +2,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Cell, List, ListItem, Paragraph, Row, Table, Wrap},
+    widgets::{Block, Borders, List, ListItem, Paragraph, Wrap},
     Frame,
 };
 
@@ -12,6 +12,7 @@ use crate::formatting::EM_DASH;
 use crate::provider_category::{provider_category, ProviderCategory};
 use crate::tui::app::App;
 use crate::tui::ui::{caret, focus_border};
+use crate::tui::widgets::scrollable_panel::ScrollablePanel;
 
 fn provider_detail_lines(app: &App) -> Vec<Line<'static>> {
     let Some(entry) = app.models_app.current_model() else {
@@ -441,18 +442,47 @@ fn draw_provider_detail(f: &mut Frame, area: Rect, lines: Vec<Line<'static>>) {
     f.render_widget(paragraph, area);
 }
 
-fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
-    let block = Block::default().borders(Borders::ALL).title(" Details ");
-    let inner = block.inner(area);
-    f.render_widget(block, area);
+fn section_header_line(width: u16, title: &str) -> Line<'static> {
+    let w = width as usize;
+    let prefix = format!("\u{2500}\u{2500} {} ", title);
+    let fill_len = w.saturating_sub(prefix.chars().count());
+    let header = format!("{}{}", prefix, "\u{2500}".repeat(fill_len));
+    Line::from(Span::styled(
+        header,
+        Style::default()
+            .fg(Color::DarkGray)
+            .add_modifier(Modifier::BOLD),
+    ))
+}
 
+/// A label-value pair for `two_pair_line`.
+struct LabelValue<'a> {
+    label: &'a str,
+    value: &'a str,
+    color: Color,
+}
+
+/// Build a line with two label-value pairs, manually padded to fill the width.
+fn two_pair_line(left: LabelValue<'_>, right: LabelValue<'_>, col_w: usize) -> Line<'static> {
+    let label_color = Color::DarkGray;
+    let pad1 = col_w.saturating_sub(left.label.len() + left.value.len());
+    let pad2 = col_w.saturating_sub(right.label.len() + right.value.len());
+    Line::from(vec![
+        Span::styled(left.label.to_string(), Style::default().fg(label_color)),
+        Span::styled(left.value.to_string(), Style::default().fg(left.color)),
+        Span::raw(" ".repeat(pad1)),
+        Span::styled(right.label.to_string(), Style::default().fg(label_color)),
+        Span::styled(right.value.to_string(), Style::default().fg(right.color)),
+        Span::raw(" ".repeat(pad2)),
+    ])
+}
+
+fn model_detail_lines(app: &App, width: u16) -> Vec<Line<'static>> {
     let Some(entry) = app.models_app.current_model() else {
-        let para = Paragraph::new(Line::from(Span::styled(
+        return vec![Line::from(Span::styled(
             "No model selected",
             Style::default().fg(Color::DarkGray),
-        )));
-        f.render_widget(para, inner);
-        return;
+        ))];
     };
 
     let model = &entry.model;
@@ -464,102 +494,20 @@ fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
         Color::White
     };
     let label_color = Color::DarkGray;
-    let em = "\u{2014}";
+    let em = EM_DASH;
+    let col_w = (width as usize) / 2;
 
-    // Helper: render a dash-padded section header into a 1-line rect
-    let render_section_header = |f: &mut Frame, rect: Rect, title: &str| {
-        let w = rect.width as usize;
-        let prefix = format!("\u{2500}\u{2500} {} ", title);
-        let fill_len = w.saturating_sub(prefix.chars().count());
-        let header = format!("{}{}", prefix, "\u{2500}".repeat(fill_len));
-        let para = Paragraph::new(Line::from(Span::styled(
-            header,
-            Style::default()
-                .fg(Color::DarkGray)
-                .add_modifier(Modifier::BOLD),
-        )));
-        f.render_widget(para, rect);
-    };
-
-    // Helper: label width for Table columns (longest label + 1 space)
-    // Pricing labels: "Cache Read: " = 12, "Cache Write: " = 13 → use 13
-    // Limits labels:  "Context: " = 9, "Input: " = 7, "Output: " = 8 → use 9
-    // Dates labels:   "Released: " = 10, "Knowledge: " = 11, "Updated: " = 9 → use 11
-    let pricing_lw: u16 = 13;
-    let limits_lw: u16 = 9;
-    let dates_lw: u16 = 11;
-
-    // ── Determine dates table height (1 or 2 rows) ────────────────────────
-    let has_updated = model.last_updated.is_some();
-    let dates_rows: u16 = if has_updated { 2 } else { 1 };
-
-    // ── Pre-build modalities paragraph for dynamic height ────────────────
-    let (mod_in, mod_out) = match &model.modalities {
-        Some(m) => (
-            if m.input.is_empty() {
-                "text".to_string()
-            } else {
-                m.input.join(", ")
-            },
-            if m.output.is_empty() {
-                "text".to_string()
-            } else {
-                m.output.join(", ")
-            },
-        ),
-        None => ("text".to_string(), "text".to_string()),
-    };
-    let mod_para = Paragraph::new(vec![
-        Line::from(vec![
-            Span::styled("Input:  ", Style::default().fg(label_color)),
-            Span::styled(mod_in, Style::default().fg(text_color)),
-        ]),
-        Line::from(vec![
-            Span::styled("Output: ", Style::default().fg(label_color)),
-            Span::styled(mod_out, Style::default().fg(text_color)),
-        ]),
-    ])
-    .wrap(Wrap { trim: false });
-    let mod_rows = mod_para.line_count(inner.width) as u16;
-
-    // ── Vertical layout ───────────────────────────────────────────────────
-    // identity(3) + gap(1) + cap_hdr(1) + cap(3) + gap(1)
-    // + price_hdr(1) + price_tbl(2) + gap(1)
-    // + limits_hdr(1) + limits_tbl(1) + gap(1)
-    // + mod_hdr(1) + mod(dynamic) + gap(1)
-    // + dates_hdr(1) + dates_tbl(1 or 2) + remainder
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3),          // 0: identity
-            Constraint::Length(1),          // 1: gap
-            Constraint::Length(1),          // 2: capabilities header
-            Constraint::Length(3),          // 3: capabilities table
-            Constraint::Length(1),          // 4: gap
-            Constraint::Length(1),          // 5: pricing header
-            Constraint::Length(2),          // 6: pricing table
-            Constraint::Length(1),          // 7: gap
-            Constraint::Length(1),          // 8: limits header
-            Constraint::Length(1),          // 9: limits table
-            Constraint::Length(1),          // 10: gap
-            Constraint::Length(1),          // 11: modalities header
-            Constraint::Length(mod_rows),   // 12: modalities content (dynamic)
-            Constraint::Length(1),          // 13: gap
-            Constraint::Length(1),          // 14: dates header
-            Constraint::Length(dates_rows), // 15: dates table
-            Constraint::Min(0),             // 16: remainder
-        ])
-        .split(inner);
+    let mut lines: Vec<Line<'static>> = Vec::new();
 
     // ── Identity ──────────────────────────────────────────────────────────
-    let name_spans: Vec<Span> = vec![Span::styled(
+    lines.push(Line::from(Span::styled(
         model.name.clone(),
         Style::default().fg(text_color).add_modifier(Modifier::BOLD),
-    )];
-    let row_id = Line::from(Span::styled(
+    )));
+    lines.push(Line::from(Span::styled(
         entry.id.clone(),
         Style::default().fg(Color::DarkGray),
-    ));
+    )));
     let mut provider_spans = vec![
         Span::styled("Provider: ", Style::default().fg(label_color)),
         Span::styled(provider_id.clone(), Style::default().fg(Color::Cyan)),
@@ -582,62 +530,71 @@ fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
             ));
         }
     }
-    let row_provider = Line::from(provider_spans);
-    let identity_para = Paragraph::new(vec![Line::from(name_spans), row_id, row_provider]);
-    f.render_widget(identity_para, chunks[0]);
+    lines.push(Line::from(provider_spans));
 
     // ── Capabilities ──────────────────────────────────────────────────────
-    render_section_header(f, chunks[2], "Capabilities");
+    lines.push(Line::from(""));
+    lines.push(section_header_line(width, "Capabilities"));
 
-    let cap_val = |active: bool, color: Color| -> (String, Color) {
+    let cap_val = |active: bool, color: Color| -> (&'static str, Color) {
         if active {
-            ("Yes".to_string(), color)
+            ("Yes", color)
         } else {
-            ("No".to_string(), Color::DarkGray)
+            ("No", Color::DarkGray)
         }
     };
     let (r_val, r_col) = cap_val(model.reasoning, Color::Cyan);
     let (t_val, t_col) = cap_val(model.tool_call, Color::Yellow);
     let (f_val, f_col) = cap_val(model.attachment, Color::Magenta);
     let (ow_val, ow_col) = if model.open_weights {
-        ("Open".to_string(), Color::Green)
+        ("Open", Color::Green)
     } else {
-        ("Closed".to_string(), Color::Red)
+        ("Closed", Color::Red)
     };
     let (tmp_val, tmp_col) = cap_val(model.temperature, Color::White);
-    let cap_lw: u16 = 10;
-    let caps_table = Table::new(
-        vec![
-            Row::new(vec![
-                Cell::from(Span::styled("Reasoning:", Style::default().fg(label_color))),
-                Cell::from(Span::styled(r_val, Style::default().fg(r_col))),
-                Cell::from(Span::styled("Tools:", Style::default().fg(label_color))),
-                Cell::from(Span::styled(t_val, Style::default().fg(t_col))),
-            ]),
-            Row::new(vec![
-                Cell::from(Span::styled("Source:", Style::default().fg(label_color))),
-                Cell::from(Span::styled(ow_val, Style::default().fg(ow_col))),
-                Cell::from(Span::styled("Files:", Style::default().fg(label_color))),
-                Cell::from(Span::styled(f_val, Style::default().fg(f_col))),
-            ]),
-            Row::new(vec![
-                Cell::from(Span::styled("Temp:", Style::default().fg(label_color))),
-                Cell::from(Span::styled(tmp_val, Style::default().fg(tmp_col))),
-                Cell::from(Span::raw("")),
-                Cell::from(Span::raw("")),
-            ]),
-        ],
-        [
-            Constraint::Length(cap_lw),
-            Constraint::Fill(1),
-            Constraint::Length(cap_lw),
-            Constraint::Fill(1),
-        ],
-    );
-    f.render_widget(caps_table, chunks[3]);
+    lines.push(two_pair_line(
+        LabelValue {
+            label: "Reasoning: ",
+            value: r_val,
+            color: r_col,
+        },
+        LabelValue {
+            label: "Tools: ",
+            value: t_val,
+            color: t_col,
+        },
+        col_w,
+    ));
+    lines.push(two_pair_line(
+        LabelValue {
+            label: "Source: ",
+            value: ow_val,
+            color: ow_col,
+        },
+        LabelValue {
+            label: "Files: ",
+            value: f_val,
+            color: f_col,
+        },
+        col_w,
+    ));
+    lines.push(two_pair_line(
+        LabelValue {
+            label: "Temp: ",
+            value: tmp_val,
+            color: tmp_col,
+        },
+        LabelValue {
+            label: "",
+            value: "",
+            color: Color::DarkGray,
+        },
+        col_w,
+    ));
 
     // ── Pricing ───────────────────────────────────────────────────────────
-    render_section_header(f, chunks[5], "Pricing");
+    lines.push(Line::from(""));
+    lines.push(section_header_line(width, "Pricing"));
 
     let free = model.is_free();
     let cost_color = if free { Color::Green } else { text_color };
@@ -667,45 +624,36 @@ fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
         fmt_cost(model.cost.as_ref().and_then(|c| c.cache_read));
     let (cache_write_str, cache_write_color) =
         fmt_cost(model.cost.as_ref().and_then(|c| c.cache_write));
-
-    let pricing_table = Table::new(
-        vec![
-            Row::new(vec![
-                Cell::from(Span::styled("Input:", Style::default().fg(label_color))),
-                Cell::from(Span::styled(input_str, Style::default().fg(input_color))),
-                Cell::from(Span::styled("Output:", Style::default().fg(label_color))),
-                Cell::from(Span::styled(output_str, Style::default().fg(output_color))),
-            ]),
-            Row::new(vec![
-                Cell::from(Span::styled(
-                    "Cache Read:",
-                    Style::default().fg(label_color),
-                )),
-                Cell::from(Span::styled(
-                    cache_read_str,
-                    Style::default().fg(cache_read_color),
-                )),
-                Cell::from(Span::styled(
-                    "Cache Write:",
-                    Style::default().fg(label_color),
-                )),
-                Cell::from(Span::styled(
-                    cache_write_str,
-                    Style::default().fg(cache_write_color),
-                )),
-            ]),
-        ],
-        [
-            Constraint::Length(pricing_lw),
-            Constraint::Fill(1),
-            Constraint::Length(pricing_lw),
-            Constraint::Fill(1),
-        ],
-    );
-    f.render_widget(pricing_table, chunks[6]);
+    lines.push(two_pair_line(
+        LabelValue {
+            label: "Input: ",
+            value: &input_str,
+            color: input_color,
+        },
+        LabelValue {
+            label: "Output: ",
+            value: &output_str,
+            color: output_color,
+        },
+        col_w,
+    ));
+    lines.push(two_pair_line(
+        LabelValue {
+            label: "Cache Read: ",
+            value: &cache_read_str,
+            color: cache_read_color,
+        },
+        LabelValue {
+            label: "Cache Write: ",
+            value: &cache_write_str,
+            color: cache_write_color,
+        },
+        col_w,
+    ));
 
     // ── Limits ────────────────────────────────────────────────────────────
-    render_section_header(f, chunks[8], "Limits");
+    lines.push(Line::from(""));
+    lines.push(section_header_line(width, "Limits"));
 
     let ctx_str = model.context_str();
     let inp_lim_str = model.input_limit_str();
@@ -725,35 +673,52 @@ fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
     } else {
         (out_str, text_color)
     };
-    let limits_table = Table::new(
-        vec![Row::new(vec![
-            Cell::from(Span::styled("Context:", Style::default().fg(label_color))),
-            Cell::from(Span::styled(ctx_val, Style::default().fg(ctx_color))),
-            Cell::from(Span::styled("Input:", Style::default().fg(label_color))),
-            Cell::from(Span::styled(
-                inp_lim_val,
-                Style::default().fg(inp_lim_color),
-            )),
-            Cell::from(Span::styled("Output:", Style::default().fg(label_color))),
-            Cell::from(Span::styled(out_val, Style::default().fg(out_color))),
-        ])],
-        [
-            Constraint::Length(limits_lw),
-            Constraint::Min(6),
-            Constraint::Length(limits_lw),
-            Constraint::Min(6),
-            Constraint::Length(limits_lw),
-            Constraint::Min(6),
-        ],
-    );
-    f.render_widget(limits_table, chunks[9]);
+    // Limits uses a 3-pair layout — pack into a single line
+    let third_w = (width as usize) / 3;
+    let pad_ctx = third_w.saturating_sub("Context: ".len() + ctx_val.len());
+    let pad_inp = third_w.saturating_sub("Input: ".len() + inp_lim_val.len());
+    lines.push(Line::from(vec![
+        Span::styled("Context: ", Style::default().fg(label_color)),
+        Span::styled(ctx_val, Style::default().fg(ctx_color)),
+        Span::raw(" ".repeat(pad_ctx)),
+        Span::styled("Input: ", Style::default().fg(label_color)),
+        Span::styled(inp_lim_val, Style::default().fg(inp_lim_color)),
+        Span::raw(" ".repeat(pad_inp)),
+        Span::styled("Output: ", Style::default().fg(label_color)),
+        Span::styled(out_val, Style::default().fg(out_color)),
+    ]));
 
     // ── Modalities ────────────────────────────────────────────────────────
-    render_section_header(f, chunks[11], "Modalities");
-    f.render_widget(mod_para, chunks[12]);
+    lines.push(Line::from(""));
+    lines.push(section_header_line(width, "Modalities"));
+
+    let (mod_in, mod_out) = match &model.modalities {
+        Some(m) => (
+            if m.input.is_empty() {
+                "text".to_string()
+            } else {
+                m.input.join(", ")
+            },
+            if m.output.is_empty() {
+                "text".to_string()
+            } else {
+                m.output.join(", ")
+            },
+        ),
+        None => ("text".to_string(), "text".to_string()),
+    };
+    lines.push(Line::from(vec![
+        Span::styled("Input:  ", Style::default().fg(label_color)),
+        Span::styled(mod_in, Style::default().fg(text_color)),
+    ]));
+    lines.push(Line::from(vec![
+        Span::styled("Output: ", Style::default().fg(label_color)),
+        Span::styled(mod_out, Style::default().fg(text_color)),
+    ]));
 
     // ── Dates ─────────────────────────────────────────────────────────────
-    render_section_header(f, chunks[14], "Dates");
+    lines.push(Line::from(""));
+    lines.push(section_header_line(width, "Dates"));
 
     let released = model.release_date.as_deref().unwrap_or(em);
     let knowledge = model.knowledge.as_deref().unwrap_or(em);
@@ -767,47 +732,49 @@ fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
     } else {
         text_color
     };
-
-    let mut dates_rows_data: Vec<Row> = vec![Row::new(vec![
-        Cell::from(Span::styled("Released:", Style::default().fg(label_color))),
-        Cell::from(Span::styled(
-            released.to_string(),
-            Style::default().fg(rel_color),
-        )),
-        Cell::from(Span::styled("Knowledge:", Style::default().fg(label_color))),
-        Cell::from(Span::styled(
-            knowledge.to_string(),
-            Style::default().fg(know_color),
-        )),
-    ])];
-
+    lines.push(two_pair_line(
+        LabelValue {
+            label: "Released: ",
+            value: released,
+            color: rel_color,
+        },
+        LabelValue {
+            label: "Knowledge: ",
+            value: knowledge,
+            color: know_color,
+        },
+        col_w,
+    ));
     if let Some(updated) = &model.last_updated {
         let upd_color = if is_deprecated {
             Color::DarkGray
         } else {
             text_color
         };
-        dates_rows_data.push(Row::new(vec![
-            Cell::from(Span::styled("Updated:", Style::default().fg(label_color))),
-            Cell::from(Span::styled(
-                updated.clone(),
-                Style::default().fg(upd_color),
-            )),
-            Cell::from(""),
-            Cell::from(""),
-        ]));
+        lines.push(two_pair_line(
+            LabelValue {
+                label: "Updated: ",
+                value: updated,
+                color: upd_color,
+            },
+            LabelValue {
+                label: "",
+                value: "",
+                color: Color::DarkGray,
+            },
+            col_w,
+        ));
     }
 
-    let dates_table = Table::new(
-        dates_rows_data,
-        [
-            Constraint::Length(dates_lw),
-            Constraint::Fill(1),
-            Constraint::Length(dates_lw),
-            Constraint::Fill(1),
-        ],
-    );
-    f.render_widget(dates_table, chunks[15]);
+    lines
+}
+
+fn draw_model_detail(f: &mut Frame, area: Rect, app: &App) {
+    let focused = app.models_app.focus == Focus::Details;
+    // Inner width for line building (area width minus 2 for borders)
+    let inner_w = area.width.saturating_sub(2);
+    let lines = model_detail_lines(app, inner_w);
+    ScrollablePanel::new("Details", lines, &app.models_app.detail_scroll, focused).render(f, area);
 }
 
 /// Unicode-safe truncation with ellipsis for table cells.

@@ -188,6 +188,7 @@ pub enum BenchmarkFocus {
     Creators,
     #[default]
     List,
+    Details,
     Compare,
 }
 
@@ -502,6 +503,7 @@ pub struct BenchmarksApp {
     pub show_sort_picker: bool,
     pub sort_picker_selected: usize,
     pub loading: bool,
+    pub detail_scroll: ScrollOffset,
 }
 
 impl BenchmarksApp {
@@ -537,6 +539,7 @@ impl BenchmarksApp {
             show_sort_picker: false,
             sort_picker_selected: 0,
             loading: true,
+            detail_scroll: ScrollOffset::default(),
         };
 
         app.build_creator_list(store);
@@ -552,6 +555,7 @@ impl BenchmarksApp {
         self.creator_list_state.select(Some(0));
         self.selected = 0;
         self.update_filtered(store, open_weights_map);
+        self.reset_detail_scroll();
     }
 
     fn build_creator_list(&mut self, store: &BenchmarkStore) {
@@ -718,6 +722,7 @@ impl BenchmarksApp {
             self.selected = 0;
         }
         self.list_state.select(Some(self.selected));
+        self.reset_detail_scroll();
     }
 
     pub fn apply_sort(&mut self, store: &BenchmarkStore) {
@@ -806,10 +811,15 @@ impl BenchmarksApp {
 
     // --- List navigation ---
 
+    pub fn reset_detail_scroll(&self) {
+        self.detail_scroll.jump_top();
+    }
+
     pub fn next(&mut self) {
         if self.selected < self.filtered_indices.len().saturating_sub(1) {
             self.selected += 1;
             self.list_state.select(Some(self.selected));
+            self.reset_detail_scroll();
         }
     }
 
@@ -817,6 +827,7 @@ impl BenchmarksApp {
         if self.selected > 0 {
             self.selected -= 1;
             self.list_state.select(Some(self.selected));
+            self.reset_detail_scroll();
         }
     }
 
@@ -824,6 +835,7 @@ impl BenchmarksApp {
         if self.selected > 0 {
             self.selected = 0;
             self.list_state.select(Some(self.selected));
+            self.reset_detail_scroll();
         }
     }
 
@@ -832,6 +844,7 @@ impl BenchmarksApp {
         if self.selected < last {
             self.selected = last;
             self.list_state.select(Some(self.selected));
+            self.reset_detail_scroll();
         }
     }
 
@@ -839,11 +852,13 @@ impl BenchmarksApp {
         let last_index = self.filtered_indices.len().saturating_sub(1);
         self.selected = (self.selected + PAGE_SIZE).min(last_index);
         self.list_state.select(Some(self.selected));
+        self.reset_detail_scroll();
     }
 
     pub fn page_up(&mut self) {
         self.selected = self.selected.saturating_sub(PAGE_SIZE);
         self.list_state.select(Some(self.selected));
+        self.reset_detail_scroll();
     }
 
     pub fn cycle_source_filter(
@@ -984,7 +999,7 @@ impl BenchmarksApp {
 
     // --- Focus ---
 
-    pub fn switch_focus(&mut self, has_compare: bool) {
+    pub fn focus_right(&mut self, has_compare: bool) {
         self.focus = if has_compare {
             let left = if self.show_creators_in_compare {
                 BenchmarkFocus::Creators
@@ -998,7 +1013,30 @@ impl BenchmarksApp {
         } else {
             match self.focus {
                 BenchmarkFocus::Creators => BenchmarkFocus::List,
-                _ => BenchmarkFocus::Creators,
+                BenchmarkFocus::List => BenchmarkFocus::Details,
+                BenchmarkFocus::Details => BenchmarkFocus::Creators,
+                BenchmarkFocus::Compare => BenchmarkFocus::Creators,
+            }
+        };
+    }
+
+    pub fn focus_left(&mut self, has_compare: bool) {
+        self.focus = if has_compare {
+            let left = if self.show_creators_in_compare {
+                BenchmarkFocus::Creators
+            } else {
+                BenchmarkFocus::List
+            };
+            match self.focus {
+                BenchmarkFocus::Compare => left,
+                _ => BenchmarkFocus::Compare,
+            }
+        } else {
+            match self.focus {
+                BenchmarkFocus::Creators => BenchmarkFocus::Details,
+                BenchmarkFocus::List => BenchmarkFocus::Creators,
+                BenchmarkFocus::Details => BenchmarkFocus::List,
+                BenchmarkFocus::Compare => BenchmarkFocus::List,
             }
         };
     }

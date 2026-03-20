@@ -2,6 +2,7 @@ use ratatui::widgets::ListState;
 
 use crate::data::{Model, Provider};
 use crate::provider_category::{provider_category, ProviderCategory};
+use crate::tui::widgets::scroll_offset::ScrollOffset;
 
 /// Page size for page up/down navigation
 const PAGE_SIZE: usize = 10;
@@ -10,6 +11,7 @@ const PAGE_SIZE: usize = 10;
 pub enum Focus {
     Providers,
     Models,
+    Details,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -68,6 +70,7 @@ pub struct ModelsApp {
     pub group_by_category: bool,
     pub provider_list_items: Vec<ProviderListItem>,
     filtered_models: Vec<ModelEntry>,
+    pub detail_scroll: ScrollOffset,
 }
 
 impl ModelsApp {
@@ -91,6 +94,7 @@ impl ModelsApp {
             group_by_category: false,
             provider_list_items: Vec::new(),
             filtered_models: Vec::new(),
+            detail_scroll: ScrollOffset::default(),
         };
 
         app.update_provider_list(providers);
@@ -350,6 +354,7 @@ impl ModelsApp {
         self.update_filtered_models(providers);
         self.model_list_state.select(Some(self.selected_model + 1));
         // +1 for header
+        self.reset_detail_scroll();
     }
 
     pub fn current_model(&self) -> Option<&ModelEntry> {
@@ -460,6 +465,7 @@ impl ModelsApp {
             self.selected_model += 1;
             self.model_list_state.select(Some(self.selected_model + 1));
             // +1 for header
+            self.reset_detail_scroll();
         }
     }
 
@@ -468,6 +474,7 @@ impl ModelsApp {
             self.selected_model -= 1;
             self.model_list_state.select(Some(self.selected_model + 1));
             // +1 for header
+            self.reset_detail_scroll();
         }
     }
 
@@ -475,6 +482,7 @@ impl ModelsApp {
         if self.selected_model > 0 {
             self.selected_model = 0;
             self.model_list_state.select(Some(self.selected_model + 1));
+            self.reset_detail_scroll();
         }
     }
 
@@ -482,6 +490,7 @@ impl ModelsApp {
         if self.selected_model < self.filtered_models.len().saturating_sub(1) {
             self.selected_model = self.filtered_models.len().saturating_sub(1);
             self.model_list_state.select(Some(self.selected_model + 1));
+            self.reset_detail_scroll();
         }
     }
 
@@ -491,6 +500,7 @@ impl ModelsApp {
         if next != self.selected_model {
             self.selected_model = next;
             self.model_list_state.select(Some(self.selected_model + 1));
+            self.reset_detail_scroll();
         }
     }
 
@@ -499,14 +509,28 @@ impl ModelsApp {
         if next != self.selected_model {
             self.selected_model = next;
             self.model_list_state.select(Some(self.selected_model + 1));
+            self.reset_detail_scroll();
         }
     }
 
-    pub fn switch_focus(&mut self) {
+    pub fn focus_right(&mut self) {
         self.focus = match self.focus {
             Focus::Providers => Focus::Models,
-            Focus::Models => Focus::Providers,
+            Focus::Models => Focus::Details,
+            Focus::Details => Focus::Providers,
         };
+    }
+
+    pub fn focus_left(&mut self) {
+        self.focus = match self.focus {
+            Focus::Providers => Focus::Details,
+            Focus::Models => Focus::Providers,
+            Focus::Details => Focus::Models,
+        };
+    }
+
+    pub fn reset_detail_scroll(&self) {
+        self.detail_scroll.jump_top();
     }
 
     pub fn cycle_sort(&mut self, providers: &[(String, Provider)]) {
@@ -515,6 +539,7 @@ impl ModelsApp {
         self.selected_model = 0;
         self.update_filtered_models(providers);
         self.model_list_state.select(Some(self.selected_model + 1));
+        self.reset_detail_scroll();
     }
 
     pub fn toggle_sort_dir(&mut self, providers: &[(String, Provider)]) {
@@ -523,6 +548,7 @@ impl ModelsApp {
             self.selected_model = 0;
             self.update_filtered_models(providers);
             self.model_list_state.select(Some(self.selected_model + 1));
+            self.reset_detail_scroll();
         }
     }
 
@@ -531,6 +557,7 @@ impl ModelsApp {
         self.selected_model = 0;
         self.update_filtered_models(providers);
         self.model_list_state.select(Some(self.selected_model + 1));
+        self.reset_detail_scroll();
     }
 
     pub fn toggle_tools(&mut self, providers: &[(String, Provider)]) {
@@ -538,6 +565,7 @@ impl ModelsApp {
         self.selected_model = 0;
         self.update_filtered_models(providers);
         self.model_list_state.select(Some(self.selected_model + 1));
+        self.reset_detail_scroll();
     }
 
     pub fn toggle_open_weights(&mut self, providers: &[(String, Provider)]) {
@@ -545,6 +573,7 @@ impl ModelsApp {
         self.selected_model = 0;
         self.update_filtered_models(providers);
         self.model_list_state.select(Some(self.selected_model + 1));
+        self.reset_detail_scroll();
     }
 
     pub fn toggle_free(&mut self, providers: &[(String, Provider)]) {
@@ -552,6 +581,7 @@ impl ModelsApp {
         self.selected_model = 0;
         self.update_filtered_models(providers);
         self.model_list_state.select(Some(self.selected_model + 1));
+        self.reset_detail_scroll();
     }
 
     pub fn cycle_provider_category(&mut self, providers: &[(String, Provider)]) {
@@ -563,6 +593,7 @@ impl ModelsApp {
         self.selected_model = 0;
         self.update_filtered_models(providers);
         self.model_list_state.select(Some(self.selected_model + 1));
+        self.reset_detail_scroll();
     }
 
     pub fn toggle_grouping(&mut self, providers: &[(String, Provider)]) {
@@ -574,6 +605,7 @@ impl ModelsApp {
         self.selected_model = 0;
         self.update_filtered_models(providers);
         self.model_list_state.select(Some(self.selected_model + 1));
+        self.reset_detail_scroll();
     }
 
     pub fn search_input(&mut self, c: char, providers: &[(String, Provider)]) {
@@ -581,7 +613,7 @@ impl ModelsApp {
         self.selected_model = 0;
         self.update_filtered_models(providers);
         self.model_list_state.select(Some(self.selected_model + 1));
-        // +1 for header
+        self.reset_detail_scroll();
     }
 
     pub fn search_backspace(&mut self, providers: &[(String, Provider)]) {
@@ -589,7 +621,7 @@ impl ModelsApp {
         self.selected_model = 0;
         self.update_filtered_models(providers);
         self.model_list_state.select(Some(self.selected_model + 1));
-        // +1 for header
+        self.reset_detail_scroll();
     }
 
     pub fn clear_search(&mut self, providers: &[(String, Provider)]) {
@@ -597,6 +629,6 @@ impl ModelsApp {
         self.selected_model = 0;
         self.update_filtered_models(providers);
         self.model_list_state.select(Some(self.selected_model + 1));
-        // +1 for header
+        self.reset_detail_scroll();
     }
 }
