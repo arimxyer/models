@@ -29,7 +29,8 @@ The header and footer are rendered by `draw_header()` and `draw_footer()` — ta
 | Role | Color | Usage |
 |------|-------|-------|
 | **Focus / Active** | `Color::Cyan` | Focused borders, active tab text, section headers, URLs, interactive highlights |
-| **Inactive / Secondary** | `Color::DarkGray` | Unfocused borders, labels, secondary text, inactive filters, missing data placeholders |
+| **Inactive / Secondary** | `Color::DarkGray` | Unfocused borders, secondary text, inactive filters, missing data placeholders |
+| **Labels / Secondary text** | `Color::Gray` | Detail panel label text (e.g., "Provider:", "Installed:", "Latest release:") |
 | **Selected / Hint** | `Color::Yellow` | Selected item text, keybinding hints in footer/help, sort indicators, warnings, loading text |
 | **Positive / Open** | `Color::Green` | Operational status, open weights, "All" items, active filter keys, "up to date", free pricing |
 | **Negative / Closed** | `Color::Red` | Errors, outages, closed weights, deprecated status, fetch failures |
@@ -91,7 +92,7 @@ The header and footer are rendered by `draw_header()` and `draw_footer()` — ta
 ### 3.2 Label/Value Pattern
 
 Detail panels consistently use:
-- **Labels:** `Style::default().fg(Color::DarkGray)` (e.g., "Provider:", "Installed:", "Latest release:")
+- **Labels:** `Style::default().fg(Color::Gray)` (e.g., "Provider:", "Installed:", "Latest release:")
 - **Values:** `Style::default().fg(Color::White)` (or `Color::DarkGray` if deprecated/unavailable)
 - **Missing values:** em-dash `\u{2014}` in `Color::DarkGray`
 

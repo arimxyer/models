@@ -12,6 +12,8 @@ Tracks AI coding assistants (CLI tools, IDEs, plugins) with GitHub metadata, loc
 | `AgentEntry` | `data.rs` | Combined entry: Agent + GitHubData + InstalledInfo + tracked flag. Methods: `update_available()`, `new_releases()`, `latest_release_relative_time()` |
 | `ChangelogBlock` | `changelog_parser.rs` | Normalized IR: `Heading(String)` \| `Bullet(String)` \| `Paragraph(String)`. Used by both CLI (`agents.rs`) and TUI preview panes |
 | `Changelog` | `changelog_parser.rs` | Flat list of ChangelogBlock. Produced by `parse_changelog()` (comrak AST → IR) |
+| `AgentServiceMapping` | `health.rs` | Maps agent IDs to status provider slugs and component names for service health display |
+| `ResolvedHealth` | `health.rs` | Resolved health with provider name and optional component name |
 
 ## Data Flow
 

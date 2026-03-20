@@ -12,3 +12,4 @@
 - Detail panel uses `ScrollablePanel` widget with `detail_scroll: ScrollOffset` for scrollable, focus-aware rendering
 - Focus navigation uses directional `focus_left()`/`focus_right()` cycling through Providers → Models → Details
 - `reset_detail_scroll()` called on every model selection change (navigation, sort, filter, search)
+- Provider list items display a category initial prefix (O/C/I/G/T for Origin/Cloud/Inference/Gateway/Tool) at the start of each item instead of an abbreviated label at the end

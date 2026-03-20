@@ -87,3 +87,4 @@ tui/
 - Borrow checker in render: extract values before `Paragraph::new()` consumes them; defer mutable updates after.
 - `LazyLock` for compiled regex singletons in `markdown.rs`.
 - Async fetches use tokio::spawn + mpsc channels. Results arrive as `Message` variants in the main loop — app never blocks.
+- `StatusApp::new()` takes `&Config` (not `&AgentsFile`) — status tab is independent of agents data loading and can be constructed without agent data.

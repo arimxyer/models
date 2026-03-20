@@ -4,7 +4,7 @@
 
 | Directory | Purpose | CLAUDE.md |
 |-----------|---------|-----------|
-| `agents/` | Agent data, GitHub integration, caching, changelog parsing | Yes |
+| `agents/` | Agent data, GitHub integration, caching, changelog parsing, agent-to-status-provider mapping (`health.rs`) | Yes |
 | `benchmarks/` | Benchmark store, CDN fetching, models.dev trait matching | Yes |
 | `cli/` | Subcommands, inline pickers, shared picker infrastructure | Yes |
 | `status/` | Provider health types, registry, assessment, fetch adapters | Yes |
