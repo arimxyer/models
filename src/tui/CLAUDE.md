@@ -8,15 +8,15 @@ The TUI uses per-tab subdirectories, each containing app state and rendering:
 tui/
 ├── models/
 │   ├── mod.rs     (pub use app::*)
-│   ├── app.rs     (ModelsApp state, Focus, Filters, SortOrder)
-│   └── render.rs  (draw_main)
+│   ├── app.rs     (ModelsApp state, Focus with Details, detail_scroll, Filters, SortOrder)
+│   └── render.rs  (draw_main, model_detail_lines, ScrollablePanel detail)
 ├── agents/
 │   ├── mod.rs     (pub use app::*)
 │   ├── app.rs     (AgentsApp state, AgentFocus, AgentSortOrder)
 │   └── render.rs  (draw_agents_main, draw_picker_modal)
 ├── benchmarks/
 │   ├── mod.rs     (pub use app::*)
-│   ├── app.rs     (BenchmarksApp state, BenchmarkFocus, BottomView, ScatterAxis, RadarPreset)
+│   ├── app.rs     (BenchmarksApp state, BenchmarkFocus with Details, detail_scroll, BottomView, ScatterAxis, RadarPreset)
 │   ├── render.rs  (draw_benchmarks_main, compare_colors)
 │   ├── compare.rs (draw_h2h_table_generic, draw_scatter)
 │   └── radar.rs   (draw_radar, spoke_angles, polygon_vertices, axes_for_preset)

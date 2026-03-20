@@ -1414,11 +1414,11 @@ mod tests {
 
     #[test]
     fn ambiguous_matches_message_lists_candidate_slugs() {
-        let entries = vec![
+        let entries = [
             make_entry("alpha", "Alpha", "openai", "OpenAI", Some(90.0)),
             make_entry("beta", "Beta", "openai", "OpenAI", Some(80.0)),
         ];
-        let matches = vec![&entries[0], &entries[1]];
+        let matches = [&entries[0], &entries[1]];
 
         let message = ambiguous_matches_message("a", &matches);
         assert!(message.contains("ambiguous"));
@@ -1428,7 +1428,7 @@ mod tests {
 
     #[test]
     fn filter_picker_entries_applies_live_query() {
-        let entries = vec![
+        let entries = [
             make_entry(
                 "claude-opus",
                 "Claude Opus",
@@ -1453,7 +1453,7 @@ mod tests {
 
     #[test]
     fn filter_picker_entries_resorts_by_requested_metric() {
-        let entries = vec![
+        let entries = [
             make_entry("alpha", "Alpha", "openai", "OpenAI", Some(80.0)),
             make_entry("beta", "Beta", "openai", "OpenAI", Some(90.0)),
         ];
