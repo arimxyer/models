@@ -433,7 +433,30 @@ pub(super) fn draw_provider_status_detail(
                         .iter()
                         .filter(|c| c.status.to_lowercase().contains("operational"))
                         .count();
-                    let group_degraded = members.len() - group_op;
+                    let group_deg = members
+                        .iter()
+                        .filter(|c| {
+                            let s = c.status.to_lowercase();
+                            s.contains("degraded") && !s.contains("maint")
+                        })
+                        .count();
+                    let group_partial = members
+                        .iter()
+                        .filter(|c| c.status.to_lowercase().contains("partial"))
+                        .count();
+                    let group_outage = members
+                        .iter()
+                        .filter(|c| {
+                            let s = c.status.to_lowercase();
+                            (s.contains("outage") || s.contains("major") || s.contains("down"))
+                                && !s.contains("partial")
+                        })
+                        .count();
+                    let group_maint = members
+                        .iter()
+                        .filter(|c| c.status.to_lowercase().contains("maint"))
+                        .count();
+                    let group_non_op = members.len() - group_op;
 
                     // Group header with aggregate health
                     let worst_status = members
@@ -441,18 +464,32 @@ pub(super) fn draw_provider_status_detail(
                         .find(|c| !c.status.to_lowercase().contains("operational"))
                         .map(|c| c.status.as_str())
                         .unwrap_or("operational");
-                    let group_icon = if group_degraded > 0 {
+                    let group_icon = if group_non_op > 0 {
                         component_status_icon(worst_status)
                     } else {
                         "●"
                     };
-                    let group_style = if group_degraded > 0 {
+                    let group_style = if group_non_op > 0 {
                         component_status_style(worst_status)
                     } else {
                         Style::default().fg(Color::Green)
                     };
-                    let summary = if group_degraded > 0 {
-                        format!("({group_degraded} degraded, {group_op} operational)")
+                    let summary = if group_non_op > 0 {
+                        let mut parts = Vec::new();
+                        if group_partial > 0 {
+                            parts.push(format!("{group_partial} partial outage"));
+                        }
+                        if group_deg > 0 {
+                            parts.push(format!("{group_deg} degraded"));
+                        }
+                        if group_outage > 0 {
+                            parts.push(format!("{group_outage} outage"));
+                        }
+                        if group_maint > 0 {
+                            parts.push(format!("{group_maint} maintenance"));
+                        }
+                        parts.push(format!("{group_op} operational"));
+                        format!("({})", parts.join(", "))
                     } else {
                         format!("({group_op} operational)")
                     };
