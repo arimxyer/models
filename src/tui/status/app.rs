@@ -220,6 +220,7 @@ impl StatusApp {
         }
 
         self.close_picker();
+        self.update_filtered();
         Ok(newly_tracked)
     }
 
@@ -231,6 +232,10 @@ impl StatusApp {
             .iter()
             .enumerate()
             .filter(|(_, entry)| {
+                // Only show tracked providers
+                if !self.tracked.contains(&entry.slug) {
+                    return false;
+                }
                 query.is_empty()
                     || entry.display_name.to_lowercase().contains(&query)
                     || entry.slug.to_lowercase().contains(&query)
@@ -322,7 +327,11 @@ impl StatusApp {
         let mut deg = 0;
         let mut out = 0;
         let mut other = 0;
-        for entry in &self.entries {
+        for entry in self
+            .entries
+            .iter()
+            .filter(|e| self.tracked.contains(&e.slug))
+        {
             match entry.health {
                 ProviderHealth::Operational => op += 1,
                 ProviderHealth::Degraded => deg += 1,
@@ -352,6 +361,7 @@ impl StatusApp {
     pub fn all_maintenances(&self) -> Vec<(&str, &ScheduledMaintenance)> {
         self.entries
             .iter()
+            .filter(|entry| self.tracked.contains(&entry.slug))
             .flat_map(|entry| {
                 entry
                     .scheduled_maintenances

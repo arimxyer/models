@@ -140,6 +140,7 @@ pub(super) fn overall_attention_entries(
     let mut entries: Vec<_> = status_app
         .entries
         .iter()
+        .filter(|entry| status_app.tracked.contains(&entry.slug))
         .filter(|entry| {
             !entry.active_incidents().is_empty()
                 || !overall_attention_components(entry).is_empty()
