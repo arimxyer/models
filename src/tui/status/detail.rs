@@ -366,6 +366,13 @@ pub(super) fn draw_provider_status_detail(
             let has_groups = groups.iter().any(|(k, _)| k.is_some());
 
             if has_groups {
+                // Sort: ungrouped first (important top-level services), then named groups
+                groups.sort_by(|(a, _), (b, _)| match (a, b) {
+                    (None, Some(_)) => std::cmp::Ordering::Less,
+                    (Some(_), None) => std::cmp::Ordering::Greater,
+                    _ => std::cmp::Ordering::Equal,
+                });
+
                 for (group_name, members) in &groups {
                     let group_label = group_name.as_deref().unwrap_or("Ungrouped");
                     let group_op = members
@@ -405,24 +412,22 @@ pub(super) fn draw_provider_status_detail(
                         Span::styled(format!("  {summary}"), Style::default().fg(Color::DarkGray)),
                     ]));
 
-                    // Show children — all if any degraded, just header if all operational
-                    if group_degraded > 0 {
-                        for comp in members {
-                            let name = translate_component_name(&comp.name);
-                            lines.push(Line::from(vec![
-                                Span::raw("  "),
-                                Span::styled(
-                                    component_status_icon(&comp.status),
-                                    component_status_style(&comp.status),
-                                ),
-                                Span::raw(" "),
-                                Span::raw(name),
-                                Span::styled(
-                                    format!("  {}", comp.status.replace('_', " ")),
-                                    Style::default().fg(Color::DarkGray),
-                                ),
-                            ]));
-                        }
+                    // Always show children under their group header
+                    for comp in members {
+                        let name = translate_component_name(&comp.name);
+                        lines.push(Line::from(vec![
+                            Span::raw("  "),
+                            Span::styled(
+                                component_status_icon(&comp.status),
+                                component_status_style(&comp.status),
+                            ),
+                            Span::raw(" "),
+                            Span::raw(name),
+                            Span::styled(
+                                format!("  {}", comp.status.replace('_', " ")),
+                                Style::default().fg(Color::DarkGray),
+                            ),
+                        ]));
                     }
                 }
             } else {
