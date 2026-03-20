@@ -351,20 +351,97 @@ pub(super) fn draw_provider_status_detail(
                 Style::default().fg(Color::DarkGray),
             )));
         } else {
+            // Group components by group_name, preserving order
+            let mut groups: Vec<(Option<String>, Vec<&crate::status::ComponentStatus>)> =
+                Vec::new();
             for comp in components {
-                let name = translate_component_name(&comp.name);
-                lines.push(Line::from(vec![
-                    Span::styled(
-                        component_status_icon(&comp.status),
-                        component_status_style(&comp.status),
-                    ),
-                    Span::raw(" "),
-                    Span::styled(name, Style::default().add_modifier(Modifier::BOLD)),
-                    Span::styled(
-                        format!("  {}", comp.status.replace('_', " ")),
-                        Style::default().fg(Color::DarkGray),
-                    ),
-                ]));
+                let key = comp.group_name.clone();
+                if let Some(group) = groups.iter_mut().find(|(k, _)| *k == key) {
+                    group.1.push(comp);
+                } else {
+                    groups.push((key, vec![comp]));
+                }
+            }
+
+            let has_groups = groups.iter().any(|(k, _)| k.is_some());
+
+            if has_groups {
+                for (group_name, members) in &groups {
+                    let group_label = group_name.as_deref().unwrap_or("Ungrouped");
+                    let group_op = members
+                        .iter()
+                        .filter(|c| c.status.to_lowercase().contains("operational"))
+                        .count();
+                    let group_degraded = members.len() - group_op;
+
+                    // Group header with aggregate health
+                    let worst_status = members
+                        .iter()
+                        .find(|c| !c.status.to_lowercase().contains("operational"))
+                        .map(|c| c.status.as_str())
+                        .unwrap_or("operational");
+                    let group_icon = if group_degraded > 0 {
+                        component_status_icon(worst_status)
+                    } else {
+                        "●"
+                    };
+                    let group_style = if group_degraded > 0 {
+                        component_status_style(worst_status)
+                    } else {
+                        Style::default().fg(Color::Green)
+                    };
+                    let summary = if group_degraded > 0 {
+                        format!("({group_degraded} degraded, {group_op} operational)")
+                    } else {
+                        format!("({group_op} operational)")
+                    };
+                    lines.push(Line::from(vec![
+                        Span::styled(group_icon, group_style),
+                        Span::raw(" "),
+                        Span::styled(
+                            group_label.to_string(),
+                            Style::default().add_modifier(Modifier::BOLD),
+                        ),
+                        Span::styled(format!("  {summary}"), Style::default().fg(Color::DarkGray)),
+                    ]));
+
+                    // Show children — all if any degraded, just header if all operational
+                    if group_degraded > 0 {
+                        for comp in members {
+                            let name = translate_component_name(&comp.name);
+                            lines.push(Line::from(vec![
+                                Span::raw("  "),
+                                Span::styled(
+                                    component_status_icon(&comp.status),
+                                    component_status_style(&comp.status),
+                                ),
+                                Span::raw(" "),
+                                Span::raw(name),
+                                Span::styled(
+                                    format!("  {}", comp.status.replace('_', " ")),
+                                    Style::default().fg(Color::DarkGray),
+                                ),
+                            ]));
+                        }
+                    }
+                }
+            } else {
+                // No groups — flat list (fallback)
+                for comp in components {
+                    let name = translate_component_name(&comp.name);
+                    lines.push(Line::from(vec![
+                        Span::styled(
+                            component_status_icon(&comp.status),
+                            component_status_style(&comp.status),
+                        ),
+                        Span::raw(" "),
+                        Span::styled(name, Style::default().add_modifier(Modifier::BOLD)),
+                        Span::styled(
+                            format!("  {}", comp.status.replace('_', " ")),
+                            Style::default().fg(Color::DarkGray),
+                        ),
+                    ]));
+                }
             }
         }
 
