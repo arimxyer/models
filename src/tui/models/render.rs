@@ -211,11 +211,11 @@ fn draw_providers(f: &mut Frame, area: Rect, app: &mut App) {
             ProviderListItem::Provider(idx) => {
                 if let Some((id, provider)) = app.providers.get(*idx) {
                     let cat = provider_category(id);
-                    let short = cat.short_label();
+                    let initial = &cat.short_label()[..1];
                     let color = cat.color();
                     let line = Line::from(vec![
-                        Span::raw(format!("{} ({}) ", id, provider.models.len())),
-                        Span::styled(short, Style::default().fg(color)),
+                        Span::styled(initial, Style::default().fg(color)),
+                        Span::raw(format!(" {} ({})", id, provider.models.len())),
                     ]);
                     items.push(ListItem::new(line));
                 }
