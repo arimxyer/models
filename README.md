@@ -296,14 +296,27 @@ See [Custom Agents](docs/custom-agents.md) for the full reference.
 
 ### Status Tab
 
+![Status tab screenshot](public/assets/status-screenshot.png)
+
+- **22 AI providers tracked** across 7 status page platforms (Statuspage, BetterStack, Instatus, incident.io, and more)
+- **Overall dashboard** — health gauge, incident count, and maintenance cards at a glance
+- **Provider detail** — grouped services, active incidents, and scheduled maintenance windows
+- **Health indicators** — operational (●), degraded (◐), outage (✗), maintenance (◆)
+- **Customizable tracking** — press `a` to choose which providers to monitor; preferences saved to `~/.config/models/config.toml`
+
+**Navigation**
 | Key | Action |
 |-----|--------|
 | `Tab` / `h` / `l` | Switch focus (List ↔ Detail) |
 | `h` / `l` | Cycle detail sub-panels (Services / Incidents / Maintenance) |
-| `a` | Add/remove tracked providers |
-| `o` | Open provider status page |
-| `r` | Refresh provider status |
 | `/` | Search providers |
+
+**Actions**
+| Key | Action |
+|-----|--------|
+| `o` | Open provider status page in browser |
+| `r` | Refresh provider status |
+| `a` | Add/remove tracked providers |
 
 ---
 
@@ -346,9 +359,21 @@ models benchmarks list --creator anthropic --json
 models benchmarks show gpt-4o --json
 ```
 
+### Standalone `benchmarks` command
+
+Like the agents CLI, you can create a symlink for standalone usage:
+
+```bash
+ln -s $(which models) ~/.local/bin/benchmarks
+benchmarks list
+benchmarks show gpt-4o
+```
+
+> **Note:** Make sure `~/.local/bin` is in your `PATH`. See the agents setup note below for shell-specific instructions.
+
 ### Agents CLI
 
-Track AI coding agent releases from the command line. Install the `agents` alias during setup, or use `models agents` as a fallback.
+Track AI coding agent releases from the command line. Install the `agents` alias during setup, or use `models agents` as a fallback. The `benchmarks` command supports the same dual entry point pattern.
 
 ```bash
 # Create the agents alias (one-time setup)
