@@ -444,8 +444,11 @@ fn run_status() -> Result<()> {
     let status_entries: Vec<crate::status::ProviderStatus> = {
         use crate::agents::health::AGENT_SERVICE_MAPPINGS;
         use crate::status::registry::status_seed_for_provider;
+        let tracked_ids: std::collections::HashSet<&str> =
+            entries.iter().map(|e| e.id.as_str()).collect();
         let slugs: std::collections::HashSet<&str> = AGENT_SERVICE_MAPPINGS
             .iter()
+            .filter(|m| tracked_ids.contains(m.agent_id))
             .map(|m| m.provider_slug)
             .collect();
         let seeds: Vec<_> = slugs.iter().map(|s| status_seed_for_provider(s)).collect();

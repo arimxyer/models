@@ -6,7 +6,7 @@ use ratatui::widgets::ListState;
 use crate::config::Config;
 use crate::status::{
     status_seed_for_provider, ProviderHealth, ProviderStatus, ScheduledMaintenance,
-    StatusProvenance, StatusProviderSeed, STATUS_REGISTRY,
+    StatusLoadState, StatusProvenance, StatusProviderSeed, STATUS_REGISTRY,
 };
 use crate::tui::widgets::ScrollOffset;
 
@@ -121,6 +121,9 @@ impl StatusApp {
     }
 
     pub fn apply_fetch(&mut self, fetched: Vec<ProviderStatus>) {
+        if fetched.is_empty() {
+            return;
+        }
         // Merge by slug: update fetched entries, reset untracked to placeholder
         let fetched_map: HashMap<String, ProviderStatus> =
             fetched.into_iter().map(|e| (e.slug.clone(), e)).collect();
@@ -217,6 +220,14 @@ impl StatusApp {
         if let Err(e) = config.save() {
             self.close_picker();
             return Err(format!("Failed to save config: {}", e));
+        }
+
+        // Reset untracked entries to placeholder health
+        for entry in &mut self.entries {
+            if !self.tracked.contains(&entry.slug) {
+                entry.health = ProviderHealth::Unknown;
+                entry.load_state = StatusLoadState::Placeholder;
+            }
         }
 
         self.close_picker();
