@@ -288,7 +288,7 @@ pub(super) fn draw_provider_status_detail(
             legend_spans.push(Span::raw(format!("{maint_comp_count} under maintenance  ")));
         }
         if !scheduled_maintenances.is_empty() {
-            legend_spans.push(Span::styled("◆ ", Style::default().fg(Color::Blue)));
+            legend_spans.push(Span::styled("◇ ", Style::default().fg(Color::Blue)));
             legend_spans.push(Span::raw(format!(
                 "{} scheduled maintenance  ",
                 scheduled_maintenances.len()
@@ -527,8 +527,13 @@ pub(super) fn draw_provider_status_detail(
                 for maint in scheduled_maintenances {
                     let mut card_lines = Vec::new();
 
+                    let maint_active = {
+                        let s = maint.status.to_lowercase();
+                        s.contains("progress") || s.contains("active") || s.contains("verifying")
+                    };
+                    let maint_icon = if maint_active { "◆" } else { "◇" };
                     card_lines.push(Line::from(vec![
-                        Span::styled("◆ ", Style::default().fg(Color::Blue)),
+                        Span::styled(format!("{maint_icon} "), Style::default().fg(Color::Blue)),
                         Span::styled(
                             maint.name.clone(),
                             Style::default().add_modifier(Modifier::BOLD),

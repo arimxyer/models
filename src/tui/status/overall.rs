@@ -233,8 +233,13 @@ fn build_maintenance_panel_cards(
     for (provider_name, maint) in items.iter() {
         let mut card_lines = Vec::new();
 
+        let maint_active = {
+            let s = maint.status.to_lowercase();
+            s.contains("progress") || s.contains("active") || s.contains("verifying")
+        };
+        let maint_icon = if maint_active { "◆" } else { "◇" };
         card_lines.push(Line::from(vec![
-            Span::styled("◆", Style::default().fg(Color::Blue)),
+            Span::styled(maint_icon, Style::default().fg(Color::Blue)),
             Span::raw(" "),
             Span::styled(
                 provider_name.to_string(),
