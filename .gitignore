@@ -2,6 +2,7 @@
 .worktrees/
 docs/plans/
 .claude/
+.codex/
 .omc/
 .env
 data/fuzzy_*.json
