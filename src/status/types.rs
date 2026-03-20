@@ -674,31 +674,32 @@ impl ProviderStatus {
     }
 
     /// Count of non-operational components (outage, degraded, or maintenance).
-    pub fn non_operational_component_count(&self) -> usize {
-        if !self.component_detail_available() {
-            return 0;
-        }
-        self.components
-            .iter()
-            .filter(|c| {
-                let s = c.status.to_lowercase();
-                !s.contains("operational") && s != "unknown" && !s.is_empty()
-            })
-            .count()
-    }
-
-    /// Combined issue count for display badges: active incidents + non-operational
-    /// components that aren't already covered by an incident.
+    /// Combined issue count for display badges: active incidents or degraded
+    /// components (excluding maintenance — planned work is not an issue).
     pub fn issue_count(&self) -> usize {
         let incidents = if self.incident_detail_available() {
             self.active_incidents().len()
         } else {
             0
         };
-        let non_op_components = self.non_operational_component_count();
+        // Only count degraded/outage components as issues, not maintenance
+        let degraded_components = if self.component_detail_available() {
+            self.components
+                .iter()
+                .filter(|c| {
+                    let s = c.status.to_lowercase();
+                    !s.contains("operational")
+                        && !s.contains("maint")
+                        && s != "unknown"
+                        && !s.is_empty()
+                })
+                .count()
+        } else {
+            0
+        };
         // If there are incidents, they typically cover the component issues.
         // Show the larger of the two to avoid double-counting.
-        incidents.max(non_op_components)
+        incidents.max(degraded_components)
     }
 }
 

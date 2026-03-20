@@ -258,10 +258,6 @@ pub(super) fn draw_provider_status_detail(
                     && !s.is_empty()
             })
             .count();
-        let maint_comp_count = components
-            .iter()
-            .filter(|c| c.status.to_lowercase().contains("maint"))
-            .count();
 
         let mut legend_spans: Vec<Span<'static>> = Vec::new();
         if healthy_comp_count > 0 {
@@ -278,19 +274,12 @@ pub(super) fn draw_provider_status_detail(
         }
         if degraded_comp_count > 0 {
             legend_spans.push(Span::styled("◐ ", Style::default().fg(Color::Yellow)));
-            legend_spans.push(Span::raw(format!(
-                "{degraded_comp_count} service degradation{}  ",
-                if degraded_comp_count == 1 { "" } else { "s" }
-            )));
-        }
-        if maint_comp_count > 0 {
-            legend_spans.push(Span::styled("◆ ", Style::default().fg(Color::Blue)));
-            legend_spans.push(Span::raw(format!("{maint_comp_count} under maintenance  ")));
+            legend_spans.push(Span::raw(format!("{degraded_comp_count} degraded  ",)));
         }
         if !scheduled_maintenances.is_empty() {
             legend_spans.push(Span::styled("◇ ", Style::default().fg(Color::Blue)));
             legend_spans.push(Span::raw(format!(
-                "{} scheduled maintenance  ",
+                "{} maintenance  ",
                 scheduled_maintenances.len()
             )));
         }
