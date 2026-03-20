@@ -49,8 +49,14 @@ pub(crate) fn parse_instatus_summary(
                             .and_then(|v| v.as_str())
                             .unwrap_or_default()
                             .to_string(),
-                        shortlink: None,
-                        created_at: None,
+                        shortlink: i
+                            .get("url")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string()),
+                        created_at: i
+                            .get("started")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string()),
                         updated_at: None,
                         latest_update: None,
                         affected_components: Vec::new(),
@@ -75,7 +81,11 @@ pub(crate) fn parse_instatus_summary(
                             .unwrap_or_default()
                             .to_string(),
                         impact: String::new(),
-                        scheduled_for: None,
+                        // Instatus uses "start" (not "scheduled_for") for the maintenance start time
+                        scheduled_for: m
+                            .get("start")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string()),
                         scheduled_until: None,
                         affected_components: Vec::new(),
                     })
@@ -176,10 +186,21 @@ mod tests {
         let summary_json = r#"{
             "page": {"status": "HASISSUES"},
             "activeIncidents": [
-                {"name": "Search degraded", "status": "INVESTIGATING", "impact": "minor"}
+                {
+                    "name": "Search degraded",
+                    "status": "INVESTIGATING",
+                    "impact": "MAJOROUTAGE",
+                    "started": "Sat Jun 11 2022 18:55:50 GMT+0000 (Coordinated Universal Time)",
+                    "url": "https://status.perplexity.com/incident/cl4a8n307"
+                }
             ],
             "scheduledMaintenances": [
-                {"name": "Planned reboot", "status": "SCHEDULED"}
+                {
+                    "name": "Planned reboot",
+                    "status": "NOTSTARTEDYET",
+                    "start": "Sat Jun 11 2022 20:00:00 GMT+0000 (Coordinated Universal Time)",
+                    "duration": "60"
+                }
             ]
         }"#;
 
@@ -189,8 +210,20 @@ mod tests {
         assert_eq!(snapshot.health, ProviderHealth::Degraded);
         assert_eq!(snapshot.incidents.len(), 1);
         assert_eq!(snapshot.incidents[0].name, "Search degraded");
+        assert_eq!(
+            snapshot.incidents[0].created_at.as_deref(),
+            Some("Sat Jun 11 2022 18:55:50 GMT+0000 (Coordinated Universal Time)")
+        );
+        assert_eq!(
+            snapshot.incidents[0].shortlink.as_deref(),
+            Some("https://status.perplexity.com/incident/cl4a8n307")
+        );
         assert_eq!(snapshot.maintenance.len(), 1);
         assert_eq!(snapshot.maintenance[0].name, "Planned reboot");
+        assert_eq!(
+            snapshot.maintenance[0].scheduled_for.as_deref(),
+            Some("Sat Jun 11 2022 20:00:00 GMT+0000 (Coordinated Universal Time)")
+        );
 
         let components_json = r#"[
             {"name": "API", "status": "OPERATIONAL"},
