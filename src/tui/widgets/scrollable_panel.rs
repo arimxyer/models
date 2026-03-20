@@ -36,7 +36,7 @@ pub struct ScrollablePanelState {
 pub struct ScrollablePanel<'a> {
     lines: Option<Vec<Line<'a>>>,
     cards: Option<Vec<SoftCard>>,
-    title: String,
+    title: Line<'a>,
     scroll: &'a ScrollOffset,
     focused: bool,
     wrap: bool,
@@ -44,7 +44,7 @@ pub struct ScrollablePanel<'a> {
 
 impl<'a> ScrollablePanel<'a> {
     pub fn new(
-        title: impl Into<String>,
+        title: impl Into<Line<'a>>,
         lines: Vec<Line<'a>>,
         scroll: &'a ScrollOffset,
         focused: bool,
@@ -52,7 +52,7 @@ impl<'a> ScrollablePanel<'a> {
         Self {
             lines: Some(lines),
             cards: None,
-            title: title.into(),
+            title: Self::pad_title(title.into()),
             scroll,
             focused,
             wrap: true,
@@ -61,7 +61,7 @@ impl<'a> ScrollablePanel<'a> {
 
     /// Create a panel that renders SoftCards instead of raw lines.
     pub fn with_cards(
-        title: impl Into<String>,
+        title: impl Into<Line<'a>>,
         cards: Vec<SoftCard>,
         scroll: &'a ScrollOffset,
         focused: bool,
@@ -69,11 +69,20 @@ impl<'a> ScrollablePanel<'a> {
         Self {
             lines: None,
             cards: Some(cards),
-            title: title.into(),
+            title: Self::pad_title(title.into()),
             scroll,
             focused,
             wrap: true,
         }
+    }
+
+    /// Ensure title has space padding for visual consistency.
+    fn pad_title(title: Line<'a>) -> Line<'a> {
+        use ratatui::text::Span;
+        let mut spans = vec![Span::raw(" ")];
+        spans.extend(title.spans);
+        spans.push(Span::raw(" "));
+        Line::from(spans)
     }
 
     /// Set whether text lines are wrapped. Defaults to true.
@@ -90,13 +99,13 @@ impl<'a> ScrollablePanel<'a> {
         let focused = self.focused;
         let wrap = self.wrap;
         if let Some(cards) = self.cards {
-            Self::render_cards_inner(f, area, cards, &title, scroll, focused)
+            Self::render_cards_inner(f, area, cards, title, scroll, focused)
         } else {
             Self::render_lines_inner(
                 f,
                 area,
                 self.lines.unwrap_or_default(),
-                &title,
+                title,
                 scroll,
                 focused,
                 wrap,
@@ -108,7 +117,7 @@ impl<'a> ScrollablePanel<'a> {
         f: &mut Frame,
         area: ratatui::layout::Rect,
         cards: Vec<SoftCard>,
-        title: &str,
+        title: Line<'_>,
         scroll: &ScrollOffset,
         focused: bool,
     ) -> ScrollablePanelState {
@@ -116,7 +125,7 @@ impl<'a> ScrollablePanel<'a> {
         let block = Block::default()
             .borders(Borders::ALL)
             .border_style(border_style)
-            .title(format!(" {} ", title));
+            .title(title);
 
         let inner = block.inner(area);
         f.render_widget(block, area);
@@ -218,7 +227,7 @@ impl<'a> ScrollablePanel<'a> {
         f: &mut Frame,
         area: ratatui::layout::Rect,
         lines: Vec<Line<'a>>,
-        title: &str,
+        title: Line<'_>,
         scroll: &ScrollOffset,
         focused: bool,
         wrap: bool,
@@ -227,7 +236,7 @@ impl<'a> ScrollablePanel<'a> {
         let block = Block::default()
             .borders(Borders::ALL)
             .border_style(border_style)
-            .title(format!(" {} ", title));
+            .title(title);
 
         let visible_height = area.height.saturating_sub(2);
         let (visual_total, visual_offsets) = if wrap {

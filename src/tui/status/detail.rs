@@ -104,7 +104,7 @@ fn build_services_title(components: &[&crate::status::ComponentStatus]) -> Line<
         }
     }
 
-    let mut spans = vec![Span::raw(format!(" Services ({}) ", components.len()))];
+    let mut spans = vec![Span::raw(format!("Services ({}) ", components.len()))];
     if op > 0 {
         spans.push(Span::styled(" ● ", Style::default().fg(Color::Green)));
         spans.push(Span::raw(format!("{op} ")));
