@@ -110,7 +110,7 @@ enum Commands {
 }
 
 fn main() -> Result<()> {
-    // Check if invoked as "agents" (symlink entry point)
+    // Check if invoked as "agents" or "benchmarks" (symlink entry point)
     let binary_name = std::env::args()
         .next()
         .and_then(|s| {
@@ -122,6 +122,9 @@ fn main() -> Result<()> {
 
     if binary_name == "agents" {
         return cli::agents::run();
+    }
+    if binary_name == "benchmarks" {
+        return cli::benchmarks::run_with_command(None);
     }
 
     let cli = Cli::parse();
