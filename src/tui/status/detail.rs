@@ -152,8 +152,8 @@ pub(super) fn draw_provider_status_detail(
     let dark_border = Style::default().fg(Color::DarkGray);
 
     // Compute dynamic subpanel heights
-    // Base: gauge + verdict + issue_summary + 2 borders = 5
-    let mut status_h: u16 = 5;
+    // Base: gauge + legend + 2 borders = 4
+    let mut status_h: u16 = 4;
     if caveat.is_some() || provenance == StatusProvenance::Unavailable {
         status_h += 1;
     }
@@ -243,12 +243,7 @@ pub(super) fn draw_provider_status_detail(
             }
         };
         let gauge_label = if total > 0 {
-            format!(
-                "{} {}  {:.0}%",
-                status_health_icon(health),
-                status_verdict_copy(health),
-                ratio * 100.0
-            )
+            format!("{}/{total}  {:.0}%", healthy_comp_count, ratio * 100.0)
         } else {
             format!(
                 "{} {}",
@@ -267,7 +262,27 @@ pub(super) fn draw_provider_status_detail(
         f.render_widget(gauge, inner_chunks[0]);
 
         // Legend line: icon+count for each category (matching Overall panel style)
+        // Separate degraded components from maintenance components
+        let degraded_comp_count = components
+            .iter()
+            .filter(|c| {
+                let s = c.status.to_lowercase();
+                !s.contains("operational")
+                    && !s.contains("maint")
+                    && s != "unknown"
+                    && !s.is_empty()
+            })
+            .count();
+        let maint_comp_count = components
+            .iter()
+            .filter(|c| c.status.to_lowercase().contains("maint"))
+            .count();
+
         let mut legend_spans: Vec<Span<'static>> = Vec::new();
+        if healthy_comp_count > 0 {
+            legend_spans.push(Span::styled("● ", Style::default().fg(Color::Green)));
+            legend_spans.push(Span::raw(format!("{healthy_comp_count} operational  ")));
+        }
         if !active_incidents.is_empty() {
             legend_spans.push(Span::styled("◐ ", Style::default().fg(Color::Yellow)));
             legend_spans.push(Span::raw(format!(
@@ -276,18 +291,21 @@ pub(super) fn draw_provider_status_detail(
                 if active_incidents.len() == 1 { "" } else { "s" }
             )));
         }
-        if non_op_comp_count > 0 && active_incidents.is_empty() {
+        if degraded_comp_count > 0 {
             legend_spans.push(Span::styled("◐ ", Style::default().fg(Color::Yellow)));
             legend_spans.push(Span::raw(format!(
-                "{} service degradation{}  ",
-                non_op_comp_count,
-                if non_op_comp_count == 1 { "" } else { "s" }
+                "{degraded_comp_count} service degradation{}  ",
+                if degraded_comp_count == 1 { "" } else { "s" }
             )));
+        }
+        if maint_comp_count > 0 {
+            legend_spans.push(Span::styled("◆ ", Style::default().fg(Color::Blue)));
+            legend_spans.push(Span::raw(format!("{maint_comp_count} under maintenance  ")));
         }
         if !scheduled_maintenances.is_empty() {
             legend_spans.push(Span::styled("◆ ", Style::default().fg(Color::Blue)));
             legend_spans.push(Span::raw(format!(
-                "{} maintenance  ",
+                "{} scheduled maintenance  ",
                 scheduled_maintenances.len()
             )));
         }

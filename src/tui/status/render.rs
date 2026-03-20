@@ -777,7 +777,6 @@ mod tests {
         let rendered = render_status_text(&mut app);
 
         assert!(rendered.contains("Status"));
-        assert!(rendered.contains("Some services degraded"));
         assert!(rendered.contains("1 active incident"));
         assert!(!rendered.contains("Narrative"));
         assert!(!rendered.contains("Status page"));
@@ -811,7 +810,8 @@ mod tests {
         let mut app = make_status_app(entry);
         let rendered = render_status_text(&mut app);
 
-        assert!(rendered.contains("All systems operational"));
+        assert!(rendered.contains("2/2"));
+        assert!(rendered.contains("100%"));
         assert!(!rendered.contains("Affected right now:"));
     }
 
