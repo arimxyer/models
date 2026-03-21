@@ -3,7 +3,7 @@
 ## Module Structure
 
 - **`types.rs`** — Core types: `ProviderHealth` enum, `ProviderStatus` struct, detail-state contract
-- **`registry.rs`** — `STATUS_REGISTRY` (21 entries), provider slug aliases, strategy/support tier lookup
+- **`registry.rs`** — `STATUS_REGISTRY` (22 entries), provider slug aliases, strategy/support tier lookup
 - **`assessment.rs`** — Assessment logic on `ProviderStatus`: coverage, freshness, confidence, contradictions, affected surfaces
 - **`fetch.rs`** — `StatusFetcher` async fetcher with bounded concurrency (≤10 in-flight), Google pre-fetch
 - **`adapters/`** — 7 adapters: statuspage, betterstack, google, instatus, onlineornot, status_io, fallback
