@@ -116,7 +116,7 @@ mod tests {
             Some("1.0.30".to_string())
         );
         assert_eq!(
-            extract_version("aider v0.82.1", None),
+            extract_version("opencode v0.82.1", None),
             Some("0.82.1".to_string())
         );
         assert_eq!(

@@ -511,6 +511,10 @@ fn draw_help_popup(f: &mut Frame, scroll: &ScrollOffset, current_tab: Tab) {
                 help_line("c", "Copy agent name"),
                 help_line("a", "Add/remove tracked agents"),
                 Line::from(""),
+                help_section("Search Navigation"),
+                help_line("n", "Next search match"),
+                help_line("N", "Previous search match"),
+                Line::from(""),
                 help_section("Status Indicators"),
                 Line::from(vec![
                     Span::styled(
@@ -582,7 +586,6 @@ fn draw_help_popup(f: &mut Frame, scroll: &ScrollOffset, current_tab: Tab) {
                 help_section("Status view"),
                 help_line("Tab/h/l", "Switch list/details focus"),
                 help_line("/", "Search providers"),
-                help_line("e", "Expand/collapse services"),
                 Line::from(""),
             ]);
         }
