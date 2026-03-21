@@ -1,7 +1,7 @@
 # CLI Module — Architecture & Patterns
 
 ## Module Purpose
-Subcommands for models, benchmarks, agents: thin clap wrappers (`list.rs`, `search.rs`, `show.rs`, `benchmarks.rs`) that delegate to interactive pickers or direct output. Binary aliases support `models <cmd>` and `agents <cmd>` (detected via argv[0]).
+Subcommands for models, benchmarks, agents: thin clap wrappers (`list.rs`, `search.rs`, `show.rs`, `benchmarks.rs`) that delegate to interactive pickers or direct output. Binary aliases support `models <cmd>`, `agents <cmd>`, and `benchmarks <cmd>` (detected via argv[0]).
 
 ## Shared Picker Infrastructure (`picker.rs`)
 
@@ -31,6 +31,8 @@ All 3 pickers (models, benchmarks, agents) follow the same lifecycle:
 - `models list` — filters + sort, delegates to picker or table output
 - `models search <query>` — keyword match, interactive picker for selection
 - `models show <name>` — single-model detail view with benchmarks/capabilities
+- `models providers` — list all providers, supports --json
+- `models completions <shell>` — generate shell completions (bash/fish/zsh/elvish/powershell)
 - `models benchmarks` — interactive picker, can output JSON via --json
 - `agents status|latest|list-sources` — table output; `agents status` sorts by most recently updated and includes a "Status" column with service health icons
 - `agents <tool>` — release browser with changelog search (agents_ui.rs)

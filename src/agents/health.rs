@@ -116,13 +116,12 @@ mod tests {
 
     #[test]
     fn unmapped_agents_return_none() {
-        assert!(service_mapping_for_agent("aider").is_none());
         assert!(service_mapping_for_agent("opencode").is_none());
     }
 
     #[test]
     fn resolve_returns_none_for_unmapped() {
-        assert!(resolve_agent_service_health("aider", &[]).is_none());
+        assert!(resolve_agent_service_health("opencode", &[]).is_none());
     }
 
     #[test]

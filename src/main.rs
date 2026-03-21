@@ -81,7 +81,6 @@ enum Commands {
   agents <tool>                 Browse releases for a tool
   agents <tool> --latest        Show latest changelog directly
   agents <tool> --list, -l      List all versions
-  agents <tool> --pick, -p      Alias for the interactive release browser
   agents <tool> --version <v>   Show changelog for a specific version
   agents <tool> --web, -w       Open releases page in browser
 
@@ -89,7 +88,7 @@ enum Commands {
   agents claude                 Browse Claude Code releases
   agents claude --latest        Latest Claude Code changelog
   agents cursor --list          All Cursor versions
-  agents aider --pick           Pick an Aider release interactively")]
+  agents cursor --version 1.0.0 Show a specific Cursor version")]
     Agents {
         #[command(subcommand)]
         command: Option<cli::agents::AgentsCommand>,

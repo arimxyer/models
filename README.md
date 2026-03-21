@@ -9,7 +9,7 @@
 TUI and CLI for browsing AI models, benchmarks, coding agents, and statuses for AI providers. 
 
 - **Models Tab**: Browse 3,000+ models across 85+ providers from [models.dev](https://models.dev) with capability indicators, adaptive layouts, and provider categorization
-- **Agents Tab**: Track AI coding assistants (Claude Code, Aider, Cursor, etc.) with version detection, changelogs, and GitHub integration
+- **Agents Tab**: Track AI coding assistants (Claude Code, Cursor, Codex, etc.) with version detection, changelogs, and GitHub integration
 - **Benchmarks Tab**: Compare model performance across 15+ benchmarks from [Artificial Analysis](https://artificialanalysis.ai), with head-to-head tables, scatter plots, radar charts, and creator filtering
 - **Status Tab**: Monitor provider health with live incident tracking and scheduled maintenance across 21+ providers
 
@@ -412,7 +412,6 @@ agents claude --version 1.0.170  # Specific version
 
 ```bash
 agents claude --list       # List all versions
-agents claude --pick       # Alias for the interactive release browser
 ```
 
 In the release browser:
@@ -450,6 +449,14 @@ Once the picker is open:
 ```bash
 models providers
 models providers --json
+```
+
+#### Shell Completions
+
+```bash
+models completions bash
+models completions fish
+models completions zsh
 ```
 
 #### Show model details

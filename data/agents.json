@@ -23,26 +23,6 @@
       "homepage": "https://claude.ai/code",
       "docs": "https://docs.anthropic.com/en/docs/claude-code"
     },
-    "aider": {
-      "name": "Aider",
-      "repo": "paul-gauthier/aider",
-      "categories": ["cli"],
-      "installation_method": "cli",
-      "pricing": {
-        "model": "free",
-        "free_tier": true,
-        "usage_notes": "Free tool, pay for underlying model API"
-      },
-      "supported_providers": ["openai", "anthropic", "openrouter", "ollama"],
-      "platform_support": ["macos", "linux", "windows"],
-      "open_source": true,
-      "cli_binary": "aider",
-      "version_command": ["--version"],
-      "version_regex": "aider v([0-9]+\\.[0-9]+\\.[0-9]+)",
-      "config_files": ["~/.aider.conf.yml", ".aider.conf.yml"],
-      "homepage": "https://aider.chat",
-      "docs": "https://aider.chat/docs"
-    },
     "cursor": {
       "name": "Cursor",
       "repo": "getcursor/cursor",

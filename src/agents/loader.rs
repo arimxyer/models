@@ -27,6 +27,6 @@ mod tests {
         assert!(agents.schema_version >= 1);
         assert!(!agents.agents.is_empty());
         assert!(agents.agents.contains_key("claude-code"));
-        assert!(agents.agents.contains_key("aider"));
+        assert!(agents.agents.contains_key("cursor"));
     }
 }
