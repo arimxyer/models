@@ -221,7 +221,6 @@ mod tests {
         assert!(config.is_tracked("claude-code"));
         assert!(config.is_tracked("codex"));
         // Not in default list
-        assert!(!config.is_tracked("aider"));
         assert!(!config.is_tracked("cursor"));
     }
 

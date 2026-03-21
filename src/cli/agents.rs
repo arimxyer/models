@@ -12,7 +12,6 @@ use tokio::sync::RwLock;
   agents <tool>                 Browse releases for a tool
   agents <tool> --latest        Show latest changelog directly
   agents <tool> --list, -l      List all versions
-  agents <tool> --pick, -p      Alias for the interactive release browser
   agents <tool> --version <v>   Show changelog for a specific version
   agents <tool> --web, -w       Open releases page in browser
 
@@ -20,7 +19,7 @@ use tokio::sync::RwLock;
   agents claude                 Browse Claude Code releases
   agents claude --latest        Latest Claude Code changelog
   agents cursor --list          All Cursor versions
-  agents aider --pick           Open the interactive release browser")]
+  agents cursor --version 1.0.0 Show a specific Cursor version")]
 pub struct AgentsCli {
     #[command(subcommand)]
     pub command: Option<AgentsCommand>,
@@ -45,7 +44,6 @@ pub struct ToolArgs {
     pub tool: String,
     pub latest: bool,
     pub list: bool,
-    pub pick: bool,
     pub version: Option<String>,
     pub web: bool,
 }
@@ -58,7 +56,6 @@ impl ToolArgs {
         let tool = args[0].clone();
         let mut latest = false;
         let mut list = false;
-        let mut pick = false;
         let mut version = None;
         let mut web = false;
 
@@ -67,7 +64,6 @@ impl ToolArgs {
             match args[i].as_str() {
                 "--latest" => latest = true,
                 "--list" | "-l" => list = true,
-                "--pick" | "-p" => pick = true,
                 "--web" | "-w" => web = true,
                 "--version" => {
                     i += 1;
@@ -83,19 +79,18 @@ impl ToolArgs {
         }
 
         // Mutual exclusivity
-        let mode_count = [latest, list, pick, version.is_some()]
+        let mode_count = [latest, list, version.is_some()]
             .iter()
             .filter(|&&v| v)
             .count();
         if mode_count > 1 {
-            anyhow::bail!("--latest, --list, --pick, and --version are mutually exclusive");
+            anyhow::bail!("--latest, --list, and --version are mutually exclusive");
         }
 
         Ok(Self {
             tool,
             latest,
             list,
-            pick,
             version,
             web,
         })
@@ -786,10 +781,6 @@ fn run_tool(args: ToolArgs) -> Result<()> {
         return run_version_list(&entry.agent, &github);
     }
 
-    if args.pick {
-        return run_release_browser(&entry, &github);
-    }
-
     if args.latest {
         return print_specific_or_latest_release(&entry.agent.name, &github, None);
     }
@@ -1146,16 +1137,15 @@ mod tests {
         assert_eq!(parsed.tool, "claude");
         assert!(parsed.latest);
         assert!(!parsed.list);
-        assert!(!parsed.pick);
         assert!(parsed.version.is_none());
     }
 
     #[test]
-    fn tool_args_rejects_conflicting_latest_and_pick() {
+    fn tool_args_rejects_conflicting_latest_and_list() {
         let err = ToolArgs::parse_from(vec![
             "claude".to_string(),
             "--latest".to_string(),
-            "--pick".to_string(),
+            "--list".to_string(),
         ])
         .unwrap_err()
         .to_string();
