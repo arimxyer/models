@@ -121,7 +121,6 @@ fn draw_benchmark_creators(f: &mut Frame, area: Rect, app: &mut App) {
     };
 
     let bench_app = &mut app.benchmarks_app;
-    let store = &app.benchmark_store;
 
     let is_focused = bench_app.focus == BenchmarkFocus::Creators;
     let border_style = focus_border(is_focused);
@@ -184,7 +183,7 @@ fn draw_benchmark_creators(f: &mut Frame, area: Rect, app: &mut App) {
         .iter()
         .map(|item| match item {
             CreatorListItem::All => {
-                let count = store.entries().len();
+                let count = bench_app.filtered_creator_count();
                 ListItem::new(Line::from(vec![
                     Span::styled("All", Style::default().fg(Color::Green)),
                     Span::raw(format!(" ({})", count)),
