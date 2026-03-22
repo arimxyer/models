@@ -388,9 +388,8 @@ impl App {
                 }
                 Tab::Benchmarks => {
                     self.benchmarks_app.search_query.push(c);
-                    self.benchmarks_app.selected = 0;
                     self.benchmarks_app
-                        .update_filtered(&self.benchmark_store, &self.open_weights_map);
+                        .rebuild_after_filter_change(&self.benchmark_store, &self.open_weights_map);
                 }
                 Tab::Status => {
                     if let Some(ref mut status_app) = self.status_app {
@@ -413,9 +412,8 @@ impl App {
                 }
                 Tab::Benchmarks => {
                     self.benchmarks_app.search_query.pop();
-                    self.benchmarks_app.selected = 0;
                     self.benchmarks_app
-                        .update_filtered(&self.benchmark_store, &self.open_weights_map);
+                        .rebuild_after_filter_change(&self.benchmark_store, &self.open_weights_map);
                 }
                 Tab::Status => {
                     if let Some(ref mut status_app) = self.status_app {
@@ -438,9 +436,8 @@ impl App {
                 }
                 Tab::Benchmarks => {
                     self.benchmarks_app.search_query.clear();
-                    self.benchmarks_app.selected = 0;
                     self.benchmarks_app
-                        .update_filtered(&self.benchmark_store, &self.open_weights_map);
+                        .rebuild_after_filter_change(&self.benchmark_store, &self.open_weights_map);
                 }
                 Tab::Status => {
                     if let Some(ref mut status_app) = self.status_app {
@@ -902,11 +899,11 @@ impl App {
             }
             Message::ToggleRegionGrouping => {
                 self.benchmarks_app
-                    .toggle_region_grouping(&self.benchmark_store);
+                    .toggle_region_grouping(&self.benchmark_store, &self.open_weights_map);
             }
             Message::ToggleTypeGrouping => {
                 self.benchmarks_app
-                    .toggle_type_grouping(&self.benchmark_store);
+                    .toggle_type_grouping(&self.benchmark_store, &self.open_weights_map);
             }
             Message::ToggleBenchmarkSortDir => {
                 self.benchmarks_app

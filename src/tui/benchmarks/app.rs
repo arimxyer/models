@@ -394,10 +394,11 @@ impl CreatorType {
     }
 }
 
-/// Pre-computed creator info: (display_name, entry_count)
+/// Pre-computed creator info: display name and model counts.
 struct CreatorInfo {
     display_name: String,
     count: usize,
+    filtered_count: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -542,7 +543,7 @@ impl BenchmarksApp {
             detail_scroll: ScrollOffset::default(),
         };
 
-        app.build_creator_list(store);
+        app.build_creator_list(store, open_weights_map);
         app.update_filtered(store, open_weights_map);
         app
     }
@@ -550,7 +551,7 @@ impl BenchmarksApp {
     /// Rebuild all derived state after the underlying store changes.
     /// Re-derives creator list, filtered indices, and resets selection.
     pub fn rebuild(&mut self, store: &BenchmarkStore, open_weights_map: &HashMap<String, bool>) {
-        self.build_creator_list(store);
+        self.build_creator_list(store, open_weights_map);
         self.selected_creator = 0;
         self.creator_list_state.select(Some(0));
         self.selected = 0;
@@ -558,15 +559,81 @@ impl BenchmarksApp {
         self.reset_detail_scroll();
     }
 
-    fn build_creator_list(&mut self, store: &BenchmarkStore) {
+    /// Rebuild creator list and filtered entries after any search/filter change.
+    /// Preserves the selected creator if it's still visible.
+    pub fn rebuild_after_filter_change(
+        &mut self,
+        store: &BenchmarkStore,
+        open_weights_map: &HashMap<String, bool>,
+    ) {
+        // Remember which creator was selected
+        let prev_creator_slug = match self.creator_list_items.get(self.selected_creator) {
+            Some(CreatorListItem::Creator(slug)) => Some(slug.clone()),
+            _ => None, // All or GroupHeader
+        };
+
+        self.build_creator_list(store, open_weights_map);
+
+        // Try to find the previously selected creator in the new list
+        let new_pos = prev_creator_slug.and_then(|prev_slug| {
+            self.creator_list_items.iter().position(
+                |item| matches!(item, CreatorListItem::Creator(slug) if *slug == prev_slug),
+            )
+        });
+
+        self.selected_creator = new_pos.unwrap_or(0);
+        self.creator_list_state.select(Some(self.selected_creator));
+        self.selected = 0;
+        self.update_filtered(store, open_weights_map);
+        self.reset_detail_scroll();
+    }
+
+    fn has_active_filters(&self) -> bool {
+        !self.search_query.is_empty()
+            || self.source_filter != SourceFilter::All
+            || self.reasoning_filter != ReasoningFilter::default()
+    }
+
+    fn entry_matches_filters(
+        &self,
+        entry: &BenchmarkEntry,
+        open_weights_map: &HashMap<String, bool>,
+    ) -> bool {
+        if !self.source_filter.matches(entry, open_weights_map) {
+            return false;
+        }
+        if !self.reasoning_filter.matches(entry) {
+            return false;
+        }
+        if !self.search_query.is_empty() {
+            let query_lower = self.search_query.to_lowercase();
+            return entry.name.to_lowercase().contains(&query_lower)
+                || entry.creator.to_lowercase().contains(&query_lower)
+                || entry.slug.to_lowercase().contains(&query_lower);
+        }
+        true
+    }
+
+    fn build_creator_list(
+        &mut self,
+        store: &BenchmarkStore,
+        open_weights_map: &HashMap<String, bool>,
+    ) {
         let mut info: HashMap<String, CreatorInfo> = HashMap::new();
+        let filtering = self.has_active_filters();
 
         for entry in store.entries() {
             if entry.creator.is_empty() {
                 continue;
             }
+            let passes = !filtering || self.entry_matches_filters(entry, open_weights_map);
             info.entry(entry.creator.clone())
-                .and_modify(|i| i.count += 1)
+                .and_modify(|i| {
+                    i.count += 1;
+                    if passes {
+                        i.filtered_count += 1;
+                    }
+                })
                 .or_insert_with(|| CreatorInfo {
                     display_name: if entry.creator_name.is_empty() {
                         entry.creator.clone()
@@ -574,10 +641,18 @@ impl BenchmarksApp {
                         entry.creator_name.clone()
                     },
                     count: 1,
+                    filtered_count: if passes { 1 } else { 0 },
                 });
         }
 
-        let mut creators: Vec<String> = info.keys().cloned().collect();
+        let mut creators: Vec<String> = if filtering {
+            info.iter()
+                .filter(|(_, i)| i.filtered_count > 0)
+                .map(|(k, _)| k.clone())
+                .collect()
+        } else {
+            info.keys().cloned().collect()
+        };
         creators.sort_by(|a, b| {
             let name_a = &info[a].display_name;
             let name_b = &info[b].display_name;
@@ -647,11 +722,36 @@ impl BenchmarksApp {
     }
 
     /// Get (display_name, count) for a creator slug.
+    /// Returns filtered count when search/filters are active, total count otherwise.
     pub fn creator_display<'a>(&'a self, slug: &'a str) -> (&'a str, usize) {
         self.creator_info
             .get(slug)
-            .map(|i| (i.display_name.as_str(), i.count))
+            .map(|i| {
+                let count = if self.has_active_filters() {
+                    i.filtered_count
+                } else {
+                    i.count
+                };
+                (i.display_name.as_str(), count)
+            })
             .unwrap_or((slug, 0))
+    }
+
+    /// Total filtered count across all visible creators.
+    pub fn filtered_creator_count(&self) -> usize {
+        if self.has_active_filters() {
+            self.creator_list_items
+                .iter()
+                .filter_map(|item| match item {
+                    CreatorListItem::Creator(slug) => {
+                        self.creator_info.get(slug).map(|i| i.filtered_count)
+                    }
+                    _ => None,
+                })
+                .sum()
+        } else {
+            self.creator_info.values().map(|i| i.count).sum()
+        }
     }
 
     /// Get the currently selected creator slug, or None for "All".
@@ -867,7 +967,7 @@ impl BenchmarksApp {
         open_weights_map: &HashMap<String, bool>,
     ) {
         self.source_filter = self.source_filter.next();
-        self.update_filtered(store, open_weights_map);
+        self.rebuild_after_filter_change(store, open_weights_map);
     }
 
     pub fn cycle_reasoning_filter(
@@ -876,27 +976,35 @@ impl BenchmarksApp {
         open_weights_map: &HashMap<String, bool>,
     ) {
         self.reasoning_filter = self.reasoning_filter.next();
-        self.update_filtered(store, open_weights_map);
+        self.rebuild_after_filter_change(store, open_weights_map);
     }
 
-    pub fn toggle_region_grouping(&mut self, store: &BenchmarkStore) {
+    pub fn toggle_region_grouping(
+        &mut self,
+        store: &BenchmarkStore,
+        open_weights_map: &HashMap<String, bool>,
+    ) {
         self.creator_grouping = if self.creator_grouping == CreatorGrouping::ByRegion {
             CreatorGrouping::None
         } else {
             CreatorGrouping::ByRegion
         };
-        self.build_creator_list(store);
+        self.build_creator_list(store, open_weights_map);
         self.selected_creator = 0;
         self.creator_list_state.select(Some(0));
     }
 
-    pub fn toggle_type_grouping(&mut self, store: &BenchmarkStore) {
+    pub fn toggle_type_grouping(
+        &mut self,
+        store: &BenchmarkStore,
+        open_weights_map: &HashMap<String, bool>,
+    ) {
         self.creator_grouping = if self.creator_grouping == CreatorGrouping::ByType {
             CreatorGrouping::None
         } else {
             CreatorGrouping::ByType
         };
-        self.build_creator_list(store);
+        self.build_creator_list(store, open_weights_map);
         self.selected_creator = 0;
         self.creator_list_state.select(Some(0));
     }
