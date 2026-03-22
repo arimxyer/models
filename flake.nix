@@ -59,6 +59,12 @@
             inherit cargoArtifacts;
             doCheck = true;
             cargoTestExtraArgs = "-- --skip ${nixSkippedTest}";
+            nativeBuildInputs = [ pkgs.makeWrapper ];
+
+            postInstall = ''
+              wrapProgram "$out/bin/models" \
+                --set SSL_CERT_FILE "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
+            '';
           }
         );
 
