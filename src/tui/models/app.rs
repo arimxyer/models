@@ -46,7 +46,7 @@ pub struct Filters {
 pub enum ProviderListItem {
     All,
     CategoryHeader(ProviderCategory),
-    Provider(usize), // Index into providers
+    Provider(usize, usize), // (index into providers, match count)
 }
 
 #[derive(Debug, Clone)]
@@ -118,14 +118,39 @@ impl ModelsApp {
         providers: &'a [(String, Provider)],
     ) -> Option<&'a (String, Provider)> {
         match self.provider_list_items.get(self.selected_provider) {
-            Some(ProviderListItem::Provider(idx)) => providers.get(*idx),
+            Some(ProviderListItem::Provider(idx, _)) => providers.get(*idx),
             _ => None,
         }
+    }
+
+    fn has_active_filters(&self) -> bool {
+        !self.search_query.is_empty()
+            || self.filters.reasoning
+            || self.filters.tools
+            || self.filters.open_weights
+            || self.filters.free
+    }
+
+    fn provider_match_count(&self, provider_id: &str, provider: &Provider) -> usize {
+        let query_lower = self.search_query.to_lowercase();
+        provider
+            .models
+            .iter()
+            .filter(|(model_id, model)| {
+                let search_matches = query_lower.is_empty()
+                    || model_id.to_lowercase().contains(&query_lower)
+                    || model.name.to_lowercase().contains(&query_lower)
+                    || provider_id.to_lowercase().contains(&query_lower);
+                search_matches && self.passes_filters(model)
+            })
+            .count()
     }
 
     pub fn update_provider_list(&mut self, providers: &[(String, Provider)]) {
         self.provider_list_items.clear();
         self.provider_list_items.push(ProviderListItem::All);
+
+        let filtering = self.has_active_filters();
 
         if self.group_by_category {
             let categories = [
@@ -143,35 +168,55 @@ impl ModelsApp {
                     continue;
                 }
 
-                let mut indices: Vec<usize> = providers
+                let mut items: Vec<(usize, usize)> = providers
                     .iter()
                     .enumerate()
                     .filter(|(_, (id, _))| provider_category(id) == *cat)
-                    .map(|(idx, _)| idx)
+                    .filter_map(|(idx, (id, provider))| {
+                        let count = if filtering {
+                            let c = self.provider_match_count(id, provider);
+                            if c == 0 {
+                                return None;
+                            }
+                            c
+                        } else {
+                            provider.models.len()
+                        };
+                        Some((idx, count))
+                    })
                     .collect();
 
-                if indices.is_empty() {
+                if items.is_empty() {
                     continue;
                 }
 
-                indices.sort_by(|a, b| providers[*a].0.cmp(&providers[*b].0));
+                items.sort_by(|a, b| providers[a.0].0.cmp(&providers[b.0].0));
 
                 self.provider_list_items
                     .push(ProviderListItem::CategoryHeader(*cat));
-                for idx in indices {
+                for (idx, count) in items {
                     self.provider_list_items
-                        .push(ProviderListItem::Provider(idx));
+                        .push(ProviderListItem::Provider(idx, count));
                 }
             }
         } else {
-            for (idx, (id, _)) in providers.iter().enumerate() {
+            for (idx, (id, provider)) in providers.iter().enumerate() {
                 if self.provider_category_filter != ProviderCategory::All
                     && provider_category(id) != self.provider_category_filter
                 {
                     continue;
                 }
+                let count = if filtering {
+                    let c = self.provider_match_count(id, provider);
+                    if c == 0 {
+                        continue;
+                    }
+                    c
+                } else {
+                    provider.models.len()
+                };
                 self.provider_list_items
-                    .push(ProviderListItem::Provider(idx));
+                    .push(ProviderListItem::Provider(idx, count));
             }
         }
     }
@@ -365,20 +410,14 @@ impl ModelsApp {
         &self.filtered_models
     }
 
-    pub fn total_model_count(&self, providers: &[(String, Provider)]) -> usize {
-        providers.iter().map(|(_, p)| p.models.len()).sum()
-    }
-
-    pub fn filtered_model_count(&self, providers: &[(String, Provider)]) -> usize {
-        if self.provider_category_filter == ProviderCategory::All {
-            self.total_model_count(providers)
-        } else {
-            providers
-                .iter()
-                .filter(|(id, _)| provider_category(id) == self.provider_category_filter)
-                .map(|(_, p)| p.models.len())
-                .sum()
-        }
+    pub fn filtered_model_count(&self) -> usize {
+        self.provider_list_items
+            .iter()
+            .filter_map(|item| match item {
+                ProviderListItem::Provider(_, count) => Some(count),
+                _ => None,
+            })
+            .sum()
     }
 
     pub fn get_copy_full(&self) -> Option<String> {
@@ -554,34 +593,22 @@ impl ModelsApp {
 
     pub fn toggle_reasoning(&mut self, providers: &[(String, Provider)]) {
         self.filters.reasoning = !self.filters.reasoning;
-        self.selected_model = 0;
-        self.update_filtered_models(providers);
-        self.model_list_state.select(Some(self.selected_model + 1));
-        self.reset_detail_scroll();
+        self.rebuild_after_filter_change(providers);
     }
 
     pub fn toggle_tools(&mut self, providers: &[(String, Provider)]) {
         self.filters.tools = !self.filters.tools;
-        self.selected_model = 0;
-        self.update_filtered_models(providers);
-        self.model_list_state.select(Some(self.selected_model + 1));
-        self.reset_detail_scroll();
+        self.rebuild_after_filter_change(providers);
     }
 
     pub fn toggle_open_weights(&mut self, providers: &[(String, Provider)]) {
         self.filters.open_weights = !self.filters.open_weights;
-        self.selected_model = 0;
-        self.update_filtered_models(providers);
-        self.model_list_state.select(Some(self.selected_model + 1));
-        self.reset_detail_scroll();
+        self.rebuild_after_filter_change(providers);
     }
 
     pub fn toggle_free(&mut self, providers: &[(String, Provider)]) {
         self.filters.free = !self.filters.free;
-        self.selected_model = 0;
-        self.update_filtered_models(providers);
-        self.model_list_state.select(Some(self.selected_model + 1));
-        self.reset_detail_scroll();
+        self.rebuild_after_filter_change(providers);
     }
 
     pub fn cycle_provider_category(&mut self, providers: &[(String, Provider)]) {
@@ -610,22 +637,40 @@ impl ModelsApp {
 
     pub fn search_input(&mut self, c: char, providers: &[(String, Provider)]) {
         self.search_query.push(c);
-        self.selected_model = 0;
-        self.update_filtered_models(providers);
-        self.model_list_state.select(Some(self.selected_model + 1));
-        self.reset_detail_scroll();
+        self.rebuild_after_filter_change(providers);
     }
 
     pub fn search_backspace(&mut self, providers: &[(String, Provider)]) {
         self.search_query.pop();
-        self.selected_model = 0;
-        self.update_filtered_models(providers);
-        self.model_list_state.select(Some(self.selected_model + 1));
-        self.reset_detail_scroll();
+        self.rebuild_after_filter_change(providers);
     }
 
     pub fn clear_search(&mut self, providers: &[(String, Provider)]) {
         self.search_query.clear();
+        self.rebuild_after_filter_change(providers);
+    }
+
+    /// Rebuild provider list and model list after any search/filter change.
+    /// Preserves the selected provider if it's still visible, otherwise falls back to "All".
+    fn rebuild_after_filter_change(&mut self, providers: &[(String, Provider)]) {
+        // Remember which provider was selected (by index into providers slice)
+        let prev_provider_idx = match self.provider_list_items.get(self.selected_provider) {
+            Some(ProviderListItem::Provider(idx, _)) => Some(*idx),
+            _ => None, // All or CategoryHeader
+        };
+
+        self.update_provider_list(providers);
+
+        // Try to find the previously selected provider in the new list
+        let new_pos = prev_provider_idx.and_then(|prev_idx| {
+            self.provider_list_items.iter().position(
+                |item| matches!(item, ProviderListItem::Provider(idx, _) if *idx == prev_idx),
+            )
+        });
+
+        self.selected_provider = new_pos.unwrap_or(0);
+        self.provider_list_state
+            .select(Some(self.selected_provider));
         self.selected_model = 0;
         self.update_filtered_models(providers);
         self.model_list_state.select(Some(self.selected_model + 1));

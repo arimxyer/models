@@ -187,7 +187,7 @@ fn draw_providers(f: &mut Frame, area: Rect, app: &mut App) {
     for item in &app.models_app.provider_list_items {
         match item {
             ProviderListItem::All => {
-                let count = app.models_app.filtered_model_count(&app.providers);
+                let count = app.models_app.filtered_model_count();
                 let text = format!("All ({})", count);
                 items.push(ListItem::new(text).style(Style::default().fg(Color::Green)));
             }
@@ -208,18 +208,15 @@ fn draw_providers(f: &mut Frame, area: Rect, app: &mut App) {
                         .style(Style::default().fg(color).add_modifier(Modifier::BOLD)),
                 );
             }
-            ProviderListItem::Provider(idx) => {
-                if let Some((id, provider)) = app.providers.get(*idx) {
+            ProviderListItem::Provider(idx, count) => {
+                if let Some((id, _)) = app.providers.get(*idx) {
                     let cat = provider_category(id);
                     let initial = &cat.short_label()[..1];
                     let color = cat.color();
                     let line = Line::from(vec![
                         Span::styled(initial, Style::default().fg(color)),
                         Span::raw(format!(" {} ", id)),
-                        Span::styled(
-                            format!("({})", provider.models.len()),
-                            Style::default().fg(Color::Gray),
-                        ),
+                        Span::styled(format!("({})", count), Style::default().fg(Color::Gray)),
                     ]);
                     items.push(ListItem::new(line));
                 }
