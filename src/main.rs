@@ -38,6 +38,7 @@ use clap_complete::Shell;
 \x1b[1;4mAdditional:\x1b[0m
   agents         Track AI coding agent releases and changelogs
   benchmarks     Query benchmark data from the command line
+  status         Check AI provider service health
 
 \x1b[1;4mOptions:\x1b[0m
 {options}
@@ -139,6 +140,20 @@ enum Commands {
         #[command(subcommand)]
         command: Option<cli::benchmarks::BenchmarksCommand>,
     },
+    /// Check AI provider service health
+    #[command(after_help = "\
+\x1b[1;4mExamples:\x1b[0m
+  models status status            Quick dashboard table
+  models status list              Interactive provider health picker
+  models status list --json       All provider statuses as JSON
+  models status show openai       Detailed OpenAI status
+  models status show anthropic --json
+  models status sources           Manage tracked providers
+  models status sources --json    List all available sources")]
+    Status {
+        #[command(subcommand)]
+        command: Option<cli::status::StatusCommand>,
+    },
     /// Create shell symlinks for `agents` and `benchmarks` commands
     #[command(after_help = "\
 \x1b[1;4mExamples:\x1b[0m
@@ -189,7 +204,12 @@ fn main() -> Result<()> {
         }
         Some(Commands::Agents { command }) => cli::agents::run_with_command(command)?,
         Some(Commands::Benchmarks { command }) => cli::benchmarks::run_with_command(command)?,
-        Some(Commands::Link { dir, remove, status }) => cli::link::run(dir, remove, status)?,
+        Some(Commands::Status { command }) => cli::status::run_with_command(command)?,
+        Some(Commands::Link {
+            dir,
+            remove,
+            status,
+        }) => cli::link::run(dir, remove, status)?,
         None => {
             // Fetch providers before entering async runtime to avoid blocking in async context
             let providers = api::fetch_providers()?;
