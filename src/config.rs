@@ -3,6 +3,46 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::PathBuf;
 
+/// Routing discriminant for symlink aliases -- not a config field, not serde-derived.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AliasKind {
+    Agents,
+    Benchmarks,
+    Status,
+}
+
+fn default_agents_alias() -> String {
+    "agents".to_string()
+}
+
+fn default_benchmarks_alias() -> String {
+    "benchmarks".to_string()
+}
+
+fn default_status_alias() -> String {
+    "mstatus".to_string()
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AliasesConfig {
+    #[serde(default = "default_agents_alias")]
+    pub agents: String,
+    #[serde(default = "default_benchmarks_alias")]
+    pub benchmarks: String,
+    #[serde(default = "default_status_alias")]
+    pub status: String,
+}
+
+impl Default for AliasesConfig {
+    fn default() -> Self {
+        Self {
+            agents: default_agents_alias(),
+            benchmarks: default_benchmarks_alias(),
+            status: default_status_alias(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct Config {
     #[serde(default)]
@@ -15,6 +55,8 @@ pub struct Config {
     pub display: DisplayConfig,
     #[serde(default)]
     pub status: StatusConfig,
+    #[serde(default)]
+    pub aliases: AliasesConfig,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -185,6 +227,29 @@ impl Config {
         }
     }
 
+    /// Returns the list of (alias_name, alias_kind) tuples for symlink operations.
+    pub fn alias_names(&self) -> Vec<(&str, AliasKind)> {
+        vec![
+            (&self.aliases.agents, AliasKind::Agents),
+            (&self.aliases.benchmarks, AliasKind::Benchmarks),
+            (&self.aliases.status, AliasKind::Status),
+        ]
+    }
+
+    /// Given a binary name (from argv[0]), returns which alias it matches, if any.
+    pub fn match_alias(&self, binary_name: &str) -> Option<AliasKind> {
+        if binary_name == self.aliases.agents {
+            return Some(AliasKind::Agents);
+        }
+        if binary_name == self.aliases.benchmarks {
+            return Some(AliasKind::Benchmarks);
+        }
+        if binary_name == self.aliases.status {
+            return Some(AliasKind::Status);
+        }
+        None
+    }
+
     pub fn is_status_tracked(&self, slug: &str) -> bool {
         self.status.tracked.contains(slug)
     }
@@ -253,5 +318,65 @@ mod tests {
         // Re-track it
         config.set_status_tracked("openai", true);
         assert!(config.is_status_tracked("openai"));
+    }
+
+    #[test]
+    fn test_default_aliases() {
+        let config = Config::default();
+        assert_eq!(config.aliases.agents, "agents");
+        assert_eq!(config.aliases.benchmarks, "benchmarks");
+        assert_eq!(config.aliases.status, "mstatus");
+    }
+
+    #[test]
+    fn test_match_alias() {
+        let config = Config::default();
+        assert_eq!(config.match_alias("agents"), Some(AliasKind::Agents));
+        assert_eq!(
+            config.match_alias("benchmarks"),
+            Some(AliasKind::Benchmarks)
+        );
+        assert_eq!(config.match_alias("mstatus"), Some(AliasKind::Status));
+        assert_eq!(config.match_alias("models"), None);
+        assert_eq!(config.match_alias("status"), None);
+        assert_eq!(config.match_alias(""), None);
+    }
+
+    #[test]
+    fn test_alias_names_returns_all_three() {
+        let config = Config::default();
+        let names = config.alias_names();
+        assert_eq!(names.len(), 3);
+        assert_eq!(names[0], ("agents", AliasKind::Agents));
+        assert_eq!(names[1], ("benchmarks", AliasKind::Benchmarks));
+        assert_eq!(names[2], ("mstatus", AliasKind::Status));
+    }
+
+    #[test]
+    fn test_aliases_config_deserializes_with_defaults_when_section_absent() {
+        let toml = r#"
+config_version = 1
+"#;
+        let config: Config = toml::from_str(toml).expect("should parse");
+        assert_eq!(config.aliases.agents, "agents");
+        assert_eq!(config.aliases.benchmarks, "benchmarks");
+        assert_eq!(config.aliases.status, "mstatus");
+    }
+
+    #[test]
+    fn test_aliases_config_custom_values() {
+        let toml = r#"
+[aliases]
+agents = "myagents"
+benchmarks = "bench"
+status = "mystatus"
+"#;
+        let config: Config = toml::from_str(toml).expect("should parse");
+        assert_eq!(config.aliases.agents, "myagents");
+        assert_eq!(config.aliases.benchmarks, "bench");
+        assert_eq!(config.aliases.status, "mystatus");
+        assert_eq!(config.match_alias("myagents"), Some(AliasKind::Agents));
+        assert_eq!(config.match_alias("mystatus"), Some(AliasKind::Status));
+        assert_eq!(config.match_alias("agents"), None);
     }
 }
