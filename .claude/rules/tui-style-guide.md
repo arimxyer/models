@@ -85,7 +85,7 @@ The header and footer are rendered by `draw_header()` and `draw_footer()` — ta
 | `BOLD` | Emphasis, selected items, section headers, active elements | Active tab, selected row, detail header name, help section headers |
 | `UNDERLINED` | Clickable/navigable elements, table header rows | URLs in markdown, list column headers |
 | `SLOW_BLINK` | Cursor / active input position | Search bar cursor only |
-| `REVERSED` | Strong selection highlight (used sparingly) | Status tab selected list item |
+| `REVERSED` | Strong selection highlight (used sparingly) | — (reserved, not currently used) |
 
 **Not used:** `DIM` (DarkGray color serves the dim role), `ITALIC`
 
@@ -177,6 +177,7 @@ Standard keybindings that every scrollable panel should support:
 Use `ScrollablePanel` for all scrollable content. It handles block, paragraph, scroll clamping, writeback, and scrollbar rendering centrally:
 
 ```rust
+// Title accepts impl Into<Line<'a>> — styled titles with colored spans are supported
 ScrollablePanel::new("Title", lines, &scroll_offset, focused)
     .render(f, area);
 
@@ -203,6 +204,12 @@ ScrollablePanel::with_cards("Title", cards, &scroll_offset, focused)
 - Search bar format: `" Search: "` (Cyan) + query + blinking `_` + `" Enter/Esc "` (Yellow) + `"confirm"`
 - Exit: `Enter` or `Esc` exits search mode; `Esc` in normal mode clears query
 - Match navigation (if applicable): `n` / `N` for next/prev match
+
+**Tab-specific search scopes:**
+- **Models**: filters model list by name/provider
+- **Agents**: searches changelog content with match highlighting and `n`/`N` navigation
+- **Benchmarks**: filters benchmark list by name/creator
+- **Status**: filters provider list by name
 
 ### 6.5 Sort
 
@@ -237,11 +244,11 @@ Replaces entire footer with the search bar (see 6.3).
 ## 8. Help Popup
 
 - Size: `centered_rect(50, 70)` — 50% width, 70% height
-- Border: `Color::Cyan`, title includes dismiss hint: `" {Tab} Help - ? or Esc to close (j/k to scroll) "`
+- Border: `Color::Cyan`, title: `"{TabName} Help - ? or Esc to close (j/k to scroll)"` where TabName is "Models", "Agents", "Benchmarks", or "Status"
 - Background: `Clear` widget rendered first
 - Content order: Navigation → Panels → Search → [Tab-specific sections] → Tabs → Other
 - Key format: 16-char padded key name in Yellow + description in default
-- Scrollable via `Paragraph::scroll`
+- Scrollable via `ScrollablePanel` widget with `.with_wrap(false)` (see Section 6.3)
 
 ## 9. Popups & Overlays
 
@@ -282,15 +289,3 @@ All popups follow these rules:
 - User should always see feedback — never silently swallow errors
 - Fallback/empty states: descriptive message in `Color::DarkGray` (e.g., `"No model selected"`, `"No matching results"`)
 
-## 12. Known Inconsistencies
-
-These are documented deviations from the above patterns that exist in the current codebase. New code should follow the guide, not these exceptions:
-
-1. ~~Models tab search query stored on App~~ — Fixed: moved to `ModelsApp.search_query`
-2. ~~Models tab missing `[/{query}]` in title~~ — Fixed: now shows search query in panel title
-3. ~~Models right panel has no focus state~~ — Fixed: model detail panel now focusable and scrollable via `Focus::Details`
-4. ~~Benchmarks detail panel is never focusable~~ — Fixed: detail panel now focusable and scrollable via `BenchmarkFocus::Details`
-5. ~~Status tab maintenance color~~ — Fixed: component maintenance now uses Blue consistently
-6. ~~No scrollbar widgets~~ — Fixed: all scrollable panels now use `ScrollablePanel` widget with `ScrollOffset` writeback
-7. ~~Footer hints vary~~ — Fixed: Benchmarks now includes `q quit`
-8. ~~`truncate()` byte indexing~~ — Fixed: now uses char-based truncation
