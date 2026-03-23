@@ -1,6 +1,7 @@
 pub mod agents;
 pub mod agents_ui;
 pub mod benchmarks;
+pub mod link;
 pub mod list;
 pub mod models;
 pub(crate) mod picker;
