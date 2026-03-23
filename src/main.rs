@@ -17,6 +17,12 @@ use clap_complete::Shell;
 #[command(name = "models")]
 #[command(about = "CLI/TUI for browsing AI models, benchmarks, and coding agents")]
 #[command(version)]
+#[command(after_help = "\
+\x1b[1;4mExamples:\x1b[0m
+  models                              Launch the interactive TUI
+  models list                         Open the inline model picker
+  models benchmarks list              Open the inline benchmark picker
+  models agents claude                Browse Claude Code releases")]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
@@ -123,7 +129,7 @@ fn main() -> Result<()> {
         return cli::agents::run();
     }
     if binary_name == "benchmarks" {
-        return cli::benchmarks::run_with_command(None);
+        return cli::benchmarks::run();
     }
 
     let cli = Cli::parse();

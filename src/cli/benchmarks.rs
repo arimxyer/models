@@ -603,6 +603,11 @@ impl<'a> BenchmarkPicker<'a> {
     }
 }
 
+pub fn run() -> Result<()> {
+    let cli = BenchmarksCli::parse();
+    run_with_command(cli.command)
+}
+
 pub fn run_with_command(command: Option<BenchmarksCommand>) -> Result<()> {
     match command {
         Some(BenchmarksCommand::List {
