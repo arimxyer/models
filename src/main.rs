@@ -132,8 +132,9 @@ enum Commands {
   models benchmarks list --sort speed --limit 10
   models benchmarks list --creator openai --reasoning
   models benchmarks list --json
-  models benchmarks show gpt-4o
-  models benchmarks show \"Claude Sonnet 4\"")]
+  models benchmarks show gpt-4o              Show benchmark details by slug
+  models benchmarks show \"Claude Sonnet 4\"   Show by display name
+  models benchmarks show gpt-4o --json       Output details as JSON")]
     Benchmarks {
         #[command(subcommand)]
         command: Option<cli::benchmarks::BenchmarksCommand>,
