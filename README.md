@@ -27,15 +27,22 @@ A terminal interface for browsing AI models, benchmarks, coding agents, and prov
 
 ## Install
 
+### Homebrew (macOS/Linux)
 ```bash
 brew install models
 ```
+
+### Cargo (any platform)
 ```bash
 cargo install modelsdev
 ```
-```bash
+
+### Scoop (Windows)
+```powershell
 scoop install extras/models
 ```
+
+### AUR (Arch Linux)
 ```bash
 paru -S models-bin
 ```
