@@ -9,6 +9,8 @@ mod provider_category;
 mod status;
 mod tui;
 
+use std::path::PathBuf;
+
 use anyhow::Result;
 use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::Shell;
@@ -17,6 +19,36 @@ use clap_complete::Shell;
 #[command(name = "models")]
 #[command(about = "CLI/TUI for browsing AI models, benchmarks, and coding agents")]
 #[command(version)]
+#[command(disable_help_subcommand = true)]
+#[command(help_template = "\
+{about}
+
+\x1b[1;4mUsage:\x1b[0m {usage}
+
+\x1b[1;4mCommands:\x1b[0m
+  list           List models, optionally filtered by provider
+  providers      List providers
+  show           Show detailed information about a model
+  search         Search models by name or provider
+
+\x1b[1;4mSetup:\x1b[0m
+  completions    Generate shell completions
+  link           Create shell symlinks for `agents` and `benchmarks` commands
+
+\x1b[1;4mAdditional:\x1b[0m
+  agents         Track AI coding agent releases and changelogs
+  benchmarks     Query benchmark data from the command line
+
+\x1b[1;4mOptions:\x1b[0m
+{options}
+
+\x1b[1;4mExamples:\x1b[0m
+  models                              Launch the interactive TUI
+  models list                         Open the inline model picker
+  models benchmarks list              Open the inline benchmark picker
+  models agents claude                Browse Claude Code releases
+  models link                         Create `agents` and `benchmarks` symlinks
+")]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
@@ -100,11 +132,30 @@ enum Commands {
   models benchmarks list --sort speed --limit 10
   models benchmarks list --creator openai --reasoning
   models benchmarks list --json
-  models benchmarks show gpt-4o
-  models benchmarks show \"Claude Sonnet 4\"")]
+  models benchmarks show gpt-4o              Show benchmark details by slug
+  models benchmarks show \"Claude Sonnet 4\"   Show by display name
+  models benchmarks show gpt-4o --json       Output details as JSON")]
     Benchmarks {
         #[command(subcommand)]
         command: Option<cli::benchmarks::BenchmarksCommand>,
+    },
+    /// Create shell symlinks for `agents` and `benchmarks` commands
+    #[command(after_help = "\
+\x1b[1;4mExamples:\x1b[0m
+  models link                     Create symlinks next to the binary
+  models link --dir ~/.local/bin  Create symlinks in a specific directory
+  models link --status            Check symlink status
+  models link --remove            Remove previously created symlinks")]
+    Link {
+        /// Target directory for symlinks (defaults to binary's directory)
+        #[arg(long)]
+        dir: Option<PathBuf>,
+        /// Remove symlinks instead of creating them
+        #[arg(long)]
+        remove: bool,
+        /// Show current symlink status
+        #[arg(long)]
+        status: bool,
     },
 }
 
@@ -123,7 +174,7 @@ fn main() -> Result<()> {
         return cli::agents::run();
     }
     if binary_name == "benchmarks" {
-        return cli::benchmarks::run_with_command(None);
+        return cli::benchmarks::run();
     }
 
     let cli = Cli::parse();
@@ -138,6 +189,7 @@ fn main() -> Result<()> {
         }
         Some(Commands::Agents { command }) => cli::agents::run_with_command(command)?,
         Some(Commands::Benchmarks { command }) => cli::benchmarks::run_with_command(command)?,
+        Some(Commands::Link { dir, remove, status }) => cli::link::run(dir, remove, status)?,
         None => {
             // Fetch providers before entering async runtime to avoid blocking in async context
             let providers = api::fetch_providers()?;

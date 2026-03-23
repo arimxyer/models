@@ -27,6 +27,15 @@ use crate::formatting::{cmp_opt_f64, parse_date_to_numeric, truncate};
 #[derive(Parser, Debug)]
 #[command(name = "benchmarks")]
 #[command(about = "Query benchmark data from the command line")]
+#[command(after_help = "\
+\x1b[1;4mExamples:\x1b[0m
+  benchmarks list                     Open the interactive benchmark picker
+  benchmarks list --sort speed --limit 10
+  benchmarks list --creator openai --reasoning
+  benchmarks list --json
+  benchmarks show gpt-4o              Show benchmark details by slug
+  benchmarks show \"Claude Sonnet 4\"   Show by display name
+  benchmarks show gpt-4o --json       Output details as JSON")]
 pub struct BenchmarksCli {
     #[command(subcommand)]
     pub command: Option<BenchmarksCommand>,
@@ -71,6 +80,12 @@ pub enum BenchmarksCommand {
         json: bool,
     },
     /// Show a single benchmark entry in detail
+    #[command(after_help = "\
+\x1b[1;4mExamples:\x1b[0m
+  benchmarks show gpt-4o              Look up by slug
+  benchmarks show \"Claude Sonnet 4.6\"  Look up by display name
+  benchmarks show claude-sonnet-4-6   Exact slug match
+  benchmarks show gpt-4o --json       Output as JSON")]
     Show {
         /// Benchmark model slug, exact display name, or unique partial match
         model: String,
@@ -601,6 +616,11 @@ impl<'a> BenchmarkPicker<'a> {
             Line::from("Enter inspect   / filter   s sort   S reverse   q quit   ↑↓/j/k move")
         }
     }
+}
+
+pub fn run() -> Result<()> {
+    let cli = BenchmarksCli::parse();
+    run_with_command(cli.command)
 }
 
 pub fn run_with_command(command: Option<BenchmarksCommand>) -> Result<()> {
