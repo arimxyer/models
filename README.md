@@ -57,7 +57,7 @@ models
 
 <video src="https://github.com/user-attachments/assets/2e205916-5998-42b2-b60e-c8ffd7b2a668" controls width="100%"></video>
 
-Navigate with arrow keys (or `j`/`k`), switch tabs with `[`/`]`, search with `/`, and press `?` for context-aware help. See [Getting Started](https://github.com/arimxyer/models/wiki/Getting-Started) for a full walkthrough.
+Navigate with arrow keys, switch tabs with `[`/`]`, search with `/`, and press `?` for context-aware help. See [Getting Started](https://github.com/arimxyer/models/wiki/Getting-Started) for a full walkthrough.
 
 ## Features
 
