@@ -28,30 +28,29 @@ A terminal interface for browsing AI models, benchmarks, coding agents, and prov
 ## Install
 
 ```bash
-brew install models        # Homebrew (macOS/Linux)
-cargo install modelsdev    # Cargo (any platform)
-scoop install extras/models  # Scoop (Windows)
-paru -S models-bin         # AUR (Arch Linux)
+brew install models
+```
+```bash
+cargo install modelsdev
+```
+```bash
+scoop install extras/models
+```
+```bash
+paru -S models-bin
 ```
 
-Pre-built binaries, `.deb`, and `.rpm` packages are available on [GitHub Releases](https://github.com/arimxyer/models/releases).
-
-See the [Installation wiki page](https://github.com/arimxyer/models/wiki/Installation) for all methods, shell completions, and command aliases.
+Pre-built binaries, `.deb`, and `.rpm` packages are available on [GitHub Releases](https://github.com/arimxyer/models/releases). See the [Installation wiki page](https://github.com/arimxyer/models/wiki/Installation) for all methods, shell completions, and command aliases.
 
 ## Quick Start
 
 ```bash
-models                     # Launch the TUI
-models list                # Interactive model picker
-models show gpt-4o         # Model details (JSON: --json)
-models benchmarks list     # Benchmark picker
-models agents status       # Agent release status table
-models status list         # Provider health picker
+models
 ```
 
-Navigate the TUI with `j`/`k`, switch tabs with `]`/`[`, search with `/`, and press `?` for context-aware help.
+<video src="https://raw.githubusercontent.com/arimxyer/models/main/public/assets/wiki/tour.mp4" controls width="100%"></video>
 
-See [Getting Started](https://github.com/arimxyer/models/wiki/Getting-Started) for a full walkthrough.
+Navigate with `j`/`k`, switch tabs with `]`/`[`, search with `/`, and press `?` for context-aware help. See [Getting Started](https://github.com/arimxyer/models/wiki/Getting-Started) for a full walkthrough.
 
 ## Features
 
