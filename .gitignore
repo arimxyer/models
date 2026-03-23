@@ -8,3 +8,13 @@ docs/plans/
 data/fuzzy_*.json
 .omx/
 */__pycache__/
+
+# Video branch assets
+.agents/
+demo.gif
+demo.mp4
+skills-lock.json
+tapes/
+video/
+video-v2/
+video-v3/
