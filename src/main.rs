@@ -33,7 +33,7 @@ use clap_complete::Shell;
 
 \x1b[1;4mSetup:\x1b[0m
   completions    Generate shell completions
-  link           Create shell symlinks for `agents` and `benchmarks` commands
+  link           Create shell symlinks for `agents`, `benchmarks`, and `status` commands
 
 \x1b[1;4mAdditional:\x1b[0m
   agents         Track AI coding agent releases and changelogs
@@ -48,7 +48,7 @@ use clap_complete::Shell;
   models list                         Open the inline model picker
   models benchmarks list              Open the inline benchmark picker
   models agents claude                Browse Claude Code releases
-  models link                         Create `agents` and `benchmarks` symlinks
+  models link                         Create `agents`, `benchmarks`, and `mstatus` symlinks
 ")]
 struct Cli {
     #[command(subcommand)]
@@ -154,7 +154,7 @@ enum Commands {
         #[command(subcommand)]
         command: Option<cli::status::StatusCommand>,
     },
-    /// Create shell symlinks for `agents` and `benchmarks` commands
+    /// Create shell symlinks for `agents`, `benchmarks`, and `status` commands
     #[command(after_help = "\
 \x1b[1;4mExamples:\x1b[0m
   models link                     Create symlinks next to the binary
@@ -175,7 +175,7 @@ enum Commands {
 }
 
 fn main() -> Result<()> {
-    // Check if invoked as "agents" or "benchmarks" (symlink entry point)
+    // Check if invoked via a symlink alias (e.g. "agents", "benchmarks", "mstatus")
     let binary_name = std::env::args()
         .next()
         .and_then(|s| {
@@ -185,11 +185,13 @@ fn main() -> Result<()> {
         })
         .unwrap_or_default();
 
-    if binary_name == "agents" {
-        return cli::agents::run();
-    }
-    if binary_name == "benchmarks" {
-        return cli::benchmarks::run();
+    let config = config::Config::load().unwrap_or_default();
+    if let Some(kind) = config.match_alias(&binary_name) {
+        return match kind {
+            config::AliasKind::Agents => cli::agents::run(),
+            config::AliasKind::Benchmarks => cli::benchmarks::run(),
+            config::AliasKind::Status => cli::status::run(),
+        };
     }
 
     let cli = Cli::parse();
@@ -209,7 +211,7 @@ fn main() -> Result<()> {
             dir,
             remove,
             status,
-        }) => cli::link::run(dir, remove, status)?,
+        }) => cli::link::run(dir, remove, status, &config)?,
         None => {
             // Fetch providers before entering async runtime to avoid blocking in async context
             let providers = api::fetch_providers()?;

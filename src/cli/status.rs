@@ -20,7 +20,8 @@ use super::picker::{self, PickerTerminal};
 use crate::formatting::truncate;
 use crate::status::{
     registry::{status_seed_for_provider, STATUS_REGISTRY},
-    ProviderHealth, ProviderStatus, StatusFetchResult, StatusFetcher, StatusProvenance,
+    ProviderHealth, ProviderStatus, StatusDetailAvailability, StatusDetailState, StatusFetchResult,
+    StatusFetcher, StatusProvenance,
 };
 
 // ── CLI structure ───────────────────────────────────────────────────
@@ -115,6 +116,24 @@ struct StatusListItem<'a> {
 }
 
 #[derive(Serialize)]
+struct DetailStateJson {
+    availability: &'static str,
+}
+
+impl DetailStateJson {
+    fn from(state: &StatusDetailState) -> Self {
+        let availability = match state.availability {
+            StatusDetailAvailability::Available => "available",
+            StatusDetailAvailability::NoneReported => "none_reported",
+            StatusDetailAvailability::Unsupported => "unsupported",
+            StatusDetailAvailability::FetchFailed => "fetch_failed",
+            StatusDetailAvailability::NotAttempted => "not_attempted",
+        };
+        Self { availability }
+    }
+}
+
+#[derive(Serialize)]
 struct StatusDetailJson<'a> {
     slug: &'a str,
     display_name: &'a str,
@@ -127,8 +146,11 @@ struct StatusDetailJson<'a> {
     status_url: Option<&'a str>,
     issues: usize,
     components: Vec<ComponentJson<'a>>,
+    components_state: DetailStateJson,
     incidents: Vec<IncidentJson<'a>>,
+    incidents_state: DetailStateJson,
     scheduled_maintenances: Vec<MaintenanceJson<'a>>,
+    scheduled_maintenances_state: DetailStateJson,
 }
 
 #[derive(Serialize)]
@@ -157,6 +179,11 @@ struct MaintenanceJson<'a> {
 }
 
 // ── Entry points ────────────────────────────────────────────────────
+
+pub fn run() -> Result<()> {
+    let cli = StatusCli::parse();
+    dispatch(cli.command)
+}
 
 pub fn run_with_command(command: Option<StatusCommand>) -> Result<()> {
     dispatch(command)
@@ -513,6 +540,7 @@ fn build_detail_json<'a>(entry: &'a ProviderStatus) -> StatusDetailJson<'a> {
                 group: c.group_name.as_deref(),
             })
             .collect(),
+        components_state: DetailStateJson::from(&entry.components_state),
         incidents: entry
             .incidents
             .iter()
@@ -526,6 +554,7 @@ fn build_detail_json<'a>(entry: &'a ProviderStatus) -> StatusDetailJson<'a> {
                 updated_at: i.updated_at.as_deref(),
             })
             .collect(),
+        incidents_state: DetailStateJson::from(&entry.incidents_state),
         scheduled_maintenances: entry
             .scheduled_maintenances
             .iter()
@@ -536,6 +565,7 @@ fn build_detail_json<'a>(entry: &'a ProviderStatus) -> StatusDetailJson<'a> {
                 scheduled_until: m.scheduled_until.as_deref(),
             })
             .collect(),
+        scheduled_maintenances_state: DetailStateJson::from(&entry.scheduled_maintenances_state),
     }
 }
 
@@ -664,6 +694,33 @@ struct SourceItem {
     tracked: bool,
 }
 
+fn print_sources_table(items: &[SourceItem]) {
+    use super::styles;
+
+    let mut table = ComfyTable::new();
+    table.load_preset(UTF8_FULL_CONDENSED);
+    table.set_header(vec![
+        styles::header_cell("Slug"),
+        styles::header_cell("Provider"),
+        styles::header_cell("Tracked"),
+    ]);
+
+    for item in items {
+        let tracked_cell = if item.tracked {
+            styles::green_cell("yes")
+        } else {
+            styles::dim_cell("no")
+        };
+        table.add_row(vec![
+            comfy_table::Cell::new(item.slug),
+            styles::bold_cell(item.display_name),
+            tracked_cell,
+        ]);
+    }
+
+    println!("{table}");
+}
+
 fn run_sources(json: bool) -> Result<()> {
     let config = crate::config::Config::load()?;
 
@@ -677,6 +734,19 @@ fn run_sources(json: bool) -> Result<()> {
             })
             .collect();
         println!("{}", serde_json::to_string_pretty(&items)?);
+        return Ok(());
+    }
+
+    if !super::styles::is_tty() {
+        let items: Vec<_> = STATUS_REGISTRY
+            .iter()
+            .map(|e| SourceItem {
+                slug: e.slug,
+                display_name: e.display_name,
+                tracked: config.is_status_tracked(e.slug),
+            })
+            .collect();
+        print_sources_table(&items);
         return Ok(());
     }
 

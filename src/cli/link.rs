@@ -2,13 +2,10 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 
-const ALIASES: &[&str] = &["agents", "benchmarks"];
+use crate::config::Config;
 
-pub fn run(dir: Option<PathBuf>, remove: bool, status: bool) -> Result<()> {
+pub fn run(dir: Option<PathBuf>, remove: bool, status: bool, config: &Config) -> Result<()> {
     let binary = std::env::current_exe().context("could not determine binary path")?;
-    let binary = binary
-        .canonicalize()
-        .context("could not resolve binary path")?;
 
     let target_dir = match dir {
         Some(d) => {
@@ -24,19 +21,19 @@ pub fn run(dir: Option<PathBuf>, remove: bool, status: bool) -> Result<()> {
     };
 
     if status {
-        show_status(&binary, &target_dir)
+        show_status(&binary, &target_dir, config)
     } else if remove {
-        remove_links(&target_dir)
+        remove_links(&binary, &target_dir, config)
     } else {
-        create_links(&binary, &target_dir)
+        create_links(&binary, &target_dir, config)
     }
 }
 
-fn show_status(binary: &Path, target_dir: &Path) -> Result<()> {
+fn show_status(binary: &Path, target_dir: &Path, config: &Config) -> Result<()> {
     println!("Binary: {}", binary.display());
     println!("Directory: {}\n", target_dir.display());
 
-    for alias in ALIASES {
+    for (alias, _kind) in config.alias_names() {
         let link_path = target_dir.join(alias);
 
         match std::fs::read_link(&link_path) {
@@ -63,10 +60,10 @@ fn show_status(binary: &Path, target_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-fn create_links(binary: &Path, target_dir: &Path) -> Result<()> {
+fn create_links(binary: &Path, target_dir: &Path, config: &Config) -> Result<()> {
     let mut created = 0;
 
-    for alias in ALIASES {
+    for (alias, _kind) in config.alias_names() {
         let link_path = target_dir.join(alias);
 
         if link_path.exists() || link_path.symlink_metadata().is_ok() {
@@ -111,14 +108,21 @@ fn create_links(binary: &Path, target_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-fn remove_links(target_dir: &Path) -> Result<()> {
+fn remove_links(binary: &Path, target_dir: &Path, config: &Config) -> Result<()> {
     let mut removed = 0;
 
-    for alias in ALIASES {
+    for (alias, _kind) in config.alias_names() {
         let link_path = target_dir.join(alias);
 
         match std::fs::read_link(&link_path) {
-            Ok(_) => {
+            Ok(target) => {
+                if target != binary {
+                    println!(
+                        "  {alias} -> skipped (points to {}, not our binary)",
+                        target.display()
+                    );
+                    continue;
+                }
                 std::fs::remove_file(&link_path).with_context(|| {
                     format!("failed to remove symlink: {}", link_path.display())
                 })?;
