@@ -18,9 +18,9 @@
 | `main.rs` | Clap CLI definition, command dispatch, TUI launch |
 | `api.rs` | Synchronous models.dev API fetch (blocking reqwest — intentionally not async, runs before tokio runtime) |
 | `data.rs` | `Provider`, `Model`, `ProvidersMap` — core data structures from models.dev. Used by nearly every module |
-| `config.rs` | User config (`~/.config/models/config.toml`) — tracked agents, cache settings, display preferences |
+| `config.rs` | User config (`~/.config/models/config.toml`) — tracked agents, cache settings, display preferences, symlink aliases (`[aliases]` section) |
 | `formatting.rs` | Shared utilities: `truncate`, `parse_date`, `format_tokens`, `format_stars`, `cmp_opt_f64`, `EM_DASH` |
-| `provider_category.rs` | `ProviderCategory` enum (Major/Inference/Chinese/Research/Other), categorization logic, display labels |
+| `provider_category.rs` | `ProviderCategory` enum (Origin/Cloud/Inference/Gateway/Tool), categorization logic, display labels |
 
 ## Cross-Module Dependencies
 

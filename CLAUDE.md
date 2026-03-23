@@ -38,8 +38,8 @@ Background fetches use tokio::spawn + mpsc channels. Results arrive as `Message`
 
 ### Agents & CLI
 See `src/agents/CLAUDE.md` and `src/cli/CLAUDE.md` for detailed module docs.
-- Binary aliases: `models agents <cmd>` or `agents <cmd>` via argv[0] symlink detection
-- Commands: `list`, `search`, `show`, `benchmarks`, `completions <shell>`, full agents suite (`status`, `latest`, `list-sources`, `<tool>`)
+- Binary aliases: `models agents <cmd>` or `agents <cmd>` via argv[0] symlink detection. Alias names configurable via `[aliases]` in config.toml (defaults: `agents`, `benchmarks`, `mstatus`)
+- Commands: `list`, `search`, `show`, `benchmarks`, `completions <shell>`, `link`, full agents suite (`status`, `latest`, `list-sources`, `<tool>`), full status suite (`list`, `show`, `status`, `sources`)
 - CLI pickers use shared `PickerTerminal` infrastructure in `src/cli/picker.rs`
 
 ### Key Files
@@ -48,13 +48,13 @@ Each module has its own `CLAUDE.md` with detailed documentation. Top-level highl
 
 - `src/formatting.rs` — shared utilities: `truncate`, `parse_date`, `format_tokens`, `format_stars`, `EM_DASH`, `cmp_opt_f64`
 - `src/data.rs` — Provider/Model data structures from models.dev API
-- `src/config.rs` — user config file (agents, cache, display settings)
+- `src/config.rs` — user config file (agents, cache, display, aliases settings). `AliasesConfig` struct + `AliasKind` enum for symlink routing
 - `src/provider_category.rs` — provider categorization logic
 - `src/benchmarks/` — `store.rs` (BenchmarkStore/Entry), `fetch.rs` (CDN fetcher), `traits.rs` (AA↔models.dev matching)
 - `src/status/` — `types.rs`, `registry.rs`, `assessment.rs`, `fetch.rs`, `adapters/` (per-source-family parsers)
 - `src/tui/` — `app.rs` (App state, Message enum), `event.rs` (NavAction dedup), `ui.rs` (shared helpers), `markdown.rs`, `widgets/` (ScrollablePanel, SoftCard, ScrollOffset, ComparisonLegend), per-tab subdirs: `models/`, `agents/`, `benchmarks/` (includes `radar.rs`), `status/` — each with `app.rs` (sub-app state) + `render.rs` (tab rendering)
 - `src/agents/health.rs` — agent-to-status-provider mapping for service health display in the Agents tab
-- `src/cli/` — `picker.rs` (shared PickerTerminal, nav helpers, style constants), `models.rs`/`benchmarks.rs`/`agents_ui.rs` (inline pickers), `styles.rs`
+- `src/cli/` — `picker.rs` (shared PickerTerminal, nav helpers, style constants), `models.rs`/`benchmarks.rs`/`agents_ui.rs`/`status.rs` (inline pickers), `styles.rs`
 
 ### GitHub Actions
 - `ci.yml` — runs on PR/push: fmt check, clippy, test

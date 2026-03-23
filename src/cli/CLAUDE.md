@@ -36,6 +36,10 @@ All 3 pickers (models, benchmarks, agents) follow the same lifecycle:
 - `models benchmarks` — interactive picker, can output JSON via --json
 - `agents status|latest|list-sources` — table output; `agents status` sorts by most recently updated and includes a "Status" column with service health icons
 - `agents <tool>` — release browser with changelog search (agents_ui.rs)
+- `status list` — interactive picker (TTY) or table (non-TTY), shows tracked providers
+- `status show <provider>` — detailed provider status with components, incidents, maintenance
+- `status status` — quick summary table (always table, even on TTY)
+- `status sources` — interactive picker to manage tracked providers (persists to config)
 
 Tool-specific flags parsed manually in `ToolArgs::parse_from()` (not clap, since tools are `external_subcommand`).
 
@@ -47,8 +51,10 @@ Tool-specific flags parsed manually in `ToolArgs::parse_from()` (not clap, since
 - `benchmarks.rs` — BenchmarkRow, scorer, H2H picker render
 - `agents.rs` — clap schema, ToolArgs parsing, command dispatch
 - `agents_ui.rs` — release browser, changelog search (n/N), source picker (ratatui inline)
+- `status.rs` — status CLI: list picker, show detail, status table, sources picker. Same `StatusFetcher` pipeline as TUI
 - `list.rs`, `search.rs`, `show.rs` — subcommand wrappers, delegate to models.rs logic
 - `styles.rs` — shared CLI colors (not duplicated from tui/ palette)
+- `link.rs` — symlink creation/removal for binary aliases, reads names from config
 
 ## Gotchas
 
