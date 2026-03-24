@@ -652,12 +652,12 @@
     "math_500": 0.889,
     "aime": 0.39,
     "aime_25": 0.193,
-    "output_tps": 127.897,
+    "output_tps": 126.606,
     "ttft": 0.491,
     "ttfat": 0.491,
-    "price_input": 0.27,
-    "price_output": 0.85,
-    "price_blended": 0.475
+    "price_input": 0.31,
+    "price_output": 0.91,
+    "price_blended": 0.487
   },
   {
     "id": "71f51ea9-94fe-4635-a80d-4cfffbb685f4",
