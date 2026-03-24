@@ -4,6 +4,7 @@
   <a href="https://crates.io/crates/modelsdev"><img src="https://img.shields.io/crates/v/modelsdev.svg?label=version" alt="Version"></a>
   <a href="https://github.com/arimxyer/models/actions/workflows/update-benchmarks.yml"><img src="https://github.com/arimxyer/models/actions/workflows/update-benchmarks.yml/badge.svg" alt="Benchmarks"></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+  <a href="https://buymeacoffee.com/arimxyer"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?logo=buy-me-a-coffee&logoColor=black" alt="Buy Me a Coffee"></a>
 </p>
 
 TUI and CLI for browsing AI models, benchmarks, coding agents, and provider statuses.
