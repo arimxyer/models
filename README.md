@@ -6,7 +6,7 @@
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
 </p>
 
-A terminal interface for browsing AI models, benchmarks, coding agents, and provider statuses. Ships as both a full TUI and a scriptable CLI with JSON output.
+TUI and CLI for browsing AI models, benchmarks, coding agents, and provider statuses.
 
 ![Models tab screenshot](public/assets/models-screenshot.png)
 
