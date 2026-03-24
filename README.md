@@ -13,7 +13,7 @@ TUI and CLI for browsing AI models, benchmarks, coding agents, and provider stat
 
 ## Highlights
 
-- **4,000+ models** across 85+ providers from [models.dev](https://models.dev) — filter by capability, price, context, and provider category
+- **~4,000+ models** across 85+ providers from [models.dev](https://models.dev) — filter by capability, price, context, and provider category
 - **~400 benchmark entries** from [Artificial Analysis](https://artificialanalysis.ai) — compare models head-to-head with scatter plots and radar charts
 - **11+ coding agents** tracked with version detection, changelogs, and GitHub integration
 - **22 provider statuses** monitored live across 7 status page platforms
