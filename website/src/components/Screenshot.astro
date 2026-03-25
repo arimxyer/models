@@ -1,6 +1,7 @@
 ---
 import { Image } from "astro:assets";
 import modelsScreenshot from "@/assets/models-screenshot.png";
+import { VERSION } from "@/data/site";
 ---
 
 <section class="data-border relative bg-black">
@@ -34,7 +35,7 @@ import modelsScreenshot from "@/assets/models-screenshot.png";
         LIVE_SYNC
       </div>
       <p class="font-mono text-lg tracking-tighter text-white">
-        Terminal User Interface v0.11.3
+        Terminal User Interface v{VERSION}
       </p>
     </div>
   </div>

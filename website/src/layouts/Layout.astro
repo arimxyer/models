@@ -1,6 +1,7 @@
 ---
 import "../styles/global.css";
 import Toaster from "@/components/bearnie/toast/Toaster.astro";
+import { SITE } from "@/data/site";
 ---
 
 <!doctype html>
@@ -15,20 +16,11 @@ import Toaster from "@/components/bearnie/toast/Toaster.astro";
     />
     <link rel="icon" href={`${import.meta.env.BASE_URL}favicon.ico`} />
     <meta name="generator" content={Astro.generator} />
-    <title>models — browse the AI ecosystem from your terminal</title>
-    <meta
-      property="og:title"
-      content="models — browse the AI ecosystem from your terminal"
-    />
-    <meta
-      property="og:description"
-      content="High-density terminal navigator for the AI landscape. Browse 4,000+ models, benchmarks, coding agents, and provider status from your terminal."
-    />
+    <title>{SITE.title}</title>
+    <meta property="og:title" content={SITE.title} />
+    <meta property="og:description" content={SITE.description} />
     <meta property="og:type" content="website" />
-    <meta
-      name="description"
-      content="High-density terminal navigator for the AI landscape. Browse 4,000+ models, benchmarks, coding agents, and provider status from your terminal."
-    />
+    <meta name="description" content={SITE.description} />
     <meta name="theme-color" content="#0f172a" />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />

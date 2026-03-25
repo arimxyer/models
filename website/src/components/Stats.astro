@@ -1,5 +1,5 @@
 ---
-
+import { DISPLAY, STATUS_PROVIDER_COUNT } from "@/data/site";
 ---
 
 <div class="grid grid-rows-3 gap-4 lg:col-span-4">
@@ -10,7 +10,7 @@
     <div class="flex items-end gap-2">
       <span
         class="glow-cyan text-5xl font-black text-[var(--neon-cyan)] [font-variant-numeric:tabular-nums]"
-        >4,000+</span
+        >{DISPLAY.models}</span
       >
       <div class="mb-2 flex gap-1" aria-hidden="true">
         <div class="h-8 w-1 bg-[var(--neon-cyan)]"></div>
@@ -26,7 +26,7 @@
     <div class="flex items-end gap-2">
       <span
         class="glow-magenta text-5xl font-black text-[var(--neon-magenta)] [font-variant-numeric:tabular-nums]"
-        >400+</span
+        >{DISPLAY.benchmarks}</span
       >
       <div class="relative mb-4 h-[2px] w-full bg-slate-800" aria-hidden="true">
         <div
@@ -45,7 +45,7 @@
     <div class="flex items-center justify-between">
       <span
         class="glow-green text-5xl font-black text-[var(--neon-green)] [font-variant-numeric:tabular-nums]"
-        >22</span
+        >{STATUS_PROVIDER_COUNT}</span
       >
       <div class="grid grid-cols-4 gap-1" aria-hidden="true">
         <div class="h-2 w-2 bg-[var(--neon-green)]"></div>

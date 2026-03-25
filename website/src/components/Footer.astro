@@ -1,5 +1,7 @@
 ---
+import { VERSION, REPO_URL, WIKI_URL, CRATES_URL } from "@/data/site";
 
+const year = new Date().getFullYear();
 ---
 
 <footer
@@ -22,25 +24,25 @@
         <li>
           <a
             class="transition-colors hover:text-[var(--neon-cyan)] focus-visible:text-[var(--neon-cyan)]"
-            href="https://github.com/arimxyer/models"
+            href={REPO_URL}
             rel="noopener noreferrer">Github_Repo</a
           >
         </li>
         <li>
           <a
             class="transition-colors hover:text-[var(--neon-cyan)] focus-visible:text-[var(--neon-cyan)]"
-            href="https://github.com/arimxyer/models/wiki"
+            href={WIKI_URL}
             rel="noopener noreferrer">Docs_Index</a
           >
         </li>
         <li>
           <a
             class="transition-colors hover:text-[var(--neon-cyan)] focus-visible:text-[var(--neon-cyan)]"
-            href="https://crates.io/crates/modelsdev"
+            href={CRATES_URL}
             rel="noopener noreferrer">Crates.io</a
           >
         </li>
-        <li>VER: v0.11.3</li>
+        <li>VER: v{VERSION}</li>
       </ul>
     </div>
     <div class="space-y-2">
@@ -55,7 +57,7 @@
     </div>
     <div class="flex items-end md:justify-end">
       <span class="font-mono text-[10px] text-slate-400"
-        >© 2026 MODELS. MIT LICENSE.</span
+        >© {year} MODELS. MIT LICENSE.</span
       >
     </div>
   </div>

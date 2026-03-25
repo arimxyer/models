@@ -1,5 +1,5 @@
 ---
-
+import { RELEASES_URL } from "@/data/site";
 ---
 
 <section class="grid grid-cols-1 gap-4 lg:grid-cols-4">
@@ -228,7 +228,7 @@
 <div class="py-4">
   <a
     class="group inline-flex items-center gap-4 font-mono font-bold tracking-widest text-[var(--neon-cyan)] uppercase transition-colors hover:text-white focus-visible:text-white"
-    href="https://github.com/arimxyer/models/releases"
+    href={RELEASES_URL}
     rel="noopener noreferrer"
   >
     <span class="text-xl">GitHub_Releases</span>

@@ -3,6 +3,12 @@ import Tabs from "@/components/bearnie/tabs/Tabs.astro";
 import TabsList from "@/components/bearnie/tabs/TabsList.astro";
 import TabsTrigger from "@/components/bearnie/tabs/TabsTrigger.astro";
 import TabsContent from "@/components/bearnie/tabs/TabsContent.astro";
+import {
+  DISPLAY,
+  PROVIDER_COUNT,
+  AGENT_COUNT,
+  STATUS_PROVIDER_COUNT,
+} from "@/data/site";
 
 const base = import.meta.env.BASE_URL;
 
@@ -27,8 +33,8 @@ const tabTriggerClass =
             >01. MODELS</span
           >
           <p class="font-mono text-xs text-slate-400">
-            Filter by capability, price, context. 85+ providers. RTFO
-            indicators.
+            Filter by capability, price, context. {PROVIDER_COUNT}+ providers.
+            RTFO indicators.
           </p>
           <div
             class="tab-progress absolute bottom-0 left-0 h-[2px] w-0 bg-[var(--neon-cyan)]"
@@ -54,7 +60,7 @@ const tabTriggerClass =
             >03. BENCHMARKS</span
           >
           <p class="font-mono text-xs text-slate-400">
-            H2H tables, scatter plots, radar charts. ~400 entries.
+            H2H tables, scatter plots, radar charts. ~{DISPLAY.benchmarks} entries.
           </p>
           <div
             class="tab-progress absolute bottom-0 left-0 h-[2px] w-0 bg-[var(--neon-cyan)]"
@@ -67,7 +73,8 @@ const tabTriggerClass =
             >04. STATUS</span
           >
           <p class="font-mono text-xs text-slate-400">
-            Live health for 22 providers. Incidents, maintenance, gauges.
+            Live health for {STATUS_PROVIDER_COUNT} providers. Incidents, maintenance,
+            gauges.
           </p>
           <div
             class="tab-progress absolute bottom-0 left-0 h-[2px] w-0 bg-[var(--neon-cyan)]"
@@ -107,8 +114,8 @@ const tabTriggerClass =
         </div>
         <div class="absolute bottom-0 left-0 p-8">
           <p class="mb-4 max-w-lg text-xl leading-tight font-light text-white">
-            Real-time ingestion of 4,000+ model definitions across 85+ providers
-            from models.dev.
+            Real-time ingestion of {DISPLAY.models} model definitions across
+            {PROVIDER_COUNT}+ providers from models.dev.
           </p>
           <ul
             class="space-y-1 font-mono text-xs text-[var(--neon-cyan)] uppercase"
@@ -151,8 +158,8 @@ const tabTriggerClass =
         </div>
         <div class="absolute bottom-0 left-0 p-8">
           <p class="mb-4 max-w-lg text-xl leading-tight font-light text-white">
-            Track 11+ AI coding assistants with version detection, changelogs,
-            and live service health.
+            Track {AGENT_COUNT}+ AI coding assistants with version detection,
+            changelogs, and live service health.
           </p>
           <ul
             class="space-y-1 font-mono text-xs text-[var(--neon-cyan)] uppercase"
@@ -239,8 +246,8 @@ const tabTriggerClass =
         </div>
         <div class="absolute bottom-0 left-0 p-8">
           <p class="mb-4 max-w-lg text-xl leading-tight font-light text-white">
-            Live health monitoring for 22 AI providers across 7 status page
-            platforms.
+            Live health monitoring for {STATUS_PROVIDER_COUNT} AI providers across
+            7 status page platforms.
           </p>
           <ul
             class="space-y-1 font-mono text-xs text-[var(--neon-cyan)] uppercase"

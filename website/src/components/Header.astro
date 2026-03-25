@@ -1,5 +1,5 @@
 ---
-
+import { WIKI_URL, REPO_URL, LICENSE_URL } from "@/data/site";
 ---
 
 <header
@@ -21,17 +21,17 @@
   >
     <a
       class="text-[var(--neon-cyan)] transition-colors hover:text-white focus-visible:text-white"
-      href="https://github.com/arimxyer/models/wiki"
+      href={WIKI_URL}
       rel="noopener noreferrer">[ documentation ]</a
     >
     <a
       class="text-slate-400 transition-colors hover:text-white focus-visible:text-white"
-      href="https://github.com/arimxyer/models"
+      href={REPO_URL}
       rel="noopener noreferrer">[ source_code ]</a
     >
     <a
       class="text-slate-400 transition-colors hover:text-white focus-visible:text-white"
-      href="https://github.com/arimxyer/models/blob/main/LICENSE"
+      href={LICENSE_URL}
       rel="noopener noreferrer">[ license ]</a
     >
   </nav>
