@@ -1,20 +1,37 @@
 ---
+
 ---
-<section class="data-border bg-black relative">
-  <div class="data-header px-4 py-2 flex justify-between">
+
+<section class="data-border relative bg-black">
+  <div class="data-header flex justify-between px-4 py-2">
     <div class="flex gap-2">
-      <div class="w-2 h-2 rounded-full bg-slate-700"></div>
-      <div class="w-2 h-2 rounded-full bg-slate-700"></div>
-      <div class="w-2 h-2 rounded-full bg-slate-700"></div>
+      <div class="h-2 w-2 rounded-full bg-slate-700"></div>
+      <div class="h-2 w-2 rounded-full bg-slate-700"></div>
+      <div class="h-2 w-2 rounded-full bg-slate-700"></div>
     </div>
-    <span class="text-[10px] font-mono text-slate-500 uppercase">VIEWPORT: TUI_EMULATION_MODE</span>
+    <span class="font-mono text-[10px] text-slate-500 uppercase"
+      >VIEWPORT: TUI_EMULATION_MODE</span
+    >
   </div>
-  <div class="aspect-video relative group overflow-hidden">
-    <img alt="models TUI interface" class="w-full h-full object-cover" src={`${import.meta.env.BASE_URL}models-screenshot.png`} />
-    <div class="absolute inset-0 bg-gradient-to-t from-[var(--bg-slate)] to-transparent opacity-60"></div>
+  <div class="group relative aspect-video overflow-hidden">
+    <img
+      alt="models TUI interface"
+      class="h-full w-full object-cover"
+      src={`${import.meta.env.BASE_URL}models-screenshot.png`}
+    />
+    <div
+      class="absolute inset-0 bg-gradient-to-t from-[var(--bg-slate)] to-transparent opacity-60"
+    >
+    </div>
     <div class="absolute bottom-8 left-8">
-      <div class="px-3 py-1 bg-[var(--neon-cyan)] text-slate-900 font-bold text-xs inline-block mb-2">LIVE_SYNC</div>
-      <p class="text-white text-lg font-mono tracking-tighter">Terminal User Interface v0.11.3</p>
+      <div
+        class="mb-2 inline-block bg-[var(--neon-cyan)] px-3 py-1 text-xs font-bold text-slate-900"
+      >
+        LIVE_SYNC
+      </div>
+      <p class="font-mono text-lg tracking-tighter text-white">
+        Terminal User Interface v0.11.3
+      </p>
     </div>
   </div>
 </section>

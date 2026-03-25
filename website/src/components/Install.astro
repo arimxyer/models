@@ -1,31 +1,60 @@
 ---
+
 ---
-<section class="grid grid-cols-1 lg:grid-cols-4 gap-4">
-  <div class="lg:col-span-1 data-border bg-[var(--neon-green)] p-6">
-    <h2 class="text-4xl font-black text-slate-900 leading-[0.9] uppercase italic">System<br/>Access</h2>
+
+<section class="grid grid-cols-1 gap-4 lg:grid-cols-4">
+  <div class="data-border bg-[var(--neon-green)] p-6 lg:col-span-1">
+    <h2
+      class="text-4xl leading-[0.9] font-black text-slate-900 uppercase italic"
+    >
+      System<br />Access
+    </h2>
   </div>
-  <div class="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-4">
-    <div class="data-border p-4 flex justify-between items-center hover:bg-[var(--neon-green)]/10 transition-colors cursor-pointer group">
-      <span class="font-bold uppercase tracking-widest text-sm">Homebrew</span>
-      <code class="font-mono text-xs text-slate-500 group-hover:text-[var(--neon-green)] transition-colors">brew install models</code>
+  <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:col-span-3">
+    <div
+      class="data-border group flex cursor-pointer items-center justify-between p-4 transition-colors hover:bg-[var(--neon-green)]/10"
+    >
+      <span class="text-sm font-bold tracking-widest uppercase">Homebrew</span>
+      <code
+        class="font-mono text-xs text-slate-500 transition-colors group-hover:text-[var(--neon-green)]"
+        >brew install models</code
+      >
     </div>
-    <div class="data-border p-4 flex justify-between items-center hover:bg-[var(--neon-green)]/10 transition-colors cursor-pointer group">
-      <span class="font-bold uppercase tracking-widest text-sm">Cargo</span>
-      <code class="font-mono text-xs text-slate-500 group-hover:text-[var(--neon-green)] transition-colors">cargo install modelsdev</code>
+    <div
+      class="data-border group flex cursor-pointer items-center justify-between p-4 transition-colors hover:bg-[var(--neon-green)]/10"
+    >
+      <span class="text-sm font-bold tracking-widest uppercase">Cargo</span>
+      <code
+        class="font-mono text-xs text-slate-500 transition-colors group-hover:text-[var(--neon-green)]"
+        >cargo install modelsdev</code
+      >
     </div>
-    <div class="data-border p-4 flex justify-between items-center hover:bg-[var(--neon-green)]/10 transition-colors cursor-pointer group">
-      <span class="font-bold uppercase tracking-widest text-sm">Scoop</span>
-      <code class="font-mono text-xs text-slate-500 group-hover:text-[var(--neon-green)] transition-colors">scoop install extras/models</code>
+    <div
+      class="data-border group flex cursor-pointer items-center justify-between p-4 transition-colors hover:bg-[var(--neon-green)]/10"
+    >
+      <span class="text-sm font-bold tracking-widest uppercase">Scoop</span>
+      <code
+        class="font-mono text-xs text-slate-500 transition-colors group-hover:text-[var(--neon-green)]"
+        >scoop install extras/models</code
+      >
     </div>
-    <div class="data-border p-4 flex justify-between items-center hover:bg-[var(--neon-green)]/10 transition-colors cursor-pointer group">
-      <span class="font-bold uppercase tracking-widest text-sm">AUR</span>
-      <code class="font-mono text-xs text-slate-500 group-hover:text-[var(--neon-green)] transition-colors">paru -S models-bin</code>
+    <div
+      class="data-border group flex cursor-pointer items-center justify-between p-4 transition-colors hover:bg-[var(--neon-green)]/10"
+    >
+      <span class="text-sm font-bold tracking-widest uppercase">AUR</span>
+      <code
+        class="font-mono text-xs text-slate-500 transition-colors group-hover:text-[var(--neon-green)]"
+        >paru -S models-bin</code
+      >
     </div>
   </div>
 </section>
 <div class="py-4">
-  <a class="inline-flex items-center gap-4 text-[var(--neon-cyan)] hover:text-white transition-all font-mono font-bold uppercase tracking-widest group" href="https://github.com/arimxyer/models/releases">
+  <a
+    class="group inline-flex items-center gap-4 font-mono font-bold tracking-widest text-[var(--neon-cyan)] uppercase transition-all hover:text-white"
+    href="https://github.com/arimxyer/models/releases"
+  >
     <span class="text-xl">GitHub_Releases</span>
-    <span class="group-hover:translate-x-2 transition-transform">→</span>
+    <span class="transition-transform group-hover:translate-x-2">→</span>
   </a>
 </div>

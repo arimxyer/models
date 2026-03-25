@@ -1,0 +1,27 @@
+[tasks.dev]
+description = "Start dev server"
+run = "bun run dev"
+
+[tasks.check]
+description = "Run astro check"
+run = "bun run check"
+
+[tasks.typecheck]
+description = "Run astro check + tsc"
+run = "bun run typecheck"
+
+[tasks.fmt]
+description = "Format code with Prettier"
+run = "bun run fmt"
+
+[tasks.fmt-check]
+description = "Check code formatting"
+run = "bun run fmt:check"
+
+[tasks.build]
+description = "Check and build"
+run = "bun run build"
+
+[tasks.preview]
+description = "Preview production build"
+run = "bun run preview"

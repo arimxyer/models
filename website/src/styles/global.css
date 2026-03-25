@@ -1,36 +1,54 @@
 @import "tailwindcss";
 
 :root {
-    --bg-slate: #0f172a;
-    --neon-cyan: #22d3ee;
-    --neon-magenta: #f472b6;
-    --neon-green: #4ade80;
-    --grid-color: rgba(34, 211, 238, 0.05);
+  --bg-slate: #0f172a;
+  --neon-cyan: #22d3ee;
+  --neon-magenta: #f472b6;
+  --neon-green: #4ade80;
+  --grid-color: rgba(34, 211, 238, 0.05);
 }
 
 body {
-    background-color: var(--bg-slate);
-    color: #e2e8f0;
-    background-image:
-        linear-gradient(var(--grid-color) 1px, transparent 1px),
-        linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
-    background-size: 40px 40px;
+  background-color: var(--bg-slate);
+  color: #e2e8f0;
+  background-image:
+    linear-gradient(var(--grid-color) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+  background-size: 40px 40px;
 }
 
-.glow-cyan { text-shadow: 0 0 10px rgba(34, 211, 238, 0.5); }
-.glow-magenta { text-shadow: 0 0 10px rgba(244, 114, 182, 0.5); }
-.glow-green { text-shadow: 0 0 10px rgba(74, 222, 128, 0.5); }
-.data-border { border: 1px solid rgba(34, 211, 238, 0.2); }
-.data-header { background: rgba(34, 211, 238, 0.1); border-bottom: 1px solid rgba(34, 211, 238, 0.3); }
+.glow-cyan {
+  text-shadow: 0 0 10px rgba(34, 211, 238, 0.5);
+}
+.glow-magenta {
+  text-shadow: 0 0 10px rgba(244, 114, 182, 0.5);
+}
+.glow-green {
+  text-shadow: 0 0 10px rgba(74, 222, 128, 0.5);
+}
+.data-border {
+  border: 1px solid rgba(34, 211, 238, 0.2);
+}
+.data-header {
+  background: rgba(34, 211, 238, 0.1);
+  border-bottom: 1px solid rgba(34, 211, 238, 0.3);
+}
 .active-scanline {
-    position: relative;
-    overflow: hidden;
+  position: relative;
+  overflow: hidden;
 }
 .active-scanline::after {
-    content: "";
-    position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: linear-gradient(to bottom, transparent 50%, rgba(34, 211, 238, 0.02) 50%);
-    background-size: 100% 4px;
-    pointer-events: none;
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent 50%,
+    rgba(34, 211, 238, 0.02) 50%
+  );
+  background-size: 100% 4px;
+  pointer-events: none;
 }

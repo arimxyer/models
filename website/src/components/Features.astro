@@ -1,32 +1,69 @@
 ---
+
 ---
-<section class="grid grid-cols-1 md:grid-cols-4 gap-4">
-  <div class="md:col-span-1 space-y-2">
-    <h2 class="text-4xl font-black text-white uppercase tracking-tighter mb-6">Operations</h2>
-    <div class="data-border bg-[var(--neon-cyan)]/10 p-4 border-l-4 border-l-[var(--neon-cyan)]">
-      <span class="text-[var(--neon-cyan)] font-bold block mb-1">01. MODELS</span>
-      <p class="text-xs text-slate-400 font-mono">Filter by capability, price, context. 85+ providers. RTFO indicators.</p>
+
+<section class="grid grid-cols-1 gap-4 md:grid-cols-4">
+  <div class="space-y-2 md:col-span-1">
+    <h2 class="mb-6 text-4xl font-black tracking-tighter text-white uppercase">
+      Operations
+    </h2>
+    <div
+      class="data-border border-l-4 border-l-[var(--neon-cyan)] bg-[var(--neon-cyan)]/10 p-4"
+    >
+      <span class="mb-1 block font-bold text-[var(--neon-cyan)]"
+        >01. MODELS</span
+      >
+      <p class="font-mono text-xs text-slate-400">
+        Filter by capability, price, context. 85+ providers. RTFO indicators.
+      </p>
     </div>
-    <div class="data-border bg-slate-900/30 p-4 border-l-4 border-l-transparent hover:border-l-slate-400 transition-all">
-      <span class="text-slate-400 font-bold block mb-1 uppercase text-sm">02. Benchmarks</span>
-      <p class="text-xs text-slate-400 font-mono">H2H tables, scatter plots, radar charts. ~400 entries.</p>
+    <div
+      class="data-border border-l-4 border-l-transparent bg-slate-900/30 p-4 transition-all hover:border-l-slate-400"
+    >
+      <span class="mb-1 block text-sm font-bold text-slate-400 uppercase"
+        >02. Benchmarks</span
+      >
+      <p class="font-mono text-xs text-slate-400">
+        H2H tables, scatter plots, radar charts. ~400 entries.
+      </p>
     </div>
-    <div class="data-border bg-slate-900/30 p-4 border-l-4 border-l-transparent hover:border-l-slate-400 transition-all">
-      <span class="text-slate-400 font-bold block mb-1 uppercase text-sm">03. Agents</span>
-      <p class="text-xs text-slate-400 font-mono">Version detection, GitHub releases, changelogs, service health.</p>
+    <div
+      class="data-border border-l-4 border-l-transparent bg-slate-900/30 p-4 transition-all hover:border-l-slate-400"
+    >
+      <span class="mb-1 block text-sm font-bold text-slate-400 uppercase"
+        >03. Agents</span
+      >
+      <p class="font-mono text-xs text-slate-400">
+        Version detection, GitHub releases, changelogs, service health.
+      </p>
     </div>
-    <div class="data-border bg-slate-900/30 p-4 border-l-4 border-l-transparent hover:border-l-slate-400 transition-all">
-      <span class="text-slate-400 font-bold block mb-1 uppercase text-sm">04. STATUS</span>
-      <p class="text-xs text-slate-400 font-mono">Live health for 22 providers. Incidents, maintenance, gauges.</p>
+    <div
+      class="data-border border-l-4 border-l-transparent bg-slate-900/30 p-4 transition-all hover:border-l-slate-400"
+    >
+      <span class="mb-1 block text-sm font-bold text-slate-400 uppercase"
+        >04. STATUS</span
+      >
+      <p class="font-mono text-xs text-slate-400">
+        Live health for 22 providers. Incidents, maintenance, gauges.
+      </p>
     </div>
   </div>
-  <div class="md:col-span-3 data-border bg-slate-900/50 p-8 flex flex-col md:flex-row gap-8 items-center">
-    <div class="w-full md:w-1/2 aspect-square data-border bg-black p-2">
-      <img alt="models TUI interface" class="w-full h-full object-cover" src={`${import.meta.env.BASE_URL}models-screenshot.png`} />
+  <div
+    class="data-border flex flex-col items-center gap-8 bg-slate-900/50 p-8 md:col-span-3 md:flex-row"
+  >
+    <div class="data-border aspect-square w-full bg-black p-2 md:w-1/2">
+      <img
+        alt="models TUI interface"
+        class="h-full w-full object-cover"
+        src={`${import.meta.env.BASE_URL}models-screenshot.png`}
+      />
     </div>
     <div class="w-full md:w-1/2">
-      <p class="text-2xl font-light text-white leading-tight mb-6">Real-time ingestion of 4,000+ model definitions across 85+ providers from models.dev.</p>
-      <ul class="font-mono text-xs text-[var(--neon-cyan)] space-y-2 uppercase">
+      <p class="mb-6 text-2xl leading-tight font-light text-white">
+        Real-time ingestion of 4,000+ model definitions across 85+ providers
+        from models.dev.
+      </p>
+      <ul class="space-y-2 font-mono text-xs text-[var(--neon-cyan)] uppercase">
         <li>+ Filter by capability and price</li>
         <li>+ Sort by date, cost, context</li>
         <li>+ Cross-provider search</li>
