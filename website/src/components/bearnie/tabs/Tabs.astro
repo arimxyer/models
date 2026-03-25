@@ -130,7 +130,7 @@ const classes = cn(
           content.setAttribute("tabindex", isActive ? "0" : "-1");
         });
 
-        trigger.focus();
+        trigger.focus({ preventScroll: true });
       };
 
       // Handle tab clicks
