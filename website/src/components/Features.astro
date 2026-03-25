@@ -1,73 +1,146 @@
 ---
-
+import Tabs from "@/components/bearnie/tabs/Tabs.astro";
+import TabsList from "@/components/bearnie/tabs/TabsList.astro";
+import TabsTrigger from "@/components/bearnie/tabs/TabsTrigger.astro";
+import TabsContent from "@/components/bearnie/tabs/TabsContent.astro";
 ---
 
 <section class="grid grid-cols-1 gap-4 md:grid-cols-4">
-  <div class="space-y-2 md:col-span-1">
-    <h2 class="mb-6 text-4xl font-black tracking-tighter text-white uppercase">
-      Operations
-    </h2>
-    <div
-      class="data-border border-l-4 border-l-[var(--neon-cyan)] bg-[var(--neon-cyan)]/10 p-4"
-    >
-      <span class="mb-1 block font-bold text-[var(--neon-cyan)]"
-        >01. MODELS</span
-      >
-      <p class="font-mono text-xs text-slate-400">
-        Filter by capability, price, context. 85+ providers. RTFO indicators.
-      </p>
+  <Tabs defaultValue="models" orientation="vertical" class="contents">
+    <div class="space-y-2 md:col-span-1">
+      <h2 class="mb-6 text-4xl font-black tracking-tighter text-white uppercase">
+        Operations
+      </h2>
+      <TabsList class="h-auto w-full flex-col items-stretch gap-2 rounded-none bg-transparent p-0">
+        <TabsTrigger
+          value="models"
+          class="group data-border block w-full cursor-pointer rounded-none border-l-4 p-4 text-left transition-all data-[state=active]:border-l-[var(--neon-cyan)] data-[state=active]:bg-[var(--neon-cyan)]/10 data-[state=inactive]:border-l-transparent data-[state=inactive]:bg-slate-900/30 data-[state=inactive]:hover:border-l-slate-400"
+        >
+          <span class="mb-1 block font-bold uppercase text-slate-400 group-data-[state=active]:text-[var(--neon-cyan)]">01. MODELS</span>
+          <p class="font-mono text-xs text-slate-400">
+            Filter by capability, price, context. 85+ providers. RTFO indicators.
+          </p>
+        </TabsTrigger>
+        <TabsTrigger
+          value="benchmarks"
+          class="group data-border block w-full cursor-pointer rounded-none border-l-4 p-4 text-left transition-all data-[state=active]:border-l-[var(--neon-cyan)] data-[state=active]:bg-[var(--neon-cyan)]/10 data-[state=inactive]:border-l-transparent data-[state=inactive]:bg-slate-900/30 data-[state=inactive]:hover:border-l-slate-400"
+        >
+          <span class="mb-1 block font-bold uppercase text-slate-400 group-data-[state=active]:text-[var(--neon-cyan)]">02. BENCHMARKS</span>
+          <p class="font-mono text-xs text-slate-400">
+            H2H tables, scatter plots, radar charts. ~400 entries.
+          </p>
+        </TabsTrigger>
+        <TabsTrigger
+          value="agents"
+          class="group data-border block w-full cursor-pointer rounded-none border-l-4 p-4 text-left transition-all data-[state=active]:border-l-[var(--neon-cyan)] data-[state=active]:bg-[var(--neon-cyan)]/10 data-[state=inactive]:border-l-transparent data-[state=inactive]:bg-slate-900/30 data-[state=inactive]:hover:border-l-slate-400"
+        >
+          <span class="mb-1 block font-bold uppercase text-slate-400 group-data-[state=active]:text-[var(--neon-cyan)]">03. AGENTS</span>
+          <p class="font-mono text-xs text-slate-400">
+            Version detection, GitHub releases, changelogs, service health.
+          </p>
+        </TabsTrigger>
+        <TabsTrigger
+          value="status"
+          class="group data-border block w-full cursor-pointer rounded-none border-l-4 p-4 text-left transition-all data-[state=active]:border-l-[var(--neon-cyan)] data-[state=active]:bg-[var(--neon-cyan)]/10 data-[state=inactive]:border-l-transparent data-[state=inactive]:bg-slate-900/30 data-[state=inactive]:hover:border-l-slate-400"
+        >
+          <span class="mb-1 block font-bold uppercase text-slate-400 group-data-[state=active]:text-[var(--neon-cyan)]">04. STATUS</span>
+          <p class="font-mono text-xs text-slate-400">
+            Live health for 22 providers. Incidents, maintenance, gauges.
+          </p>
+        </TabsTrigger>
+      </TabsList>
     </div>
-    <div
-      class="data-border border-l-4 border-l-transparent bg-slate-900/30 p-4 transition-all hover:border-l-slate-400"
-    >
-      <span class="mb-1 block text-sm font-bold text-slate-400 uppercase"
-        >02. Benchmarks</span
-      >
-      <p class="font-mono text-xs text-slate-400">
-        H2H tables, scatter plots, radar charts. ~400 entries.
-      </p>
-    </div>
-    <div
-      class="data-border border-l-4 border-l-transparent bg-slate-900/30 p-4 transition-all hover:border-l-slate-400"
-    >
-      <span class="mb-1 block text-sm font-bold text-slate-400 uppercase"
-        >03. Agents</span
-      >
-      <p class="font-mono text-xs text-slate-400">
-        Version detection, GitHub releases, changelogs, service health.
-      </p>
-    </div>
-    <div
-      class="data-border border-l-4 border-l-transparent bg-slate-900/30 p-4 transition-all hover:border-l-slate-400"
-    >
-      <span class="mb-1 block text-sm font-bold text-slate-400 uppercase"
-        >04. STATUS</span
-      >
-      <p class="font-mono text-xs text-slate-400">
-        Live health for 22 providers. Incidents, maintenance, gauges.
-      </p>
-    </div>
-  </div>
-  <div
-    class="data-border flex flex-col items-center gap-8 bg-slate-900/50 p-8 md:col-span-3 md:flex-row"
-  >
-    <div class="data-border aspect-square w-full bg-black p-2 md:w-1/2">
-      <img
-        alt="models TUI interface"
-        class="h-full w-full object-cover"
-        src={`${import.meta.env.BASE_URL}models-screenshot.png`}
-      />
-    </div>
-    <div class="w-full md:w-1/2">
-      <p class="mb-6 text-2xl leading-tight font-light text-white">
-        Real-time ingestion of 4,000+ model definitions across 85+ providers
-        from models.dev.
-      </p>
-      <ul class="space-y-2 font-mono text-xs text-[var(--neon-cyan)] uppercase">
-        <li>+ Filter by capability and price</li>
-        <li>+ Sort by date, cost, context</li>
-        <li>+ Cross-provider search</li>
-      </ul>
-    </div>
-  </div>
+
+    <TabsContent value="models" class="mt-0 md:col-span-3">
+      <div class="data-border flex flex-col items-center gap-8 bg-slate-900/50 p-8 md:flex-row">
+        <div class="data-border aspect-square w-full bg-black p-2 md:w-1/2">
+          <img
+            alt="models TUI interface"
+            class="h-full w-full object-cover"
+            src={`${import.meta.env.BASE_URL}models-screenshot.png`}
+          />
+        </div>
+        <div class="w-full md:w-1/2">
+          <p class="mb-6 text-2xl leading-tight font-light text-white">
+            Real-time ingestion of 4,000+ model definitions across 85+ providers
+            from models.dev.
+          </p>
+          <ul class="space-y-2 font-mono text-xs text-[var(--neon-cyan)] uppercase">
+            <li>+ Filter by capability and price</li>
+            <li>+ Sort by date, cost, context</li>
+            <li>+ Cross-provider search</li>
+          </ul>
+        </div>
+      </div>
+    </TabsContent>
+
+    <TabsContent value="benchmarks" class="mt-0 md:col-span-3">
+      <div class="data-border flex flex-col items-center gap-8 bg-slate-900/50 p-8 md:flex-row">
+        <div class="data-border aspect-square w-full bg-black p-2 md:w-1/2">
+          <img
+            alt="benchmarks TUI interface"
+            class="h-full w-full object-cover"
+            src={`${import.meta.env.BASE_URL}benchmark-screenshot.png`}
+          />
+        </div>
+        <div class="w-full md:w-1/2">
+          <p class="mb-6 text-2xl leading-tight font-light text-white">
+            Head-to-head comparison with scatter plots, radar charts, and quality
+            indexes from Artificial Analysis.
+          </p>
+          <ul class="space-y-2 font-mono text-xs text-[var(--neon-cyan)] uppercase">
+            <li>+ Compare models side by side</li>
+            <li>+ Scatter plots and radar charts</li>
+            <li>+ Filter by creator and region</li>
+          </ul>
+        </div>
+      </div>
+    </TabsContent>
+
+    <TabsContent value="agents" class="mt-0 md:col-span-3">
+      <div class="data-border flex flex-col items-center gap-8 bg-slate-900/50 p-8 md:flex-row">
+        <div class="data-border aspect-square w-full bg-black p-2 md:w-1/2">
+          <img
+            alt="agents TUI interface"
+            class="h-full w-full object-cover"
+            src={`${import.meta.env.BASE_URL}agents-screenshot.png`}
+          />
+        </div>
+        <div class="w-full md:w-1/2">
+          <p class="mb-6 text-2xl leading-tight font-light text-white">
+            Track 11+ AI coding assistants with version detection, changelogs,
+            and live service health.
+          </p>
+          <ul class="space-y-2 font-mono text-xs text-[var(--neon-cyan)] uppercase">
+            <li>+ Automatic version detection</li>
+            <li>+ GitHub release tracking</li>
+            <li>+ Live service health status</li>
+          </ul>
+        </div>
+      </div>
+    </TabsContent>
+
+    <TabsContent value="status" class="mt-0 md:col-span-3">
+      <div class="data-border flex flex-col items-center gap-8 bg-slate-900/50 p-8 md:flex-row">
+        <div class="data-border aspect-square w-full bg-black p-2 md:w-1/2">
+          <img
+            alt="status TUI interface"
+            class="h-full w-full object-cover"
+            src={`${import.meta.env.BASE_URL}status-screenshot.png`}
+          />
+        </div>
+        <div class="w-full md:w-1/2">
+          <p class="mb-6 text-2xl leading-tight font-light text-white">
+            Live health monitoring for 22 AI providers across 7 status page
+            platforms.
+          </p>
+          <ul class="space-y-2 font-mono text-xs text-[var(--neon-cyan)] uppercase">
+            <li>+ Overall health dashboard</li>
+            <li>+ Incident and maintenance cards</li>
+            <li>+ Grouped service components</li>
+          </ul>
+        </div>
+      </div>
+    </TabsContent>
+  </Tabs>
 </section>

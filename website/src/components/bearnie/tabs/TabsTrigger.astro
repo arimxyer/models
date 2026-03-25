@@ -1,0 +1,41 @@
+---
+import { cn } from "@/utils/cn";
+import type { HTMLAttributes } from "astro/types";
+
+export interface Props extends HTMLAttributes<"button"> {
+  value: string;
+}
+
+const { value, class: className, ...props } = Astro.props;
+
+const classes = cn(
+  "inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5",
+  "text-sm font-medium text-muted-foreground ring-offset-background transition-all",
+  "hover:text-foreground",
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+  "disabled:pointer-events-none disabled:opacity-50",
+  "data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm",
+  className
+);
+---
+
+<button
+  type="button"
+  role="tab"
+  class={classes}
+  data-tabs-trigger
+  data-value={value}
+  data-state="inactive"
+  aria-selected="false"
+  tabindex="-1"
+  {...props}
+>
+  <slot />
+</button>
+
+<style>
+  :global([data-tabs-trigger][data-orientation="vertical"]) {
+    width: 100%;
+    justify-content: flex-start;
+  }
+</style>

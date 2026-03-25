@@ -1,0 +1,29 @@
+---
+import { cn } from "@/utils/cn";
+import type { HTMLAttributes } from "astro/types";
+
+export interface Props extends HTMLAttributes<"div"> {
+  value: string;
+}
+
+const { value, class: className, ...props } = Astro.props;
+
+const classes = cn(
+  "mt-2 ring-offset-background",
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+  className
+);
+---
+
+<div
+  role="tabpanel"
+  class={classes}
+  data-tabs-content
+  data-value={value}
+  data-state="inactive"
+  tabindex="0"
+  hidden
+  {...props}
+>
+  <slot />
+</div>

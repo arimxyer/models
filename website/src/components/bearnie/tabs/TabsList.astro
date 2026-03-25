@@ -1,0 +1,34 @@
+---
+import { cn } from "@/utils/cn";
+import type { HTMLAttributes } from "astro/types";
+
+export interface Props extends HTMLAttributes<"div"> {}
+
+const {
+  class: className,
+  ...props
+} = Astro.props;
+
+const classes = cn(
+  "flex w-fit h-10 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground gap-1",
+  className
+);
+---
+
+<div
+  role="tablist"
+  class={classes}
+  data-tabs-list
+  {...props}
+>
+  <slot />
+</div>
+
+<style>
+  :global([data-tabs-list][data-orientation="vertical"]) {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    width: 100%;
+  }
+</style>

@@ -1,0 +1,186 @@
+---
+import { cn } from "@/utils/cn";
+import type { HTMLAttributes } from "astro/types";
+
+export interface Props extends HTMLAttributes<"div"> {
+  defaultValue?: string;
+  orientation?: "horizontal" | "vertical";
+}
+
+const {
+  defaultValue,
+  orientation = "horizontal",
+  class: className,
+  ...props
+} = Astro.props;
+
+const classes = cn(
+  "w-full",
+  orientation === "vertical" && "grid grid-cols-1 lg:grid-cols-2 gap-4",
+  className
+);
+---
+
+<div
+  class={classes}
+  data-tabs
+  data-default-value={defaultValue}
+  data-orientation={orientation}
+  {...props}
+>
+  <slot />
+</div>
+
+<script>
+  import { generateId } from '@/utils/focus-trap';
+
+  function initTabs() {
+    document.querySelectorAll("[data-tabs]").forEach((tabs) => {
+      if (tabs.hasAttribute("data-initialized")) return;
+      tabs.setAttribute("data-initialized", "true");
+
+      const defaultValue = tabs.getAttribute("data-default-value");
+      const orientation = tabs.getAttribute("data-orientation") || "horizontal";
+      
+      const tabsList = tabs.querySelector("[data-tabs-list]") as HTMLElement;
+      const triggers = Array.from(tabs.querySelectorAll("[data-tabs-trigger]")) as HTMLElement[];
+      const contents = Array.from(tabs.querySelectorAll("[data-tabs-content]")) as HTMLElement[];
+
+      // Set aria-orientation on tablist
+      if (tabsList) {
+        tabsList.setAttribute("data-orientation", orientation);
+        tabsList.setAttribute("aria-orientation", orientation);
+      }
+      
+      // Generate IDs and set up ARIA relationships
+      triggers.forEach((trigger) => {
+        trigger.setAttribute("data-orientation", orientation);
+        const value = trigger.getAttribute("data-value");
+        
+        // Generate IDs if not present
+        if (!trigger.id) {
+          trigger.id = generateId(`tab-${value}`);
+        }
+        
+        // Find matching content and link them
+        const matchingContent = contents.find(c => c.getAttribute("data-value") === value);
+        if (matchingContent) {
+          if (!matchingContent.id) {
+            matchingContent.id = generateId(`tabpanel-${value}`);
+          }
+          trigger.setAttribute("aria-controls", matchingContent.id);
+          matchingContent.setAttribute("aria-labelledby", trigger.id);
+        }
+      });
+
+      // Initialize default tab
+      let activeIndex = 0;
+      if (defaultValue) {
+        triggers.forEach((trigger, index) => {
+          const value = trigger.getAttribute("data-value");
+          if (value === defaultValue) {
+            trigger.setAttribute("data-state", "active");
+            trigger.setAttribute("aria-selected", "true");
+            trigger.setAttribute("tabindex", "0");
+            activeIndex = index;
+          } else {
+            trigger.setAttribute("data-state", "inactive");
+            trigger.setAttribute("aria-selected", "false");
+            trigger.setAttribute("tabindex", "-1");
+          }
+        });
+
+        contents.forEach((content) => {
+          const value = content.getAttribute("data-value");
+          if (value === defaultValue) {
+            content.setAttribute("data-state", "active");
+            content.hidden = false;
+          } else {
+            content.setAttribute("data-state", "inactive");
+            content.hidden = true;
+          }
+        });
+      }
+
+      // Activate tab function
+      const activateTab = (trigger: HTMLElement) => {
+        const value = trigger.getAttribute("data-value");
+
+        // Update all triggers
+        triggers.forEach((t) => {
+          const isActive = t.getAttribute("data-value") === value;
+          t.setAttribute("data-state", isActive ? "active" : "inactive");
+          t.setAttribute("aria-selected", String(isActive));
+          t.setAttribute("tabindex", isActive ? "0" : "-1");
+        });
+
+        // Update all contents
+        contents.forEach((content) => {
+          const isActive = content.getAttribute("data-value") === value;
+          content.setAttribute("data-state", isActive ? "active" : "inactive");
+          content.hidden = !isActive;
+        });
+
+        trigger.focus();
+      };
+
+      // Handle tab clicks
+      triggers.forEach((trigger) => {
+        trigger.addEventListener("click", () => activateTab(trigger));
+      });
+
+      // Keyboard navigation
+      tabsList?.addEventListener("keydown", (e: KeyboardEvent) => {
+        const currentIndex = triggers.findIndex(t => t === document.activeElement);
+        if (currentIndex === -1) return;
+
+        let nextIndex = currentIndex;
+        const isHorizontal = orientation === "horizontal";
+
+        switch (e.key) {
+          case "ArrowRight":
+            if (isHorizontal) {
+              e.preventDefault();
+              nextIndex = (currentIndex + 1) % triggers.length;
+            }
+            break;
+          case "ArrowLeft":
+            if (isHorizontal) {
+              e.preventDefault();
+              nextIndex = (currentIndex - 1 + triggers.length) % triggers.length;
+            }
+            break;
+          case "ArrowDown":
+            if (!isHorizontal) {
+              e.preventDefault();
+              nextIndex = (currentIndex + 1) % triggers.length;
+            }
+            break;
+          case "ArrowUp":
+            if (!isHorizontal) {
+              e.preventDefault();
+              nextIndex = (currentIndex - 1 + triggers.length) % triggers.length;
+            }
+            break;
+          case "Home":
+            e.preventDefault();
+            nextIndex = 0;
+            break;
+          case "End":
+            e.preventDefault();
+            nextIndex = triggers.length - 1;
+            break;
+          default:
+            return;
+        }
+
+        if (nextIndex !== currentIndex) {
+          activateTab(triggers[nextIndex]);
+        }
+      });
+    });
+  }
+
+  initTabs();
+  document.addEventListener("astro:page-load", initTabs);
+</script>
