@@ -1,13 +1,13 @@
 ---
-import { Image } from "astro:assets";
 import Tabs from "@/components/bearnie/tabs/Tabs.astro";
 import TabsList from "@/components/bearnie/tabs/TabsList.astro";
 import TabsTrigger from "@/components/bearnie/tabs/TabsTrigger.astro";
 import TabsContent from "@/components/bearnie/tabs/TabsContent.astro";
-import modelsScreenshot from "@/assets/models-screenshot.png";
-import benchmarkScreenshot from "@/assets/benchmark-screenshot.png";
-import agentsScreenshot from "@/assets/agents-screenshot.png";
-import statusScreenshot from "@/assets/status-screenshot.png";
+
+const base = import.meta.env.BASE_URL;
+
+const tabTriggerClass =
+  "group data-border relative block w-full cursor-pointer overflow-hidden rounded-none border-l-4 p-4 text-left transition-colors data-[state=active]:border-l-[var(--neon-cyan)] data-[state=active]:bg-[var(--neon-cyan)]/10 data-[state=inactive]:border-l-transparent data-[state=inactive]:bg-slate-900/30 data-[state=inactive]:hover:border-l-slate-400";
 ---
 
 <section class="grid grid-cols-1 gap-4 md:grid-cols-4">
@@ -21,10 +21,7 @@ import statusScreenshot from "@/assets/status-screenshot.png";
       <TabsList
         class="h-auto w-full flex-col items-stretch gap-2 rounded-none bg-transparent p-0"
       >
-        <TabsTrigger
-          value="models"
-          class="group data-border block w-full cursor-pointer rounded-none border-l-4 p-4 text-left transition-colors data-[state=active]:border-l-[var(--neon-cyan)] data-[state=active]:bg-[var(--neon-cyan)]/10 data-[state=inactive]:border-l-transparent data-[state=inactive]:bg-slate-900/30 data-[state=inactive]:hover:border-l-slate-400"
-        >
+        <TabsTrigger value="models" class={tabTriggerClass}>
           <span
             class="mb-1 block font-bold text-slate-400 uppercase group-data-[state=active]:text-[var(--neon-cyan)]"
             >01. MODELS</span
@@ -33,35 +30,38 @@ import statusScreenshot from "@/assets/status-screenshot.png";
             Filter by capability, price, context. 85+ providers. RTFO
             indicators.
           </p>
-        </TabsTrigger>
-        <TabsTrigger
-          value="benchmarks"
-          class="group data-border block w-full cursor-pointer rounded-none border-l-4 p-4 text-left transition-colors data-[state=active]:border-l-[var(--neon-cyan)] data-[state=active]:bg-[var(--neon-cyan)]/10 data-[state=inactive]:border-l-transparent data-[state=inactive]:bg-slate-900/30 data-[state=inactive]:hover:border-l-slate-400"
-        >
-          <span
-            class="mb-1 block font-bold text-slate-400 uppercase group-data-[state=active]:text-[var(--neon-cyan)]"
-            >02. BENCHMARKS</span
+          <div
+            class="tab-progress absolute bottom-0 left-0 h-[2px] w-0 bg-[var(--neon-cyan)]"
           >
-          <p class="font-mono text-xs text-slate-400">
-            H2H tables, scatter plots, radar charts. ~400 entries.
-          </p>
+          </div>
         </TabsTrigger>
-        <TabsTrigger
-          value="agents"
-          class="group data-border block w-full cursor-pointer rounded-none border-l-4 p-4 text-left transition-colors data-[state=active]:border-l-[var(--neon-cyan)] data-[state=active]:bg-[var(--neon-cyan)]/10 data-[state=inactive]:border-l-transparent data-[state=inactive]:bg-slate-900/30 data-[state=inactive]:hover:border-l-slate-400"
-        >
+        <TabsTrigger value="agents" class={tabTriggerClass}>
           <span
             class="mb-1 block font-bold text-slate-400 uppercase group-data-[state=active]:text-[var(--neon-cyan)]"
-            >03. AGENTS</span
+            >02. AGENTS</span
           >
           <p class="font-mono text-xs text-slate-400">
             Version detection, GitHub releases, changelogs, service health.
           </p>
+          <div
+            class="tab-progress absolute bottom-0 left-0 h-[2px] w-0 bg-[var(--neon-cyan)]"
+          >
+          </div>
         </TabsTrigger>
-        <TabsTrigger
-          value="status"
-          class="group data-border block w-full cursor-pointer rounded-none border-l-4 p-4 text-left transition-colors data-[state=active]:border-l-[var(--neon-cyan)] data-[state=active]:bg-[var(--neon-cyan)]/10 data-[state=inactive]:border-l-transparent data-[state=inactive]:bg-slate-900/30 data-[state=inactive]:hover:border-l-slate-400"
-        >
+        <TabsTrigger value="benchmarks" class={tabTriggerClass}>
+          <span
+            class="mb-1 block font-bold text-slate-400 uppercase group-data-[state=active]:text-[var(--neon-cyan)]"
+            >03. BENCHMARKS</span
+          >
+          <p class="font-mono text-xs text-slate-400">
+            H2H tables, scatter plots, radar charts. ~400 entries.
+          </p>
+          <div
+            class="tab-progress absolute bottom-0 left-0 h-[2px] w-0 bg-[var(--neon-cyan)]"
+          >
+          </div>
+        </TabsTrigger>
+        <TabsTrigger value="status" class={tabTriggerClass}>
           <span
             class="mb-1 block font-bold text-slate-400 uppercase group-data-[state=active]:text-[var(--neon-cyan)]"
             >04. STATUS</span
@@ -69,28 +69,36 @@ import statusScreenshot from "@/assets/status-screenshot.png";
           <p class="font-mono text-xs text-slate-400">
             Live health for 22 providers. Incidents, maintenance, gauges.
           </p>
+          <div
+            class="tab-progress absolute bottom-0 left-0 h-[2px] w-0 bg-[var(--neon-cyan)]"
+          >
+          </div>
         </TabsTrigger>
       </TabsList>
     </div>
 
     <TabsContent value="models" class="mt-0 h-full md:col-span-3">
-      <div
-        class="data-border flex h-full flex-col items-center gap-8 bg-slate-900/50 p-8 md:flex-row"
-      >
-        <div class="data-border aspect-square w-full bg-black p-2 md:w-1/2">
-          <Image
-            src={modelsScreenshot}
-            alt="Models tab with provider filtering, model list, and detail panel"
-            class="h-full w-full object-cover"
-          />
+      <div class="data-border relative h-full overflow-hidden bg-black">
+        <video
+          class="h-full w-full object-cover"
+          muted
+          playsinline
+          preload="auto"
+          aria-label="Models tab showing provider list, model details, and RTFO capability indicators"
+        >
+          <source src={`${base}assets/wiki/models.mp4`} type="video/mp4" />
+        </video>
+        <div
+          class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent"
+        >
         </div>
-        <div class="w-full md:w-1/2">
-          <p class="mb-6 text-2xl leading-tight font-light text-white">
+        <div class="absolute bottom-0 left-0 p-8">
+          <p class="mb-4 max-w-lg text-xl leading-tight font-light text-white">
             Real-time ingestion of 4,000+ model definitions across 85+ providers
             from models.dev.
           </p>
           <ul
-            class="space-y-2 font-mono text-xs text-[var(--neon-cyan)] uppercase"
+            class="space-y-1 font-mono text-xs text-[var(--neon-cyan)] uppercase"
           >
             <li>+ Filter by capability and price</li>
             <li>+ Sort by date, cost, context</li>
@@ -100,51 +108,28 @@ import statusScreenshot from "@/assets/status-screenshot.png";
       </div>
     </TabsContent>
 
-    <TabsContent value="benchmarks" class="mt-0 h-full md:col-span-3">
-      <div
-        class="data-border flex h-full flex-col items-center gap-8 bg-slate-900/50 p-8 md:flex-row"
-      >
-        <div class="data-border aspect-square w-full bg-black p-2 md:w-1/2">
-          <Image
-            src={benchmarkScreenshot}
-            alt="Benchmarks tab with head-to-head comparison table and radar chart"
-            class="h-full w-full object-cover"
-          />
-        </div>
-        <div class="w-full md:w-1/2">
-          <p class="mb-6 text-2xl leading-tight font-light text-white">
-            Head-to-head comparison with scatter plots, radar charts, and
-            quality indexes from Artificial Analysis.
-          </p>
-          <ul
-            class="space-y-2 font-mono text-xs text-[var(--neon-cyan)] uppercase"
-          >
-            <li>+ Compare models side by side</li>
-            <li>+ Scatter plots and radar charts</li>
-            <li>+ Filter by creator and region</li>
-          </ul>
-        </div>
-      </div>
-    </TabsContent>
-
     <TabsContent value="agents" class="mt-0 h-full md:col-span-3">
-      <div
-        class="data-border flex h-full flex-col items-center gap-8 bg-slate-900/50 p-8 md:flex-row"
-      >
-        <div class="data-border aspect-square w-full bg-black p-2 md:w-1/2">
-          <Image
-            src={agentsScreenshot}
-            alt="Agents tab showing version tracking, changelogs, and service health"
-            class="h-full w-full object-cover"
-          />
+      <div class="data-border relative h-full overflow-hidden bg-black">
+        <video
+          class="h-full w-full object-cover"
+          muted
+          playsinline
+          preload="auto"
+          aria-label="Agents tab showing version tracking, changelogs, and service health"
+        >
+          <source src={`${base}assets/wiki/agents.mp4`} type="video/mp4" />
+        </video>
+        <div
+          class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent"
+        >
         </div>
-        <div class="w-full md:w-1/2">
-          <p class="mb-6 text-2xl leading-tight font-light text-white">
+        <div class="absolute bottom-0 left-0 p-8">
+          <p class="mb-4 max-w-lg text-xl leading-tight font-light text-white">
             Track 11+ AI coding assistants with version detection, changelogs,
             and live service health.
           </p>
           <ul
-            class="space-y-2 font-mono text-xs text-[var(--neon-cyan)] uppercase"
+            class="space-y-1 font-mono text-xs text-[var(--neon-cyan)] uppercase"
           >
             <li>+ Automatic version detection</li>
             <li>+ GitHub release tracking</li>
@@ -154,24 +139,59 @@ import statusScreenshot from "@/assets/status-screenshot.png";
       </div>
     </TabsContent>
 
-    <TabsContent value="status" class="mt-0 h-full md:col-span-3">
-      <div
-        class="data-border flex h-full flex-col items-center gap-8 bg-slate-900/50 p-8 md:flex-row"
-      >
-        <div class="data-border aspect-square w-full bg-black p-2 md:w-1/2">
-          <Image
-            src={statusScreenshot}
-            alt="Status tab with provider health dashboard, incidents, and maintenance cards"
-            class="h-full w-full object-cover"
-          />
+    <TabsContent value="benchmarks" class="mt-0 h-full md:col-span-3">
+      <div class="data-border relative h-full overflow-hidden bg-black">
+        <video
+          class="h-full w-full object-cover"
+          muted
+          playsinline
+          preload="auto"
+          aria-label="Benchmarks tab with head-to-head comparison table and radar chart"
+        >
+          <source src={`${base}assets/wiki/benchmarks.mp4`} type="video/mp4" />
+        </video>
+        <div
+          class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent"
+        >
         </div>
-        <div class="w-full md:w-1/2">
-          <p class="mb-6 text-2xl leading-tight font-light text-white">
+        <div class="absolute bottom-0 left-0 p-8">
+          <p class="mb-4 max-w-lg text-xl leading-tight font-light text-white">
+            Head-to-head comparison with scatter plots, radar charts, and
+            quality indexes from Artificial Analysis.
+          </p>
+          <ul
+            class="space-y-1 font-mono text-xs text-[var(--neon-cyan)] uppercase"
+          >
+            <li>+ Compare models side by side</li>
+            <li>+ Scatter plots and radar charts</li>
+            <li>+ Filter by creator and region</li>
+          </ul>
+        </div>
+      </div>
+    </TabsContent>
+
+    <TabsContent value="status" class="mt-0 h-full md:col-span-3">
+      <div class="data-border relative h-full overflow-hidden bg-black">
+        <video
+          class="h-full w-full object-cover"
+          muted
+          playsinline
+          preload="auto"
+          aria-label="Status tab with provider health dashboard, incidents, and maintenance cards"
+        >
+          <source src={`${base}assets/wiki/status.mp4`} type="video/mp4" />
+        </video>
+        <div
+          class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent"
+        >
+        </div>
+        <div class="absolute bottom-0 left-0 p-8">
+          <p class="mb-4 max-w-lg text-xl leading-tight font-light text-white">
             Live health monitoring for 22 AI providers across 7 status page
             platforms.
           </p>
           <ul
-            class="space-y-2 font-mono text-xs text-[var(--neon-cyan)] uppercase"
+            class="space-y-1 font-mono text-xs text-[var(--neon-cyan)] uppercase"
           >
             <li>+ Overall health dashboard</li>
             <li>+ Incident and maintenance cards</li>
@@ -182,3 +202,139 @@ import statusScreenshot from "@/assets/status-screenshot.png";
     </TabsContent>
   </Tabs>
 </section>
+
+<script>
+  function initTabCycle() {
+    const tabsRoot = document.querySelector("[data-tabs]");
+    if (!tabsRoot || tabsRoot.hasAttribute("data-cycle-init")) return;
+    tabsRoot.setAttribute("data-cycle-init", "true");
+
+    const triggers = Array.from(
+      tabsRoot.querySelectorAll("[data-tabs-trigger]"),
+    ) as HTMLElement[];
+
+    // Build an ordered map: tab value → { trigger, content, video, progress }
+    const tabOrder = triggers.map((trigger) => {
+      const value = trigger.getAttribute("data-value")!;
+      const content = tabsRoot.querySelector(
+        `[data-tabs-content][data-value="${value}"]`,
+      ) as HTMLElement;
+      const video = content?.querySelector("video") as HTMLVideoElement | null;
+      const progress = trigger.querySelector(
+        ".tab-progress",
+      ) as HTMLElement | null;
+      return { value, trigger, content, video, progress };
+    });
+
+    let userInteracted = false;
+    let progressRaf: number | null = null;
+
+    // Reset all progress bars
+    function clearAllProgress() {
+      tabOrder.forEach((tab) => {
+        if (tab.progress) tab.progress.style.width = "0%";
+      });
+    }
+
+    // Animate progress bar for the active tab's video
+    function animateProgress(video: HTMLVideoElement, bar: HTMLElement | null) {
+      if (progressRaf) cancelAnimationFrame(progressRaf);
+      if (!bar) return;
+
+      function tick() {
+        if (video.duration && !video.paused) {
+          const pct = (video.currentTime / video.duration) * 100;
+          bar!.style.width = `${pct}%`;
+        }
+        progressRaf = requestAnimationFrame(tick);
+      }
+      progressRaf = requestAnimationFrame(tick);
+    }
+
+    // Find the active tab index
+    function getActiveIndex(): number {
+      return tabOrder.findIndex(
+        (t) => t.trigger.getAttribute("data-state") === "active",
+      );
+    }
+
+    // Activate a tab by index: pause old video, play new, start progress
+    function activateTab(index: number) {
+      // Pause all videos
+      tabOrder.forEach((tab) => {
+        if (tab.video) {
+          tab.video.pause();
+          tab.video.currentTime = 0;
+        }
+      });
+
+      clearAllProgress();
+
+      // Click the trigger to activate via Bearnie's handler
+      tabOrder[index].trigger.click();
+
+      // Play the new video
+      const { video, progress } = tabOrder[index];
+      if (video) {
+        video.currentTime = 0;
+        video.play();
+        animateProgress(video, progress);
+      }
+    }
+
+    // Stop auto-cycle on user click
+    triggers.forEach((trigger, i) => {
+      trigger.addEventListener("click", () => {
+        // Only mark as user-interacted if the cycle script didn't trigger it
+        if (!trigger.hasAttribute("data-auto-click")) {
+          userInteracted = true;
+          if (progressRaf) cancelAnimationFrame(progressRaf);
+          clearAllProgress();
+
+          // Still play the video for the clicked tab
+          const { video } = tabOrder[i];
+          tabOrder.forEach((t) => {
+            if (t.video) {
+              t.video.pause();
+              t.video.currentTime = 0;
+            }
+          });
+          if (video) {
+            video.currentTime = 0;
+            video.loop = true;
+            video.play();
+          }
+        }
+      });
+    });
+
+    // Listen for video ended on each tab
+    tabOrder.forEach((tab, index) => {
+      if (!tab.video) return;
+
+      tab.video.addEventListener("ended", () => {
+        if (userInteracted) return;
+
+        const nextIndex = (index + 1) % tabOrder.length;
+
+        // Use a flag so the click handler knows this is auto-cycle
+        tabOrder[nextIndex].trigger.setAttribute("data-auto-click", "true");
+        activateTab(nextIndex);
+        tabOrder[nextIndex].trigger.removeAttribute("data-auto-click");
+      });
+    });
+
+    // Start: play the first active tab's video
+    const activeIdx = getActiveIndex();
+    if (activeIdx >= 0) {
+      const { video, progress } = tabOrder[activeIdx];
+      if (video) {
+        video.play();
+        animateProgress(video, progress);
+      }
+    }
+  }
+
+  initTabCycle();
+  document.addEventListener("astro:page-load", initTabCycle);
+</script>
