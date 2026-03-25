@@ -33,12 +33,13 @@ export const CRATES_URL = `https://crates.io/crates/${CRATE_NAME}`;
 const benchmarksJson = JSON.parse(readRepoFile("data/benchmarks.json"));
 export const BENCHMARK_COUNT = Array.isArray(benchmarksJson)
   ? benchmarksJson.length
-  : 0;
+  : Object.keys(benchmarksJson).length;
 
 const agentsJson = JSON.parse(readRepoFile("data/agents.json"));
-export const AGENT_COUNT = Array.isArray(agentsJson.agents)
-  ? agentsJson.agents.length
-  : 0;
+const agents = agentsJson.agents ?? {};
+export const AGENT_COUNT = Array.isArray(agents)
+  ? agents.length
+  : Object.keys(agents).length;
 
 const registryRs = readRepoFile("src/status/registry.rs");
 export const STATUS_PROVIDER_COUNT = (
@@ -59,10 +60,11 @@ try {
   const res = await fetch("https://models.dev/api.json");
   const data = (await res.json()) as Record<string, ModelsDevProvider>;
   providerCount = Object.keys(data).length;
-  modelCount = Object.values(data).reduce(
-    (sum, provider) => sum + (provider.models?.length ?? 0),
-    0,
-  );
+  modelCount = Object.values(data).reduce((sum, provider) => {
+    const models = provider.models;
+    if (!models || typeof models !== "object") return sum;
+    return sum + Object.keys(models).length;
+  }, 0);
 } catch {
   // Fallback if API is unreachable during build
   modelCount = 3800;
