@@ -45,7 +45,7 @@ mise run fmt && mise run typecheck && mise run build
 src/
   layouts/Layout.astro       -- base HTML shell, fonts, meta tags
   components/
-    Header.astro             -- fixed top nav
+    Header.astro             -- sticky top nav
     Hero.astro               -- hero title + tagline + install command
     Stats.astro              -- 3 stat cards (models/benchmarks/providers)
     Screenshot.astro         -- TUI screenshot with terminal chrome
@@ -68,7 +68,13 @@ R2 "Data Dashboard" — sci-fi neon-on-dark aesthetic. Design explorations in `.
 
 ### Data Flow
 
-Static site — no runtime data fetching. Screenshots from `public/` directory. All content is hardcoded in components.
+Static site — all data sourced at build time via `src/data/site.ts`:
+- Version, repo URL, crate name: parsed from `../Cargo.toml`
+- Benchmark/agent counts: parsed from `../data/*.json`
+- Status provider count: regex-counted from `../src/status/registry.rs`
+- Model/provider counts: fetched from `models.dev/api.json`
+
+Components import from `@/data/site` — never hardcode stats, versions, or URLs. Videos from `public/assets/wiki/`, hero screenshot from `src/assets/`.
 
 ## Gotchas
 
