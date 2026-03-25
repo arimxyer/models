@@ -8,24 +8,35 @@ import TabsContent from "@/components/bearnie/tabs/TabsContent.astro";
 <section class="grid grid-cols-1 gap-4 md:grid-cols-4">
   <Tabs defaultValue="models" orientation="vertical" class="contents">
     <div class="space-y-2 md:col-span-1">
-      <h2 class="mb-6 text-4xl font-black tracking-tighter text-white uppercase">
+      <h2
+        class="mb-6 text-4xl font-black tracking-tighter text-white uppercase"
+      >
         Operations
       </h2>
-      <TabsList class="h-auto w-full flex-col items-stretch gap-2 rounded-none bg-transparent p-0">
+      <TabsList
+        class="h-auto w-full flex-col items-stretch gap-2 rounded-none bg-transparent p-0"
+      >
         <TabsTrigger
           value="models"
           class="group data-border block w-full cursor-pointer rounded-none border-l-4 p-4 text-left transition-all data-[state=active]:border-l-[var(--neon-cyan)] data-[state=active]:bg-[var(--neon-cyan)]/10 data-[state=inactive]:border-l-transparent data-[state=inactive]:bg-slate-900/30 data-[state=inactive]:hover:border-l-slate-400"
         >
-          <span class="mb-1 block font-bold uppercase text-slate-400 group-data-[state=active]:text-[var(--neon-cyan)]">01. MODELS</span>
+          <span
+            class="mb-1 block font-bold text-slate-400 uppercase group-data-[state=active]:text-[var(--neon-cyan)]"
+            >01. MODELS</span
+          >
           <p class="font-mono text-xs text-slate-400">
-            Filter by capability, price, context. 85+ providers. RTFO indicators.
+            Filter by capability, price, context. 85+ providers. RTFO
+            indicators.
           </p>
         </TabsTrigger>
         <TabsTrigger
           value="benchmarks"
           class="group data-border block w-full cursor-pointer rounded-none border-l-4 p-4 text-left transition-all data-[state=active]:border-l-[var(--neon-cyan)] data-[state=active]:bg-[var(--neon-cyan)]/10 data-[state=inactive]:border-l-transparent data-[state=inactive]:bg-slate-900/30 data-[state=inactive]:hover:border-l-slate-400"
         >
-          <span class="mb-1 block font-bold uppercase text-slate-400 group-data-[state=active]:text-[var(--neon-cyan)]">02. BENCHMARKS</span>
+          <span
+            class="mb-1 block font-bold text-slate-400 uppercase group-data-[state=active]:text-[var(--neon-cyan)]"
+            >02. BENCHMARKS</span
+          >
           <p class="font-mono text-xs text-slate-400">
             H2H tables, scatter plots, radar charts. ~400 entries.
           </p>
@@ -34,7 +45,10 @@ import TabsContent from "@/components/bearnie/tabs/TabsContent.astro";
           value="agents"
           class="group data-border block w-full cursor-pointer rounded-none border-l-4 p-4 text-left transition-all data-[state=active]:border-l-[var(--neon-cyan)] data-[state=active]:bg-[var(--neon-cyan)]/10 data-[state=inactive]:border-l-transparent data-[state=inactive]:bg-slate-900/30 data-[state=inactive]:hover:border-l-slate-400"
         >
-          <span class="mb-1 block font-bold uppercase text-slate-400 group-data-[state=active]:text-[var(--neon-cyan)]">03. AGENTS</span>
+          <span
+            class="mb-1 block font-bold text-slate-400 uppercase group-data-[state=active]:text-[var(--neon-cyan)]"
+            >03. AGENTS</span
+          >
           <p class="font-mono text-xs text-slate-400">
             Version detection, GitHub releases, changelogs, service health.
           </p>
@@ -43,7 +57,10 @@ import TabsContent from "@/components/bearnie/tabs/TabsContent.astro";
           value="status"
           class="group data-border block w-full cursor-pointer rounded-none border-l-4 p-4 text-left transition-all data-[state=active]:border-l-[var(--neon-cyan)] data-[state=active]:bg-[var(--neon-cyan)]/10 data-[state=inactive]:border-l-transparent data-[state=inactive]:bg-slate-900/30 data-[state=inactive]:hover:border-l-slate-400"
         >
-          <span class="mb-1 block font-bold uppercase text-slate-400 group-data-[state=active]:text-[var(--neon-cyan)]">04. STATUS</span>
+          <span
+            class="mb-1 block font-bold text-slate-400 uppercase group-data-[state=active]:text-[var(--neon-cyan)]"
+            >04. STATUS</span
+          >
           <p class="font-mono text-xs text-slate-400">
             Live health for 22 providers. Incidents, maintenance, gauges.
           </p>
@@ -52,7 +69,9 @@ import TabsContent from "@/components/bearnie/tabs/TabsContent.astro";
     </div>
 
     <TabsContent value="models" class="mt-0 md:col-span-3">
-      <div class="data-border flex flex-col items-center gap-8 bg-slate-900/50 p-8 md:flex-row">
+      <div
+        class="data-border flex flex-col items-center gap-8 bg-slate-900/50 p-8 md:flex-row"
+      >
         <div class="data-border aspect-square w-full bg-black p-2 md:w-1/2">
           <img
             alt="models TUI interface"
@@ -65,7 +84,9 @@ import TabsContent from "@/components/bearnie/tabs/TabsContent.astro";
             Real-time ingestion of 4,000+ model definitions across 85+ providers
             from models.dev.
           </p>
-          <ul class="space-y-2 font-mono text-xs text-[var(--neon-cyan)] uppercase">
+          <ul
+            class="space-y-2 font-mono text-xs text-[var(--neon-cyan)] uppercase"
+          >
             <li>+ Filter by capability and price</li>
             <li>+ Sort by date, cost, context</li>
             <li>+ Cross-provider search</li>
@@ -75,7 +96,9 @@ import TabsContent from "@/components/bearnie/tabs/TabsContent.astro";
     </TabsContent>
 
     <TabsContent value="benchmarks" class="mt-0 md:col-span-3">
-      <div class="data-border flex flex-col items-center gap-8 bg-slate-900/50 p-8 md:flex-row">
+      <div
+        class="data-border flex flex-col items-center gap-8 bg-slate-900/50 p-8 md:flex-row"
+      >
         <div class="data-border aspect-square w-full bg-black p-2 md:w-1/2">
           <img
             alt="benchmarks TUI interface"
@@ -85,10 +108,12 @@ import TabsContent from "@/components/bearnie/tabs/TabsContent.astro";
         </div>
         <div class="w-full md:w-1/2">
           <p class="mb-6 text-2xl leading-tight font-light text-white">
-            Head-to-head comparison with scatter plots, radar charts, and quality
-            indexes from Artificial Analysis.
+            Head-to-head comparison with scatter plots, radar charts, and
+            quality indexes from Artificial Analysis.
           </p>
-          <ul class="space-y-2 font-mono text-xs text-[var(--neon-cyan)] uppercase">
+          <ul
+            class="space-y-2 font-mono text-xs text-[var(--neon-cyan)] uppercase"
+          >
             <li>+ Compare models side by side</li>
             <li>+ Scatter plots and radar charts</li>
             <li>+ Filter by creator and region</li>
@@ -98,7 +123,9 @@ import TabsContent from "@/components/bearnie/tabs/TabsContent.astro";
     </TabsContent>
 
     <TabsContent value="agents" class="mt-0 md:col-span-3">
-      <div class="data-border flex flex-col items-center gap-8 bg-slate-900/50 p-8 md:flex-row">
+      <div
+        class="data-border flex flex-col items-center gap-8 bg-slate-900/50 p-8 md:flex-row"
+      >
         <div class="data-border aspect-square w-full bg-black p-2 md:w-1/2">
           <img
             alt="agents TUI interface"
@@ -111,7 +138,9 @@ import TabsContent from "@/components/bearnie/tabs/TabsContent.astro";
             Track 11+ AI coding assistants with version detection, changelogs,
             and live service health.
           </p>
-          <ul class="space-y-2 font-mono text-xs text-[var(--neon-cyan)] uppercase">
+          <ul
+            class="space-y-2 font-mono text-xs text-[var(--neon-cyan)] uppercase"
+          >
             <li>+ Automatic version detection</li>
             <li>+ GitHub release tracking</li>
             <li>+ Live service health status</li>
@@ -121,7 +150,9 @@ import TabsContent from "@/components/bearnie/tabs/TabsContent.astro";
     </TabsContent>
 
     <TabsContent value="status" class="mt-0 md:col-span-3">
-      <div class="data-border flex flex-col items-center gap-8 bg-slate-900/50 p-8 md:flex-row">
+      <div
+        class="data-border flex flex-col items-center gap-8 bg-slate-900/50 p-8 md:flex-row"
+      >
         <div class="data-border aspect-square w-full bg-black p-2 md:w-1/2">
           <img
             alt="status TUI interface"
@@ -134,7 +165,9 @@ import TabsContent from "@/components/bearnie/tabs/TabsContent.astro";
             Live health monitoring for 22 AI providers across 7 status page
             platforms.
           </p>
-          <ul class="space-y-2 font-mono text-xs text-[var(--neon-cyan)] uppercase">
+          <ul
+            class="space-y-2 font-mono text-xs text-[var(--neon-cyan)] uppercase"
+          >
             <li>+ Overall health dashboard</li>
             <li>+ Incident and maintenance cards</li>
             <li>+ Grouped service components</li>

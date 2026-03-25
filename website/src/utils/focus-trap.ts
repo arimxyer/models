@@ -4,17 +4,18 @@
  */
 
 const FOCUSABLE_SELECTORS = [
-  'a[href]',
-  'button:not([disabled])',
-  'input:not([disabled])',
-  'select:not([disabled])',
-  'textarea:not([disabled])',
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
   '[tabindex]:not([tabindex="-1"])',
-].join(', ');
+].join(", ");
 
 export function getFocusableElements(container: HTMLElement): HTMLElement[] {
-  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTORS))
-    .filter(el => el.offsetParent !== null); // Filter out hidden elements
+  return Array.from(
+    container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTORS),
+  ).filter((el) => el.offsetParent !== null); // Filter out hidden elements
 }
 
 export function trapFocus(container: HTMLElement): () => void {
@@ -23,7 +24,7 @@ export function trapFocus(container: HTMLElement): () => void {
   const lastFocusable = focusableElements[focusableElements.length - 1];
 
   function handleKeyDown(e: KeyboardEvent) {
-    if (e.key !== 'Tab') return;
+    if (e.key !== "Tab") return;
 
     const updatedFocusableElements = getFocusableElements(container);
     const first = updatedFocusableElements[0];
@@ -44,14 +45,14 @@ export function trapFocus(container: HTMLElement): () => void {
     }
   }
 
-  container.addEventListener('keydown', handleKeyDown);
+  container.addEventListener("keydown", handleKeyDown);
 
   // Focus first element
   firstFocusable?.focus();
 
   // Return cleanup function
   return () => {
-    container.removeEventListener('keydown', handleKeyDown);
+    container.removeEventListener("keydown", handleKeyDown);
   };
 }
 

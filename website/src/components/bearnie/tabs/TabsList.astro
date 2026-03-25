@@ -4,23 +4,15 @@ import type { HTMLAttributes } from "astro/types";
 
 export interface Props extends HTMLAttributes<"div"> {}
 
-const {
-  class: className,
-  ...props
-} = Astro.props;
+const { class: className, ...props } = Astro.props;
 
 const classes = cn(
   "flex w-fit h-10 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground gap-1",
-  className
+  className,
 );
 ---
 
-<div
-  role="tablist"
-  class={classes}
-  data-tabs-list
-  {...props}
->
+<div role="tablist" class={classes} data-tabs-list {...props}>
   <slot />
 </div>
 
