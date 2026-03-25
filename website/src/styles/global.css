@@ -54,4 +54,98 @@ body {
     background-size: 100% 4px;
     pointer-events: none;
   }
+
+  .phosphor-sweep {
+    pointer-events: none;
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(
+      to right,
+      transparent 0%,
+      rgba(34, 211, 238, 0.12) 20%,
+      rgba(34, 211, 238, 0.18) 50%,
+      rgba(34, 211, 238, 0.12) 80%,
+      transparent 100%
+    );
+    z-index: 1;
+    animation: phosphor-scan 9s linear infinite;
+  }
+  @keyframes phosphor-scan {
+    0% {
+      top: -2px;
+      opacity: 1;
+    }
+    10% {
+      top: 100%;
+      opacity: 0.6;
+    }
+    10.1% {
+      top: -2px;
+      opacity: 0;
+    }
+    20% {
+      opacity: 0;
+    }
+    100% {
+      top: -2px;
+      opacity: 0;
+    }
+  }
+
+  .telemetry-live-dot {
+    animation: telemetry-pulse 4.3s step-end infinite;
+  }
+  @keyframes telemetry-pulse {
+    0%,
+    88% {
+      opacity: 1;
+    }
+    89%,
+    93% {
+      opacity: 0;
+    }
+    94% {
+      opacity: 1;
+    }
+    97%,
+    99% {
+      opacity: 0.3;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+
+  .hero-command-text {
+    display: inline-block;
+    overflow: hidden;
+    white-space: nowrap;
+    width: 0;
+    animation: hero-type 1.2s steps(20) 0.4s forwards;
+  }
+  .hero-command-text::after {
+    content: "_";
+    color: var(--neon-cyan);
+    opacity: 0;
+    animation: hero-blink 0.9s step-end infinite 1.7s;
+  }
+  @keyframes hero-type {
+    from {
+      width: 0;
+    }
+    to {
+      width: 20ch;
+    }
+  }
+  @keyframes hero-blink {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0;
+    }
+  }
 }

@@ -1,8 +1,34 @@
 ---
-import { DISPLAY, STATUS_PROVIDER_COUNT } from "@/data/site";
+import {
+  BENCHMARK_COUNT,
+  DISPLAY,
+  PROVIDER_MODEL_COUNTS,
+  STATUS_PROVIDER_COUNT,
+} from "@/data/site";
+
+// Card 2: scanline progress stack
+const SCAN_LINES = 10;
+const coverageFraction = Math.min(BENCHMARK_COUNT / 200, 1);
+
+// Card 3: radial tick dial
+const n = STATUS_PROVIDER_COUNT;
+const CX = 40,
+  CY = 40,
+  R_IN = 24,
+  R_OUT = 36;
+const ticks = Array.from({ length: n }, (_, i) => {
+  const a = (2 * Math.PI * i) / n - Math.PI / 2;
+  return {
+    x1: +(CX + R_IN * Math.cos(a)).toFixed(2),
+    y1: +(CY + R_IN * Math.sin(a)).toFixed(2),
+    x2: +(CX + R_OUT * Math.cos(a)).toFixed(2),
+    y2: +(CY + R_OUT * Math.sin(a)).toFixed(2),
+  };
+});
 ---
 
 <div class="grid grid-rows-3 gap-4 lg:col-span-4">
+  <!-- Card 1: Model_Density — frequency histogram -->
   <div class="data-border flex flex-col justify-between bg-slate-900/50 p-6">
     <span class="font-mono text-[10px] tracking-widest text-slate-400 uppercase"
       >Model_Density</span
@@ -12,13 +38,30 @@ import { DISPLAY, STATUS_PROVIDER_COUNT } from "@/data/site";
         class="glow-cyan text-5xl font-black text-[var(--neon-cyan)] [font-variant-numeric:tabular-nums]"
         >{DISPLAY.models}</span
       >
-      <div class="mb-2 flex gap-1" aria-hidden="true">
-        <div class="h-8 w-1 bg-[var(--neon-cyan)]"></div>
-        <div class="h-6 w-1 bg-[var(--neon-cyan)] opacity-60"></div>
-        <div class="h-10 w-1 bg-[var(--neon-cyan)]"></div>
-      </div>
+      <svg width="96" height="48" aria-hidden="true" class="mb-1 self-end">
+        {
+          PROVIDER_MODEL_COUNTS.map((count, i) => {
+            const maxCount = PROVIDER_MODEL_COUNTS[0] ?? 1;
+            const h = Math.max(2, Math.round((count / maxCount) * 44));
+            return (
+              <rect
+                x={i * 4}
+                y={48 - h}
+                width={3}
+                height={h}
+                fill="var(--neon-cyan)"
+                opacity={+(0.4 + 0.6 * (count / maxCount)).toFixed(2)}
+                class="hist-bar"
+                style={`--i:${i}`}
+              />
+            );
+          })
+        }
+      </svg>
     </div>
   </div>
+
+  <!-- Card 2: Bench_Validation — scanline progress stack -->
   <div class="data-border flex flex-col justify-between bg-slate-900/50 p-6">
     <span class="font-mono text-[10px] tracking-widest text-slate-400 uppercase"
       >Bench_Validation</span
@@ -28,14 +71,52 @@ import { DISPLAY, STATUS_PROVIDER_COUNT } from "@/data/site";
         class="glow-magenta text-5xl font-black text-[var(--neon-magenta)] [font-variant-numeric:tabular-nums]"
         >{DISPLAY.benchmarks}</span
       >
-      <div class="relative mb-4 h-[2px] w-full bg-slate-800" aria-hidden="true">
-        <div
-          class="absolute top-0 left-0 h-full w-[85%] bg-[var(--neon-magenta)]"
-        >
-        </div>
-      </div>
+      <svg
+        width="120"
+        height="44"
+        viewBox="0 0 120 44"
+        aria-hidden="true"
+        class="mb-1 self-end"
+      >
+        {
+          Array.from({ length: SCAN_LINES }, (_, i) => {
+            const y = i * 4 + 2;
+            const rowFrac = Math.min(
+              1,
+              Math.max(0, coverageFraction * SCAN_LINES - i),
+            );
+            const fillW = Math.round(rowFrac * 116);
+            return (
+              <>
+                <rect
+                  x="2"
+                  y={y}
+                  width="116"
+                  height="3"
+                  fill="var(--neon-magenta)"
+                  opacity="0.10"
+                />
+                {fillW > 0 && (
+                  <rect
+                    x="2"
+                    y={y}
+                    width={fillW}
+                    height="3"
+                    fill="var(--neon-magenta)"
+                    opacity="0.82"
+                    class="scan-line"
+                    style={`--i:${i}`}
+                  />
+                )}
+              </>
+            );
+          })
+        }
+      </svg>
     </div>
   </div>
+
+  <!-- Card 3: Provider_Nodes — radial tick dial -->
   <div
     class="data-border flex flex-col justify-between border-l-4 border-l-[var(--neon-green)] bg-slate-900/50 p-6"
   >
@@ -47,16 +128,77 @@ import { DISPLAY, STATUS_PROVIDER_COUNT } from "@/data/site";
         class="glow-green text-5xl font-black text-[var(--neon-green)] [font-variant-numeric:tabular-nums]"
         >{STATUS_PROVIDER_COUNT}</span
       >
-      <div class="grid grid-cols-4 gap-1" aria-hidden="true">
-        <div class="h-2 w-2 bg-[var(--neon-green)]"></div>
-        <div class="h-2 w-2 bg-[var(--neon-green)] opacity-20"></div>
-        <div class="h-2 w-2 bg-[var(--neon-green)]"></div>
-        <div class="h-2 w-2 bg-[var(--neon-green)]"></div>
-        <div class="h-2 w-2 bg-[var(--neon-green)] opacity-50"></div>
-        <div class="h-2 w-2 bg-[var(--neon-green)]"></div>
-        <div class="h-2 w-2 bg-[var(--neon-green)]"></div>
-        <div class="h-2 w-2 bg-[var(--neon-green)] opacity-10"></div>
-      </div>
+      <svg width="80" height="80" viewBox="0 0 80 80" aria-hidden="true">
+        <circle
+          cx={CX}
+          cy={CY}
+          r={R_IN - 4}
+          fill="none"
+          stroke="var(--neon-green)"
+          stroke-width="8"
+          opacity="0.07"></circle>
+        {
+          ticks.map(({ x1, y1, x2, y2 }, i) => (
+            <line
+              x1={x1}
+              y1={y1}
+              x2={x2}
+              y2={y2}
+              stroke="var(--neon-green)"
+              stroke-width="1.5"
+              stroke-linecap="butt"
+              opacity="0.85"
+              class="dial-tick"
+              style={`--i:${i}`}
+            />
+          ))
+        }
+      </svg>
     </div>
   </div>
 </div>
+
+<style is:global>
+  @media (prefers-reduced-motion: no-preference) {
+    .hist-bar {
+      transform-origin: bottom;
+      transform-box: fill-box;
+      animation: bar-grow 0.5s ease-out both;
+      animation-delay: calc(var(--i) * 12ms);
+    }
+    @keyframes bar-grow {
+      from {
+        transform: scaleY(0);
+      }
+      to {
+        transform: scaleY(1);
+      }
+    }
+
+    .scan-line {
+      clip-path: inset(0 100% 0 0);
+      animation: scan-fill 0.35s ease-out both;
+      animation-delay: calc(var(--i) * 55ms);
+    }
+    @keyframes scan-fill {
+      from {
+        clip-path: inset(0 100% 0 0);
+      }
+      to {
+        clip-path: inset(0 0% 0 0);
+      }
+    }
+
+    .dial-tick {
+      stroke-dasharray: 12;
+      stroke-dashoffset: 12;
+      animation: tick-draw 0.12s ease-out both;
+      animation-delay: calc(var(--i) * 7ms);
+    }
+    @keyframes tick-draw {
+      to {
+        stroke-dashoffset: 0;
+      }
+    }
+  }
+</style>

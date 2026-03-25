@@ -55,24 +55,31 @@ interface ModelsDevProvider {
 
 let modelCount = 0;
 let providerCount = 0;
+let providerModelCounts: number[] = [];
 
 try {
   const res = await fetch("https://models.dev/api.json");
   const data = (await res.json()) as Record<string, ModelsDevProvider>;
   providerCount = Object.keys(data).length;
+  const counts: number[] = [];
   modelCount = Object.values(data).reduce((sum, provider) => {
     const models = provider.models;
     if (!models || typeof models !== "object") return sum;
-    return sum + Object.keys(models).length;
+    const n = Object.keys(models).length;
+    if (n > 0) counts.push(n);
+    return sum + n;
   }, 0);
+  providerModelCounts = counts.sort((a, b) => b - a).slice(0, 24);
 } catch {
   // Fallback if API is unreachable during build
   modelCount = 3800;
   providerCount = 100;
+  providerModelCounts = [];
 }
 
 export const MODEL_COUNT = modelCount;
 export const PROVIDER_COUNT = providerCount;
+export const PROVIDER_MODEL_COUNTS: number[] = providerModelCounts;
 
 // --- Formatted display values ---
 

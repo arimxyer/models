@@ -5,6 +5,7 @@
 <div
   class="data-border active-scanline relative overflow-hidden bg-slate-900/50 p-8 backdrop-blur-sm lg:col-span-8"
 >
+  <div class="phosphor-sweep" aria-hidden="true"></div>
   <div
     aria-hidden="true"
     class="absolute top-4 right-6 font-mono text-[10px] text-slate-400"
@@ -31,7 +32,10 @@
     aria-label="Copy install command: brew install models"
   >
     <span class="text-[var(--neon-green)]">❯</span>
-    <code class="text-xl text-[var(--neon-cyan)]">brew install models</code>
+    <code
+      class="hero-command-text text-xl text-[var(--neon-cyan)]"
+      style="--n:20">brew install models</code
+    >
     <span class="hero-copy-icon ml-2 flex items-center text-slate-400">
       <!-- clipboard icon -->
       <svg
@@ -66,4 +70,20 @@
       </svg>
     </span>
   </button>
+  <div
+    aria-hidden="true"
+    class="absolute bottom-4 left-8 hidden font-mono text-[10px] tracking-widest text-slate-400 uppercase sm:block"
+  >
+    SYS: NOMINAL
+  </div>
+  <div
+    aria-hidden="true"
+    class="absolute right-6 bottom-4 hidden items-center gap-1 font-mono text-[10px] tracking-widest text-slate-400 uppercase sm:flex"
+  >
+    FEED:
+    <span
+      class="telemetry-live-dot inline-block h-1.5 w-1.5 bg-[var(--neon-green)]"
+    ></span>
+    LIVE
+  </div>
 </div>
