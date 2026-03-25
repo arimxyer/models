@@ -1,8 +1,13 @@
 ---
+import { Image } from "astro:assets";
 import Tabs from "@/components/bearnie/tabs/Tabs.astro";
 import TabsList from "@/components/bearnie/tabs/TabsList.astro";
 import TabsTrigger from "@/components/bearnie/tabs/TabsTrigger.astro";
 import TabsContent from "@/components/bearnie/tabs/TabsContent.astro";
+import modelsScreenshot from "@/assets/models-screenshot.png";
+import benchmarkScreenshot from "@/assets/benchmark-screenshot.png";
+import agentsScreenshot from "@/assets/agents-screenshot.png";
+import statusScreenshot from "@/assets/status-screenshot.png";
 ---
 
 <section class="grid grid-cols-1 gap-4 md:grid-cols-4">
@@ -73,10 +78,10 @@ import TabsContent from "@/components/bearnie/tabs/TabsContent.astro";
         class="data-border flex flex-col items-center gap-8 bg-slate-900/50 p-8 md:flex-row"
       >
         <div class="data-border aspect-square w-full bg-black p-2 md:w-1/2">
-          <img
+          <Image
+            src={modelsScreenshot}
             alt="models TUI interface"
             class="h-full w-full object-cover"
-            src={`${import.meta.env.BASE_URL}models-screenshot.png`}
           />
         </div>
         <div class="w-full md:w-1/2">
@@ -100,10 +105,10 @@ import TabsContent from "@/components/bearnie/tabs/TabsContent.astro";
         class="data-border flex flex-col items-center gap-8 bg-slate-900/50 p-8 md:flex-row"
       >
         <div class="data-border aspect-square w-full bg-black p-2 md:w-1/2">
-          <img
+          <Image
+            src={benchmarkScreenshot}
             alt="benchmarks TUI interface"
             class="h-full w-full object-cover"
-            src={`${import.meta.env.BASE_URL}benchmark-screenshot.png`}
           />
         </div>
         <div class="w-full md:w-1/2">
@@ -127,10 +132,10 @@ import TabsContent from "@/components/bearnie/tabs/TabsContent.astro";
         class="data-border flex flex-col items-center gap-8 bg-slate-900/50 p-8 md:flex-row"
       >
         <div class="data-border aspect-square w-full bg-black p-2 md:w-1/2">
-          <img
+          <Image
+            src={agentsScreenshot}
             alt="agents TUI interface"
             class="h-full w-full object-cover"
-            src={`${import.meta.env.BASE_URL}agents-screenshot.png`}
           />
         </div>
         <div class="w-full md:w-1/2">
@@ -154,10 +159,10 @@ import TabsContent from "@/components/bearnie/tabs/TabsContent.astro";
         class="data-border flex flex-col items-center gap-8 bg-slate-900/50 p-8 md:flex-row"
       >
         <div class="data-border aspect-square w-full bg-black p-2 md:w-1/2">
-          <img
+          <Image
+            src={statusScreenshot}
             alt="status TUI interface"
             class="h-full w-full object-cover"
-            src={`${import.meta.env.BASE_URL}status-screenshot.png`}
           />
         </div>
         <div class="w-full md:w-1/2">
