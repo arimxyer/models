@@ -118,18 +118,20 @@ body {
     }
   }
 
-  .hero-command-text {
-    display: inline-block;
-    overflow: hidden;
-    white-space: nowrap;
-    width: 0;
-    animation: hero-type 1.2s steps(20) 0.4s forwards;
-  }
-  .hero-command-text::after {
-    content: "_";
-    color: var(--neon-cyan);
-    opacity: 0;
-    animation: hero-blink 0.9s step-end infinite 1.7s;
+  @media (min-width: 768px) {
+    .hero-command-text {
+      display: inline-block;
+      overflow: hidden;
+      white-space: nowrap;
+      width: 0;
+      animation: hero-type 1.2s steps(20) 0.4s forwards;
+    }
+    .hero-command-text::after {
+      content: "_";
+      color: var(--neon-cyan);
+      opacity: 0;
+      animation: hero-blink 0.9s step-end infinite 1.7s;
+    }
   }
   @keyframes hero-type {
     from {

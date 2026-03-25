@@ -13,7 +13,7 @@ import { RELEASES_URL } from "@/data/site";
   <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:col-span-3">
     <!-- Homebrew -->
     <button
-      class="data-border group relative flex cursor-pointer items-center justify-between border-0 bg-transparent p-4 text-left transition-colors hover:bg-[var(--neon-green)]/10 focus-visible:ring-2 focus-visible:ring-[var(--neon-cyan)] focus-visible:outline-none"
+      class="data-border group relative flex cursor-pointer flex-col items-start gap-2 border-0 bg-transparent p-4 text-left transition-colors hover:bg-[var(--neon-green)]/10 focus-visible:ring-2 focus-visible:ring-[var(--neon-cyan)] focus-visible:outline-none sm:flex-row sm:items-center sm:justify-between"
       data-copy-btn
       data-copy-text="brew install models"
       aria-label="Copy install command: brew install models"
@@ -28,7 +28,7 @@ import { RELEASES_URL } from "@/data/site";
       <span class="text-sm font-bold tracking-widest uppercase">Homebrew</span>
       <span class="flex items-center gap-2">
         <code
-          class="font-mono text-xs text-slate-400 transition-colors group-hover:text-[var(--neon-green)]"
+          class="font-mono text-xs break-all text-slate-400 transition-colors group-hover:text-[var(--neon-green)] sm:break-normal"
           >brew install models</code
         >
         <span class="copy-icon-wrap flex shrink-0 items-center text-slate-400">
@@ -67,7 +67,7 @@ import { RELEASES_URL } from "@/data/site";
 
     <!-- Cargo -->
     <button
-      class="data-border group relative flex cursor-pointer items-center justify-between border-0 bg-transparent p-4 text-left transition-colors hover:bg-[var(--neon-green)]/10 focus-visible:ring-2 focus-visible:ring-[var(--neon-cyan)] focus-visible:outline-none"
+      class="data-border group relative flex cursor-pointer flex-col items-start gap-2 border-0 bg-transparent p-4 text-left transition-colors hover:bg-[var(--neon-green)]/10 focus-visible:ring-2 focus-visible:ring-[var(--neon-cyan)] focus-visible:outline-none sm:flex-row sm:items-center sm:justify-between"
       data-copy-btn
       data-copy-text="cargo install modelsdev"
       aria-label="Copy install command: cargo install modelsdev"
@@ -81,7 +81,7 @@ import { RELEASES_URL } from "@/data/site";
       <span class="text-sm font-bold tracking-widest uppercase">Cargo</span>
       <span class="flex items-center gap-2">
         <code
-          class="font-mono text-xs text-slate-400 transition-colors group-hover:text-[var(--neon-green)]"
+          class="font-mono text-xs break-all text-slate-400 transition-colors group-hover:text-[var(--neon-green)] sm:break-normal"
           >cargo install modelsdev</code
         >
         <span class="copy-icon-wrap flex shrink-0 items-center text-slate-400">
@@ -120,7 +120,7 @@ import { RELEASES_URL } from "@/data/site";
 
     <!-- Scoop -->
     <button
-      class="data-border group relative flex cursor-pointer items-center justify-between border-0 bg-transparent p-4 text-left transition-colors hover:bg-[var(--neon-green)]/10 focus-visible:ring-2 focus-visible:ring-[var(--neon-cyan)] focus-visible:outline-none"
+      class="data-border group relative flex cursor-pointer flex-col items-start gap-2 border-0 bg-transparent p-4 text-left transition-colors hover:bg-[var(--neon-green)]/10 focus-visible:ring-2 focus-visible:ring-[var(--neon-cyan)] focus-visible:outline-none sm:flex-row sm:items-center sm:justify-between"
       data-copy-btn
       data-copy-text="scoop install extras/models"
       aria-label="Copy install command: scoop install extras/models"
@@ -134,7 +134,7 @@ import { RELEASES_URL } from "@/data/site";
       <span class="text-sm font-bold tracking-widest uppercase">Scoop</span>
       <span class="flex items-center gap-2">
         <code
-          class="font-mono text-xs text-slate-400 transition-colors group-hover:text-[var(--neon-green)]"
+          class="font-mono text-xs break-all text-slate-400 transition-colors group-hover:text-[var(--neon-green)] sm:break-normal"
           >scoop install extras/models</code
         >
         <span class="copy-icon-wrap flex shrink-0 items-center text-slate-400">
@@ -173,7 +173,7 @@ import { RELEASES_URL } from "@/data/site";
 
     <!-- AUR -->
     <button
-      class="data-border group relative flex cursor-pointer items-center justify-between border-0 bg-transparent p-4 text-left transition-colors hover:bg-[var(--neon-green)]/10 focus-visible:ring-2 focus-visible:ring-[var(--neon-cyan)] focus-visible:outline-none"
+      class="data-border group relative flex cursor-pointer flex-col items-start gap-2 border-0 bg-transparent p-4 text-left transition-colors hover:bg-[var(--neon-green)]/10 focus-visible:ring-2 focus-visible:ring-[var(--neon-cyan)] focus-visible:outline-none sm:flex-row sm:items-center sm:justify-between"
       data-copy-btn
       data-copy-text="paru -S models-bin"
       aria-label="Copy install command: paru -S models-bin"
@@ -187,7 +187,7 @@ import { RELEASES_URL } from "@/data/site";
       <span class="text-sm font-bold tracking-widest uppercase">AUR</span>
       <span class="flex items-center gap-2">
         <code
-          class="font-mono text-xs text-slate-400 transition-colors group-hover:text-[var(--neon-green)]"
+          class="font-mono text-xs break-all text-slate-400 transition-colors group-hover:text-[var(--neon-green)] sm:break-normal"
           >paru -S models-bin</code
         >
         <span class="copy-icon-wrap flex shrink-0 items-center text-slate-400">
