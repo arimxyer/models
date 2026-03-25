@@ -1,0 +1,100 @@
+---
+import { cn } from "@/utils/cn";
+import type { HTMLAttributes } from "astro/types";
+
+export interface Props extends HTMLAttributes<"button"> {
+  variant?:
+    | "default"
+    | "destructive"
+    | "outline"
+    | "secondary"
+    | "ghost"
+    | "link"
+    | "success"
+    | "warning"
+    | "info";
+  size?: "xs" | "sm" | "default" | "lg" | "xl";
+  iconOnly?: boolean;
+  pill?: boolean;
+  href?: string;
+  disabled?: boolean;
+}
+
+const {
+  variant = "default",
+  size = "default",
+  iconOnly = false,
+  pill = false,
+  href,
+  disabled = false,
+  class: className,
+  ...props
+} = Astro.props;
+
+const baseStyles =
+  "inline-flex items-center justify-center whitespace-nowrap font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 cursor-pointer";
+
+const variantStyles = {
+  default: "bg-primary text-primary-foreground hover:bg-primary/90",
+  destructive:
+    "bg-destructive/10 text-destructive hover:bg-destructive/20 dark:bg-destructive/20 dark:text-destructive-foreground dark:hover:bg-destructive/30",
+  outline:
+    "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
+  secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+  ghost: "hover:bg-accent hover:text-accent-foreground",
+  link: "text-primary underline-offset-4 hover:underline",
+  success:
+    "bg-success/10 text-success hover:bg-success/20 dark:bg-success/20 dark:text-success-foreground dark:hover:bg-success/30",
+  warning:
+    "bg-warning/10 text-warning hover:bg-warning/20 dark:bg-warning/20 dark:text-warning-foreground dark:hover:bg-warning/30",
+  info: "bg-info/10 text-info hover:bg-info/20 dark:bg-info/20 dark:text-info-foreground dark:hover:bg-info/30",
+};
+
+const sizeStyles = {
+  xs: "h-7 px-2.5 gap-1.5 text-xs [&_svg]:size-3",
+  sm: "h-8 px-3 gap-1.5 text-xs [&_svg]:size-3.5",
+  default: "h-9 px-4 gap-2 text-sm [&_svg]:size-4",
+  lg: "h-10 px-6 gap-2.5 text-base [&_svg]:size-5",
+  xl: "h-11 px-8 gap-3 text-lg [&_svg]:size-5",
+};
+
+const iconOnlySizeStyles = {
+  xs: "size-7 text-xs [&_svg]:size-3",
+  sm: "size-8 text-xs [&_svg]:size-3.5",
+  default: "size-9 text-sm [&_svg]:size-4",
+  lg: "size-10 text-base [&_svg]:size-5",
+  xl: "size-11 text-lg [&_svg]:size-5",
+};
+
+const radiusStyles = {
+  xs: "rounded-sm",
+  sm: "rounded-md",
+  default: "rounded-md",
+  lg: "rounded-md",
+  xl: "rounded-lg",
+};
+
+const classes = cn(
+  baseStyles,
+  variantStyles[variant],
+  iconOnly ? iconOnlySizeStyles[size] : sizeStyles[size],
+  pill ? "rounded-full" : radiusStyles[size],
+  className,
+);
+---
+
+{
+  href ? (
+    <a href={href} class={classes} {...props}>
+      <slot name="left-icon" />
+      <slot />
+      <slot name="right-icon" />
+    </a>
+  ) : (
+    <button class={classes} disabled={disabled} {...props}>
+      <slot name="left-icon" />
+      <slot />
+      <slot name="right-icon" />
+    </button>
+  )
+}

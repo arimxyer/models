@@ -9,8 +9,8 @@ export interface Props extends HTMLAttributes<"div"> {
 const { value, class: className, ...props } = Astro.props;
 
 const classes = cn(
-  "mt-2 ring-offset-background",
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+  "mt-2 ring-offset-[var(--bg-slate)]",
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--neon-cyan)] focus-visible:ring-offset-2",
   className,
 );
 ---

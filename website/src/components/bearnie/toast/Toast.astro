@@ -1,0 +1,44 @@
+---
+import { cn } from "@/utils/cn";
+import type { HTMLAttributes } from "astro/types";
+import X from "@lucide/astro/icons/x";
+
+export interface Props extends HTMLAttributes<"div"> {
+  variant?: "default" | "destructive";
+}
+
+const { variant = "default", class: className, ...props } = Astro.props;
+
+const baseStyles =
+  "group pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-lg border p-6 pr-8 shadow-lg transition-all";
+
+const variantStyles = {
+  default: "bg-background text-foreground border",
+  destructive:
+    "destructive group border-destructive bg-destructive text-destructive-foreground",
+};
+
+const classes = cn(baseStyles, variantStyles[variant], className);
+---
+
+<div class={classes} role="alert" data-toast {...props}>
+  <slot />
+  <button
+    type="button"
+    class="text-foreground/50 hover:text-foreground absolute top-2 right-2 rounded-md p-1 opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100 focus:ring-2 focus:outline-none"
+    data-toast-close
+  >
+    <X size={16} />
+  </button>
+</div>
+
+<script>
+  document.querySelectorAll("[data-toast-close]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const toast = btn.closest("[data-toast]");
+      if (toast) {
+        toast.remove();
+      }
+    });
+  });
+</script>

@@ -5,19 +5,20 @@ import modelsScreenshot from "@/assets/models-screenshot.png";
 
 <section class="data-border relative bg-black">
   <div class="data-header flex justify-between px-4 py-2">
-    <div class="flex gap-2">
+    <div class="flex gap-2" aria-hidden="true">
       <div class="h-2 w-2 rounded-full bg-slate-700"></div>
       <div class="h-2 w-2 rounded-full bg-slate-700"></div>
       <div class="h-2 w-2 rounded-full bg-slate-700"></div>
     </div>
-    <span class="font-mono text-[10px] text-slate-500 uppercase"
-      >VIEWPORT: TUI_EMULATION_MODE</span
+    <span
+      class="font-mono text-[10px] text-slate-400 uppercase"
+      aria-hidden="true">VIEWPORT: TUI_EMULATION_MODE</span
     >
   </div>
   <div class="group relative aspect-video overflow-hidden">
     <Image
       src={modelsScreenshot}
-      alt="models TUI interface"
+      alt="Models tab showing provider list with RTFO capability indicators and model detail panel"
       class="h-full w-full object-cover"
       loading="eager"
     />
@@ -28,6 +29,7 @@ import modelsScreenshot from "@/assets/models-screenshot.png";
     <div class="absolute bottom-8 left-8">
       <div
         class="mb-2 inline-block bg-[var(--neon-cyan)] px-3 py-1 text-xs font-bold text-slate-900"
+        aria-hidden="true"
       >
         LIVE_SYNC
       </div>

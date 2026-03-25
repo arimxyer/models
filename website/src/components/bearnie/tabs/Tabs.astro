@@ -101,9 +101,11 @@ const classes = cn(
           if (value === defaultValue) {
             content.setAttribute("data-state", "active");
             content.hidden = false;
+            content.setAttribute("tabindex", "0");
           } else {
             content.setAttribute("data-state", "inactive");
             content.hidden = true;
+            content.setAttribute("tabindex", "-1");
           }
         });
       }
@@ -125,6 +127,7 @@ const classes = cn(
           const isActive = content.getAttribute("data-value") === value;
           content.setAttribute("data-state", isActive ? "active" : "inactive");
           content.hidden = !isActive;
+          content.setAttribute("tabindex", isActive ? "0" : "-1");
         });
 
         trigger.focus();

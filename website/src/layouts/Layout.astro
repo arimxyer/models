@@ -1,5 +1,6 @@
 ---
 import "../styles/global.css";
+import Toaster from "@/components/bearnie/toast/Toaster.astro";
 ---
 
 <!doctype html>
@@ -24,6 +25,14 @@ import "../styles/global.css";
       content="High-density terminal navigator for the AI landscape. Browse 4,000+ models, benchmarks, coding agents, and provider status from your terminal."
     />
     <meta property="og:type" content="website" />
+    <meta
+      name="description"
+      content="High-density terminal navigator for the AI landscape. Browse 4,000+ models, benchmarks, coding agents, and provider status from your terminal."
+    />
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=JetBrains+Mono:wght@400;700&family=Outfit:wght@300;600;900&display=swap"
       rel="stylesheet"
@@ -32,6 +41,12 @@ import "../styles/global.css";
   <body
     class="font-['Outfit'] selection:bg-[var(--neon-magenta)] selection:text-white"
   >
+    <a
+      href="#main-content"
+      class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:bg-[var(--bg-slate)] focus:px-4 focus:py-2 focus:text-[var(--neon-cyan)] focus:outline focus:outline-2 focus:outline-[var(--neon-cyan)]"
+      >Skip to content</a
+    >
     <slot />
+    <Toaster position="bottom-center" />
   </body>
 </html>

@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 :root {
+  color-scheme: dark;
   --bg-slate: #0f172a;
   --neon-cyan: #22d3ee;
   --neon-magenta: #f472b6;
@@ -33,22 +34,24 @@ body {
   background: rgba(34, 211, 238, 0.1);
   border-bottom: 1px solid rgba(34, 211, 238, 0.3);
 }
-.active-scanline {
-  position: relative;
-  overflow: hidden;
-}
-.active-scanline::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(
-    to bottom,
-    transparent 50%,
-    rgba(34, 211, 238, 0.02) 50%
-  );
-  background-size: 100% 4px;
-  pointer-events: none;
+@media (prefers-reduced-motion: no-preference) {
+  .active-scanline {
+    position: relative;
+    overflow: hidden;
+  }
+  .active-scanline::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+      to bottom,
+      transparent 50%,
+      rgba(34, 211, 238, 0.02) 50%
+    );
+    background-size: 100% 4px;
+    pointer-events: none;
+  }
 }

@@ -11,50 +11,259 @@
     </h2>
   </div>
   <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:col-span-3">
-    <div
-      class="data-border group flex cursor-pointer items-center justify-between p-4 transition-colors hover:bg-[var(--neon-green)]/10"
+    <!-- Homebrew -->
+    <button
+      class="data-border group relative flex cursor-pointer items-center justify-between border-0 bg-transparent p-4 text-left transition-colors hover:bg-[var(--neon-green)]/10 focus-visible:ring-2 focus-visible:ring-[var(--neon-cyan)] focus-visible:outline-none"
+      data-copy-btn
+      data-copy-text="brew install models"
+      aria-label="Copy install command: brew install models"
     >
+      <!-- tooltip -->
+      <span
+        class="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 rounded bg-slate-800 px-2 py-1 font-mono text-xs whitespace-nowrap text-slate-300 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
+        aria-hidden="true"
+      >
+        Click to copy
+      </span>
       <span class="text-sm font-bold tracking-widest uppercase">Homebrew</span>
-      <code
-        class="font-mono text-xs text-slate-500 transition-colors group-hover:text-[var(--neon-green)]"
-        >brew install models</code
-      >
-    </div>
-    <div
-      class="data-border group flex cursor-pointer items-center justify-between p-4 transition-colors hover:bg-[var(--neon-green)]/10"
+      <span class="flex items-center gap-2">
+        <code
+          class="font-mono text-xs text-slate-500 transition-colors group-hover:text-[var(--neon-green)]"
+          >brew install models</code
+        >
+        <span class="copy-icon-wrap flex shrink-0 items-center text-slate-500">
+          <svg
+            class="clipboard-icon size-3.5 transition-opacity duration-200"
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <rect width="8" height="4" x="8" y="2" rx="1" ry="1"></rect>
+            <path
+              d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"
+            ></path>
+          </svg>
+          <svg
+            class="check-icon size-3.5 opacity-0 transition-opacity duration-200"
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M20 6 9 17l-5-5"></path>
+          </svg>
+        </span>
+      </span>
+    </button>
+
+    <!-- Cargo -->
+    <button
+      class="data-border group relative flex cursor-pointer items-center justify-between border-0 bg-transparent p-4 text-left transition-colors hover:bg-[var(--neon-green)]/10 focus-visible:ring-2 focus-visible:ring-[var(--neon-cyan)] focus-visible:outline-none"
+      data-copy-btn
+      data-copy-text="cargo install modelsdev"
+      aria-label="Copy install command: cargo install modelsdev"
     >
+      <span
+        class="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 rounded bg-slate-800 px-2 py-1 font-mono text-xs whitespace-nowrap text-slate-300 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
+        aria-hidden="true"
+      >
+        Click to copy
+      </span>
       <span class="text-sm font-bold tracking-widest uppercase">Cargo</span>
-      <code
-        class="font-mono text-xs text-slate-500 transition-colors group-hover:text-[var(--neon-green)]"
-        >cargo install modelsdev</code
-      >
-    </div>
-    <div
-      class="data-border group flex cursor-pointer items-center justify-between p-4 transition-colors hover:bg-[var(--neon-green)]/10"
+      <span class="flex items-center gap-2">
+        <code
+          class="font-mono text-xs text-slate-500 transition-colors group-hover:text-[var(--neon-green)]"
+          >cargo install modelsdev</code
+        >
+        <span class="copy-icon-wrap flex shrink-0 items-center text-slate-500">
+          <svg
+            class="clipboard-icon size-3.5 transition-opacity duration-200"
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <rect width="8" height="4" x="8" y="2" rx="1" ry="1"></rect>
+            <path
+              d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"
+            ></path>
+          </svg>
+          <svg
+            class="check-icon size-3.5 opacity-0 transition-opacity duration-200"
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M20 6 9 17l-5-5"></path>
+          </svg>
+        </span>
+      </span>
+    </button>
+
+    <!-- Scoop -->
+    <button
+      class="data-border group relative flex cursor-pointer items-center justify-between border-0 bg-transparent p-4 text-left transition-colors hover:bg-[var(--neon-green)]/10 focus-visible:ring-2 focus-visible:ring-[var(--neon-cyan)] focus-visible:outline-none"
+      data-copy-btn
+      data-copy-text="scoop install extras/models"
+      aria-label="Copy install command: scoop install extras/models"
     >
+      <span
+        class="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 rounded bg-slate-800 px-2 py-1 font-mono text-xs whitespace-nowrap text-slate-300 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
+        aria-hidden="true"
+      >
+        Click to copy
+      </span>
       <span class="text-sm font-bold tracking-widest uppercase">Scoop</span>
-      <code
-        class="font-mono text-xs text-slate-500 transition-colors group-hover:text-[var(--neon-green)]"
-        >scoop install extras/models</code
-      >
-    </div>
-    <div
-      class="data-border group flex cursor-pointer items-center justify-between p-4 transition-colors hover:bg-[var(--neon-green)]/10"
+      <span class="flex items-center gap-2">
+        <code
+          class="font-mono text-xs text-slate-500 transition-colors group-hover:text-[var(--neon-green)]"
+          >scoop install extras/models</code
+        >
+        <span class="copy-icon-wrap flex shrink-0 items-center text-slate-500">
+          <svg
+            class="clipboard-icon size-3.5 transition-opacity duration-200"
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <rect width="8" height="4" x="8" y="2" rx="1" ry="1"></rect>
+            <path
+              d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"
+            ></path>
+          </svg>
+          <svg
+            class="check-icon size-3.5 opacity-0 transition-opacity duration-200"
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M20 6 9 17l-5-5"></path>
+          </svg>
+        </span>
+      </span>
+    </button>
+
+    <!-- AUR -->
+    <button
+      class="data-border group relative flex cursor-pointer items-center justify-between border-0 bg-transparent p-4 text-left transition-colors hover:bg-[var(--neon-green)]/10 focus-visible:ring-2 focus-visible:ring-[var(--neon-cyan)] focus-visible:outline-none"
+      data-copy-btn
+      data-copy-text="paru -S models-bin"
+      aria-label="Copy install command: paru -S models-bin"
     >
-      <span class="text-sm font-bold tracking-widest uppercase">AUR</span>
-      <code
-        class="font-mono text-xs text-slate-500 transition-colors group-hover:text-[var(--neon-green)]"
-        >paru -S models-bin</code
+      <span
+        class="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 rounded bg-slate-800 px-2 py-1 font-mono text-xs whitespace-nowrap text-slate-300 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
+        aria-hidden="true"
       >
-    </div>
+        Click to copy
+      </span>
+      <span class="text-sm font-bold tracking-widest uppercase">AUR</span>
+      <span class="flex items-center gap-2">
+        <code
+          class="font-mono text-xs text-slate-500 transition-colors group-hover:text-[var(--neon-green)]"
+          >paru -S models-bin</code
+        >
+        <span class="copy-icon-wrap flex shrink-0 items-center text-slate-500">
+          <svg
+            class="clipboard-icon size-3.5 transition-opacity duration-200"
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <rect width="8" height="4" x="8" y="2" rx="1" ry="1"></rect>
+            <path
+              d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"
+            ></path>
+          </svg>
+          <svg
+            class="check-icon size-3.5 opacity-0 transition-opacity duration-200"
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M20 6 9 17l-5-5"></path>
+          </svg>
+        </span>
+      </span>
+    </button>
   </div>
 </section>
 <div class="py-4">
   <a
-    class="group inline-flex items-center gap-4 font-mono font-bold tracking-widest text-[var(--neon-cyan)] uppercase transition-all hover:text-white"
+    class="group inline-flex items-center gap-4 font-mono font-bold tracking-widest text-[var(--neon-cyan)] uppercase transition-colors hover:text-white focus-visible:text-white"
     href="https://github.com/arimxyer/models/releases"
+    rel="noopener noreferrer"
   >
     <span class="text-xl">GitHub_Releases</span>
     <span class="transition-transform group-hover:translate-x-2">→</span>
   </a>
 </div>
+
+<script>
+  document.querySelectorAll<HTMLElement>("[data-copy-btn]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const text = btn.getAttribute("data-copy-text");
+      if (!text) return;
+
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        return;
+      }
+
+      // Find icon elements — handle both Hero (hero-copy-icon wrapper) and Install card buttons
+      const clipboardIcon = btn.querySelector<SVGElement>(".clipboard-icon");
+      const checkIcon = btn.querySelector<SVGElement>(".check-icon");
+
+      if (clipboardIcon && checkIcon) {
+        clipboardIcon.style.opacity = "0";
+        checkIcon.style.opacity = "1";
+
+        setTimeout(() => {
+          clipboardIcon.style.opacity = "1";
+          checkIcon.style.opacity = "0";
+        }, 1800);
+      }
+
+      // @ts-ignore
+      window.toast?.success?.("Copied!");
+    });
+  });
+</script>

@@ -23,7 +23,7 @@ import statusScreenshot from "@/assets/status-screenshot.png";
       >
         <TabsTrigger
           value="models"
-          class="group data-border block w-full cursor-pointer rounded-none border-l-4 p-4 text-left transition-all data-[state=active]:border-l-[var(--neon-cyan)] data-[state=active]:bg-[var(--neon-cyan)]/10 data-[state=inactive]:border-l-transparent data-[state=inactive]:bg-slate-900/30 data-[state=inactive]:hover:border-l-slate-400"
+          class="group data-border block w-full cursor-pointer rounded-none border-l-4 p-4 text-left transition-colors data-[state=active]:border-l-[var(--neon-cyan)] data-[state=active]:bg-[var(--neon-cyan)]/10 data-[state=inactive]:border-l-transparent data-[state=inactive]:bg-slate-900/30 data-[state=inactive]:hover:border-l-slate-400"
         >
           <span
             class="mb-1 block font-bold text-slate-400 uppercase group-data-[state=active]:text-[var(--neon-cyan)]"
@@ -36,7 +36,7 @@ import statusScreenshot from "@/assets/status-screenshot.png";
         </TabsTrigger>
         <TabsTrigger
           value="benchmarks"
-          class="group data-border block w-full cursor-pointer rounded-none border-l-4 p-4 text-left transition-all data-[state=active]:border-l-[var(--neon-cyan)] data-[state=active]:bg-[var(--neon-cyan)]/10 data-[state=inactive]:border-l-transparent data-[state=inactive]:bg-slate-900/30 data-[state=inactive]:hover:border-l-slate-400"
+          class="group data-border block w-full cursor-pointer rounded-none border-l-4 p-4 text-left transition-colors data-[state=active]:border-l-[var(--neon-cyan)] data-[state=active]:bg-[var(--neon-cyan)]/10 data-[state=inactive]:border-l-transparent data-[state=inactive]:bg-slate-900/30 data-[state=inactive]:hover:border-l-slate-400"
         >
           <span
             class="mb-1 block font-bold text-slate-400 uppercase group-data-[state=active]:text-[var(--neon-cyan)]"
@@ -48,7 +48,7 @@ import statusScreenshot from "@/assets/status-screenshot.png";
         </TabsTrigger>
         <TabsTrigger
           value="agents"
-          class="group data-border block w-full cursor-pointer rounded-none border-l-4 p-4 text-left transition-all data-[state=active]:border-l-[var(--neon-cyan)] data-[state=active]:bg-[var(--neon-cyan)]/10 data-[state=inactive]:border-l-transparent data-[state=inactive]:bg-slate-900/30 data-[state=inactive]:hover:border-l-slate-400"
+          class="group data-border block w-full cursor-pointer rounded-none border-l-4 p-4 text-left transition-colors data-[state=active]:border-l-[var(--neon-cyan)] data-[state=active]:bg-[var(--neon-cyan)]/10 data-[state=inactive]:border-l-transparent data-[state=inactive]:bg-slate-900/30 data-[state=inactive]:hover:border-l-slate-400"
         >
           <span
             class="mb-1 block font-bold text-slate-400 uppercase group-data-[state=active]:text-[var(--neon-cyan)]"
@@ -60,7 +60,7 @@ import statusScreenshot from "@/assets/status-screenshot.png";
         </TabsTrigger>
         <TabsTrigger
           value="status"
-          class="group data-border block w-full cursor-pointer rounded-none border-l-4 p-4 text-left transition-all data-[state=active]:border-l-[var(--neon-cyan)] data-[state=active]:bg-[var(--neon-cyan)]/10 data-[state=inactive]:border-l-transparent data-[state=inactive]:bg-slate-900/30 data-[state=inactive]:hover:border-l-slate-400"
+          class="group data-border block w-full cursor-pointer rounded-none border-l-4 p-4 text-left transition-colors data-[state=active]:border-l-[var(--neon-cyan)] data-[state=active]:bg-[var(--neon-cyan)]/10 data-[state=inactive]:border-l-transparent data-[state=inactive]:bg-slate-900/30 data-[state=inactive]:hover:border-l-slate-400"
         >
           <span
             class="mb-1 block font-bold text-slate-400 uppercase group-data-[state=active]:text-[var(--neon-cyan)]"
@@ -80,7 +80,7 @@ import statusScreenshot from "@/assets/status-screenshot.png";
         <div class="data-border aspect-square w-full bg-black p-2 md:w-1/2">
           <Image
             src={modelsScreenshot}
-            alt="models TUI interface"
+            alt="Models tab with provider filtering, model list, and detail panel"
             class="h-full w-full object-cover"
           />
         </div>
@@ -107,7 +107,7 @@ import statusScreenshot from "@/assets/status-screenshot.png";
         <div class="data-border aspect-square w-full bg-black p-2 md:w-1/2">
           <Image
             src={benchmarkScreenshot}
-            alt="benchmarks TUI interface"
+            alt="Benchmarks tab with head-to-head comparison table and radar chart"
             class="h-full w-full object-cover"
           />
         </div>
@@ -134,7 +134,7 @@ import statusScreenshot from "@/assets/status-screenshot.png";
         <div class="data-border aspect-square w-full bg-black p-2 md:w-1/2">
           <Image
             src={agentsScreenshot}
-            alt="agents TUI interface"
+            alt="Agents tab showing version tracking, changelogs, and service health"
             class="h-full w-full object-cover"
           />
         </div>
@@ -161,7 +161,7 @@ import statusScreenshot from "@/assets/status-screenshot.png";
         <div class="data-border aspect-square w-full bg-black p-2 md:w-1/2">
           <Image
             src={statusScreenshot}
-            alt="status TUI interface"
+            alt="Status tab with provider health dashboard, incidents, and maintenance cards"
             class="h-full w-full object-cover"
           />
         </div>

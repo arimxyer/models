@@ -6,23 +6,33 @@
   class="data-header fixed top-0 z-50 flex w-full items-center justify-between px-6 py-3 backdrop-blur-md"
 >
   <div class="flex items-center gap-4">
-    <div class="h-3 w-3 animate-pulse bg-[var(--neon-cyan)]"></div>
+    <div
+      class="h-3 w-3 bg-[var(--neon-cyan)] motion-safe:animate-pulse"
+      aria-hidden="true"
+    >
+    </div>
     <span class="text-sm font-black tracking-[0.2em] uppercase"
       >System: Models_OS</span
     >
   </div>
-  <nav class="flex gap-8 font-mono text-[10px] tracking-widest uppercase">
+  <nav
+    class="flex gap-8 font-mono text-[10px] tracking-widest uppercase"
+    aria-label="Main navigation"
+  >
     <a
-      class="text-[var(--neon-cyan)] transition-colors hover:text-white"
-      href="https://github.com/arimxyer/models/wiki">[ documentation ]</a
+      class="text-[var(--neon-cyan)] transition-colors hover:text-white focus-visible:text-white"
+      href="https://github.com/arimxyer/models/wiki"
+      rel="noopener noreferrer">[ documentation ]</a
     >
     <a
-      class="text-slate-400 transition-colors hover:text-white"
-      href="https://github.com/arimxyer/models">[ source_code ]</a
+      class="text-slate-400 transition-colors hover:text-white focus-visible:text-white"
+      href="https://github.com/arimxyer/models"
+      rel="noopener noreferrer">[ source_code ]</a
     >
     <a
-      class="text-slate-400 transition-colors hover:text-white"
-      href="https://github.com/arimxyer/models/blob/main/LICENSE">[ license ]</a
+      class="text-slate-400 transition-colors hover:text-white focus-visible:text-white"
+      href="https://github.com/arimxyer/models/blob/main/LICENSE"
+      rel="noopener noreferrer">[ license ]</a
     >
   </nav>
 </header>

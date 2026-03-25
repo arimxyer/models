@@ -1,0 +1,35 @@
+---
+import { cn } from "@/utils/cn";
+import type { HTMLAttributes } from "astro/types";
+
+export interface Props extends HTMLAttributes<"div"> {
+  side?: "top" | "right" | "bottom" | "left";
+  id?: string;
+}
+
+const { side = "top", class: className, id, ...props } = Astro.props;
+
+const sideStyles = {
+  top: "bottom-full left-1/2 -translate-x-1/2 mb-2",
+  right: "left-full top-1/2 -translate-y-1/2 ml-2",
+  bottom: "top-full left-1/2 -translate-x-1/2 mt-2",
+  left: "right-full top-1/2 -translate-y-1/2 mr-2",
+};
+
+const classes = cn(
+  "absolute z-50 overflow-hidden rounded-md border bg-popover px-3 py-1.5 text-sm text-popover-foreground shadow-md whitespace-nowrap",
+  sideStyles[side],
+  className,
+);
+---
+
+<div
+  class={classes}
+  data-tooltip-content
+  role="tooltip"
+  id={id}
+  hidden
+  {...props}
+>
+  <slot />
+</div>

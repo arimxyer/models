@@ -5,11 +5,14 @@
 <div
   class="data-border active-scanline relative overflow-hidden bg-slate-900/50 p-8 backdrop-blur-sm lg:col-span-8"
 >
-  <div class="absolute top-4 right-6 font-mono text-[10px] text-slate-500">
+  <div
+    aria-hidden="true"
+    class="absolute top-4 right-6 font-mono text-[10px] text-slate-400"
+  >
     ID: MDL-001-CORE
   </div>
   <h1
-    class="mb-8 text-[clamp(60px,15vw,180px)] leading-[0.8] font-black tracking-tighter text-white"
+    class="mb-8 text-[clamp(60px,15vw,180px)] leading-[0.8] font-black tracking-tighter text-balance text-white"
   >
     models<span class="text-[var(--neon-cyan)]">.</span>
   </h1>
@@ -21,8 +24,46 @@
       >Browse the AI ecosystem.</span
     >
   </p>
-  <div class="data-border mt-12 inline-block bg-black/40 p-4 font-mono">
-    <span class="mr-4 text-[var(--neon-green)]">❯</span>
+  <button
+    class="data-border mt-12 inline-flex cursor-pointer items-center gap-3 border-0 bg-black/40 bg-transparent p-4 font-mono transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-[var(--neon-cyan)] focus-visible:outline-none"
+    data-copy-btn
+    data-copy-text="brew install models"
+    aria-label="Copy install command: brew install models"
+  >
+    <span class="text-[var(--neon-green)]">❯</span>
     <code class="text-xl text-[var(--neon-cyan)]">brew install models</code>
-  </div>
+    <span class="hero-copy-icon ml-2 flex items-center text-slate-500">
+      <!-- clipboard icon -->
+      <svg
+        class="clipboard-icon size-4 transition-opacity duration-200"
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <rect width="8" height="4" x="8" y="2" rx="1" ry="1"></rect>
+        <path
+          d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"
+        ></path>
+      </svg>
+      <!-- checkmark icon -->
+      <svg
+        class="check-icon size-4 opacity-0 transition-opacity duration-200"
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M20 6 9 17l-5-5"></path>
+      </svg>
+    </span>
+  </button>
 </div>
