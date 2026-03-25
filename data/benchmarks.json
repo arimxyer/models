@@ -4252,12 +4252,12 @@
     "math_500": null,
     "aime": null,
     "aime_25": null,
-    "output_tps": null,
-    "ttft": null,
-    "ttfat": null,
-    "price_input": 0,
-    "price_output": 0,
-    "price_blended": 0
+    "output_tps": 89.368,
+    "ttft": 1.424,
+    "ttfat": 23.803,
+    "price_input": 1,
+    "price_output": 3,
+    "price_blended": 1.5
   },
   {
     "id": "ae4fe623-80ab-4ea3-8921-70a18ea0fc7e",
@@ -11213,8 +11213,8 @@
     "aime": null,
     "aime_25": 0.573,
     "output_tps": 42.44,
-    "ttft": 0.834,
-    "ttfat": 0.834,
+    "ttft": 0.837,
+    "ttfat": 0.837,
     "price_input": 0.8,
     "price_output": 2.25,
     "price_blended": 1.137
@@ -11663,8 +11663,8 @@
     "aime": null,
     "aime_25": 0.95,
     "output_tps": 85.108,
-    "ttft": 0.726,
-    "ttfat": 24.225,
+    "ttft": 0.715,
+    "ttfat": 24.215,
     "price_input": 0.6,
     "price_output": 2.2,
     "price_blended": 1
