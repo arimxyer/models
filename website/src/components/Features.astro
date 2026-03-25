@@ -272,9 +272,26 @@ const tabTriggerClass =
 
 <script>
   function initTabCycle() {
+    // Respect prefers-reduced-motion: skip auto-cycle and progress bar animations
+    const prefersReducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+
     const tabsRoot = document.querySelector("[data-tabs]");
     if (!tabsRoot || tabsRoot.hasAttribute("data-cycle-init")) return;
     tabsRoot.setAttribute("data-cycle-init", "true");
+
+    // If user prefers reduced motion, play the first video but don't auto-cycle
+    if (prefersReducedMotion) {
+      const firstVideo = tabsRoot.querySelector(
+        "video",
+      ) as HTMLVideoElement | null;
+      if (firstVideo) {
+        firstVideo.play();
+        firstVideo.loop = true;
+      }
+      return;
+    }
 
     const triggers = Array.from(
       tabsRoot.querySelectorAll("[data-tabs-trigger]"),
