@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>models — The AI Ecosystem CLI</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&amp;family=Inter:wght@400;500;700&amp;family=Metropolis:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">tailwind.config = {darkMode: "class", theme: {extend: {colors: {background: "#10131a", "on-background": "#e0e2ec", primary: "#aac7ff", outline: "#8b919f", "outline-variant": "#414753", tertiary: "#ffb68c", "secondary-container": "#2e4770", "primary-container": "#4090fe", "tertiary-container": "#e3711f", "tertiary-fixed-dim": "#ffb68c", "on-tertiary-fixed-variant": "#763400", "secondary-fixed": "#d6e3ff", "secondary-fixed-dim": "#afc7f7", "surface-variant": "#32353c", "on-primary": "#002f64", error: "#ffb4ab", "on-tertiary-fixed": "#321200", "surface-tint": "#aac7ff", "primary-fixed": "#d6e3ff", "on-secondary": "#153058", "inverse-on-surface": "#2d3038", "inverse-surface": "#e0e2ec", "primary-fixed-dim": "#aac7ff", "on-secondary-container": "#9db6e5", "on-secondary-fixed": "#001b3e", "surface-container-low": "#181c22", "surface-container": "#1c2026", "on-primary-container": "#002958", "on-surface-variant": "#c1c6d5", "on-tertiary-container": "#481d00", secondary: "#afc7f7", "tertiary-fixed": "#ffdbc9", "surface-container-high": "#272a31", "surface-dim": "#10131a", "error-container": "#93000a", "surface-container-lowest": "#0b0e15", "on-primary-fixed-variant": "#00458d", "on-secondary-fixed-variant": "#2e4770", "on-tertiary": "#532200", "surface-container-highest": "#32353c", "surface-bright": "#363940", surface: "#10131a", "on-error": "#690005", "on-error-container": "#ffdad6", "on-primary-fixed": "#001b3e", "on-surface": "#e0e2ec", "inverse-primary": "#005db8"}, fontFamily: {headline: ["Space Grotesk"], body: ["Inter"], mono: ["JetBrains Mono"], label: ["Metropolis"], display: "Space Grotesk"}, borderRadius: {DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px"}}}};</script>
+<style type="text/tailwindcss">
+        body { 
+            background-color: #0a0a0a; 
+            color: #e8e8e8; 
+            overflow-x: hidden;
+        }
+        .brutalist-border { border: 1px solid #222222; }
+        .sidebar-scroll { 
+            scrollbar-width: none; 
+            -ms-overflow-style: none; 
+        }
+        .sidebar-scroll::-webkit-scrollbar { display: none; }
+        .text-vertical { writing-mode: vertical-rl; transform: rotate(180deg); }
+    </style>
+</head>
+<body class="font-body selection:bg-primary selection:text-background">
+<div class="flex flex-col md:flex-row min-h-screen">
+<main class="w-full md:w-[75%] border-r border-outline-variant relative">
+<header class="h-16 border-b border-outline-variant flex items-center px-8 justify-between sticky top-0 bg-background/80 backdrop-blur-sm z-50">
+<div class="text-on-background font-bold tracking-tighter text-xl font-headline uppercase">models</div>
+<div class="hidden md:flex gap-8">
+<a class="font-headline font-bold uppercase text-[10px] tracking-widest text-outline hover:text-on-background" href="#">Documentation</a>
+<a class="font-headline font-bold uppercase text-[10px] tracking-widest text-outline hover:text-on-background" href="#">Source</a>
+</div>
+</header>
+<section class="p-8 md:p-16 border-b border-outline-variant">
+<h1 class="font-headline font-bold text-[clamp(80px,20vw,240px)] leading-[0.75] tracking-[-0.06em] mb-12">
+                models.
+            </h1>
+<div class="flex flex-col md:flex-row justify-between items-end gap-8">
+<div class="max-w-xl">
+<p class="text-2xl md:text-5xl font-medium leading-tight mb-8">
+                        Browse the AI ecosystem from your terminal.
+                    </p>
+<code class="font-mono text-xl text-primary">$ brew install models</code>
+</div>
+<div class="font-mono text-[10px] uppercase tracking-[0.3em] text-outline text-right leading-loose">
+                    4,000+ models<br/>
+                    400 benchmarks<br/>
+                    22 providers<br/>
+                    MIT license
+                </div>
+</div>
+</section>
+<section class="border-b border-outline-variant bg-[#111]">
+<div class="relative group">
+<div class="absolute top-4 left-4 z-10">
+<span class="font-mono text-[10px] uppercase tracking-[0.2em] bg-background px-3 py-1 border border-outline-variant">THE INTERFACE // LIVE_TUI</span>
+</div>
+<div class="w-full overflow-hidden">
+<img alt="TUI screenshot" class="w-full h-auto grayscale contrast-125 brightness-75 hover:brightness-100 transition-all duration-700" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAp7jWPV_9xvZ6WTTX7x1uqKe_kgWQ1ng6GpR3Wq4gwXGRzHcG54qilqU_MEe7dd_89a70WOnZDsZ3mGo2VrRCxwsGybb2ak2sxS8YpEtL8A_TcwjOpa5p8v4L6mRtG70dAZ0tu0Knn75i9oXRraN4WUfhoVtT0pyRattw4GSYtDBoCzSrLsacZ_G88iG2084hVS8Xbz3TYiRCD3K71v50ohj5UIT4Ef6HQJ9wAEX7CuZeA6EXFWrHw_24yp4CYVRDLuA7l9IoWMg"/>
+</div>
+</div>
+</section>
+<section class="p-8 md:p-16">
+<h2 class="font-headline font-bold text-6xl md:text-8xl tracking-[-0.05em] mb-16">Install</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 border-t border-l border-outline-variant">
+<div class="border-b border-r border-outline-variant p-8 group">
+<div class="flex justify-between items-center mb-2">
+<span class="font-headline font-bold text-sm uppercase text-outline">Homebrew</span>
+<span class="text-primary font-mono text-xs">Recommended</span>
+</div>
+<code class="font-mono text-lg block">$ brew install models</code>
+</div>
+<div class="border-b border-r border-outline-variant p-8">
+<span class="font-headline font-bold text-sm uppercase text-outline mb-2 block">Cargo</span>
+<code class="font-mono text-lg block">$ cargo install models-cli</code>
+</div>
+<div class="border-b border-r border-outline-variant p-8">
+<span class="font-headline font-bold text-sm uppercase text-outline mb-2 block">Scoop</span>
+<code class="font-mono text-lg block">$ scoop install models</code>
+</div>
+<div class="border-b border-r border-outline-variant p-8">
+<span class="font-headline font-bold text-sm uppercase text-outline mb-2 block">AUR</span>
+<code class="font-mono text-lg block">$ yay -S models-bin</code>
+</div>
+</div>
+<div class="mt-12 flex justify-between items-center">
+<a class="font-headline font-bold text-xl text-primary hover:underline" href="#">GitHub Releases →</a>
+<div class="font-mono text-[10px] text-outline uppercase tracking-widest">v1.4.2 stable</div>
+</div>
+</section>
+<footer class="p-8 border-t border-outline-variant flex flex-col md:flex-row justify-between items-center gap-4">
+<div class="font-mono text-[10px] tracking-widest uppercase text-outline">© 2024 MODELS_CLI. BUILT IN RUST.</div>
+<div class="flex gap-8">
+<a class="font-mono text-[10px] tracking-widest uppercase text-outline hover:text-primary" href="#">github</a>
+<a class="font-mono text-[10px] tracking-widest uppercase text-outline hover:text-primary" href="#">crates.io</a>
+<a class="font-mono text-[10px] tracking-widest uppercase text-outline hover:text-primary" href="#">discord</a>
+</div>
+</footer>
+</main>
+<aside class="w-full md:w-[25%] bg-background md:sticky md:top-0 h-screen overflow-y-auto sidebar-scroll border-t md:border-t-0 border-outline-variant">
+<div class="p-6 border-b border-outline-variant">
+<span class="font-mono text-[10px] uppercase tracking-[0.3em] text-outline mb-12 block">/ FEATURES / DATA_STREAM</span>
+<div class="space-y-12">
+<div class="relative">
+<div class="absolute -left-6 top-0 bottom-0 w-[2px] bg-primary"></div>
+<h3 class="font-headline font-bold text-xl mb-3 text-primary">Models</h3>
+<p class="text-sm text-on-background/80 leading-relaxed font-body">
+                        Filter 4k+ weights across <span class="text-primary font-mono text-[12px]">HuggingFace</span>, <span class="text-primary font-mono text-[12px]">Anthropic</span>, and <span class="text-primary font-mono text-[12px]">OpenAI</span>. Sort by parameters and release.
+                    </p>
+</div>
+<div class="relative opacity-60">
+<h3 class="font-headline font-bold text-xl mb-3 text-outline">Benchmarks</h3>
+<p class="text-sm text-outline leading-relaxed font-body">
+                        Compare performance across 400+ standardized tests. Analyze <span class="text-on-background font-mono text-[12px]">latency</span> vs <span class="text-on-background font-mono text-[12px]">throughput</span>.
+                    </p>
+</div>
+<div class="relative opacity-60">
+<h3 class="font-headline font-bold text-xl mb-3 text-outline">Agents</h3>
+<p class="text-sm text-outline leading-relaxed font-body">
+                        Deploy local agentic loops directly from the TUI. Supporting <span class="text-on-background font-mono text-[12px]">LlamaIndex</span> and <span class="text-on-background font-mono text-[12px]">LangChain</span>.
+                    </p>
+</div>
+</div>
+</div>
+<div class="p-6">
+<span class="font-mono text-[10px] uppercase tracking-[0.3em] text-outline mb-12 block">/ CLI_COMMANDS / EXEC</span>
+<div class="space-y-8 font-mono">
+<div class="group">
+<code class="text-[13px] block mb-2 leading-tight">
+<span class="text-primary">$</span> models list <span class="text-outline">--provider</span> <span class="text-primary">anthropic</span>
+</code>
+<p class="text-[10px] text-outline uppercase tracking-tighter">Filter by provider</p>
+</div>
+<div class="group">
+<code class="text-[13px] block mb-2 leading-tight">
+<span class="text-primary">$</span> models inspect <span class="text-primary">llama-3-70b</span>
+</code>
+<p class="text-[10px] text-outline uppercase tracking-tighter">Metadata &amp; tensor shapes</p>
+</div>
+<div class="group">
+<code class="text-[13px] block mb-2 leading-tight">
+<span class="text-primary">$</span> models bench <span class="text-outline">--local</span>
+</code>
+<p class="text-[10px] text-outline uppercase tracking-tighter">Local performance tests</p>
+</div>
+<div class="pt-8 opacity-30 pointer-events-none">
+<code class="text-[10px] block border-t border-outline-variant pt-4">SYSTEM_STATUS: NOMINAL</code>
+<code class="text-[10px] block">RUST_BACKTRACE: 0</code>
+<code class="text-[10px] block">BUFF_SIZE: 1024KB</code>
+</div>
+</div>
+</div>
+<div class="hidden md:block absolute bottom-12 right-6">
+<span class="text-vertical font-mono text-[10px] uppercase tracking-[1em] text-outline-variant pointer-events-none">
+                OPINIONATED_TERMINAL_INTERFACE_V1.4
+            </span>
+</div>
+</aside>
+</div>
+</body></html>
