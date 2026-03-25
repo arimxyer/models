@@ -21,12 +21,12 @@ Package manager is **bun** (not npm/pnpm). UI components from **Bearnie** (Astro
 
 ## 2. Hard Design Constraints
 
-- Zero `border-radius` — sharp edges only
-- No `box-shadow` — depth via tonal layering and `data-border`
+- Zero `border-radius` on structural containers — exception: terminal chrome dots (`rounded-full`) and tooltips (`rounded`)
+- No `box-shadow` — depth via tonal layering and `data-border`. Note: Bearnie base TabsTrigger carries latent `shadow-sm` — always override
 - No gradient fills on text — solid white or neon accent
-- No emoji — monospace labels and terminal notation
-- Asymmetric column splits — never equal-width grids for content sections (8/4, 1/3, etc.)
-- `prefers-reduced-motion` — all CSS animations wrapped in `@media (prefers-reduced-motion: no-preference)` or use `motion-safe:` Tailwind prefix
+- No emoji — monospace labels and terminal notation. Exception: hero prompt `❯` (U+276F)
+- Asymmetric column splits for content sections — exception: Commands and Footer use equal grids for dense data
+- `prefers-reduced-motion` — CSS animations wrapped in `@media (prefers-reduced-motion: no-preference)` or `motion-safe:` prefix. Known gap: video auto-cycle is not yet gated
 
 ## 3. Colors
 

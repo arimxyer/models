@@ -43,32 +43,32 @@ mise run fmt && mise run typecheck && mise run build
 
 ```
 src/
-  layouts/Layout.astro       -- base HTML shell, fonts, meta tags
+  data/site.ts               -- build-time data sourcing (Cargo.toml, API, data files)
+  layouts/Layout.astro       -- base HTML shell, fonts, meta tags, Toaster
   components/
     Header.astro             -- sticky top nav
-    Hero.astro               -- hero title + tagline + install command
+    Hero.astro               -- hero title + tagline + copy-to-clipboard install command
     Stats.astro              -- 3 stat cards (models/benchmarks/providers)
-    Screenshot.astro         -- TUI screenshot with terminal chrome
-    Features.astro           -- feature tabs + detail panel
+    Screenshot.astro         -- TUI screenshot with terminal chrome + Astro Image
+    Features.astro           -- vertical tabs with autoplay videos, auto-cycle, progress bars
     Commands.astro           -- CLI command cards
-    Install.astro            -- install method grid
-    Footer.astro             -- footer
+    Install.astro            -- install method grid with copy-to-clipboard + global copy script
+    Footer.astro             -- footer with dynamic version + copyright year
+    bearnie/                 -- Bearnie UI components (tabs, toast, tooltip, button)
   pages/index.astro          -- composes all components
-  styles/global.css          -- Tailwind + custom CSS vars + utilities
+  styles/global.css          -- Tailwind + CSS custom properties + utilities
 ```
 
 ### Design Direction
 
-R2 "Data Dashboard" — sci-fi neon-on-dark aesthetic. Design explorations in `.stitch/designs/`.
+R2 "Data Dashboard" — sci-fi neon-on-dark aesthetic. See `DESIGN.md` for the full design system (atmosphere, color palette, typography, component stylings, layout principles). Design explorations archived in `.stitch/designs/`.
 
-- Background: deep slate (#0f172a) with subtle cyan grid
-- Triple neon accent: cyan (#22d3ee), magenta (#f472b6), green (#4ade80)
-- Fonts: Outfit (display), Inter (body), JetBrains Mono (code)
-- Scanline effects, data-border styling, glow utilities
+Key constraints: no rounded corners on containers, no box-shadows, no emoji, asymmetric layouts, `text-slate-400` minimum for contrast. See `.claude/rules/website-design.md` for implementation rules.
 
 ### Data Flow
 
 Static site — all data sourced at build time via `src/data/site.ts`:
+
 - Version, repo URL, crate name: parsed from `../Cargo.toml`
 - Benchmark/agent counts: parsed from `../data/*.json`
 - Status provider count: regex-counted from `../src/status/registry.rs`
@@ -82,3 +82,9 @@ Components import from `@/data/site` — never hardcode stats, versions, or URLs
 - No Astro LSP server available — use `astro check` / `mise run typecheck` for `.astro` file diagnostics
 - `astro check` is wired into the build script — runs automatically before every `bun run build`
 - Stitch-generated HTML hallucinated CLI commands and descriptions — always verify factual content against the real tool
+- `src/data/site.ts` uses `process.cwd()` (not `import.meta.url`) to resolve repo root — Astro's build runs from a different directory than the source, so `import.meta.url`-based paths break during SSG
+- The copy-to-clipboard `<script>` in `Install.astro` is a global handler — it selects ALL `[data-copy-btn]` elements on the page, including the Hero button. Don't duplicate the script in other components
+- `models.dev/api.json` returns models as an object (keyed by model ID), not an array — use `Object.keys().length` not `.length` for counting
+- `data/agents.json` `agents` field is also an object, not an array
+- Bearnie's base `TabsTrigger.astro` carries `rounded-md` and `shadow-sm` defaults — override with `rounded-none` and avoid shadow classes in the `tabTriggerClass` const in Features.astro
+- The `.claude/` directory is in the root `.gitignore` — rules files must be force-added with `git add -f`
