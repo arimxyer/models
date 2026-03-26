@@ -30,14 +30,15 @@ const ticks = Array.from({ length: n }, (_, i) => {
 <div class="grid grid-rows-3 gap-4 lg:col-span-4">
   <!-- Card 1: Model_Density — frequency histogram -->
   <div class="data-border flex flex-col justify-between bg-slate-900/50 p-6">
-    <span class="font-mono text-[10px] tracking-widest text-slate-400 uppercase"
-      >Model_Density</span
-    >
+    <div class="font-mono text-[10px] tracking-widest text-slate-400 uppercase">
+      Model_Density
+    </div>
     <div class="flex items-end gap-2">
-      <span
+      <div
         class="glow-cyan text-5xl font-black text-[var(--neon-cyan)] [font-variant-numeric:tabular-nums]"
-        >{DISPLAY.models}</span
       >
+        {DISPLAY.models}
+      </div>
       <svg width="96" height="48" aria-hidden="true" class="mb-1 self-end">
         {
           PROVIDER_MODEL_COUNTS.map((count, i) => {
@@ -63,14 +64,15 @@ const ticks = Array.from({ length: n }, (_, i) => {
 
   <!-- Card 2: Bench_Validation — scanline progress stack -->
   <div class="data-border flex flex-col justify-between bg-slate-900/50 p-6">
-    <span class="font-mono text-[10px] tracking-widest text-slate-400 uppercase"
-      >Bench_Validation</span
-    >
+    <div class="font-mono text-[10px] tracking-widest text-slate-400 uppercase">
+      Bench_Validation
+    </div>
     <div class="flex items-end gap-2">
-      <span
+      <div
         class="glow-magenta text-5xl font-black text-[var(--neon-magenta)] [font-variant-numeric:tabular-nums]"
-        >{DISPLAY.benchmarks}</span
       >
+        {DISPLAY.benchmarks}
+      </div>
       <svg
         width="120"
         height="44"
@@ -120,14 +122,15 @@ const ticks = Array.from({ length: n }, (_, i) => {
   <div
     class="data-border flex flex-col justify-between border-l-4 border-l-[var(--neon-green)] bg-slate-900/50 p-6"
   >
-    <span class="font-mono text-[10px] tracking-widest text-slate-400 uppercase"
-      >Provider_Nodes</span
-    >
+    <div class="font-mono text-[10px] tracking-widest text-slate-400 uppercase">
+      Provider_Nodes
+    </div>
     <div class="flex items-center justify-between">
-      <span
+      <div
         class="glow-green text-5xl font-black text-[var(--neon-green)] [font-variant-numeric:tabular-nums]"
-        >{STATUS_PROVIDER_COUNT}</span
       >
+        {STATUS_PROVIDER_COUNT}
+      </div>
       <svg width="80" height="80" viewBox="0 0 80 80" aria-hidden="true">
         <circle
           cx={CX}
