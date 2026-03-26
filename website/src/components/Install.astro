@@ -1,5 +1,9 @@
 ---
 import { RELEASES_URL } from "@/data/site";
+import { ClipboardCopy, Check } from "@lucide/astro";
+import Button from "@/components/bearnie/button/Button.astro";
+import Tooltip from "@/components/bearnie/tooltip/Tooltip.astro";
+import TooltipContent from "@/components/bearnie/tooltip/TooltipContent.astro";
 ---
 
 <section class="grid grid-cols-1 gap-4 lg:grid-cols-4">
@@ -12,217 +16,137 @@ import { RELEASES_URL } from "@/data/site";
   </div>
   <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:col-span-3">
     <!-- Homebrew -->
-    <button
-      class="data-border group relative flex cursor-pointer flex-col items-start gap-2 border-0 bg-transparent p-4 text-left transition-colors hover:bg-[var(--neon-green)]/10 focus-visible:ring-2 focus-visible:ring-[var(--neon-cyan)] focus-visible:outline-none sm:flex-row sm:items-center sm:justify-between"
-      data-copy-btn
-      data-copy-text="brew install models"
-      aria-label="Copy install command: brew install models"
-    >
-      <!-- tooltip -->
-      <span
-        class="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 rounded bg-slate-800 px-2 py-1 font-mono text-xs whitespace-nowrap text-slate-300 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
-        aria-hidden="true"
+    <Tooltip class="w-full">
+      <Button
+        variant="ghost"
+        class="data-border group relative flex h-auto w-full cursor-pointer flex-col items-start gap-2 rounded-none border-0 bg-transparent p-4 text-left transition-colors hover:bg-[var(--neon-green)]/10 focus-visible:ring-2 focus-visible:ring-[var(--neon-cyan)] focus-visible:outline-none sm:flex-row sm:items-center sm:justify-between"
+        data-copy-btn
+        data-copy-text="brew install models"
+        aria-label="Copy install command: brew install models"
+        data-tooltip-trigger
       >
-        Click to copy
-      </span>
-      <span class="text-sm font-bold tracking-widest uppercase">Homebrew</span>
-      <span class="flex items-center gap-2">
-        <code
-          class="font-mono text-xs break-all text-slate-400 transition-colors group-hover:text-[var(--neon-green)] sm:break-normal"
-          >brew install models</code
+        <span class="text-sm font-bold tracking-widest uppercase">Homebrew</span
         >
-        <span class="copy-icon-wrap flex shrink-0 items-center text-slate-400">
-          <svg
-            class="clipboard-icon size-3.5 transition-opacity duration-200"
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
+        <div
+          class="flex w-full justify-between gap-2 sm:w-auto sm:justify-start"
+        >
+          <code
+            class="font-mono text-xs break-all text-slate-400 transition-colors group-hover:text-[var(--neon-green)] sm:break-normal"
+            >brew install models</code
           >
-            <rect width="8" height="4" x="8" y="2" rx="1" ry="1"></rect>
-            <path
-              d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"
-            ></path>
-          </svg>
-          <svg
-            class="check-icon size-3.5 opacity-0 transition-opacity duration-200"
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M20 6 9 17l-5-5"></path>
-          </svg>
-        </span>
-      </span>
-    </button>
+          <div class="relative size-3.5 shrink-0 text-slate-400">
+            <ClipboardCopy
+              class="clipboard-icon absolute inset-0 transition-opacity duration-200"
+              aria-hidden="true"
+            />
+            <Check
+              class="check-icon absolute inset-0 opacity-0 transition-opacity duration-200"
+              aria-hidden="true"
+            />
+          </div>
+        </div>
+      </Button>
+      <TooltipContent side="top">Click to copy</TooltipContent>
+    </Tooltip>
 
     <!-- Cargo -->
-    <button
-      class="data-border group relative flex cursor-pointer flex-col items-start gap-2 border-0 bg-transparent p-4 text-left transition-colors hover:bg-[var(--neon-green)]/10 focus-visible:ring-2 focus-visible:ring-[var(--neon-cyan)] focus-visible:outline-none sm:flex-row sm:items-center sm:justify-between"
-      data-copy-btn
-      data-copy-text="cargo install modelsdev"
-      aria-label="Copy install command: cargo install modelsdev"
-    >
-      <span
-        class="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 rounded bg-slate-800 px-2 py-1 font-mono text-xs whitespace-nowrap text-slate-300 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
-        aria-hidden="true"
+    <Tooltip class="w-full">
+      <Button
+        variant="ghost"
+        class="data-border group relative flex h-auto w-full cursor-pointer flex-col items-start gap-2 rounded-none border-0 bg-transparent p-4 text-left transition-colors hover:bg-[var(--neon-green)]/10 focus-visible:ring-2 focus-visible:ring-[var(--neon-cyan)] focus-visible:outline-none sm:flex-row sm:items-center sm:justify-between"
+        data-copy-btn
+        data-copy-text="cargo install modelsdev"
+        aria-label="Copy install command: cargo install modelsdev"
+        data-tooltip-trigger
       >
-        Click to copy
-      </span>
-      <span class="text-sm font-bold tracking-widest uppercase">Cargo</span>
-      <span class="flex items-center gap-2">
-        <code
-          class="font-mono text-xs break-all text-slate-400 transition-colors group-hover:text-[var(--neon-green)] sm:break-normal"
-          >cargo install modelsdev</code
+        <span class="text-sm font-bold tracking-widest uppercase">Cargo</span>
+        <div
+          class="flex w-full justify-between gap-2 sm:w-auto sm:justify-start"
         >
-        <span class="copy-icon-wrap flex shrink-0 items-center text-slate-400">
-          <svg
-            class="clipboard-icon size-3.5 transition-opacity duration-200"
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
+          <code
+            class="font-mono text-xs break-all text-slate-400 transition-colors group-hover:text-[var(--neon-green)] sm:break-normal"
+            >cargo install modelsdev</code
           >
-            <rect width="8" height="4" x="8" y="2" rx="1" ry="1"></rect>
-            <path
-              d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"
-            ></path>
-          </svg>
-          <svg
-            class="check-icon size-3.5 opacity-0 transition-opacity duration-200"
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M20 6 9 17l-5-5"></path>
-          </svg>
-        </span>
-      </span>
-    </button>
+          <div class="relative size-3.5 shrink-0 text-slate-400">
+            <ClipboardCopy
+              class="clipboard-icon absolute inset-0 transition-opacity duration-200"
+              aria-hidden="true"
+            />
+            <Check
+              class="check-icon absolute inset-0 opacity-0 transition-opacity duration-200"
+              aria-hidden="true"
+            />
+          </div>
+        </div>
+      </Button>
+      <TooltipContent side="top">Click to copy</TooltipContent>
+    </Tooltip>
 
     <!-- Scoop -->
-    <button
-      class="data-border group relative flex cursor-pointer flex-col items-start gap-2 border-0 bg-transparent p-4 text-left transition-colors hover:bg-[var(--neon-green)]/10 focus-visible:ring-2 focus-visible:ring-[var(--neon-cyan)] focus-visible:outline-none sm:flex-row sm:items-center sm:justify-between"
-      data-copy-btn
-      data-copy-text="scoop install extras/models"
-      aria-label="Copy install command: scoop install extras/models"
-    >
-      <span
-        class="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 rounded bg-slate-800 px-2 py-1 font-mono text-xs whitespace-nowrap text-slate-300 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
-        aria-hidden="true"
+    <Tooltip class="w-full">
+      <Button
+        variant="ghost"
+        class="data-border group relative flex h-auto w-full cursor-pointer flex-col items-start gap-2 rounded-none border-0 bg-transparent p-4 text-left transition-colors hover:bg-[var(--neon-green)]/10 focus-visible:ring-2 focus-visible:ring-[var(--neon-cyan)] focus-visible:outline-none sm:flex-row sm:items-center sm:justify-between"
+        data-copy-btn
+        data-copy-text="scoop install extras/models"
+        aria-label="Copy install command: scoop install extras/models"
+        data-tooltip-trigger
       >
-        Click to copy
-      </span>
-      <span class="text-sm font-bold tracking-widest uppercase">Scoop</span>
-      <span class="flex items-center gap-2">
-        <code
-          class="font-mono text-xs break-all text-slate-400 transition-colors group-hover:text-[var(--neon-green)] sm:break-normal"
-          >scoop install extras/models</code
+        <span class="text-sm font-bold tracking-widest uppercase">Scoop</span>
+        <div
+          class="flex w-full justify-between gap-2 sm:w-auto sm:justify-start"
         >
-        <span class="copy-icon-wrap flex shrink-0 items-center text-slate-400">
-          <svg
-            class="clipboard-icon size-3.5 transition-opacity duration-200"
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
+          <code
+            class="font-mono text-xs break-all text-slate-400 transition-colors group-hover:text-[var(--neon-green)] sm:break-normal"
+            >scoop install extras/models</code
           >
-            <rect width="8" height="4" x="8" y="2" rx="1" ry="1"></rect>
-            <path
-              d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"
-            ></path>
-          </svg>
-          <svg
-            class="check-icon size-3.5 opacity-0 transition-opacity duration-200"
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M20 6 9 17l-5-5"></path>
-          </svg>
-        </span>
-      </span>
-    </button>
+          <div class="relative size-3.5 shrink-0 text-slate-400">
+            <ClipboardCopy
+              class="clipboard-icon absolute inset-0 transition-opacity duration-200"
+              aria-hidden="true"
+            />
+            <Check
+              class="check-icon absolute inset-0 opacity-0 transition-opacity duration-200"
+              aria-hidden="true"
+            />
+          </div>
+        </div>
+      </Button>
+      <TooltipContent side="top">Click to copy</TooltipContent>
+    </Tooltip>
 
     <!-- AUR -->
-    <button
-      class="data-border group relative flex cursor-pointer flex-col items-start gap-2 border-0 bg-transparent p-4 text-left transition-colors hover:bg-[var(--neon-green)]/10 focus-visible:ring-2 focus-visible:ring-[var(--neon-cyan)] focus-visible:outline-none sm:flex-row sm:items-center sm:justify-between"
-      data-copy-btn
-      data-copy-text="paru -S models-bin"
-      aria-label="Copy install command: paru -S models-bin"
-    >
-      <span
-        class="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 rounded bg-slate-800 px-2 py-1 font-mono text-xs whitespace-nowrap text-slate-300 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
-        aria-hidden="true"
+    <Tooltip class="w-full">
+      <Button
+        variant="ghost"
+        class="data-border group relative flex h-auto w-full cursor-pointer flex-col items-start gap-2 rounded-none border-0 bg-transparent p-4 text-left transition-colors hover:bg-[var(--neon-green)]/10 focus-visible:ring-2 focus-visible:ring-[var(--neon-cyan)] focus-visible:outline-none sm:flex-row sm:items-center sm:justify-between"
+        data-copy-btn
+        data-copy-text="paru -S models-bin"
+        aria-label="Copy install command: paru -S models-bin"
+        data-tooltip-trigger
       >
-        Click to copy
-      </span>
-      <span class="text-sm font-bold tracking-widest uppercase">AUR</span>
-      <span class="flex items-center gap-2">
-        <code
-          class="font-mono text-xs break-all text-slate-400 transition-colors group-hover:text-[var(--neon-green)] sm:break-normal"
-          >paru -S models-bin</code
+        <span class="text-sm font-bold tracking-widest uppercase">AUR</span>
+        <div
+          class="flex w-full justify-between gap-2 sm:w-auto sm:justify-start"
         >
-        <span class="copy-icon-wrap flex shrink-0 items-center text-slate-400">
-          <svg
-            class="clipboard-icon size-3.5 transition-opacity duration-200"
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
+          <code
+            class="font-mono text-xs break-all text-slate-400 transition-colors group-hover:text-[var(--neon-green)] sm:break-normal"
+            >paru -S models-bin</code
           >
-            <rect width="8" height="4" x="8" y="2" rx="1" ry="1"></rect>
-            <path
-              d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"
-            ></path>
-          </svg>
-          <svg
-            class="check-icon size-3.5 opacity-0 transition-opacity duration-200"
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M20 6 9 17l-5-5"></path>
-          </svg>
-        </span>
-      </span>
-    </button>
+          <div class="relative size-3.5 shrink-0 text-slate-400">
+            <ClipboardCopy
+              class="clipboard-icon absolute inset-0 transition-opacity duration-200"
+              aria-hidden="true"
+            />
+            <Check
+              class="check-icon absolute inset-0 opacity-0 transition-opacity duration-200"
+              aria-hidden="true"
+            />
+          </div>
+        </div>
+      </Button>
+      <TooltipContent side="top">Click to copy</TooltipContent>
+    </Tooltip>
   </div>
 </section>
 <div class="py-4">
@@ -248,7 +172,7 @@ import { RELEASES_URL } from "@/data/site";
         return;
       }
 
-      // Find icon elements — handle both Hero (hero-copy-icon wrapper) and Install card buttons
+      // Find icon elements within the button
       const clipboardIcon = btn.querySelector<SVGElement>(".clipboard-icon");
       const checkIcon = btn.querySelector<SVGElement>(".check-icon");
 
