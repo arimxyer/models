@@ -1,5 +1,6 @@
 ---
-
+import { ClipboardCopy, Check } from "@lucide/astro";
+import Button from "@/components/bearnie/button/Button.astro";
 ---
 
 <div
@@ -25,8 +26,9 @@
       >Browse the AI ecosystem.</span
     >
   </p>
-  <button
-    class="data-border mt-12 inline-flex cursor-pointer items-center gap-3 border-0 bg-black/40 bg-transparent p-4 font-mono transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-[var(--neon-cyan)] focus-visible:outline-none"
+  <Button
+    variant="ghost"
+    class="data-border mt-12 h-auto cursor-pointer items-center gap-3 rounded-none border-0 bg-black/40 bg-transparent p-4 font-mono transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-[var(--neon-cyan)] focus-visible:outline-none"
     data-copy-btn
     data-copy-text="brew install models"
     aria-label="Copy install command: brew install models"
@@ -36,40 +38,17 @@
       class="hero-command-text text-xl text-[var(--neon-cyan)]"
       style="--n:20">brew install models</code
     >
-    <span class="hero-copy-icon ml-2 flex items-center text-slate-400">
-      <!-- clipboard icon -->
-      <svg
-        class="clipboard-icon size-4 transition-opacity duration-200"
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
+    <div class="relative size-4 text-slate-400">
+      <ClipboardCopy
+        class="clipboard-icon absolute inset-0 transition-opacity duration-200"
         aria-hidden="true"
-      >
-        <rect width="8" height="4" x="8" y="2" rx="1" ry="1"></rect>
-        <path
-          d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"
-        ></path>
-      </svg>
-      <!-- checkmark icon -->
-      <svg
-        class="check-icon size-4 opacity-0 transition-opacity duration-200"
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
+      />
+      <Check
+        class="check-icon absolute inset-0 opacity-0 transition-opacity duration-200"
         aria-hidden="true"
-      >
-        <path d="M20 6 9 17l-5-5"></path>
-      </svg>
-    </span>
-  </button>
+      />
+    </div>
+  </Button>
   <div
     aria-hidden="true"
     class="absolute bottom-4 left-8 hidden font-mono text-[10px] tracking-widest text-slate-400 uppercase sm:block"
