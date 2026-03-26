@@ -1,6 +1,8 @@
 ---
 import { ClipboardCopy, Check } from "@lucide/astro";
 import Button from "@/components/bearnie/button/Button.astro";
+import Tooltip from "@/components/bearnie/tooltip/Tooltip.astro";
+import TooltipContent from "@/components/bearnie/tooltip/TooltipContent.astro";
 ---
 
 <div
@@ -26,28 +28,32 @@ import Button from "@/components/bearnie/button/Button.astro";
       >Browse the AI ecosystem.</span
     >
   </p>
-  <Button
-    variant="ghost"
-    class="data-border mt-12 h-auto cursor-pointer items-center gap-3 rounded-none border-0 bg-black/40 p-4 font-mono transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-(--neon-cyan) focus-visible:outline-none"
-    data-copy-btn
-    data-copy-text="brew install models"
-    aria-label="Copy install command: brew install models"
-  >
-    <span class="text-(--neon-green)">❯</span>
-    <code class="hero-command-text text-xl text-(--neon-cyan)" style="--n:20"
-      >brew install models</code
+  <Tooltip>
+    <Button
+      variant="ghost"
+      class="data-border mt-12 h-auto cursor-pointer items-center gap-3 rounded-none border-0 bg-black/40 p-4 font-mono transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-(--neon-cyan) focus-visible:outline-none"
+      data-copy-btn
+      data-copy-text="brew install models"
+      aria-label="Copy install command: brew install models"
+      data-tooltip-trigger
     >
-    <div class="relative size-4 text-slate-400">
-      <ClipboardCopy
-        class="clipboard-icon absolute inset-0 transition-opacity duration-200"
-        aria-hidden="true"
-      />
-      <Check
-        class="check-icon absolute inset-0 opacity-0 transition-opacity duration-200"
-        aria-hidden="true"
-      />
-    </div>
-  </Button>
+      <span class="text-(--neon-green)">❯</span>
+      <code class="hero-command-text text-xl text-(--neon-cyan)" style="--n:20"
+        >brew install models</code
+      >
+      <div class="relative size-4 text-slate-400">
+        <ClipboardCopy
+          class="clipboard-icon absolute inset-0 transition-opacity duration-200"
+          aria-hidden="true"
+        />
+        <Check
+          class="check-icon absolute inset-0 opacity-0 transition-opacity duration-200"
+          aria-hidden="true"
+        />
+      </div>
+    </Button>
+    <TooltipContent side="bottom">Click to copy</TooltipContent>
+  </Tooltip>
   <div
     aria-hidden="true"
     class="absolute bottom-4 left-8 hidden font-mono text-[10px] tracking-widest text-slate-400 uppercase sm:block"
