@@ -46,6 +46,7 @@
   --neon-cyan: #22d3ee;
   --neon-magenta: #f472b6;
   --neon-green: #4ade80;
+  --neon-amber: #fbbf24;
   --grid-color: rgba(34, 211, 238, 0.05);
 
   /* Deprecated — use bg-background instead */
