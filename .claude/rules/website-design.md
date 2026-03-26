@@ -37,9 +37,13 @@ Use CSS custom properties — never raw hex literals in components:
 | `var(--neon-cyan)` | Primary accent — focus, active, links, data |
 | `var(--neon-magenta)` | Command/CLI accent |
 | `var(--neon-green)` | Install/CTA accent |
-| `var(--bg-slate)` | Canvas background |
+| `bg-background` | Canvas background (shadcn token, resolves to `--background: #0f172a`) |
 
-Minimum readable text: `text-slate-400`. Never `text-slate-500` or darker on `--bg-slate`.
+Bearnie components use shadcn/ui semantic tokens (`bg-popover`, `text-foreground`, `bg-muted`, etc.) defined via `@theme inline` in `global.css`. Site components use the `--neon-*` variables directly. Both systems coexist — shadcn tokens for Bearnie defaults, neon vars for explicit accent styling.
+
+`--bg-slate` is deprecated — use `bg-background` instead.
+
+Minimum readable text: `text-slate-400`. Never `text-slate-500` or darker on the canvas background.
 
 ## 4. Data Sourcing
 

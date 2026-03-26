@@ -86,5 +86,6 @@ Components import from `@/data/site` — never hardcode stats, versions, or URLs
 - The copy-to-clipboard `<script>` in `Install.astro` is a global handler — it selects ALL `[data-copy-btn]` elements on the page, including the Hero button. Don't duplicate the script in other components
 - `models.dev/api.json` returns models as an object (keyed by model ID), not an array — use `Object.keys().length` not `.length` for counting
 - `data/agents.json` `agents` field is also an object, not an array
-- Bearnie's base `TabsTrigger.astro` carries `rounded-md` and `shadow-sm` defaults — override with `rounded-none` and avoid shadow classes in the `tabTriggerClass` const in Features.astro
+- Bearnie's base `TabsTrigger.astro` carries `rounded-md` default — override with `rounded-none` in the `tabTriggerClass` const in Features.astro
 - The `.claude/` directory is in the root `.gitignore` — rules files must be force-added with `git add -f`
+- Website uses shadcn/ui theme tokens via `@theme inline` in `global.css`. Bearnie components resolve classes like `bg-popover`, `text-foreground`, `bg-muted` from these tokens. When adding new Bearnie components, ensure any new tokens they reference are defined in `global.css` `:root` and `@theme inline` blocks
