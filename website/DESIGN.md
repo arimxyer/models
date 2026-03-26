@@ -62,11 +62,10 @@ Three glow utilities (`.glow-cyan`, `.glow-magenta`, `.glow-green`) apply `text-
 
 ### Font Families
 
-| Font                          | Character                                                 | Role                                                                                                                                                                                   |
-| ----------------------------- | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Outfit** (300, 600, 900)    | Geometric, technical sans-serif with extreme weight range | Display headings (900 black), body text (300 light), section headers (600 semibold). The "voice" of the site.                                                                          |
-| **Inter** (400, 700, 900)     | Neutral UI workhorse                                      | Loaded via Google Fonts but not explicitly applied to any element. Available as a system fallback if Outfit fails to load. Consider removing from the font bundle if unused long-term. |
-| **JetBrains Mono** (400, 700) | Developer-grade monospace                                 | CLI commands, install strings, data classification labels (`Model_Density`, `COMMAND_FILTER`), terminal chrome labels, footer tech specs. The "data" voice.                            |
+| Font                          | Character                                                 | Role                                                                                                                                                        |
+| ----------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Outfit** (300, 600, 900)    | Geometric, technical sans-serif with extreme weight range | Display headings (900 black), body text (300 light), section headers (600 semibold). The "voice" of the site. System sans-serif stack provides fallback.    |
+| **JetBrains Mono** (400, 700) | Developer-grade monospace                                 | CLI commands, install strings, data classification labels (`Model_Density`, `COMMAND_FILTER`), terminal chrome labels, footer tech specs. The "data" voice. |
 
 ### Type Scale
 

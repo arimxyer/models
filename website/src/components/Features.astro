@@ -3,6 +3,11 @@ import Tabs from "@/components/bearnie/tabs/Tabs.astro";
 import TabsList from "@/components/bearnie/tabs/TabsList.astro";
 import TabsTrigger from "@/components/bearnie/tabs/TabsTrigger.astro";
 import TabsContent from "@/components/bearnie/tabs/TabsContent.astro";
+import Button from "@/components/bearnie/button/Button.astro";
+import Tooltip from "@/components/bearnie/tooltip/Tooltip.astro";
+import TooltipTrigger from "@/components/bearnie/tooltip/TooltipTrigger.astro";
+import TooltipContent from "@/components/bearnie/tooltip/TooltipContent.astro";
+import { Pause, Play } from "@lucide/astro";
 import {
   DISPLAY,
   PROVIDER_COUNT,
@@ -19,11 +24,30 @@ const tabTriggerClass =
 <section class="grid grid-cols-1 gap-4 md:grid-cols-4">
   <Tabs defaultValue="models" orientation="vertical" class="contents">
     <div class="space-y-2 md:col-span-1">
-      <h2
-        class="mb-6 text-4xl font-black tracking-tighter text-white uppercase"
-      >
-        Operations
-      </h2>
+      <div class="mb-6 flex items-center justify-between">
+        <h2 class="text-4xl font-black tracking-tighter text-white uppercase">
+          Operations
+        </h2>
+        <Tooltip>
+          <TooltipTrigger>
+            <Button
+              id="cycle-toggle"
+              type="button"
+              variant="outline"
+              size="xs"
+              iconOnly
+              class="rounded-md border-slate-700 text-slate-400 hover:border-[var(--neon-cyan)] hover:bg-transparent hover:text-[var(--neon-cyan)] focus-visible:ring-[var(--neon-cyan)]"
+              aria-label="Pause video auto-cycle"
+            >
+              <Pause id="cycle-icon-pause" size={14} />
+              <Play id="cycle-icon-play" size={14} class="hidden" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            <span id="cycle-label">Pause auto-cycle</span>
+          </TooltipContent>
+        </Tooltip>
+      </div>
       <TabsList
         class="h-auto w-full flex-col items-stretch gap-2 rounded-none bg-transparent p-0"
       >
@@ -272,7 +296,6 @@ const tabTriggerClass =
 
 <script>
   function initTabCycle() {
-    // Respect prefers-reduced-motion: skip auto-cycle and progress bar animations
     const prefersReducedMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
     ).matches;
@@ -281,23 +304,10 @@ const tabTriggerClass =
     if (!tabsRoot || tabsRoot.hasAttribute("data-cycle-init")) return;
     tabsRoot.setAttribute("data-cycle-init", "true");
 
-    // If user prefers reduced motion, play the first video but don't auto-cycle
-    if (prefersReducedMotion) {
-      const firstVideo = tabsRoot.querySelector(
-        "video",
-      ) as HTMLVideoElement | null;
-      if (firstVideo) {
-        firstVideo.play();
-        firstVideo.loop = true;
-      }
-      return;
-    }
-
     const triggers = Array.from(
       tabsRoot.querySelectorAll("[data-tabs-trigger]"),
     ) as HTMLElement[];
 
-    // Build an ordered map: tab value → { trigger, content, video, progress }
     const tabOrder = triggers.map((trigger) => {
       const value = trigger.getAttribute("data-value")!;
       const content = tabsRoot.querySelector(
@@ -310,21 +320,36 @@ const tabTriggerClass =
       return { value, trigger, content, video, progress };
     });
 
-    let userInteracted = false;
+    let autoCycling = !prefersReducedMotion;
     let progressRaf: number | null = null;
 
-    // Reset all progress bars
+    const toggleBtn = document.getElementById("cycle-toggle");
+    const pauseIcon = document.getElementById("cycle-icon-pause");
+    const playIcon = document.getElementById("cycle-icon-play");
+    const toggleLabel = document.getElementById("cycle-label");
+
+    function updateToggle() {
+      if (!toggleBtn || !pauseIcon || !playIcon || !toggleLabel) return;
+      pauseIcon.classList.toggle("hidden", !autoCycling);
+      playIcon.classList.toggle("hidden", autoCycling);
+      toggleLabel.textContent = autoCycling
+        ? "Pause auto-cycle"
+        : "Resume auto-cycle";
+      toggleBtn.setAttribute(
+        "aria-label",
+        autoCycling ? "Pause video auto-cycle" : "Resume video auto-cycle",
+      );
+    }
+
     function clearAllProgress() {
       tabOrder.forEach((tab) => {
         if (tab.progress) tab.progress.style.width = "0%";
       });
     }
 
-    // Animate progress bar for the active tab's video
     function animateProgress(video: HTMLVideoElement, bar: HTMLElement | null) {
       if (progressRaf) cancelAnimationFrame(progressRaf);
       if (!bar) return;
-
       function tick() {
         if (video.duration && !video.paused) {
           const pct = (video.currentTime / video.duration) * 100;
@@ -335,86 +360,102 @@ const tabTriggerClass =
       progressRaf = requestAnimationFrame(tick);
     }
 
-    // Find the active tab index
     function getActiveIndex(): number {
       return tabOrder.findIndex(
         (t) => t.trigger.getAttribute("data-state") === "active",
       );
     }
 
-    // Activate a tab by index: pause old video, play new, start progress
-    function activateTab(index: number) {
-      // Pause all videos
+    function playTab(index: number, loop: boolean) {
       tabOrder.forEach((tab) => {
         if (tab.video) {
           tab.video.pause();
           tab.video.currentTime = 0;
+          tab.video.loop = false;
         }
       });
 
       clearAllProgress();
 
-      // Click the trigger to activate via Bearnie's handler
+      tabOrder[index].trigger.setAttribute("data-auto-click", "true");
       tabOrder[index].trigger.click();
+      tabOrder[index].trigger.removeAttribute("data-auto-click");
 
-      // Play the new video
       const { video, progress } = tabOrder[index];
       if (video) {
         video.currentTime = 0;
+        video.loop = loop;
         video.play();
-        animateProgress(video, progress);
+        if (!loop) animateProgress(video, progress);
       }
     }
 
-    // Stop auto-cycle on user click
+    // Auto-advance when a video ends
+    tabOrder.forEach((tab, index) => {
+      if (!tab.video) return;
+      tab.video.addEventListener("ended", () => {
+        if (!autoCycling) return;
+        playTab((index + 1) % tabOrder.length, false);
+      });
+    });
+
+    // User clicks a tab: pause cycle, loop that tab
     triggers.forEach((trigger, i) => {
       trigger.addEventListener("click", () => {
-        // Only mark as user-interacted if the cycle script didn't trigger it
-        if (!trigger.hasAttribute("data-auto-click")) {
-          userInteracted = true;
-          if (progressRaf) cancelAnimationFrame(progressRaf);
-          clearAllProgress();
+        if (trigger.hasAttribute("data-auto-click")) return;
+        autoCycling = false;
+        updateToggle();
+        if (progressRaf) cancelAnimationFrame(progressRaf);
+        clearAllProgress();
 
-          // Still play the video for the clicked tab
-          const { video } = tabOrder[i];
-          tabOrder.forEach((t) => {
-            if (t.video) {
-              t.video.pause();
-              t.video.currentTime = 0;
-            }
-          });
-          if (video) {
-            video.currentTime = 0;
-            video.loop = true;
-            video.play();
+        tabOrder.forEach((t) => {
+          if (t.video) {
+            t.video.pause();
+            t.video.currentTime = 0;
+            t.video.loop = false;
           }
+        });
+        const { video } = tabOrder[i];
+        if (video) {
+          video.currentTime = 0;
+          video.loop = true;
+          video.play();
         }
       });
     });
 
-    // Listen for video ended on each tab
-    tabOrder.forEach((tab, index) => {
-      if (!tab.video) return;
+    // Play/pause toggle
+    toggleBtn?.addEventListener("click", () => {
+      autoCycling = !autoCycling;
+      updateToggle();
 
-      tab.video.addEventListener("ended", () => {
-        if (userInteracted) return;
+      const idx = getActiveIndex();
+      if (idx < 0) return;
+      const { video, progress } = tabOrder[idx];
 
-        const nextIndex = (index + 1) % tabOrder.length;
-
-        // Use a flag so the click handler knows this is auto-cycle
-        tabOrder[nextIndex].trigger.setAttribute("data-auto-click", "true");
-        activateTab(nextIndex);
-        tabOrder[nextIndex].trigger.removeAttribute("data-auto-click");
-      });
+      if (autoCycling) {
+        if (video) {
+          video.loop = false;
+          if (video.ended) video.currentTime = 0;
+          video.play();
+          animateProgress(video, progress);
+        }
+      } else {
+        if (video) video.loop = true;
+        if (progressRaf) cancelAnimationFrame(progressRaf);
+        clearAllProgress();
+      }
     });
 
-    // Start: play the first active tab's video
+    updateToggle();
+
     const activeIdx = getActiveIndex();
     if (activeIdx >= 0) {
       const { video, progress } = tabOrder[activeIdx];
       if (video) {
+        video.loop = !autoCycling;
         video.play();
-        animateProgress(video, progress);
+        if (autoCycling) animateProgress(video, progress);
       }
     }
   }
