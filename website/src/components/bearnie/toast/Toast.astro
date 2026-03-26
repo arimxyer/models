@@ -10,7 +10,7 @@ export interface Props extends HTMLAttributes<"div"> {
 const { variant = "default", class: className, ...props } = Astro.props;
 
 const baseStyles =
-  "group pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-lg border p-6 pr-8 shadow-lg transition-all";
+  "group pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-none border p-6 pr-8 transition-all";
 
 const variantStyles = {
   default: "bg-background text-foreground border",
