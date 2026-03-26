@@ -16,27 +16,26 @@ import Button from "@/components/bearnie/button/Button.astro";
   <h1
     class="mb-8 text-[clamp(60px,15vw,180px)] leading-[0.8] font-black tracking-tighter text-balance text-white"
   >
-    models<span class="text-[var(--neon-cyan)]">.</span>
+    models<span class="text-(--neon-cyan)">.</span>
   </h1>
   <p
     class="max-w-2xl text-2xl leading-tight font-light text-slate-300 md:text-4xl"
   >
     High-density terminal navigator for the AI landscape.
-    <span class="font-semibold text-[var(--neon-magenta)]"
+    <span class="font-semibold text-(--neon-magenta)"
       >Browse the AI ecosystem.</span
     >
   </p>
   <Button
     variant="ghost"
-    class="data-border mt-12 h-auto cursor-pointer items-center gap-3 rounded-none border-0 bg-black/40 bg-transparent p-4 font-mono transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-[var(--neon-cyan)] focus-visible:outline-none"
+    class="data-border mt-12 h-auto cursor-pointer items-center gap-3 rounded-none border-0 bg-black/40 p-4 font-mono transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-(--neon-cyan) focus-visible:outline-none"
     data-copy-btn
     data-copy-text="brew install models"
     aria-label="Copy install command: brew install models"
   >
-    <span class="text-[var(--neon-green)]">❯</span>
-    <code
-      class="hero-command-text text-xl text-[var(--neon-cyan)]"
-      style="--n:20">brew install models</code
+    <span class="text-(--neon-green)">❯</span>
+    <code class="hero-command-text text-xl text-(--neon-cyan)" style="--n:20"
+      >brew install models</code
     >
     <div class="relative size-4 text-slate-400">
       <ClipboardCopy
@@ -60,8 +59,7 @@ import Button from "@/components/bearnie/button/Button.astro";
     class="absolute right-6 bottom-4 hidden items-center gap-1 font-mono text-[10px] tracking-widest text-slate-400 uppercase sm:flex"
   >
     FEED:
-    <span
-      class="telemetry-live-dot inline-block h-1.5 w-1.5 bg-[var(--neon-green)]"
+    <span class="telemetry-live-dot inline-block h-1.5 w-1.5 bg-(--neon-green)"
     ></span>
     LIVE
   </div>

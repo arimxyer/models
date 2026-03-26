@@ -5,7 +5,7 @@ const year = new Date().getFullYear();
 ---
 
 <footer
-  class="mt-20 border-t border-[var(--neon-cyan)]/20 bg-black/40 p-8 backdrop-blur-md"
+  class="mt-20 border-t border-(--neon-cyan)/20 bg-black/40 p-8 backdrop-blur-md"
 >
   <div class="grid grid-cols-1 gap-8 md:grid-cols-4">
     <div class="space-y-4">
@@ -24,21 +24,21 @@ const year = new Date().getFullYear();
       <ul class="space-y-1 font-mono text-xs uppercase">
         <li>
           <a
-            class="transition-colors hover:text-[var(--neon-cyan)] focus-visible:text-[var(--neon-cyan)]"
+            class="transition-colors hover:text-(--neon-cyan) focus-visible:text-(--neon-cyan)"
             href={REPO_URL}
             rel="noopener noreferrer">Github_Repo</a
           >
         </li>
         <li>
           <a
-            class="transition-colors hover:text-[var(--neon-cyan)] focus-visible:text-[var(--neon-cyan)]"
+            class="transition-colors hover:text-(--neon-cyan) focus-visible:text-(--neon-cyan)"
             href={WIKI_URL}
             rel="noopener noreferrer">Docs_Index</a
           >
         </li>
         <li>
           <a
-            class="transition-colors hover:text-[var(--neon-cyan)] focus-visible:text-[var(--neon-cyan)]"
+            class="transition-colors hover:text-(--neon-cyan) focus-visible:text-(--neon-cyan)"
             href={CRATES_URL}
             rel="noopener noreferrer">Crates.io</a
           >

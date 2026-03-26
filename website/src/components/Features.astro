@@ -18,7 +18,7 @@ import {
 const base = import.meta.env.BASE_URL;
 
 const tabTriggerClass =
-  "group data-border relative block w-full cursor-pointer overflow-hidden rounded-none border-l-4 p-4 text-left transition-colors data-[state=active]:border-l-[var(--neon-cyan)] data-[state=active]:bg-[var(--neon-cyan)]/10 data-[state=inactive]:border-l-transparent data-[state=inactive]:bg-slate-900/30 data-[state=inactive]:hover:border-l-slate-400";
+  "group data-border relative block w-full cursor-pointer overflow-hidden rounded-none border-l-4 p-4 text-left transition-colors data-[state=active]:border-l-(--neon-cyan) data-[state=active]:bg-(--neon-cyan)/10 data-[state=inactive]:border-l-transparent data-[state=inactive]:bg-slate-900/30 data-[state=inactive]:hover:border-l-slate-400";
 ---
 
 <section class="grid grid-cols-1 gap-4 md:grid-cols-4">
@@ -36,7 +36,7 @@ const tabTriggerClass =
               variant="outline"
               size="xs"
               iconOnly
-              class="rounded-md border-slate-700 text-slate-400 hover:border-[var(--neon-cyan)] hover:bg-transparent hover:text-[var(--neon-cyan)] focus-visible:ring-[var(--neon-cyan)]"
+              class="rounded-md border-slate-700 text-slate-400 hover:border-(--neon-cyan) hover:bg-transparent hover:text-(--neon-cyan) focus-visible:ring-(--neon-cyan)"
               aria-label="Pause video auto-cycle"
             >
               <Pause id="cycle-icon-pause" size={14} />
@@ -53,7 +53,7 @@ const tabTriggerClass =
       >
         <TabsTrigger value="models" class={tabTriggerClass}>
           <span
-            class="mb-1 block font-bold text-slate-400 uppercase group-data-[state=active]:text-[var(--neon-cyan)]"
+            class="mb-1 block font-bold text-slate-400 uppercase group-data-[state=active]:text-(--neon-cyan)"
             >01. MODELS</span
           >
           <p class="font-mono text-xs text-slate-400">
@@ -61,39 +61,39 @@ const tabTriggerClass =
             RTFO indicators.
           </p>
           <div
-            class="tab-progress absolute bottom-0 left-0 h-[2px] w-0 bg-[var(--neon-cyan)]"
+            class="tab-progress absolute bottom-0 left-0 h-0.5 w-0 bg-(--neon-cyan)"
           >
           </div>
         </TabsTrigger>
         <TabsTrigger value="agents" class={tabTriggerClass}>
           <span
-            class="mb-1 block font-bold text-slate-400 uppercase group-data-[state=active]:text-[var(--neon-cyan)]"
+            class="mb-1 block font-bold text-slate-400 uppercase group-data-[state=active]:text-(--neon-cyan)"
             >02. AGENTS</span
           >
           <p class="font-mono text-xs text-slate-400">
             Version detection, GitHub releases, changelogs, service health.
           </p>
           <div
-            class="tab-progress absolute bottom-0 left-0 h-[2px] w-0 bg-[var(--neon-cyan)]"
+            class="tab-progress absolute bottom-0 left-0 h-0.5 w-0 bg-(--neon-cyan)"
           >
           </div>
         </TabsTrigger>
         <TabsTrigger value="benchmarks" class={tabTriggerClass}>
           <span
-            class="mb-1 block font-bold text-slate-400 uppercase group-data-[state=active]:text-[var(--neon-cyan)]"
+            class="mb-1 block font-bold text-slate-400 uppercase group-data-[state=active]:text-(--neon-cyan)"
             >03. BENCHMARKS</span
           >
           <p class="font-mono text-xs text-slate-400">
             H2H tables, scatter plots, radar charts. ~{DISPLAY.benchmarks} entries.
           </p>
           <div
-            class="tab-progress absolute bottom-0 left-0 h-[2px] w-0 bg-[var(--neon-cyan)]"
+            class="tab-progress absolute bottom-0 left-0 h-0.5 w-0 bg-(--neon-cyan)"
           >
           </div>
         </TabsTrigger>
         <TabsTrigger value="status" class={tabTriggerClass}>
           <span
-            class="mb-1 block font-bold text-slate-400 uppercase group-data-[state=active]:text-[var(--neon-cyan)]"
+            class="mb-1 block font-bold text-slate-400 uppercase group-data-[state=active]:text-(--neon-cyan)"
             >04. STATUS</span
           >
           <p class="font-mono text-xs text-slate-400">
@@ -101,7 +101,7 @@ const tabTriggerClass =
             gauges.
           </p>
           <div
-            class="tab-progress absolute bottom-0 left-0 h-[2px] w-0 bg-[var(--neon-cyan)]"
+            class="tab-progress absolute bottom-0 left-0 h-0.5 w-0 bg-(--neon-cyan)"
           >
           </div>
         </TabsTrigger>
@@ -133,7 +133,7 @@ const tabTriggerClass =
           <source src={`${base}assets/wiki/models.mp4`} type="video/mp4" />
         </video>
         <div
-          class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent"
+          class="absolute inset-0 bg-linear-to-t from-black/90 via-black/30 to-transparent"
         >
         </div>
         <div class="absolute bottom-0 left-0 p-4 md:p-8">
@@ -143,9 +143,7 @@ const tabTriggerClass =
             Real-time ingestion of {DISPLAY.models} model definitions across
             {PROVIDER_COUNT}+ providers from models.dev.
           </p>
-          <ul
-            class="space-y-1 font-mono text-xs text-[var(--neon-cyan)] uppercase"
-          >
+          <ul class="space-y-1 font-mono text-xs text-(--neon-cyan) uppercase">
             <li>+ Filter by capability and price</li>
             <li>+ Sort by date, cost, context</li>
             <li>+ Cross-provider search</li>
@@ -179,7 +177,7 @@ const tabTriggerClass =
           <source src={`${base}assets/wiki/agents.mp4`} type="video/mp4" />
         </video>
         <div
-          class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent"
+          class="absolute inset-0 bg-linear-to-t from-black/90 via-black/30 to-transparent"
         >
         </div>
         <div class="absolute bottom-0 left-0 p-4 md:p-8">
@@ -189,9 +187,7 @@ const tabTriggerClass =
             Track {AGENT_COUNT}+ AI coding assistants with version detection,
             changelogs, and live service health.
           </p>
-          <ul
-            class="space-y-1 font-mono text-xs text-[var(--neon-cyan)] uppercase"
-          >
+          <ul class="space-y-1 font-mono text-xs text-(--neon-cyan) uppercase">
             <li>+ Automatic version detection</li>
             <li>+ GitHub release tracking</li>
             <li>+ Live service health status</li>
@@ -225,7 +221,7 @@ const tabTriggerClass =
           <source src={`${base}assets/wiki/benchmarks.mp4`} type="video/mp4" />
         </video>
         <div
-          class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent"
+          class="absolute inset-0 bg-linear-to-t from-black/90 via-black/30 to-transparent"
         >
         </div>
         <div class="absolute bottom-0 left-0 p-4 md:p-8">
@@ -235,9 +231,7 @@ const tabTriggerClass =
             Head-to-head comparison with scatter plots, radar charts, and
             quality indexes from Artificial Analysis.
           </p>
-          <ul
-            class="space-y-1 font-mono text-xs text-[var(--neon-cyan)] uppercase"
-          >
+          <ul class="space-y-1 font-mono text-xs text-(--neon-cyan) uppercase">
             <li>+ Compare models side by side</li>
             <li>+ Scatter plots and radar charts</li>
             <li>+ Filter by creator and region</li>
@@ -271,7 +265,7 @@ const tabTriggerClass =
           <source src={`${base}assets/wiki/status.mp4`} type="video/mp4" />
         </video>
         <div
-          class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent"
+          class="absolute inset-0 bg-linear-to-t from-black/90 via-black/30 to-transparent"
         >
         </div>
         <div class="absolute bottom-0 left-0 p-4 md:p-8">
@@ -281,9 +275,7 @@ const tabTriggerClass =
             Live health monitoring for {STATUS_PROVIDER_COUNT} AI providers across
             7 status page platforms.
           </p>
-          <ul
-            class="space-y-1 font-mono text-xs text-[var(--neon-cyan)] uppercase"
-          >
+          <ul class="space-y-1 font-mono text-xs text-(--neon-cyan) uppercase">
             <li>+ Overall health dashboard</li>
             <li>+ Incident and maintenance cards</li>
             <li>+ Grouped service components</li>

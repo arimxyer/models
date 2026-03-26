@@ -35,7 +35,7 @@ const ticks = Array.from({ length: n }, (_, i) => {
     </div>
     <div class="flex items-end gap-2">
       <div
-        class="glow-cyan text-5xl font-black text-[var(--neon-cyan)] [font-variant-numeric:tabular-nums]"
+        class="glow-cyan text-5xl font-black text-(--neon-cyan) [font-variant-numeric:tabular-nums]"
       >
         {DISPLAY.models}
       </div>
@@ -69,7 +69,7 @@ const ticks = Array.from({ length: n }, (_, i) => {
     </div>
     <div class="flex items-end gap-2">
       <div
-        class="glow-magenta text-5xl font-black text-[var(--neon-magenta)] [font-variant-numeric:tabular-nums]"
+        class="glow-magenta text-5xl font-black text-(--neon-magenta) [font-variant-numeric:tabular-nums]"
       >
         {DISPLAY.benchmarks}
       </div>
@@ -120,14 +120,14 @@ const ticks = Array.from({ length: n }, (_, i) => {
 
   <!-- Card 3: Provider_Nodes — radial tick dial -->
   <div
-    class="data-border flex flex-col justify-between border-l-4 border-l-[var(--neon-green)] bg-slate-900/50 p-6"
+    class="data-border flex flex-col justify-between border-l-4 border-l-(--neon-green) bg-slate-900/50 p-6"
   >
     <div class="font-mono text-[10px] tracking-widest text-slate-400 uppercase">
       Provider_Nodes
     </div>
     <div class="flex items-center justify-between">
       <div
-        class="glow-green text-5xl font-black text-[var(--neon-green)] [font-variant-numeric:tabular-nums]"
+        class="glow-green text-5xl font-black text-(--neon-green) [font-variant-numeric:tabular-nums]"
       >
         {STATUS_PROVIDER_COUNT}
       </div>

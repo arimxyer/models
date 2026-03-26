@@ -45,12 +45,12 @@ Three neon accents, each with a strict functional assignment. They are never int
 
 ### Text Hierarchy
 
-| Descriptive Name | Tailwind Class         | Functional Role                                                                                                                |
-| ---------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| **Full Bright**  | `text-white`           | Primary headings, model names, emphasized data values                                                                          |
-| **Cool Silver**  | `text-slate-300`       | Body descriptions, tagline text                                                                                                |
-| **Muted Steel**  | `text-slate-400`       | Secondary labels, metadata, inactive states. Minimum contrast level for readable text on dark backgrounds (WCAG AA compliant). |
-| Accent colors    | `text-[var(--neon-*)]` | Functional highlights per accent role above                                                                                    |
+| Descriptive Name | Tailwind Class    | Functional Role                                                                                                                |
+| ---------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| **Full Bright**  | `text-white`      | Primary headings, model names, emphasized data values                                                                          |
+| **Cool Silver**  | `text-slate-300`  | Body descriptions, tagline text                                                                                                |
+| **Muted Steel**  | `text-slate-400`  | Secondary labels, metadata, inactive states. Minimum contrast level for readable text on dark backgrounds (WCAG AA compliant). |
+| Accent colors    | `text-(--neon-*)` | Functional highlights per accent role above                                                                                    |
 
 **Contrast rule:** Never use `text-slate-500` or darker for text that conveys meaning on the `--bg-slate` background. `text-slate-400` is the floor.
 
@@ -106,7 +106,7 @@ Three cards in a vertical stack, each with:
 
 ### Feature Tabs (Bearnie Vertical Tabs)
 
-- Tab triggers: `data-border`, left border accent (4px cyan when active, transparent when inactive), `bg-[var(--neon-cyan)]/10` active background
+- Tab triggers: `data-border`, left border accent (4px cyan when active, transparent when inactive), `bg-(--neon-cyan)/10` active background
 - Tab content: Terminal chrome header + autoplay video with gradient overlay (`from-black/90 via-black/30 to-transparent`) + text overlaid at bottom-left
 - 2px cyan progress bar at bottom of each trigger, animated via `requestAnimationFrame` synced to video playback
 - Auto-cycles through tabs on video end; user click stops cycling
