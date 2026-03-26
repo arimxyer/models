@@ -24,8 +24,10 @@ import TooltipContent from "@/components/bearnie/tooltip/TooltipContent.astro";
     class="max-w-2xl text-2xl leading-tight font-light text-slate-300 md:text-4xl"
   >
     High-density terminal navigator for the AI landscape.
-    <span class="font-semibold text-(--neon-magenta)"
-      >Browse the AI ecosystem.</span
+    <span
+      id="hero-rotator"
+      class="font-semibold text-(--neon-magenta)"
+      aria-live="polite">Browse the AI ecosystem.</span
     >
   </p>
   <Tooltip>
@@ -70,3 +72,39 @@ import TooltipContent from "@/components/bearnie/tooltip/TooltipContent.astro";
     LIVE
   </div>
 </div>
+
+<script>
+  const phrases = [
+    { text: "Browse the AI ecosystem.", color: "var(--neon-magenta)" },
+    { text: "Compare benchmarks.", color: "var(--neon-cyan)" },
+    { text: "Track coding agents.", color: "var(--neon-green)" },
+    { text: "Monitor provider status.", color: "var(--neon-amber)" },
+  ];
+
+  function initRotator() {
+    const el = document.getElementById("hero-rotator");
+    if (!el || el.hasAttribute("data-rotator-init")) return;
+    el.setAttribute("data-rotator-init", "true");
+
+    const prefersReducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    if (prefersReducedMotion) return;
+
+    let index = 0;
+    el.style.transition = "opacity 0.4s ease";
+
+    setInterval(() => {
+      el.style.opacity = "0";
+      setTimeout(() => {
+        index = (index + 1) % phrases.length;
+        el.textContent = phrases[index].text;
+        el.style.color = phrases[index].color;
+        el.style.opacity = "1";
+      }, 400);
+    }, 6000);
+  }
+
+  initRotator();
+  document.addEventListener("astro:page-load", initRotator);
+</script>
