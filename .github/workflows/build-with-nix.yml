@@ -19,7 +19,7 @@ jobs:
       - name: Checkout tree
         uses: actions/checkout@v6
       - name: Install Nix
-        uses: DeterminateSystems/determinate-nix-action@main
+        uses: DeterminateSystems/determinate-nix-action@v3
       - name: Check Flake
         run: nix flake check
 
@@ -36,6 +36,6 @@ jobs:
       - name: Checkout tree
         uses: actions/checkout@v6
       - name: Install Nix
-        uses: DeterminateSystems/determinate-nix-action@main
+        uses: DeterminateSystems/determinate-nix-action@v3
       - name: Build Packages / ${{ matrix.os }}
         run: nix build .
