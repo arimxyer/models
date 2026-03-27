@@ -2754,7 +2754,7 @@
     "aime_25": null,
     "output_tps": 45.167,
     "ttft": 1.785,
-    "ttfat": 46.064,
+    "ttfat": 56.293,
     "price_input": 0.3,
     "price_output": 1.2,
     "price_blended": 0.525
@@ -5004,7 +5004,7 @@
     "aime_25": null,
     "output_tps": 62.726,
     "ttft": 0.99,
-    "ttfat": 32.875,
+    "ttfat": 50.492,
     "price_input": 1,
     "price_output": 3.2,
     "price_blended": 1.55
