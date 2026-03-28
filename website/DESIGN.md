@@ -96,13 +96,16 @@ The signature "monitor frame" wrapping video panels and the hero screenshot:
 
 ### Stat Cards
 
-Three cards in a vertical stack, each with:
+Four cards in a vertical stack, each using Bearnie Card (`rounded-none` override) with accent-colored borders:
 
-- `data-border` + `bg-slate-900/50` background
-- Data label in JetBrains Mono at top
-- Large display number with accent glow at bottom
-- Accent-colored decorative visualization alongside the number: cyan bar chart (card 1), magenta progress line (card 2), green dot grid (card 3). These are placeholder `<div>` elements with `aria-hidden="true"` — candidates for replacement with data-driven or animated visualizations
-- Third card has a `border-l-4` in Terminal Green for differentiation
+- Data label in JetBrains Mono at top, large display number with accent glow at bottom-left
+- Interactive graphic positioned center-right via `clamp()` responsive sizing
+- Card 1 (cyan): PixiJS procedural galaxy with spiral particles, black hole sphere, perspective tilt. Hover: particle twinkle. Click: burst spin
+- Card 2 (magenta): SVG scatter plot with anime.js dot pop-in. Hover: brighten. Click: re-randomize positions
+- Card 3 (green): cobe WebGL globe with provider city markers. `border-l-4` green accent. Hover: speed up rotation. Click: outage flash (red→green)
+- Card 4 (amber): Lottie-exported robot SVG with anime.js secondary motion (phase-offset body parts). Hover: eye blink. Click: swap through 11 bot variants
+- Scroll-triggered activation via anime.js `onScroll`, staggered card fade-in + number count-up
+- All WebGL/animation loops pause via IntersectionObserver when off-screen
 
 ### Feature Tabs (Bearnie Vertical Tabs)
 
@@ -189,7 +192,7 @@ These animations run unconditionally (known gap):
 - **Tab auto-cycle**: Videos play and cycle through tabs regardless of motion preference. The `requestAnimationFrame` progress bar animation also runs unconditionally. Should be gated in a future pass.
 - **Icon transitions**: Clipboard-to-checkmark swap uses 200ms CSS opacity transition. Subtle enough to be acceptable, but could be made instant under reduced-motion.
 
-### Stat Card Animations (stats-preview)
+### Stat Card Animations
 
 Stat cards use `animejs` v4 for scroll-triggered entry, number counters, hover effects, and click easter eggs. Each card has a unique visualization:
 
@@ -204,4 +207,4 @@ Stat cards use `animejs` v4 for scroll-triggered entry, number counters, hover e
 
 ### Motion Philosophy
 
-No spring physics, no parallax, no scroll-triggered animations. Motion is functional (indicating state) or atmospheric (scanlines, pulse), never decorative.
+No spring physics, no parallax. Scroll-triggered activation is used for stat cards (staggered reveal + count-up). Motion is functional (indicating state, revealing content on scroll) or atmospheric (globe rotation, galaxy drift), not gratuitous.

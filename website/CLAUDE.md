@@ -48,13 +48,19 @@ src/
   components/
     Header.astro             -- sticky top nav
     Hero.astro               -- hero title + tagline + copy-to-clipboard install command
-    Stats.astro              -- 3 stat cards (models/benchmarks/providers)
+    Stats.astro              -- 4 stat cards composed from modular graphics, scroll-triggered
+    stats/                   -- stat card graphic components
+      StatCard.astro         -- Bearnie Card wrapper with accent theming and slot
+      GalaxyGraphic.astro    -- PixiJS procedural galaxy with black hole sphere
+      ScatterGraphic.astro   -- SVG scatter plot with anime.js animations
+      GlobeGraphic.astro     -- cobe WebGL globe with outage flash easter egg
+      RobotGraphic.astro     -- animated robot SVG with click-to-swap variants
     Screenshot.astro         -- TUI screenshot with terminal chrome + Astro Image
     Features.astro           -- vertical tabs with autoplay videos, auto-cycle, progress bars
     Commands.astro           -- CLI command cards
     Install.astro            -- install method grid with copy-to-clipboard + global copy script
     Footer.astro             -- footer with dynamic version + copyright year
-    bearnie/                 -- Bearnie UI components (tabs, toast, tooltip, button)
+    bearnie/                 -- Bearnie UI components (card, tabs, toast, tooltip, button)
   pages/index.astro          -- composes all components
   styles/global.css          -- Tailwind + CSS custom properties + utilities
 ```
@@ -89,8 +95,12 @@ Components import from `@/data/site` — never hardcode stats, versions, or URLs
 - Bearnie's base `TabsTrigger.astro` carries `rounded-md` default — override with `rounded-none` in the `tabTriggerClass` const in Features.astro
 - The `.claude/` directory is in the root `.gitignore` — rules files must be force-added with `git add -f`
 - Website uses shadcn/ui theme tokens via `@theme inline` in `global.css`. Bearnie components resolve classes like `bg-popover`, `text-foreground`, `bg-muted` from these tokens. When adding new Bearnie components, ensure any new tokens they reference are defined in `global.css` `:root` and `@theme inline` blocks
-- `stats-preview.astro` is a sandbox page for iterating on stat card visuals without touching production `Stats.astro`. Visit at `/models/stats-preview/` during dev
-- Animation deps: `animejs` v4 (6.2KB animation engine), `cobe` (5KB WebGL globe), `pixi.js` (exploratory, not yet used in production). `@rive-app/canvas` and `lottie-web` installed but may be removed
-- Lottie-to-SVG pipeline: export frame 0 via `lottie-to-svg`, wrap each `<g>` layer in an outer `<g id="part-wrap">` for safe anime.js transforms, animate the wrappers. Inner `<g>` elements retain their positional `transform="matrix(...)"` attributes untouched
+- Animation deps: `animejs` v4 (animation engine), `cobe` (WebGL globe), `pixi.js` v8 (procedural galaxy). `lottie-to-svg` is a devDependency for SVG export only
+- Stat card graphics use CustomEvent activation: `Stats.astro` dispatches `{name}:activate` events, each graphic component listens with `document.addEventListener("{name}:activate", ...)` and initializes lazily
+- WebGL/canvas/looping animation components must use IntersectionObserver to pause when off-screen and resume when visible — see `GalaxyGraphic.astro`, `GlobeGraphic.astro`, `RobotGraphic.astro` for the pattern
+- PixiJS v8: use `preference: "webgl"` in `Application.init()` to skip the 38KB WebGPU chunk. Use `cacheAsTexture(true)` on static containers with BlurFilters to avoid per-frame recomposition. Subpath imports do not save bundle size in v8
+- cobe globe: `markerColor` is global (single RGB array for all markers, no per-marker coloring). Call `destroy()` before recreating. `update({phi})` for rotation
+- anime.js v4 overwrites the entire CSS `transform` property — do not use CSS `transform: translateX()` for positioning if anime.js will animate `scale` or `rotate` on the same element. Use CSS `left`/`right`/`top`/`bottom` positioning instead
+- Lottie-to-SVG pipeline (historical, used for `stat-robot.svg`): export frame 0 via `lottie-to-svg`, wrap each `<g>` layer in an outer `<g id="part-wrap">` for safe anime.js transforms
 - anime.js v4 `alternate` syntax: use a single target value (`translateY: 8`) with `alternate: true` — NOT array syntax (`[-5, 5]`) which creates discrete keyframes and choppy motion
 - CSS `translateX`/`translateY` on SVG `<g>` elements uses SVG coordinate units (viewBox), not CSS pixels. In a 1080-wide viewBox rendered at 150px, ~1800 units needed to exit the frame
