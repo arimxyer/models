@@ -1135,22 +1135,26 @@ const PROVIDER_LOCATIONS: [number, number][] = [
       let globeInstance: Globe | null = null;
       let globePhi = 0;
       let globeSpeed = 0.003;
+      let globeSpinning = false;
+      let globeSwapping = false;
+      let allLocations: [number, number][] = [];
 
-      function initGlobe(): void {
-        if (globeInstance) return; // prevent duplicate init from re-triggering scroll
-        const canvas = document.getElementById(
-          "globe-canvas",
-        ) as HTMLCanvasElement;
-        if (!canvas) return;
-        const locs: [number, number][] = JSON.parse(
-          canvas.dataset.locations || "[]",
-        );
+      function createGlobeInstance(
+        canvas: HTMLCanvasElement,
+        locations: [number, number][],
+        markerColor: [number, number, number],
+        markerSize = 0.06,
+      ): void {
+        if (globeInstance) {
+          globeInstance.destroy();
+          globeInstance = null;
+        }
 
         globeInstance = createGlobe(canvas, {
           devicePixelRatio: 2,
           width: 240,
           height: 240,
-          phi: 0,
+          phi: globePhi,
           theta: 0.15,
           dark: 1,
           diffuse: 1.2,
@@ -1158,12 +1162,24 @@ const PROVIDER_LOCATIONS: [number, number][] = [
           mapBrightness: 4,
           mapBaseBrightness: 0.02,
           baseColor: [0.12, 0.16, 0.26],
-          markerColor: [0.29, 0.87, 0.5],
+          markerColor,
           glowColor: [0.08, 0.12, 0.2],
           scale: 1,
           offset: [0, 0],
-          markers: locs.map((loc) => ({ location: loc, size: 0.06 })),
+          markers: locations.map((loc) => ({ location: loc, size: markerSize })),
         });
+      }
+
+      function initGlobe(): void {
+        if (globeSpinning) return;
+        globeSpinning = true;
+        const canvas = document.getElementById(
+          "globe-canvas",
+        ) as HTMLCanvasElement;
+        if (!canvas) return;
+        allLocations = JSON.parse(canvas.dataset.locations || "[]");
+
+        createGlobeInstance(canvas, allLocations, [0.29, 0.87, 0.5]);
 
         function spin() {
           globePhi += globeSpeed;
@@ -1328,18 +1344,23 @@ const PROVIDER_LOCATIONS: [number, number][] = [
           });
         }
 
-        // Globe: zoom pulse
-        const globeCard = document.querySelector('[data-accent="green"]');
-        if (globeCard) {
-          globeCard.addEventListener("click", () => {
-            const canvas = document.getElementById("globe-canvas");
-            if (canvas) {
-              animate(canvas, {
-                scale: [1, 1.2, 1],
-                duration: 800,
-                ease: "outBack",
-              });
-            }
+        // Globe: outage flash — click flashes all markers red, then recovers to green
+        const globeClickCard = document.querySelector('[data-accent="green"]');
+        if (globeClickCard) {
+          globeClickCard.addEventListener("click", () => {
+            if (globeSwapping) return;
+            globeSwapping = true;
+            const canvas = document.getElementById("globe-canvas") as HTMLCanvasElement;
+            if (!canvas) { globeSwapping = false; return; }
+
+            // Phase 1: all markers flash red (same positions, same sizes)
+            createGlobeInstance(canvas, allLocations, [0.95, 0.27, 0.27]);
+
+            // Phase 2: recover to green
+            setTimeout(() => {
+              createGlobeInstance(canvas, allLocations, [0.29, 0.87, 0.5]);
+              globeSwapping = false;
+            }, 1500);
           });
         }
 
