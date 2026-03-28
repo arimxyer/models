@@ -189,6 +189,18 @@ These animations run unconditionally (known gap):
 - **Tab auto-cycle**: Videos play and cycle through tabs regardless of motion preference. The `requestAnimationFrame` progress bar animation also runs unconditionally. Should be gated in a future pass.
 - **Icon transitions**: Clipboard-to-checkmark swap uses 200ms CSS opacity transition. Subtle enough to be acceptable, but could be made instant under reduced-motion.
 
+### Stat Card Animations (stats-preview)
+
+Stat cards use `animejs` v4 for scroll-triggered entry, number counters, hover effects, and click easter eggs. Each card has a unique visualization:
+- **Model_Density**: galaxy SVG (recolored from LottieFiles)
+- **Bench_Validation**: programmatic scatter plot (SVG dots animated by anime.js)
+- **Provider_Nodes**: cobe WebGL globe with real provider city markers
+- **Agent_Tracker**: Lottie bot exported as static SVG with per-part secondary motion
+
+**Secondary motion pattern**: give each animated body part a slightly different duration (e.g., body=2500ms, head=2800ms, arms=2900-3100ms) so parts phase in and out of sync naturally. All use `inOutSine` easing for floating feel.
+
+**Robot easing rule**: no elastic/springy easings for mechanical characters. Use `inOutSine` for floating, `inQuad`/`outQuad` for deliberate movements. Linear feels too rigid, elastic feels too organic.
+
 ### Motion Philosophy
 
 No spring physics, no parallax, no scroll-triggered animations. Motion is functional (indicating state) or atmospheric (scanlines, pulse), never decorative.

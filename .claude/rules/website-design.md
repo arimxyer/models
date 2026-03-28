@@ -69,3 +69,9 @@ All dynamic data comes from `src/data/site.ts` (build-time). Never hardcode:
 - `public/` assets: prefix with `import.meta.env.BASE_URL` (GitHub Pages `/models` base path)
 - `src/assets/` images: use ESM imports with Astro `<Image>` component
 - Videos: `public/assets/wiki/` with BASE_URL prefix in `<source>` tags
+
+## 7. SVG Animation
+
+- When animating Lottie-exported SVGs with anime.js, wrap each `<g>` layer in an outer `<g id="part-wrap">` with no transform. Animate the wrapper — the inner `<g>` retains its positional `transform="matrix(...)"` untouched. Direct CSS transforms on positioned `<g>` elements will displace them.
+- anime.js v4 alternate loops: use single target value + `alternate: true`, not keyframe arrays
+- CSS `translateX`/`translateY` on SVG `<g>` uses SVG coordinate units (viewBox scale), not CSS pixels

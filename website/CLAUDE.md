@@ -89,3 +89,8 @@ Components import from `@/data/site` — never hardcode stats, versions, or URLs
 - Bearnie's base `TabsTrigger.astro` carries `rounded-md` default — override with `rounded-none` in the `tabTriggerClass` const in Features.astro
 - The `.claude/` directory is in the root `.gitignore` — rules files must be force-added with `git add -f`
 - Website uses shadcn/ui theme tokens via `@theme inline` in `global.css`. Bearnie components resolve classes like `bg-popover`, `text-foreground`, `bg-muted` from these tokens. When adding new Bearnie components, ensure any new tokens they reference are defined in `global.css` `:root` and `@theme inline` blocks
+- `stats-preview.astro` is a sandbox page for iterating on stat card visuals without touching production `Stats.astro`. Visit at `/models/stats-preview/` during dev
+- Animation deps: `animejs` v4 (6.2KB animation engine), `cobe` (5KB WebGL globe), `pixi.js` (exploratory, not yet used in production). `@rive-app/canvas` and `lottie-web` installed but may be removed
+- Lottie-to-SVG pipeline: export frame 0 via `lottie-to-svg`, wrap each `<g>` layer in an outer `<g id="part-wrap">` for safe anime.js transforms, animate the wrappers. Inner `<g>` elements retain their positional `transform="matrix(...)"` attributes untouched
+- anime.js v4 `alternate` syntax: use a single target value (`translateY: 8`) with `alternate: true` — NOT array syntax (`[-5, 5]`) which creates discrete keyframes and choppy motion
+- CSS `translateX`/`translateY` on SVG `<g>` elements uses SVG coordinate units (viewBox), not CSS pixels. In a 1080-wide viewBox rendered at 150px, ~1800 units needed to exit the frame
