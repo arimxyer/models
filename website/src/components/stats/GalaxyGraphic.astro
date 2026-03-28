@@ -2,15 +2,21 @@
 
 <style>
   .galaxy-graphic {
-    width: 200px;
-    height: 200px;
-    perspective: 600px;
     position: absolute;
-    right: -30px;
-    top: -80px;
+    top: 50%;
+    right: 2%;
+    width: clamp(112px, 48%, 164px);
+    aspect-ratio: 1;
+    transform: translateY(-50%);
+    perspective: 600px;
     opacity: 0;
+    pointer-events: none;
+    z-index: 0;
   }
   .galaxy-graphic :global(canvas) {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
     transform: rotateX(55deg);
     transform-origin: center center;
   }
@@ -103,8 +109,7 @@
       resolution: 2,
       autoDensity: true,
     });
-    app.canvas.style.width = "180px";
-    app.canvas.style.height = "180px";
+    // CSS handles display sizing via percentages; autoDensity handles resolution
     el.appendChild(app.canvas);
 
     const particles = generateGalaxyParticles(500, 90);

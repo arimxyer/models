@@ -15,11 +15,14 @@ const { locations } = Astro.props;
 
 <style>
   .globe-graphic {
-    width: 90px;
-    height: 90px;
     position: absolute;
-    right: 8px;
-    bottom: 8px;
+    top: 50%;
+    right: 2%;
+    width: clamp(108px, 42%, 148px);
+    aspect-ratio: 1;
+    transform: translateY(-50%);
+    pointer-events: none;
+    z-index: 0;
   }
 </style>
 

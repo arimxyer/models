@@ -35,11 +35,11 @@ const numberColors = {
   data-stat-card
   data-accent={accent}
 >
-  <div class="flex flex-col justify-between p-6">
+  <div class="relative flex flex-col justify-between p-6">
     <div class="font-mono text-[10px] tracking-widest text-slate-500 uppercase">
       {label}
     </div>
-    <div class="relative flex items-end">
+    <div class="mt-2">
       <div
         class:list={[
           "z-10 text-5xl font-black [font-variant-numeric:tabular-nums]",
@@ -49,7 +49,7 @@ const numberColors = {
       >
         0
       </div>
-      <slot />
     </div>
+    <slot />
   </div>
 </Card>

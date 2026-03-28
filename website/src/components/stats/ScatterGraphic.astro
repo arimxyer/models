@@ -81,11 +81,16 @@ const { dots } = Astro.props;
 
 <style>
   .scatter-graphic {
-    width: 140px;
-    height: 70px;
     position: absolute;
-    right: 8px;
-    bottom: 12px;
+    top: 50%;
+    right: -2%;
+    width: clamp(128px, 52%, 180px);
+    height: auto;
+    aspect-ratio: 2 / 1;
+    transform: translateY(-50%);
+    pointer-events: none;
+    z-index: 0;
+    overflow: visible;
   }
   .scatter-dot {
     opacity: 0;
@@ -149,7 +154,7 @@ const { dots } = Astro.props;
           cx: 12 + Math.random() * 178,
           cy: 10 + Math.random() * 78,
           duration: 600,
-          ease: "outElastic",
+          ease: "inOutBack(1.7)",
         });
       });
   });
