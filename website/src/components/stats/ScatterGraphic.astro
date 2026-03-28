@@ -1,0 +1,156 @@
+---
+interface Props {
+  dots: Array<{ x: number; y: number; r: number; opacity: number }>;
+}
+
+const { dots } = Astro.props;
+---
+
+<svg class="scatter-graphic" viewBox="0 0 200 100" aria-hidden="true">
+  <!-- Axes -->
+  <line
+    x1="10"
+    y1="92"
+    x2="195"
+    y2="92"
+    stroke="var(--neon-magenta)"
+    stroke-width="0.5"
+    opacity="0.15"></line>
+  <line
+    x1="10"
+    y1="8"
+    x2="10"
+    y2="92"
+    stroke="var(--neon-magenta)"
+    stroke-width="0.5"
+    opacity="0.15"></line>
+  <!-- Midlines (dashed) -->
+  <line
+    x1="10"
+    y1="50"
+    x2="195"
+    y2="50"
+    stroke="var(--neon-magenta)"
+    stroke-width="0.3"
+    opacity="0.08"
+    stroke-dasharray="4 3"></line>
+  <line
+    x1="100"
+    y1="8"
+    x2="100"
+    y2="92"
+    stroke="var(--neon-magenta)"
+    stroke-width="0.3"
+    opacity="0.08"
+    stroke-dasharray="4 3"></line>
+  <!-- Labels -->
+  <text
+    x="102"
+    y="99"
+    fill="var(--neon-magenta)"
+    font-size="5"
+    font-family="'JetBrains Mono'"
+    text-anchor="middle"
+    opacity="0.25">QUALITY</text
+  >
+  <text
+    x="3"
+    y="52"
+    fill="var(--neon-magenta)"
+    font-size="5"
+    font-family="'JetBrains Mono'"
+    text-anchor="middle"
+    opacity="0.25"
+    transform="rotate(-90 3 52)">SPEED</text
+  >
+  <!-- Dots -->
+  {
+    dots.map((d) => (
+      <circle
+        cx={d.x}
+        cy={d.y}
+        r="0"
+        fill="var(--neon-magenta)"
+        class="scatter-dot"
+        data-target-r={d.r}
+        data-target-opacity={d.opacity}
+      />
+    ))
+  }
+</svg>
+
+<style>
+  .scatter-graphic {
+    width: 140px;
+    height: 70px;
+    position: absolute;
+    right: 8px;
+    bottom: 12px;
+  }
+  .scatter-dot {
+    opacity: 0;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .scatter-dot {
+      opacity: 0.6 !important;
+    }
+  }
+</style>
+
+<script>
+  import { animate, stagger } from "animejs";
+
+  // Reduced motion: show dots immediately at final state
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    document
+      .querySelectorAll<SVGCircleElement>(".scatter-dot")
+      .forEach((dot) => {
+        dot.setAttribute("r", dot.dataset.targetR || "2");
+        dot.setAttribute("opacity", dot.dataset.targetOpacity || "0.5");
+      });
+  }
+
+  // Activation — pop in dots
+  document.addEventListener("scatter:activate", () => {
+    const dots = document.querySelectorAll<SVGCircleElement>(".scatter-dot");
+    dots.forEach((dot) => {
+      const targetR = parseFloat(dot.dataset.targetR || "2");
+      const targetOp = parseFloat(dot.dataset.targetOpacity || "0.5");
+      animate(dot, {
+        r: [0, targetR],
+        opacity: [0, targetOp],
+        duration: 400,
+        delay: stagger(15),
+        ease: "outBack",
+      });
+    });
+  });
+
+  // Hover — brighten all dots
+  document.addEventListener("scatter:hover-start", () => {
+    animate(".scatter-dot", { opacity: 0.9, duration: 300, ease: "outQuad" });
+  });
+
+  document.addEventListener("scatter:hover-end", () => {
+    document
+      .querySelectorAll<SVGCircleElement>(".scatter-dot")
+      .forEach((dot) => {
+        const targetOp = parseFloat(dot.dataset.targetOpacity || "0.5");
+        animate(dot, { opacity: targetOp, duration: 400, ease: "outQuad" });
+      });
+  });
+
+  // Click — re-randomize positions
+  document.addEventListener("scatter:click", () => {
+    document
+      .querySelectorAll<SVGCircleElement>(".scatter-dot")
+      .forEach((dot) => {
+        animate(dot, {
+          cx: 12 + Math.random() * 178,
+          cy: 10 + Math.random() * 78,
+          duration: 600,
+          ease: "outElastic",
+        });
+      });
+  });
+</script>
