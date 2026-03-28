@@ -55,78 +55,94 @@ const base = import.meta.env.BASE_URL;
       "(prefers-reduced-motion: reduce)",
     ).matches;
 
+    const idleAnims: ReturnType<typeof animate>[] = [];
+
     if (!prefersReducedMotion) {
       // Body float
-      animate("#bot-character", {
+      idleAnims.push(animate("#bot-character", {
         translateY: 70,
         duration: 2500,
         ease: "inOutSine",
         loop: true,
         alternate: true,
-      });
+      }));
 
       // Head lag
-      animate("#bot-head-wrap", {
+      idleAnims.push(animate("#bot-head-wrap", {
         translateY: 3,
         duration: 2800,
         ease: "inOutSine",
         loop: true,
         alternate: true,
-      });
+      }));
 
       // Visor/eyes follow head
-      animate("#bot-visor-wrap, #bot-eye-l-wrap, #bot-eye-r-wrap", {
+      idleAnims.push(animate("#bot-visor-wrap, #bot-eye-l-wrap, #bot-eye-r-wrap", {
         translateY: 2,
         duration: 3000,
         ease: "inOutSine",
         loop: true,
         alternate: true,
-      });
+      }));
 
       // Arms sway
-      animate("#bot-hand-l-wrap", {
+      idleAnims.push(animate("#bot-hand-l-wrap", {
         translateY: 4,
         translateX: -1,
         duration: 2900,
         ease: "inOutSine",
         loop: true,
         alternate: true,
-      });
-      animate("#bot-hand-r-wrap", {
+      }));
+      idleAnims.push(animate("#bot-hand-r-wrap", {
         translateY: 3,
         translateX: 1,
         duration: 3100,
         ease: "inOutSine",
         loop: true,
         alternate: true,
-      });
+      }));
 
       // Ears drift
-      animate("#bot-ear-l-wrap", {
+      idleAnims.push(animate("#bot-ear-l-wrap", {
         translateY: 2,
         translateX: -1,
         duration: 3300,
         ease: "inOutSine",
         loop: true,
         alternate: true,
-      });
-      animate("#bot-ear-r-wrap", {
+      }));
+      idleAnims.push(animate("#bot-ear-r-wrap", {
         translateY: 2,
         translateX: 1,
         duration: 3000,
         ease: "inOutSine",
         loop: true,
         alternate: true,
-      });
+      }));
 
       // Shadow pulse
-      animate("#bot-shadow", {
+      idleAnims.push(animate("#bot-shadow", {
         duration: 2500,
         ease: "inOutSine",
         loop: true,
         alternate: true,
         opacity: 0.25,
-      });
+      }));
+
+      const observer = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (entry.isIntersecting) {
+              for (const anim of idleAnims) anim.play();
+            } else {
+              for (const anim of idleAnims) anim.pause();
+            }
+          }
+        },
+        { rootMargin: "50px", threshold: 0 },
+      );
+      observer.observe(container);
     }
 
     // Hover: eye blink (user-initiated, works even with reduced motion)

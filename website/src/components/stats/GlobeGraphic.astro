@@ -36,6 +36,8 @@ const { locations } = Astro.props;
   let globeSpinning = false;
   let globeSwapping = false;
   let allLocations: [number, number][] = [];
+  let globeRafId: number | null = null;
+  let globeVisible = true;
 
   function createGlobeInstance(
     canvas: HTMLCanvasElement,
@@ -78,11 +80,34 @@ const { locations } = Astro.props;
     createGlobeInstance(canvas, allLocations, [0.29, 0.87, 0.5]);
 
     function spin() {
+      if (!globeVisible) {
+        globeRafId = null;
+        return;
+      }
       globePhi += globeSpeed;
       globeInstance?.update({ phi: globePhi });
-      requestAnimationFrame(spin);
+      globeRafId = requestAnimationFrame(spin);
     }
     spin();
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            if (!globeVisible) {
+              globeVisible = true;
+              if (globeRafId === null) {
+                spin();
+              }
+            }
+          } else {
+            globeVisible = false;
+          }
+        }
+      },
+      { rootMargin: "50px", threshold: 0 },
+    );
+    observer.observe(canvas);
   }
 
   // Activation
