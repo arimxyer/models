@@ -49,6 +49,24 @@ const PROVIDER_LOCATIONS: [number, number][] = [
         Scroll to trigger · hover for subtle effect · click for easter egg
       </p>
 
+      <!-- Galaxy Comparison -->
+      <div class="galaxy-comparison">
+        <div class="galaxy-option">
+          <span class="option-label">Option 1 — Canvas 2D</span>
+          <div class="galaxy-frame" data-accent="cyan">
+            <canvas id="galaxy-canvas2d" width="400" height="400" aria-hidden="true"></canvas>
+          </div>
+          <span class="option-note">~0KB extra · shadowBlur glow · rAF rotation</span>
+        </div>
+        <div class="galaxy-option">
+          <span class="option-label">Option 2 — PixiJS WebGL</span>
+          <div class="galaxy-frame galaxy-frame--tilted" data-accent="cyan">
+            <div id="galaxy-pixi" style="width:400px;height:400px"></div>
+          </div>
+          <span class="option-note">~150KB bundle · additive blend · GPU particles</span>
+        </div>
+      </div>
+
       <div style="height: 60vh"></div>
 
       <div class="stats-stack" id="stats-stack">
@@ -59,12 +77,11 @@ const PROVIDER_LOCATIONS: [number, number][] = [
           </div>
           <div class="card-body">
             <div class="card-number glow-cyan" data-count-target={DISPLAY.models}>0</div>
-            <img
-              src={`${base}assets/stat-galaxy.svg`}
-              alt=""
+            <div
+              id="galaxy-card-pixi"
               aria-hidden="true"
               class="card-graphic card-graphic--galaxy"
-            />
+            ></div>
           </div>
         </div>
 
@@ -154,11 +171,11 @@ const PROVIDER_LOCATIONS: [number, number][] = [
         background-size: 40px 40px;
         color: #e2e8f0;
       }
-      .page { max-width: 500px; margin: 0 auto; padding: 2rem 1rem; }
+      .page { max-width: 900px; margin: 0 auto; padding: 2rem 1rem; }
       .page-title { font-size: 1.5rem; font-weight: 900; letter-spacing: -0.02em; color: white; }
       .page-subtitle { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: #64748b; margin-top: 0.25rem; }
 
-      .stats-stack { display: grid; grid-template-rows: repeat(4, 1fr); gap: 4px; }
+      .stats-stack { display: grid; grid-template-rows: repeat(4, 1fr); gap: 4px; max-width: 500px; margin: 0 auto; }
 
       .stat-card {
         border: 1px solid rgba(34, 211, 238, 0.2);
@@ -194,12 +211,53 @@ const PROVIDER_LOCATIONS: [number, number][] = [
 
       /* Graphics */
       .card-graphic { align-self: flex-end; }
-      .card-graphic--galaxy { width: 130px; height: auto; opacity: 0; }
+      .card-graphic--galaxy {
+        width: 150px; height: 150px;
+        perspective: 600px;
+        opacity: 0;
+        position: absolute;
+        right: 8px;
+        bottom: 8px;
+      }
+      .card-graphic--galaxy canvas {
+        transform: rotateX(55deg);
+        transform-origin: center center;
+      }
       .card-graphic--scatter { width: 200px; height: 100px; }
       .card-graphic--globe { width: 120px; height: 120px; }
       .card-graphic--robot { width: 150px; height: 120px; }
 
       .scatter-dot { opacity: 0; }
+
+      /* Galaxy comparison */
+      .galaxy-comparison {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+        margin-bottom: 3rem;
+      }
+      .galaxy-option { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+      .option-label {
+        font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700;
+        letter-spacing: 0.15em; text-transform: uppercase; color: var(--neon-cyan);
+      }
+      .option-note {
+        font-family: 'JetBrains Mono', monospace; font-size: 9px;
+        color: #475569; text-align: center;
+      }
+      .galaxy-frame {
+        border: 1px solid rgba(34, 211, 238, 0.2);
+        background: rgba(15, 23, 42, 0.8);
+        width: 400px; height: 400px; overflow: hidden;
+        display: flex; align-items: center; justify-content: center;
+      }
+      .galaxy-frame canvas, .galaxy-frame div { display: block; }
+      .galaxy-frame--tilted {
+        perspective: 800px;
+        overflow: visible;
+      }
+      .galaxy-frame--tilted > * {
+        transform: rotateX(55deg);
+        transform-origin: center center;
+      }
 
       /* Reduced motion */
       @media (prefers-reduced-motion: reduce) {
@@ -213,7 +271,375 @@ const PROVIDER_LOCATIONS: [number, number][] = [
       import { animate, stagger, onScroll, utils } from "animejs";
       import createGlobe from "cobe";
       import type { Globe } from "cobe";
-      // lottie-web removed — using static SVG + anime.js instead
+      import { Application, Graphics, Container, BlurFilter } from "pixi.js";
+
+      // =============================================
+      // Galaxy Comparison: Canvas 2D vs PixiJS
+      // =============================================
+
+      interface StarParticle {
+        x: number;
+        y: number;
+        size: number;
+        opacity: number;
+        hue: number; // 0=cyan core, 1=white edge
+      }
+
+      // Generate spiral galaxy particles
+      function generateGalaxyParticles(count: number, radius: number): StarParticle[] {
+        const particles: StarParticle[] = [];
+        const arms = 3;
+        const armSpread = 0.4;
+
+        // Core cluster — dense center
+        for (let i = 0; i < count * 0.3; i++) {
+          const r = Math.random() * radius * 0.25;
+          const angle = Math.random() * Math.PI * 2;
+          particles.push({
+            x: Math.cos(angle) * r,
+            y: Math.sin(angle) * r,
+            size: 0.5 + Math.random() * 2,
+            opacity: 0.4 + Math.random() * 0.6,
+            hue: Math.random() * 0.3, // mostly cyan
+          });
+        }
+
+        // Spiral arms
+        for (let i = 0; i < count * 0.7; i++) {
+          const arm = Math.floor(Math.random() * arms);
+          const armAngle = (arm / arms) * Math.PI * 2;
+          const t = Math.random(); // 0=center, 1=edge
+          const r = t * radius;
+          const spiralAngle = armAngle + t * Math.PI * 2.5; // 2.5 full turns
+          const scatter = armSpread * (0.2 + t * 0.8); // tighter at center
+          const offsetAngle = spiralAngle + (Math.random() - 0.5) * scatter;
+          const offsetR = r + (Math.random() - 0.5) * radius * 0.1;
+
+          particles.push({
+            x: Math.cos(offsetAngle) * offsetR,
+            y: Math.sin(offsetAngle) * offsetR,
+            size: 0.3 + Math.random() * 1.8 * (1 - t * 0.5), // larger near center
+            opacity: (0.2 + Math.random() * 0.8) * (1 - t * 0.4), // brighter near center
+            hue: t, // cyan at center → white at edges
+          });
+        }
+
+        return particles;
+      }
+
+      // --- Option 1: Canvas 2D ---
+      function initCanvas2DGalaxy(): void {
+        const canvas = document.getElementById("galaxy-canvas2d") as HTMLCanvasElement;
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+
+        const W = canvas.width;
+        const H = canvas.height;
+        const cx = W / 2;
+        const cy = H / 2;
+        const particles = generateGalaxyParticles(600, 160);
+        let rotation = 0;
+
+        function draw() {
+          ctx!.clearRect(0, 0, W, H);
+          ctx!.save();
+          ctx!.translate(cx, cy);
+          ctx!.rotate(rotation);
+
+          for (const p of particles) {
+            // Interpolate cyan → white based on hue
+            const r = Math.round(34 + (255 - 34) * p.hue);
+            const g = Math.round(211 + (255 - 211) * p.hue);
+            const b = Math.round(238 + (255 - 238) * p.hue);
+            const color = `rgba(${r},${g},${b},${p.opacity})`;
+
+            ctx!.beginPath();
+            ctx!.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx!.fillStyle = color;
+
+            // Glow on larger particles
+            if (p.size > 1.2) {
+              ctx!.shadowColor = `rgba(34,211,238,${p.opacity * 0.6})`;
+              ctx!.shadowBlur = p.size * 4;
+            } else {
+              ctx!.shadowBlur = 0;
+            }
+
+            ctx!.fill();
+          }
+
+          ctx!.restore();
+          rotation += 0.001;
+          requestAnimationFrame(draw);
+        }
+
+        draw();
+      }
+
+      // --- Option 2: PixiJS WebGL ---
+      async function initPixiGalaxy(): Promise<void> {
+        const el = document.getElementById("galaxy-pixi");
+        if (!el) return;
+
+        const app = new Application();
+        await app.init({
+          width: 400,
+          height: 400,
+          backgroundAlpha: 0,
+          antialias: true,
+          resolution: 2,
+          autoDensity: true,
+        });
+        el.appendChild(app.canvas);
+
+        const particles = generateGalaxyParticles(800, 160);
+        const galaxyContainer = new Container();
+        galaxyContainer.x = 200;
+        galaxyContainer.y = 200;
+        app.stage.addChild(galaxyContainer);
+
+        // Glow layer (blurred, additive)
+        const glowContainer = new Container();
+        galaxyContainer.addChild(glowContainer);
+
+        // Sharp layer on top
+        const sharpContainer = new Container();
+        galaxyContainer.addChild(sharpContainer);
+
+        for (const p of particles) {
+          const r = Math.round(34 + (255 - 34) * p.hue);
+          const g = Math.round(211 + (255 - 211) * p.hue);
+          const b = Math.round(238 + (255 - 238) * p.hue);
+          const color = (r << 16) | (g << 8) | b;
+
+          // Sharp dot
+          const dot = new Graphics();
+          dot.circle(0, 0, p.size);
+          dot.fill({ color, alpha: p.opacity });
+          dot.x = p.x;
+          dot.y = p.y;
+          sharpContainer.addChild(dot);
+
+          // Glow dot (only for larger particles)
+          if (p.size > 1.0) {
+            const glow = new Graphics();
+            glow.circle(0, 0, p.size * 2.5);
+            glow.fill({ color: 0x22d3ee, alpha: p.opacity * 0.25 });
+            glow.x = p.x;
+            glow.y = p.y;
+            glowContainer.addChild(glow);
+          }
+        }
+
+        // Blur the glow layer
+        glowContainer.filters = [new BlurFilter({ strength: 4 })];
+
+        // Black hole — rendered on top of everything
+        const blackHoleContainer = new Container();
+        galaxyContainer.addChild(blackHoleContainer);
+
+        const SPHERE_R = 14;
+
+        // Accretion ring glow (outer, wide soft)
+        const ringGlow = new Graphics();
+        ringGlow.circle(0, 0, SPHERE_R + 10);
+        ringGlow.stroke({ color: 0x22d3ee, alpha: 0.25, width: 8 });
+        blackHoleContainer.addChild(ringGlow);
+        ringGlow.filters = [new BlurFilter({ strength: 8 })];
+
+        // Accretion ring (crisp inner)
+        const ringInner = new Graphics();
+        ringInner.circle(0, 0, SPHERE_R + 4);
+        ringInner.stroke({ color: 0x22d3ee, alpha: 0.45, width: 1.5 });
+        blackHoleContainer.addChild(ringInner);
+
+        // Sphere: build from concentric circles to fake radial shading
+        // Outermost = slightly lighter (rim light), center = pure black
+        const sphereContainer = new Container();
+        blackHoleContainer.addChild(sphereContainer);
+
+        // Shadow/atmosphere halo behind sphere
+        const halo = new Graphics();
+        halo.circle(0, 0, SPHERE_R + 3);
+        halo.fill({ color: 0x0a0f1e, alpha: 0.8 });
+        sphereContainer.addChild(halo);
+        halo.filters = [new BlurFilter({ strength: 3 })];
+
+        // Concentric shading rings (outer=slightly lit, inner=dark)
+        const rings = 12;
+        for (let i = rings; i >= 0; i--) {
+          const t = i / rings; // 1=outer edge, 0=center
+          const r = SPHERE_R * (0.3 + t * 0.7);
+          const ring = new Graphics();
+          ring.circle(0, 0, r);
+          // Outer rings: very dark blue-gray (ambient light). Inner: pure black.
+          const brightness = Math.floor(t * t * 18); // quadratic falloff, max ~18
+          const color = (brightness << 16) | (brightness + 2 << 8) | (brightness + 8);
+          ring.fill({ color, alpha: 1 });
+          sphereContainer.addChild(ring);
+        }
+
+        // Specular highlight — upper-left, small bright spot
+        const specular = new Graphics();
+        specular.circle(-4, -5, 4);
+        specular.fill({ color: 0x334155, alpha: 0.6 }); // slate-700 tint
+        sphereContainer.addChild(specular);
+        specular.filters = [new BlurFilter({ strength: 3 })];
+
+        // Tight specular core
+        const specCore = new Graphics();
+        specCore.circle(-3.5, -4.5, 1.8);
+        specCore.fill({ color: 0x64748b, alpha: 0.4 }); // slate-500
+        sphereContainer.addChild(specCore);
+        specCore.filters = [new BlurFilter({ strength: 1.5 })];
+
+        // Rim light — subtle cyan edge glow on the lower-right
+        const rimLight = new Graphics();
+        rimLight.arc(0, 0, SPHERE_R - 1, Math.PI * 0.15, Math.PI * 0.65);
+        rimLight.stroke({ color: 0x22d3ee, alpha: 0.2, width: 2 });
+        sphereContainer.addChild(rimLight);
+        rimLight.filters = [new BlurFilter({ strength: 2 })];
+
+        // Hot spot orbiting accretion ring
+        const hotSpot = new Graphics();
+        hotSpot.circle(SPHERE_R + 6, 0, 2.5);
+        hotSpot.fill({ color: 0xffffff, alpha: 0.6 });
+        blackHoleContainer.addChild(hotSpot);
+        hotSpot.filters = [new BlurFilter({ strength: 2 })];
+
+        // Rotate galaxy, counter-rotate black hole accretion for visual interest
+        app.ticker.add(() => {
+          galaxyContainer.rotation += 0.001;
+          blackHoleContainer.rotation -= 0.002; // accretion ring spins opposite
+        });
+      }
+
+      // --- Card Galaxy (PixiJS, embedded in stat card) ---
+      let cardGalaxySpeed = 0.001;
+      async function initCardGalaxy(): Promise<void> {
+        const el = document.getElementById("galaxy-card-pixi");
+        if (!el) return;
+
+        const app = new Application();
+        await app.init({
+          width: 300,
+          height: 300,
+          backgroundAlpha: 0,
+          antialias: true,
+          resolution: 2,
+          autoDensity: true,
+        });
+        app.canvas.style.width = "150px";
+        app.canvas.style.height = "150px";
+        el.appendChild(app.canvas);
+
+        const particles = generateGalaxyParticles(600, 120);
+        const galaxyContainer = new Container();
+        galaxyContainer.x = 150;
+        galaxyContainer.y = 150;
+        app.stage.addChild(galaxyContainer);
+
+        const glowContainer = new Container();
+        galaxyContainer.addChild(glowContainer);
+        const sharpContainer = new Container();
+        galaxyContainer.addChild(sharpContainer);
+
+        for (const p of particles) {
+          const r = Math.round(34 + (255 - 34) * p.hue);
+          const g = Math.round(211 + (255 - 211) * p.hue);
+          const b = Math.round(238 + (255 - 238) * p.hue);
+          const color = (r << 16) | (g << 8) | b;
+
+          const dot = new Graphics();
+          dot.circle(0, 0, p.size);
+          dot.fill({ color, alpha: p.opacity });
+          dot.x = p.x;
+          dot.y = p.y;
+          sharpContainer.addChild(dot);
+
+          if (p.size > 1.0) {
+            const glow = new Graphics();
+            glow.circle(0, 0, p.size * 2.5);
+            glow.fill({ color: 0x22d3ee, alpha: p.opacity * 0.25 });
+            glow.x = p.x;
+            glow.y = p.y;
+            glowContainer.addChild(glow);
+          }
+        }
+
+        glowContainer.filters = [new BlurFilter({ strength: 4 })];
+
+        // Black hole sphere
+        const blackHoleContainer = new Container();
+        galaxyContainer.addChild(blackHoleContainer);
+
+        const SPHERE_R = 10;
+
+        const ringGlow = new Graphics();
+        ringGlow.circle(0, 0, SPHERE_R + 8);
+        ringGlow.stroke({ color: 0x22d3ee, alpha: 0.25, width: 6 });
+        blackHoleContainer.addChild(ringGlow);
+        ringGlow.filters = [new BlurFilter({ strength: 6 })];
+
+        const ringInner = new Graphics();
+        ringInner.circle(0, 0, SPHERE_R + 3);
+        ringInner.stroke({ color: 0x22d3ee, alpha: 0.45, width: 1.5 });
+        blackHoleContainer.addChild(ringInner);
+
+        const sphereContainer = new Container();
+        blackHoleContainer.addChild(sphereContainer);
+
+        const halo = new Graphics();
+        halo.circle(0, 0, SPHERE_R + 2);
+        halo.fill({ color: 0x0a0f1e, alpha: 0.8 });
+        sphereContainer.addChild(halo);
+        halo.filters = [new BlurFilter({ strength: 3 })];
+
+        const rings = 10;
+        for (let i = rings; i >= 0; i--) {
+          const t = i / rings;
+          const r = SPHERE_R * (0.3 + t * 0.7);
+          const ring = new Graphics();
+          ring.circle(0, 0, r);
+          const brightness = Math.floor(t * t * 18);
+          const color = (brightness << 16) | ((brightness + 2) << 8) | (brightness + 8);
+          ring.fill({ color, alpha: 1 });
+          sphereContainer.addChild(ring);
+        }
+
+        const specular = new Graphics();
+        specular.circle(-3, -4, 3);
+        specular.fill({ color: 0x334155, alpha: 0.6 });
+        sphereContainer.addChild(specular);
+        specular.filters = [new BlurFilter({ strength: 2.5 })];
+
+        const specCore = new Graphics();
+        specCore.circle(-2.5, -3.5, 1.5);
+        specCore.fill({ color: 0x64748b, alpha: 0.4 });
+        sphereContainer.addChild(specCore);
+        specCore.filters = [new BlurFilter({ strength: 1.5 })];
+
+        const rimLight = new Graphics();
+        rimLight.arc(0, 0, SPHERE_R - 1, Math.PI * 0.15, Math.PI * 0.65);
+        rimLight.stroke({ color: 0x22d3ee, alpha: 0.2, width: 1.5 });
+        sphereContainer.addChild(rimLight);
+        rimLight.filters = [new BlurFilter({ strength: 2 })];
+
+        const hotSpot = new Graphics();
+        hotSpot.circle(SPHERE_R + 4, 0, 2);
+        hotSpot.fill({ color: 0xffffff, alpha: 0.6 });
+        blackHoleContainer.addChild(hotSpot);
+        hotSpot.filters = [new BlurFilter({ strength: 2 })];
+
+        app.ticker.add(() => {
+          galaxyContainer.rotation += cardGalaxySpeed;
+          blackHoleContainer.rotation -= cardGalaxySpeed * 2;
+        });
+      }
+
+      initCanvas2DGalaxy();
+      initPixiGalaxy();
 
       // --- Number counter ---
       function countUp(el: HTMLElement, target: string, duration: number): void {
@@ -454,12 +880,12 @@ const PROVIDER_LOCATIONS: [number, number][] = [
           if (numEl) countUp(numEl, numEl.dataset.countTarget || "0", 1200);
         });
 
-        // Galaxy: fade in
+        // Galaxy: init PixiJS + fade in
+        initCardGalaxy();
         const galaxy = document.querySelector<HTMLElement>(".card-graphic--galaxy");
         if (galaxy) {
           animate(galaxy, {
-            opacity: [0, 0.85],
-            scale: [0.8, 1],
+            opacity: [0, 1],
             duration: 800,
             delay: 200,
             ease: "outQuad",
@@ -489,16 +915,11 @@ const PROVIDER_LOCATIONS: [number, number][] = [
 
       // --- Hover effects (subtle) ---
       function setupHoverEffects(): void {
-        // Galaxy: gentle slow rotation
+        // Galaxy: speed up rotation on hover
         const galaxyCard = document.querySelector('[data-accent="cyan"]');
-        const galaxy = document.querySelector<HTMLElement>(".card-graphic--galaxy");
-        if (galaxyCard && galaxy) {
-          galaxyCard.addEventListener("mouseenter", () => {
-            animate(galaxy, { rotate: [0, 15], scale: [1, 1.08], duration: 800, ease: "outQuad" });
-          });
-          galaxyCard.addEventListener("mouseleave", () => {
-            animate(galaxy, { rotate: [15, 0], scale: [1.08, 1], duration: 600, ease: "outQuad" });
-          });
+        if (galaxyCard) {
+          galaxyCard.addEventListener("mouseenter", () => { cardGalaxySpeed = 0.004; });
+          galaxyCard.addEventListener("mouseleave", () => { cardGalaxySpeed = 0.001; });
         }
 
         // Scatter: dots brighten
@@ -527,17 +948,15 @@ const PROVIDER_LOCATIONS: [number, number][] = [
 
       // --- Click easter eggs ---
       function setupClickEasterEggs(): void {
-        // Galaxy: spin 360
-        const galaxyCard = document.querySelector('[data-accent="cyan"]');
-        const galaxy = document.querySelector<HTMLElement>(".card-graphic--galaxy");
-        if (galaxyCard && galaxy) {
-          galaxyCard.addEventListener("click", () => {
-            animate(galaxy, {
-              rotate: [0, 360],
-              scale: [1, 1.15, 1],
-              duration: 1200,
-              ease: "inOutQuad",
-            });
+        // Galaxy: burst spin on click
+        const galaxyClickCard = document.querySelector('[data-accent="cyan"]');
+        if (galaxyClickCard) {
+          galaxyClickCard.addEventListener("click", () => {
+            // Ramp up speed then ease back down
+            cardGalaxySpeed = 0.02;
+            setTimeout(() => { cardGalaxySpeed = 0.008; }, 400);
+            setTimeout(() => { cardGalaxySpeed = 0.003; }, 800);
+            setTimeout(() => { cardGalaxySpeed = 0.001; }, 1200);
           });
         }
 
@@ -598,7 +1017,8 @@ const PROVIDER_LOCATIONS: [number, number][] = [
           if (numEl) numEl.textContent = numEl.dataset.countTarget || "0";
         });
         const galaxy = document.querySelector<HTMLElement>(".card-graphic--galaxy");
-        if (galaxy) galaxy.style.opacity = "0.85";
+        if (galaxy) galaxy.style.opacity = "1";
+        initCardGalaxy();
         document.querySelectorAll<SVGCircleElement>(".scatter-dot").forEach((dot) => {
           dot.setAttribute("r", dot.dataset.targetR || "2");
           dot.setAttribute("opacity", dot.dataset.targetOpacity || "0.5");
