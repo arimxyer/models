@@ -19,10 +19,14 @@
     "@astrojs/check": "^0.9.8",
     "@astrojs/react": "^5.0.1",
     "@lucide/astro": "^1.7.0",
+    "@rive-app/canvas": "^2.36.0",
     "@tailwindcss/vite": "^4.2.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "animejs": "^4.3.6",
     "astro": "^6.0.8",
+    "cobe": "^2.0.1",
+    "pixi.js": "^8.17.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "tailwind-merge": "^3.5.0",
@@ -32,6 +36,7 @@
   "devDependencies": {
     "@astrojs/ts-plugin": "^1.10.7",
     "@types/node": "^25.5.0",
+    "lottie-to-svg": "^1.1.0",
     "prettier": "^3.8.1",
     "prettier-plugin-astro": "^0.14.1",
     "prettier-plugin-tailwindcss": "^0.7.2"

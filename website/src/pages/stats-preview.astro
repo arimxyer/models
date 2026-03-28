@@ -1,0 +1,555 @@
+---
+import {
+  AGENT_COUNT,
+  DISPLAY,
+  STATUS_PROVIDER_COUNT,
+} from "@/data/site";
+
+const base = import.meta.env.BASE_URL;
+
+// Scatter plot: benchmark-like comparison data
+const SCATTER_COUNT = 32;
+const scatterDots = Array.from({ length: SCATTER_COUNT }, () => ({
+  x: +(12 + Math.random() * 178).toFixed(1),
+  y: +(10 + Math.random() * 78).toFixed(1),
+  r: +(1.5 + Math.random() * 2).toFixed(1),
+  opacity: +(0.35 + Math.random() * 0.65).toFixed(2),
+}));
+
+// Provider locations (approximate lat/lon of major AI providers)
+const PROVIDER_LOCATIONS: [number, number][] = [
+  [37.77, -122.42], [47.61, -122.33], [40.71, -74.01],
+  [51.51, -0.13], [48.86, 2.35], [52.52, 13.41],
+  [35.68, 139.69], [37.57, 126.98], [31.23, 121.47],
+  [39.90, 116.40], [22.54, 114.06], [1.35, 103.82],
+  [43.65, -79.38], [45.50, -73.57], [13.08, 80.27],
+  [12.97, 77.59], [25.20, 55.27], [34.05, -118.24],
+  [42.36, -71.06], [30.27, -97.74], [55.75, 37.62],
+  [-33.87, 151.21], [50.07, 14.44], [59.33, 18.07],
+  [32.07, 34.78],
+];
+---
+
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Stats Preview — v3</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Outfit:wght@300;600;900&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="page">
+      <h1 class="page-title">Stats Preview v3</h1>
+      <p class="page-subtitle">
+        Scroll to trigger · hover for subtle effect · click for easter egg
+      </p>
+
+      <div style="height: 60vh"></div>
+
+      <div class="stats-stack" id="stats-stack">
+        <!-- Card 1: Model_Density — Galaxy SVG -->
+        <div class="stat-card" data-stat-card data-accent="cyan">
+          <div class="card-top">
+            <span class="card-label">Model_Density</span>
+          </div>
+          <div class="card-body">
+            <div class="card-number glow-cyan" data-count-target={DISPLAY.models}>0</div>
+            <img
+              src={`${base}assets/stat-galaxy.svg`}
+              alt=""
+              aria-hidden="true"
+              class="card-graphic card-graphic--galaxy"
+            />
+          </div>
+        </div>
+
+        <!-- Card 2: Bench_Validation — Scatter Plot -->
+        <div class="stat-card" data-stat-card data-accent="magenta">
+          <div class="card-top">
+            <span class="card-label">Bench_Validation</span>
+          </div>
+          <div class="card-body">
+            <div class="card-number glow-magenta" data-count-target={DISPLAY.benchmarks}>0</div>
+            <svg class="card-graphic card-graphic--scatter" viewBox="0 0 200 100" aria-hidden="true">
+              <line x1="10" y1="92" x2="195" y2="92" stroke="var(--neon-magenta)" stroke-width="0.5" opacity="0.15" />
+              <line x1="10" y1="8" x2="10" y2="92" stroke="var(--neon-magenta)" stroke-width="0.5" opacity="0.15" />
+              <line x1="10" y1="50" x2="195" y2="50" stroke="var(--neon-magenta)" stroke-width="0.3" opacity="0.08" stroke-dasharray="4 3" />
+              <line x1="100" y1="8" x2="100" y2="92" stroke="var(--neon-magenta)" stroke-width="0.3" opacity="0.08" stroke-dasharray="4 3" />
+              <text x="102" y="99" fill="var(--neon-magenta)" font-size="5" font-family="'JetBrains Mono'" text-anchor="middle" opacity="0.25">QUALITY</text>
+              <text x="3" y="52" fill="var(--neon-magenta)" font-size="5" font-family="'JetBrains Mono'" text-anchor="middle" opacity="0.25" transform="rotate(-90 3 52)">SPEED</text>
+              {scatterDots.map((d) => (
+                <circle
+                  cx={d.x}
+                  cy={d.y}
+                  r="0"
+                  fill="var(--neon-magenta)"
+                  class="scatter-dot"
+                  data-target-r={d.r}
+                  data-target-opacity={d.opacity}
+                />
+              ))}
+            </svg>
+          </div>
+        </div>
+
+        <!-- Card 3: Provider_Nodes — Globe (cobe) -->
+        <div class="stat-card" data-stat-card data-accent="green">
+          <div class="card-top">
+            <span class="card-label">Provider_Nodes</span>
+          </div>
+          <div class="card-body">
+            <div class="card-number glow-green" data-count-target={String(STATUS_PROVIDER_COUNT)}>0</div>
+            <canvas
+              id="globe-canvas"
+              class="card-graphic card-graphic--globe"
+              width="240"
+              height="240"
+              aria-hidden="true"
+              data-locations={JSON.stringify(PROVIDER_LOCATIONS)}
+            ></canvas>
+          </div>
+        </div>
+
+        <!-- Card 4: Agent_Tracker — Animated Bot SVG -->
+        <div class="stat-card" data-stat-card data-accent="amber">
+          <div class="card-top">
+            <span class="card-label">Agent_Tracker</span>
+          </div>
+          <div class="card-body">
+            <div class="card-number glow-amber" data-count-target={String(AGENT_COUNT)}>0</div>
+            <div
+              class="card-graphic card-graphic--robot"
+              id="bot-container"
+              aria-hidden="true"
+              data-svg-src={`${base}assets/stat-robot.svg`}
+            ></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="height: 40vh"></div>
+    </div>
+
+    <style>
+      :root {
+        --neon-cyan: #22d3ee;
+        --neon-magenta: #f472b6;
+        --neon-green: #4ade80;
+        --neon-amber: #fbbf24;
+        --bg-slate: #0f172a;
+        --grid-color: rgba(34, 211, 238, 0.05);
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        font-family: 'Outfit', sans-serif;
+        background-color: var(--bg-slate);
+        background-image:
+          linear-gradient(var(--grid-color) 1px, transparent 1px),
+          linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+        background-size: 40px 40px;
+        color: #e2e8f0;
+      }
+      .page { max-width: 500px; margin: 0 auto; padding: 2rem 1rem; }
+      .page-title { font-size: 1.5rem; font-weight: 900; letter-spacing: -0.02em; color: white; }
+      .page-subtitle { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: #64748b; margin-top: 0.25rem; }
+
+      .stats-stack { display: grid; grid-template-rows: repeat(4, 1fr); gap: 4px; }
+
+      .stat-card {
+        border: 1px solid rgba(34, 211, 238, 0.2);
+        background: rgba(15, 23, 42, 0.8);
+        display: flex; flex-direction: column;
+        height: 170px; cursor: default; overflow: hidden;
+        opacity: 0; transform: translateY(12px);
+      }
+      .stat-card[data-accent="magenta"] { border-color: rgba(244, 114, 182, 0.2); }
+      .stat-card[data-accent="green"] { border-color: rgba(74, 222, 128, 0.2); border-left: 4px solid var(--neon-green); }
+      .stat-card[data-accent="amber"] { border-color: rgba(251, 191, 36, 0.2); }
+
+      .card-top { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; }
+      .card-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; color: #64748b; }
+
+      .card-body { flex: 1; display: flex; align-items: flex-end; justify-content: space-between; padding: 0 16px 16px; position: relative; }
+
+      .card-number {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: clamp(42px, 10vw, 56px);
+        font-weight: 900; letter-spacing: -2px;
+        font-variant-numeric: tabular-nums; line-height: 1; z-index: 1;
+      }
+      [data-accent="cyan"] .card-number { color: var(--neon-cyan); }
+      [data-accent="magenta"] .card-number { color: var(--neon-magenta); }
+      [data-accent="green"] .card-number { color: var(--neon-green); }
+      [data-accent="amber"] .card-number { color: var(--neon-amber); }
+
+      .glow-cyan { text-shadow: 0 0 10px rgba(34, 211, 238, 0.5); }
+      .glow-magenta { text-shadow: 0 0 10px rgba(244, 114, 182, 0.5); }
+      .glow-green { text-shadow: 0 0 10px rgba(74, 222, 128, 0.5); }
+      .glow-amber { text-shadow: 0 0 10px rgba(251, 191, 36, 0.5); }
+
+      /* Graphics */
+      .card-graphic { align-self: flex-end; }
+      .card-graphic--galaxy { width: 130px; height: auto; opacity: 0; }
+      .card-graphic--scatter { width: 200px; height: 100px; }
+      .card-graphic--globe { width: 120px; height: 120px; }
+      .card-graphic--robot { width: 150px; height: 120px; }
+
+      .scatter-dot { opacity: 0; }
+
+      /* Reduced motion */
+      @media (prefers-reduced-motion: reduce) {
+        .stat-card { opacity: 1 !important; transform: none !important; }
+        .card-graphic--galaxy { opacity: 1 !important; }
+        .scatter-dot { opacity: 0.6 !important; }
+      }
+    </style>
+
+    <script>
+      import { animate, stagger, onScroll, utils } from "animejs";
+      import createGlobe from "cobe";
+      import type { Globe } from "cobe";
+      // lottie-web removed — using static SVG + anime.js instead
+
+      // --- Number counter ---
+      function countUp(el: HTMLElement, target: string, duration: number): void {
+        const match = target.match(/^([\d,]+)(.*)$/);
+        if (!match) { el.textContent = target; return; }
+        const num = parseInt(match[1].replace(/,/g, ""), 10);
+        const suffix = match[2];
+        const counter = { value: 0 };
+        animate(counter, {
+          value: num,
+          duration,
+          ease: "outExpo",
+          modifier: utils.round(0),
+          onRender: () => {
+            el.textContent = counter.value.toLocaleString("en-US") + suffix;
+          },
+        });
+      }
+
+      // --- Animated Bot SVG ---
+      async function initRobot(): Promise<void> {
+        const container = document.getElementById("bot-container");
+        if (!container) return;
+
+        // Fetch and inject SVG so we can access internal elements
+        const src = container.dataset.svgSrc;
+        if (!src) return;
+        const res = await fetch(src);
+        const svgText = await res.text();
+        container.innerHTML = svgText;
+
+        const svg = container.querySelector("svg");
+        if (!svg) return;
+        svg.style.width = "100%";
+        svg.style.height = "100%";
+
+        // Idle: character floats gently — slow, subtle, continuous
+        animate("#bot-character", {
+          translateY: 70,
+          duration: 2500,
+          ease: "inOutSine",
+          loop: true,
+          alternate: true,
+        });
+
+        // Secondary motion: head lags behind body
+        animate("#bot-head-wrap", {
+          translateY: 3,
+          duration: 2800,
+          ease: "inOutSine",
+          loop: true,
+          alternate: true,
+        });
+
+        // Secondary motion: visor/eyes follow head with extra lag
+        animate("#bot-visor-wrap, #bot-eye-l-wrap, #bot-eye-r-wrap", {
+          translateY: 2,
+          duration: 3000,
+          ease: "inOutSine",
+          loop: true,
+          alternate: true,
+        });
+
+        // Secondary motion: arms sway with offset timing
+        animate("#bot-hand-l-wrap", {
+          translateY: 4,
+          translateX: -1,
+          duration: 2900,
+          ease: "inOutSine",
+          loop: true,
+          alternate: true,
+        });
+        animate("#bot-hand-r-wrap", {
+          translateY: 3,
+          translateX: 1,
+          duration: 3100,
+          ease: "inOutSine",
+          loop: true,
+          alternate: true,
+        });
+
+        // Secondary motion: ears drift independently
+        animate("#bot-ear-l-wrap", {
+          translateY: 2,
+          translateX: -1,
+          duration: 3300,
+          ease: "inOutSine",
+          loop: true,
+          alternate: true,
+        });
+        animate("#bot-ear-r-wrap", {
+          translateY: 2,
+          translateX: 1,
+          duration: 3000,
+          ease: "inOutSine",
+          loop: true,
+          alternate: true,
+        });
+
+        // Idle: shadow floats gently — slow, subtle, continuous
+        animate("#bot-shadow", {
+          duration: 2500,
+          ease: "inOutSine",
+          loop: true,
+          alternate: true,
+          opacity: 0.25
+        });
+
+        // Hover: eyes blink
+        const card = document.querySelector('[data-accent="amber"]');
+        card?.addEventListener("mouseenter", () => {
+          animate("#bot-eye-l, #bot-eye-r", {
+            opacity: [1, 0, 1],
+            duration: 250,
+            ease: "inOutQuad",
+          });
+        });
+
+        // Click: character shifts sideways and back, eyes double-blink
+        card?.addEventListener("click", () => {
+          animate("#bot-character", {
+            translateX: [0, 12, 0],
+            duration: 600,
+            ease: "inOutQuad",
+          });
+          animate("#bot-eye-l, #bot-eye-r", {
+            opacity: [1, 0, 1, 0, 1],
+            duration: 400,
+            ease: "inOutQuad",
+          });
+        });
+      }
+
+      // --- Globe ---
+      let globeInstance: Globe | null = null;
+      let globePhi = 0;
+      let globeSpeed = 0.003;
+
+      function initGlobe(): void {
+        const canvas = document.getElementById("globe-canvas") as HTMLCanvasElement;
+        if (!canvas) return;
+        const locs: [number, number][] = JSON.parse(canvas.dataset.locations || "[]");
+
+        globeInstance = createGlobe(canvas, {
+          devicePixelRatio: 2, width: 240, height: 240,
+          phi: 0, theta: 0.15, dark: 1, diffuse: 1.2,
+          mapSamples: 16000, mapBrightness: 4, mapBaseBrightness: 0.02,
+          baseColor: [0.12, 0.16, 0.26],
+          markerColor: [0.29, 0.87, 0.5],
+          glowColor: [0.08, 0.12, 0.2],
+          scale: 1, offset: [0, 0],
+          markers: locs.map(loc => ({ location: loc, size: 0.06 })),
+        });
+
+        function spin() {
+          globePhi += globeSpeed;
+          globeInstance?.update({ phi: globePhi });
+          requestAnimationFrame(spin);
+        }
+        spin();
+      }
+
+      // --- Activate all cards ---
+      function activateCards(): void {
+        const cards = document.querySelectorAll<HTMLElement>("[data-stat-card]");
+
+        // Fade in all cards together
+        animate(cards, {
+          opacity: [0, 1],
+          translateY: [12, 0],
+          duration: 600,
+          ease: "outQuad",
+          delay: stagger(100),
+        });
+
+        // Count up all numbers
+        cards.forEach((card) => {
+          const numEl = card.querySelector<HTMLElement>("[data-count-target]");
+          if (numEl) countUp(numEl, numEl.dataset.countTarget || "0", 1200);
+        });
+
+        // Galaxy: fade in
+        const galaxy = document.querySelector<HTMLElement>(".card-graphic--galaxy");
+        if (galaxy) {
+          animate(galaxy, {
+            opacity: [0, 0.85],
+            scale: [0.8, 1],
+            duration: 800,
+            delay: 200,
+            ease: "outQuad",
+          });
+        }
+
+        // Scatter dots: pop in
+        const dots = document.querySelectorAll<SVGCircleElement>(".scatter-dot");
+        dots.forEach((dot) => {
+          const targetR = parseFloat(dot.dataset.targetR || "2");
+          const targetOp = parseFloat(dot.dataset.targetOpacity || "0.5");
+          animate(dot, {
+            r: [0, targetR],
+            opacity: [0, targetOp],
+            duration: 400,
+            delay: stagger(15),
+            ease: "outBack",
+          });
+        });
+
+        // Globe: init
+        initGlobe();
+
+        // Robot: init PixiJS scene
+        initRobot();
+      }
+
+      // --- Hover effects (subtle) ---
+      function setupHoverEffects(): void {
+        // Galaxy: gentle slow rotation
+        const galaxyCard = document.querySelector('[data-accent="cyan"]');
+        const galaxy = document.querySelector<HTMLElement>(".card-graphic--galaxy");
+        if (galaxyCard && galaxy) {
+          galaxyCard.addEventListener("mouseenter", () => {
+            animate(galaxy, { rotate: [0, 15], scale: [1, 1.08], duration: 800, ease: "outQuad" });
+          });
+          galaxyCard.addEventListener("mouseleave", () => {
+            animate(galaxy, { rotate: [15, 0], scale: [1.08, 1], duration: 600, ease: "outQuad" });
+          });
+        }
+
+        // Scatter: dots brighten
+        const scatterCard = document.querySelector('[data-accent="magenta"]');
+        if (scatterCard) {
+          scatterCard.addEventListener("mouseenter", () => {
+            animate(".scatter-dot", { opacity: 0.9, duration: 300, ease: "outQuad" });
+          });
+          scatterCard.addEventListener("mouseleave", () => {
+            document.querySelectorAll<SVGCircleElement>(".scatter-dot").forEach((dot) => {
+              const targetOp = parseFloat(dot.dataset.targetOpacity || "0.5");
+              animate(dot, { opacity: targetOp, duration: 400, ease: "outQuad" });
+            });
+          });
+        }
+
+        // Globe: speed up on hover
+        const globeCard = document.querySelector('[data-accent="green"]');
+        if (globeCard) {
+          globeCard.addEventListener("mouseenter", () => { globeSpeed = 0.008; });
+          globeCard.addEventListener("mouseleave", () => { globeSpeed = 0.003; });
+        }
+
+        // Robot: handled by PixiJS internally
+      }
+
+      // --- Click easter eggs ---
+      function setupClickEasterEggs(): void {
+        // Galaxy: spin 360
+        const galaxyCard = document.querySelector('[data-accent="cyan"]');
+        const galaxy = document.querySelector<HTMLElement>(".card-graphic--galaxy");
+        if (galaxyCard && galaxy) {
+          galaxyCard.addEventListener("click", () => {
+            animate(galaxy, {
+              rotate: [0, 360],
+              scale: [1, 1.15, 1],
+              duration: 1200,
+              ease: "inOutQuad",
+            });
+          });
+        }
+
+        // Scatter: re-randomize dot positions
+        const scatterCard = document.querySelector('[data-accent="magenta"]');
+        if (scatterCard) {
+          scatterCard.addEventListener("click", () => {
+            document.querySelectorAll<SVGCircleElement>(".scatter-dot").forEach((dot) => {
+              animate(dot, {
+                cx: 12 + Math.random() * 178,
+                cy: 10 + Math.random() * 78,
+                duration: 600,
+                ease: "outElastic",
+              });
+            });
+          });
+        }
+
+        // Globe: zoom pulse
+        const globeCard = document.querySelector('[data-accent="green"]');
+        if (globeCard) {
+          globeCard.addEventListener("click", () => {
+            const canvas = document.getElementById("globe-canvas");
+            if (canvas) {
+              animate(canvas, {
+                scale: [1, 1.2, 1],
+                duration: 800,
+                ease: "outBack",
+              });
+            }
+          });
+        }
+
+        // Robot: handled by PixiJS internally
+      }
+
+      // --- Init ---
+      const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      if (!prefersReducedMotion) {
+        // Scroll-triggered activation
+        const stack = document.getElementById("stats-stack");
+        if (stack) {
+          onScroll({
+            target: stack,
+            enter: "bottom top",
+            onEnter: () => {
+              activateCards();
+            },
+          });
+        }
+      } else {
+        // Reduced motion: show final state
+        document.querySelectorAll<HTMLElement>("[data-stat-card]").forEach((card) => {
+          card.style.opacity = "1";
+          card.style.transform = "none";
+          const numEl = card.querySelector<HTMLElement>("[data-count-target]");
+          if (numEl) numEl.textContent = numEl.dataset.countTarget || "0";
+        });
+        const galaxy = document.querySelector<HTMLElement>(".card-graphic--galaxy");
+        if (galaxy) galaxy.style.opacity = "0.85";
+        document.querySelectorAll<SVGCircleElement>(".scatter-dot").forEach((dot) => {
+          dot.setAttribute("r", dot.dataset.targetR || "2");
+          dot.setAttribute("opacity", dot.dataset.targetOpacity || "0.5");
+        });
+        initGlobe();
+        initRobot();
+      }
+
+      setupHoverEffects();
+      setupClickEasterEggs();
+    </script>
+  </body>
+</html>
