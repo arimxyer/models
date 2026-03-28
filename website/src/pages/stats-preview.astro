@@ -332,17 +332,76 @@ const PROVIDER_LOCATIONS: [number, number][] = [
           });
         });
 
-        // Click: character shifts sideways and back, eyes double-blink
-        card?.addEventListener("click", () => {
-          animate("#bot-character", {
-            translateX: [0, 12, 0],
-            duration: 600,
-            ease: "inOutQuad",
+        // Click: robot swap — current exits right, new one enters left
+        const eyeColors = [
+          "rgb(125,138,255)", // #1 original blue-purple
+          "rgb(34,211,238)",  // #2 cyan
+          "rgb(244,114,182)", // #3 magenta
+          "rgb(74,222,128)",  // #4 green
+          "rgb(251,191,36)",  // #5 amber
+          "rgb(239,68,68)",   // #6 red
+          "rgb(168,85,247)",  // #7 purple
+          "rgb(59,130,246)",  // #8 blue
+          "rgb(20,184,166)",  // #9 teal
+          "rgb(245,158,11)",  // #10 orange
+          "rgb(236,72,153)",  // #11 pink
+        ];
+        let botIndex = 0;
+        let swapping = false;
+
+        // Add number label to the body — large watermark centered on torso
+        const botBody = container!.querySelector("#bot-body");
+        const svgNs = "http://www.w3.org/2000/svg";
+        const numLabel = document.createElementNS(svgNs, "text");
+        numLabel.setAttribute("x", "-23");
+        numLabel.setAttribute("y", "235");
+        numLabel.setAttribute("text-anchor", "middle");
+        numLabel.setAttribute("font-size", "140");
+        numLabel.setAttribute("font-family", "'JetBrains Mono', monospace");
+        numLabel.setAttribute("font-weight", "900");
+        numLabel.setAttribute("fill", eyeColors[0]);
+        numLabel.setAttribute("opacity", "1");
+        numLabel.textContent = "1";
+        botBody?.appendChild(numLabel);
+
+        function setBot(index: number) {
+          const color = eyeColors[index % eyeColors.length];
+          // Update eye colors
+          container!.querySelectorAll("#bot-eye-l path, #bot-eye-r path").forEach((p) => {
+            if ((p as SVGElement).getAttribute("fill")?.startsWith("rgb")) {
+              (p as SVGElement).setAttribute("fill", color);
+            }
           });
-          animate("#bot-eye-l, #bot-eye-r", {
-            opacity: [1, 0, 1, 0, 1],
-            duration: 400,
-            ease: "inOutQuad",
+          // Update number + match color to eyes
+          numLabel.textContent = `${index + 1}`;
+          numLabel.setAttribute("fill", color);
+          numLabel.setAttribute("opacity", "0.35");
+        }
+
+        card?.addEventListener("click", () => {
+          if (swapping) return;
+          swapping = true;
+
+          // Exit right — animate the whole #bot group (character + shadow together)
+          animate("#bot", {
+            translateX: 1800,
+            duration: 500,
+            ease: "inQuad",
+            onComplete: () => {
+              // Swap appearance while fully off-screen
+              botIndex = (botIndex + 1) % 11;
+              setBot(botIndex);
+
+              // Pause, then re-enter from right
+              setTimeout(() => {
+                animate("#bot", {
+                  translateX: 0,
+                  duration: 500,
+                  ease: "outQuad",
+                  onComplete: () => { swapping = false; },
+                });
+              }, 1500);
+            },
           });
         });
       }
