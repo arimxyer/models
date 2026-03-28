@@ -916,7 +916,7 @@ const PROVIDER_LOCATIONS: [number, number][] = [
       // --- Hover effects (subtle) ---
       function setupHoverEffects(): void {
         // Galaxy: speed up rotation on hover
-        const galaxyCard = document.querySelector('[data-accent="cyan"]');
+        const galaxyCard = document.querySelector('.stat-card[data-accent="cyan"]');
         if (galaxyCard) {
           galaxyCard.addEventListener("mouseenter", () => { cardGalaxySpeed = 0.004; });
           galaxyCard.addEventListener("mouseleave", () => { cardGalaxySpeed = 0.001; });
@@ -949,7 +949,7 @@ const PROVIDER_LOCATIONS: [number, number][] = [
       // --- Click easter eggs ---
       function setupClickEasterEggs(): void {
         // Galaxy: burst spin on click
-        const galaxyClickCard = document.querySelector('[data-accent="cyan"]');
+        const galaxyClickCard = document.querySelector('.stat-card[data-accent="cyan"]');
         if (galaxyClickCard) {
           galaxyClickCard.addEventListener("click", () => {
             // Ramp up speed then ease back down
