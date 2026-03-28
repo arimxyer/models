@@ -64,7 +64,7 @@ import TooltipContent from "@/components/bearnie/tooltip/TooltipContent.astro";
 </div>
 
 <script>
-  import { animate } from "animejs";
+  import { createTimeline } from "animejs";
 
   const phrases = [
     { text: "Browse the AI ecosystem.", color: "var(--neon-magenta)" },
@@ -85,24 +85,18 @@ import TooltipContent from "@/components/bearnie/tooltip/TooltipContent.astro";
 
     let index = 0;
 
-    function scheduleNext() {
-      setTimeout(() => {
-        animate(el!, {
-          opacity: 0,
-          duration: 400,
-          ease: "outQuad",
-          onComplete: () => {
-            index = (index + 1) % phrases.length;
-            el!.textContent = phrases[index].text;
-            el!.style.color = phrases[index].color;
-            animate(el!, { opacity: 1, duration: 400, ease: "inQuad" });
-            scheduleNext();
-          },
-        });
-      }, 6000);
-    }
-
-    scheduleNext();
+    createTimeline({ loop: true })
+      .add(el, { opacity: 0, duration: 400, ease: "outQuad" }, "+=6000")
+      .add(el, {
+        opacity: 0,
+        duration: 1,
+        onComplete: () => {
+          index = (index + 1) % phrases.length;
+          el.textContent = phrases[index].text;
+          el.style.color = phrases[index].color;
+        },
+      })
+      .add(el, { opacity: 1, duration: 400, ease: "inQuad" });
   }
 
   initRotator();

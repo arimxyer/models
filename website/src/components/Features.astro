@@ -7,6 +7,7 @@ import Button from "@/components/bearnie/button/Button.astro";
 import Tooltip from "@/components/bearnie/tooltip/Tooltip.astro";
 import TooltipTrigger from "@/components/bearnie/tooltip/TooltipTrigger.astro";
 import TooltipContent from "@/components/bearnie/tooltip/TooltipContent.astro";
+import TerminalChrome from "@/components/TerminalChrome.astro";
 import { Pause, Play } from "@lucide/astro";
 import {
   DISPLAY,
@@ -109,20 +110,7 @@ const tabTriggerClass =
     </div>
 
     <TabsContent value="models" class="mt-0 h-full md:col-span-3">
-      <div class="data-border relative h-full overflow-hidden bg-black">
-        <div
-          class="data-header flex justify-between px-4 py-2"
-          aria-hidden="true"
-        >
-          <div class="flex gap-2">
-            <div class="h-2 w-2 rounded-full bg-slate-700"></div>
-            <div class="h-2 w-2 rounded-full bg-slate-700"></div>
-            <div class="h-2 w-2 rounded-full bg-slate-700"></div>
-          </div>
-          <span class="font-mono text-[10px] text-slate-400 uppercase"
-            >MODE: TUI // TAB: MODELS</span
-          >
-        </div>
+      <TerminalChrome label="MODE: TUI // TAB: MODELS" class="relative h-full">
         <video
           class="w-full"
           muted
@@ -149,24 +137,11 @@ const tabTriggerClass =
             <li>+ Cross-provider search</li>
           </ul>
         </div>
-      </div>
+      </TerminalChrome>
     </TabsContent>
 
     <TabsContent value="agents" class="mt-0 h-full md:col-span-3">
-      <div class="data-border relative h-full overflow-hidden bg-black">
-        <div
-          class="data-header flex justify-between px-4 py-2"
-          aria-hidden="true"
-        >
-          <div class="flex gap-2">
-            <div class="h-2 w-2 rounded-full bg-slate-700"></div>
-            <div class="h-2 w-2 rounded-full bg-slate-700"></div>
-            <div class="h-2 w-2 rounded-full bg-slate-700"></div>
-          </div>
-          <span class="font-mono text-[10px] text-slate-400 uppercase"
-            >MODE: TUI // TAB: AGENTS</span
-          >
-        </div>
+      <TerminalChrome label="MODE: TUI // TAB: AGENTS" class="relative h-full">
         <video
           class="w-full"
           muted
@@ -193,24 +168,14 @@ const tabTriggerClass =
             <li>+ Live service health status</li>
           </ul>
         </div>
-      </div>
+      </TerminalChrome>
     </TabsContent>
 
     <TabsContent value="benchmarks" class="mt-0 h-full md:col-span-3">
-      <div class="data-border relative h-full overflow-hidden bg-black">
-        <div
-          class="data-header flex justify-between px-4 py-2"
-          aria-hidden="true"
-        >
-          <div class="flex gap-2">
-            <div class="h-2 w-2 rounded-full bg-slate-700"></div>
-            <div class="h-2 w-2 rounded-full bg-slate-700"></div>
-            <div class="h-2 w-2 rounded-full bg-slate-700"></div>
-          </div>
-          <span class="font-mono text-[10px] text-slate-400 uppercase"
-            >MODE: TUI // TAB: BENCHMARKS</span
-          >
-        </div>
+      <TerminalChrome
+        label="MODE: TUI // TAB: BENCHMARKS"
+        class="relative h-full"
+      >
         <video
           class="w-full"
           muted
@@ -237,24 +202,11 @@ const tabTriggerClass =
             <li>+ Filter by creator and region</li>
           </ul>
         </div>
-      </div>
+      </TerminalChrome>
     </TabsContent>
 
     <TabsContent value="status" class="mt-0 h-full md:col-span-3">
-      <div class="data-border relative h-full overflow-hidden bg-black">
-        <div
-          class="data-header flex justify-between px-4 py-2"
-          aria-hidden="true"
-        >
-          <div class="flex gap-2">
-            <div class="h-2 w-2 rounded-full bg-slate-700"></div>
-            <div class="h-2 w-2 rounded-full bg-slate-700"></div>
-            <div class="h-2 w-2 rounded-full bg-slate-700"></div>
-          </div>
-          <span class="font-mono text-[10px] text-slate-400 uppercase"
-            >MODE: TUI // TAB: STATUS</span
-          >
-        </div>
+      <TerminalChrome label="MODE: TUI // TAB: STATUS" class="relative h-full">
         <video
           class="w-full"
           muted
@@ -281,7 +233,7 @@ const tabTriggerClass =
             <li>+ Grouped service components</li>
           </ul>
         </div>
-      </div>
+      </TerminalChrome>
     </TabsContent>
   </Tabs>
 </section>

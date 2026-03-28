@@ -93,7 +93,6 @@ body {
   border-bottom: 1px solid rgba(34, 211, 238, 0.3);
 }
 @media (prefers-reduced-motion: no-preference) {
-
   @media (min-width: 768px) {
     .hero-command-text {
       display: inline-block;

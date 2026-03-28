@@ -1,9 +1,6 @@
 ---
 import { RELEASES_URL } from "@/data/site";
-import { ClipboardCopy, Check } from "@lucide/astro";
-import Button from "@/components/bearnie/button/Button.astro";
-import Tooltip from "@/components/bearnie/tooltip/Tooltip.astro";
-import TooltipContent from "@/components/bearnie/tooltip/TooltipContent.astro";
+import InstallCard from "@/components/InstallCard.astro";
 ---
 
 <section class="grid grid-cols-1 gap-4 lg:grid-cols-4">
@@ -15,138 +12,10 @@ import TooltipContent from "@/components/bearnie/tooltip/TooltipContent.astro";
     </h2>
   </div>
   <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:col-span-3">
-    <!-- Homebrew -->
-    <Tooltip class="w-full">
-      <Button
-        variant="ghost"
-        class="data-border group relative flex h-auto w-full cursor-pointer flex-col items-start gap-2 rounded-none border-0 bg-transparent p-4 text-left transition-colors hover:bg-(--neon-green)/10 focus-visible:ring-2 focus-visible:ring-(--neon-cyan) focus-visible:outline-none sm:flex-row sm:items-center sm:justify-between"
-        data-copy-btn
-        data-copy-text="brew install models"
-        aria-label="Copy install command: brew install models"
-        data-tooltip-trigger
-      >
-        <span class="text-sm font-bold tracking-widest uppercase">Homebrew</span
-        >
-        <div
-          class="flex w-full justify-between gap-2 sm:w-auto sm:justify-start"
-        >
-          <code
-            class="font-mono text-xs break-all text-slate-400 transition-colors group-hover:text-(--neon-green) sm:break-normal"
-            >brew install models</code
-          >
-          <div class="relative size-3.5 shrink-0 text-slate-400">
-            <ClipboardCopy
-              class="clipboard-icon absolute inset-0 transition-opacity duration-200"
-              aria-hidden="true"
-            />
-            <Check
-              class="check-icon absolute inset-0 opacity-0 transition-opacity duration-200"
-              aria-hidden="true"
-            />
-          </div>
-        </div>
-      </Button>
-      <TooltipContent side="top">Click to copy</TooltipContent>
-    </Tooltip>
-
-    <!-- Cargo -->
-    <Tooltip class="w-full">
-      <Button
-        variant="ghost"
-        class="data-border group relative flex h-auto w-full cursor-pointer flex-col items-start gap-2 rounded-none border-0 bg-transparent p-4 text-left transition-colors hover:bg-(--neon-green)/10 focus-visible:ring-2 focus-visible:ring-(--neon-cyan) focus-visible:outline-none sm:flex-row sm:items-center sm:justify-between"
-        data-copy-btn
-        data-copy-text="cargo install modelsdev"
-        aria-label="Copy install command: cargo install modelsdev"
-        data-tooltip-trigger
-      >
-        <span class="text-sm font-bold tracking-widest uppercase">Cargo</span>
-        <div
-          class="flex w-full justify-between gap-2 sm:w-auto sm:justify-start"
-        >
-          <code
-            class="font-mono text-xs break-all text-slate-400 transition-colors group-hover:text-(--neon-green) sm:break-normal"
-            >cargo install modelsdev</code
-          >
-          <div class="relative size-3.5 shrink-0 text-slate-400">
-            <ClipboardCopy
-              class="clipboard-icon absolute inset-0 transition-opacity duration-200"
-              aria-hidden="true"
-            />
-            <Check
-              class="check-icon absolute inset-0 opacity-0 transition-opacity duration-200"
-              aria-hidden="true"
-            />
-          </div>
-        </div>
-      </Button>
-      <TooltipContent side="top">Click to copy</TooltipContent>
-    </Tooltip>
-
-    <!-- Scoop -->
-    <Tooltip class="w-full">
-      <Button
-        variant="ghost"
-        class="data-border group relative flex h-auto w-full cursor-pointer flex-col items-start gap-2 rounded-none border-0 bg-transparent p-4 text-left transition-colors hover:bg-(--neon-green)/10 focus-visible:ring-2 focus-visible:ring-(--neon-cyan) focus-visible:outline-none sm:flex-row sm:items-center sm:justify-between"
-        data-copy-btn
-        data-copy-text="scoop install extras/models"
-        aria-label="Copy install command: scoop install extras/models"
-        data-tooltip-trigger
-      >
-        <span class="text-sm font-bold tracking-widest uppercase">Scoop</span>
-        <div
-          class="flex w-full justify-between gap-2 sm:w-auto sm:justify-start"
-        >
-          <code
-            class="font-mono text-xs break-all text-slate-400 transition-colors group-hover:text-(--neon-green) sm:break-normal"
-            >scoop install extras/models</code
-          >
-          <div class="relative size-3.5 shrink-0 text-slate-400">
-            <ClipboardCopy
-              class="clipboard-icon absolute inset-0 transition-opacity duration-200"
-              aria-hidden="true"
-            />
-            <Check
-              class="check-icon absolute inset-0 opacity-0 transition-opacity duration-200"
-              aria-hidden="true"
-            />
-          </div>
-        </div>
-      </Button>
-      <TooltipContent side="top">Click to copy</TooltipContent>
-    </Tooltip>
-
-    <!-- AUR -->
-    <Tooltip class="w-full">
-      <Button
-        variant="ghost"
-        class="data-border group relative flex h-auto w-full cursor-pointer flex-col items-start gap-2 rounded-none border-0 bg-transparent p-4 text-left transition-colors hover:bg-(--neon-green)/10 focus-visible:ring-2 focus-visible:ring-(--neon-cyan) focus-visible:outline-none sm:flex-row sm:items-center sm:justify-between"
-        data-copy-btn
-        data-copy-text="paru -S models-bin"
-        aria-label="Copy install command: paru -S models-bin"
-        data-tooltip-trigger
-      >
-        <span class="text-sm font-bold tracking-widest uppercase">AUR</span>
-        <div
-          class="flex w-full justify-between gap-2 sm:w-auto sm:justify-start"
-        >
-          <code
-            class="font-mono text-xs break-all text-slate-400 transition-colors group-hover:text-(--neon-green) sm:break-normal"
-            >paru -S models-bin</code
-          >
-          <div class="relative size-3.5 shrink-0 text-slate-400">
-            <ClipboardCopy
-              class="clipboard-icon absolute inset-0 transition-opacity duration-200"
-              aria-hidden="true"
-            />
-            <Check
-              class="check-icon absolute inset-0 opacity-0 transition-opacity duration-200"
-              aria-hidden="true"
-            />
-          </div>
-        </div>
-      </Button>
-      <TooltipContent side="top">Click to copy</TooltipContent>
-    </Tooltip>
+    <InstallCard label="Homebrew" command="brew install models" />
+    <InstallCard label="Cargo" command="cargo install modelsdev" />
+    <InstallCard label="Scoop" command="scoop install extras/models" />
+    <InstallCard label="AUR" command="paru -S models-bin" />
   </div>
 </section>
 <div class="py-4">

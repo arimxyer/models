@@ -70,7 +70,14 @@ const PROVIDER_LOCATIONS: [number, number][] = [
 </div>
 
 <script>
-  import { animate, stagger, onScroll, utils } from "animejs";
+  import {
+    animate,
+    waapi,
+    stagger,
+    onScroll,
+    utils,
+    createScope,
+  } from "animejs";
 
   // --- Number counter ---
   function countUp(el: HTMLElement, target: string, duration: number): void {
@@ -99,39 +106,50 @@ const PROVIDER_LOCATIONS: [number, number][] = [
     if (cardsActivated) return;
     cardsActivated = true;
 
-    const cards = document.querySelectorAll<HTMLElement>("[data-stat-card]");
-
-    // Fade in all cards together
-    animate(cards, {
-      opacity: [0, 1],
-      translateY: [12, 0],
-      duration: 600,
-      ease: "outQuad",
-      delay: stagger(100),
+    const scope = createScope({
+      root: document.getElementById("stats-stack") ?? undefined,
     });
 
-    // Count up all numbers
-    cards.forEach((card) => {
-      const numEl = card.querySelector<HTMLElement>("[data-count-target]");
-      if (numEl) countUp(numEl, numEl.dataset.countTarget || "0", 1200);
-    });
+    scope.add(() => {
+      const cards = document.querySelectorAll<HTMLElement>("[data-stat-card]");
 
-    // Activate all graphics via CustomEvents
-    document.dispatchEvent(new CustomEvent("galaxy:activate"));
-    document.dispatchEvent(new CustomEvent("scatter:activate"));
-    document.dispatchEvent(new CustomEvent("globe:activate"));
-    document.dispatchEvent(new CustomEvent("robot:activate"));
-
-    // Galaxy: fade in wrapper
-    const galaxy = document.querySelector<HTMLElement>(".galaxy-graphic");
-    if (galaxy) {
-      animate(galaxy, {
+      // Fade in all cards together (WAAPI — runs on compositor thread)
+      waapi.animate(cards, {
         opacity: [0, 1],
-        duration: 800,
-        delay: 200,
+        translateY: [12, 0],
+        duration: 600,
         ease: "outQuad",
+        delay: stagger(100),
       });
-    }
+
+      // Count up all numbers (JS engine — needs modifier + onRender callbacks)
+      cards.forEach((card) => {
+        const numEl = card.querySelector<HTMLElement>("[data-count-target]");
+        if (numEl) countUp(numEl, numEl.dataset.countTarget || "0", 1200);
+      });
+
+      // Activate all graphics via CustomEvents
+      document.dispatchEvent(new CustomEvent("galaxy:activate"));
+      document.dispatchEvent(new CustomEvent("scatter:activate"));
+      document.dispatchEvent(new CustomEvent("globe:activate"));
+      document.dispatchEvent(new CustomEvent("robot:activate"));
+
+      // Galaxy: fade in wrapper (single element, low impact — regular animate)
+      const galaxy = document.querySelector<HTMLElement>(".galaxy-graphic");
+      if (galaxy) {
+        animate(galaxy, {
+          opacity: [0, 1],
+          duration: 800,
+          delay: 200,
+          ease: "outQuad",
+        });
+      }
+    });
+
+    // Cleanup on Astro view-transition navigation
+    document.addEventListener("astro:before-swap", () => scope.revert(), {
+      once: true,
+    });
   }
 
   // --- Hover effects ---
