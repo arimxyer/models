@@ -758,7 +758,10 @@ const PROVIDER_LOCATIONS: [number, number][] = [
         phase: number;
       }[] = [];
 
+      let cardGalaxyInitialized = false;
       async function initCardGalaxy(): Promise<void> {
+        if (cardGalaxyInitialized) return;
+        cardGalaxyInitialized = true;
         const el = document.getElementById("galaxy-card-pixi");
         if (!el) return;
 
@@ -949,7 +952,10 @@ const PROVIDER_LOCATIONS: [number, number][] = [
       }
 
       // --- Animated Bot SVG ---
+      let robotInitialized = false;
       async function initRobot(): Promise<void> {
+        if (robotInitialized) return;
+        robotInitialized = true;
         const container = document.getElementById("bot-container");
         if (!container) return;
 
@@ -1131,6 +1137,7 @@ const PROVIDER_LOCATIONS: [number, number][] = [
       let globeSpeed = 0.003;
 
       function initGlobe(): void {
+        if (globeInstance) return; // prevent duplicate init from re-triggering scroll
         const canvas = document.getElementById(
           "globe-canvas",
         ) as HTMLCanvasElement;
@@ -1167,7 +1174,10 @@ const PROVIDER_LOCATIONS: [number, number][] = [
       }
 
       // --- Activate all cards ---
+      let cardsActivated = false;
       function activateCards(): void {
+        if (cardsActivated) return;
+        cardsActivated = true;
         const cards =
           document.querySelectorAll<HTMLElement>("[data-stat-card]");
 
