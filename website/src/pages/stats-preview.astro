@@ -380,13 +380,15 @@ const PROVIDER_LOCATIONS: [number, number][] = [
       .card-graphic {
         align-self: flex-end;
       }
+      /* All graphics centered at the same point: right edge of card minus ~30% */
+      /* No transform used — anime.js click animations would overwrite it */
       .card-graphic--galaxy {
         width: 150px;
         height: 150px;
         perspective: 600px;
         opacity: 0;
         position: absolute;
-        right: 8px;
+        right: calc(25% - 75px);
         bottom: 8px;
       }
       .card-graphic--galaxy canvas {
@@ -396,14 +398,23 @@ const PROVIDER_LOCATIONS: [number, number][] = [
       .card-graphic--scatter {
         width: 200px;
         height: 100px;
+        position: absolute;
+        right: calc(25% - 95px);
+        bottom: 8px;
       }
       .card-graphic--globe {
-        width: 120px;
-        height: 120px;
+        width: 140px;
+        height: 140px;
+        position: absolute;
+        right: calc(25% - 60px);
+        bottom: 0px;
       }
       .card-graphic--robot {
         width: 150px;
         height: 120px;
+        position: absolute;
+        right: calc(25% - 75px);
+        bottom: 8px;
       }
 
       .scatter-dot {
@@ -1258,7 +1269,7 @@ const PROVIDER_LOCATIONS: [number, number][] = [
         const globeCard = document.querySelector('[data-accent="green"]');
         if (globeCard) {
           globeCard.addEventListener("mouseenter", () => {
-            globeSpeed = 0.008;
+            globeSpeed = 0.006;
           });
           globeCard.addEventListener("mouseleave", () => {
             globeSpeed = 0.003;
@@ -1279,7 +1290,7 @@ const PROVIDER_LOCATIONS: [number, number][] = [
             // Ramp up speed then ease back down
             cardGalaxySpeed = 0.02;
             setTimeout(() => {
-              cardGalaxySpeed = 0.008;
+              cardGalaxySpeed = 0.007;
             }, 400);
             setTimeout(() => {
               cardGalaxySpeed = 0.003;
