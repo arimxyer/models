@@ -192,6 +192,7 @@ These animations run unconditionally (known gap):
 ### Stat Card Animations (stats-preview)
 
 Stat cards use `animejs` v4 for scroll-triggered entry, number counters, hover effects, and click easter eggs. Each card has a unique visualization:
+
 - **Model_Density**: galaxy SVG (recolored from LottieFiles)
 - **Bench_Validation**: programmatic scatter plot (SVG dots animated by anime.js)
 - **Provider_Nodes**: cobe WebGL globe with real provider city markers
