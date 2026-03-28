@@ -1,9 +1,5 @@
 ---
-import {
-  AGENT_COUNT,
-  DISPLAY,
-  STATUS_PROVIDER_COUNT,
-} from "@/data/site";
+import { AGENT_COUNT, DISPLAY, STATUS_PROVIDER_COUNT } from "@/data/site";
 
 const base = import.meta.env.BASE_URL;
 
@@ -18,14 +14,30 @@ const scatterDots = Array.from({ length: SCATTER_COUNT }, () => ({
 
 // Provider locations (approximate lat/lon of major AI providers)
 const PROVIDER_LOCATIONS: [number, number][] = [
-  [37.77, -122.42], [47.61, -122.33], [40.71, -74.01],
-  [51.51, -0.13], [48.86, 2.35], [52.52, 13.41],
-  [35.68, 139.69], [37.57, 126.98], [31.23, 121.47],
-  [39.90, 116.40], [22.54, 114.06], [1.35, 103.82],
-  [43.65, -79.38], [45.50, -73.57], [13.08, 80.27],
-  [12.97, 77.59], [25.20, 55.27], [34.05, -118.24],
-  [42.36, -71.06], [30.27, -97.74], [55.75, 37.62],
-  [-33.87, 151.21], [50.07, 14.44], [59.33, 18.07],
+  [37.77, -122.42],
+  [47.61, -122.33],
+  [40.71, -74.01],
+  [51.51, -0.13],
+  [48.86, 2.35],
+  [52.52, 13.41],
+  [35.68, 139.69],
+  [37.57, 126.98],
+  [31.23, 121.47],
+  [39.9, 116.4],
+  [22.54, 114.06],
+  [1.35, 103.82],
+  [43.65, -79.38],
+  [45.5, -73.57],
+  [13.08, 80.27],
+  [12.97, 77.59],
+  [25.2, 55.27],
+  [34.05, -118.24],
+  [42.36, -71.06],
+  [30.27, -97.74],
+  [55.75, 37.62],
+  [-33.87, 151.21],
+  [50.07, 14.44],
+  [59.33, 18.07],
   [32.07, 34.78],
 ];
 ---
@@ -54,16 +66,24 @@ const PROVIDER_LOCATIONS: [number, number][] = [
         <div class="galaxy-option">
           <span class="option-label">Option 1 — Canvas 2D</span>
           <div class="galaxy-frame" data-accent="cyan">
-            <canvas id="galaxy-canvas2d" width="400" height="400" aria-hidden="true"></canvas>
+            <canvas
+              id="galaxy-canvas2d"
+              width="400"
+              height="400"
+              aria-hidden="true"></canvas>
           </div>
-          <span class="option-note">~0KB extra · shadowBlur glow · rAF rotation</span>
+          <span class="option-note"
+            >~0KB extra · shadowBlur glow · rAF rotation</span
+          >
         </div>
         <div class="galaxy-option">
           <span class="option-label">Option 2 — PixiJS WebGL</span>
           <div class="galaxy-frame galaxy-frame--tilted" data-accent="cyan">
             <div id="galaxy-pixi" style="width:400px;height:400px"></div>
           </div>
-          <span class="option-note">~150KB bundle · additive blend · GPU particles</span>
+          <span class="option-note"
+            >~150KB bundle · additive blend · GPU particles</span
+          >
         </div>
       </div>
 
@@ -76,12 +96,18 @@ const PROVIDER_LOCATIONS: [number, number][] = [
             <span class="card-label">Model_Density</span>
           </div>
           <div class="card-body">
-            <div class="card-number glow-cyan" data-count-target={DISPLAY.models}>0</div>
+            <div
+              class="card-number glow-cyan"
+              data-count-target={DISPLAY.models}
+            >
+              0
+            </div>
             <div
               id="galaxy-card-pixi"
               aria-hidden="true"
               class="card-graphic card-graphic--galaxy"
-            ></div>
+            >
+            </div>
           </div>
         </div>
 
@@ -91,25 +117,83 @@ const PROVIDER_LOCATIONS: [number, number][] = [
             <span class="card-label">Bench_Validation</span>
           </div>
           <div class="card-body">
-            <div class="card-number glow-magenta" data-count-target={DISPLAY.benchmarks}>0</div>
-            <svg class="card-graphic card-graphic--scatter" viewBox="0 0 200 100" aria-hidden="true">
-              <line x1="10" y1="92" x2="195" y2="92" stroke="var(--neon-magenta)" stroke-width="0.5" opacity="0.15" />
-              <line x1="10" y1="8" x2="10" y2="92" stroke="var(--neon-magenta)" stroke-width="0.5" opacity="0.15" />
-              <line x1="10" y1="50" x2="195" y2="50" stroke="var(--neon-magenta)" stroke-width="0.3" opacity="0.08" stroke-dasharray="4 3" />
-              <line x1="100" y1="8" x2="100" y2="92" stroke="var(--neon-magenta)" stroke-width="0.3" opacity="0.08" stroke-dasharray="4 3" />
-              <text x="102" y="99" fill="var(--neon-magenta)" font-size="5" font-family="'JetBrains Mono'" text-anchor="middle" opacity="0.25">QUALITY</text>
-              <text x="3" y="52" fill="var(--neon-magenta)" font-size="5" font-family="'JetBrains Mono'" text-anchor="middle" opacity="0.25" transform="rotate(-90 3 52)">SPEED</text>
-              {scatterDots.map((d) => (
-                <circle
-                  cx={d.x}
-                  cy={d.y}
-                  r="0"
-                  fill="var(--neon-magenta)"
-                  class="scatter-dot"
-                  data-target-r={d.r}
-                  data-target-opacity={d.opacity}
-                />
-              ))}
+            <div
+              class="card-number glow-magenta"
+              data-count-target={DISPLAY.benchmarks}
+            >
+              0
+            </div>
+            <svg
+              class="card-graphic card-graphic--scatter"
+              viewBox="0 0 200 100"
+              aria-hidden="true"
+            >
+              <line
+                x1="10"
+                y1="92"
+                x2="195"
+                y2="92"
+                stroke="var(--neon-magenta)"
+                stroke-width="0.5"
+                opacity="0.15"></line>
+              <line
+                x1="10"
+                y1="8"
+                x2="10"
+                y2="92"
+                stroke="var(--neon-magenta)"
+                stroke-width="0.5"
+                opacity="0.15"></line>
+              <line
+                x1="10"
+                y1="50"
+                x2="195"
+                y2="50"
+                stroke="var(--neon-magenta)"
+                stroke-width="0.3"
+                opacity="0.08"
+                stroke-dasharray="4 3"></line>
+              <line
+                x1="100"
+                y1="8"
+                x2="100"
+                y2="92"
+                stroke="var(--neon-magenta)"
+                stroke-width="0.3"
+                opacity="0.08"
+                stroke-dasharray="4 3"></line>
+              <text
+                x="102"
+                y="99"
+                fill="var(--neon-magenta)"
+                font-size="5"
+                font-family="'JetBrains Mono'"
+                text-anchor="middle"
+                opacity="0.25">QUALITY</text
+              >
+              <text
+                x="3"
+                y="52"
+                fill="var(--neon-magenta)"
+                font-size="5"
+                font-family="'JetBrains Mono'"
+                text-anchor="middle"
+                opacity="0.25"
+                transform="rotate(-90 3 52)">SPEED</text
+              >
+              {
+                scatterDots.map((d) => (
+                  <circle
+                    cx={d.x}
+                    cy={d.y}
+                    r="0"
+                    fill="var(--neon-magenta)"
+                    class="scatter-dot"
+                    data-target-r={d.r}
+                    data-target-opacity={d.opacity}
+                  />
+                ))
+              }
             </svg>
           </div>
         </div>
@@ -120,15 +204,19 @@ const PROVIDER_LOCATIONS: [number, number][] = [
             <span class="card-label">Provider_Nodes</span>
           </div>
           <div class="card-body">
-            <div class="card-number glow-green" data-count-target={String(STATUS_PROVIDER_COUNT)}>0</div>
+            <div
+              class="card-number glow-green"
+              data-count-target={String(STATUS_PROVIDER_COUNT)}
+            >
+              0
+            </div>
             <canvas
               id="globe-canvas"
               class="card-graphic card-graphic--globe"
               width="240"
               height="240"
               aria-hidden="true"
-              data-locations={JSON.stringify(PROVIDER_LOCATIONS)}
-            ></canvas>
+              data-locations={JSON.stringify(PROVIDER_LOCATIONS)}></canvas>
           </div>
         </div>
 
@@ -138,13 +226,19 @@ const PROVIDER_LOCATIONS: [number, number][] = [
             <span class="card-label">Agent_Tracker</span>
           </div>
           <div class="card-body">
-            <div class="card-number glow-amber" data-count-target={String(AGENT_COUNT)}>0</div>
+            <div
+              class="card-number glow-amber"
+              data-count-target={String(AGENT_COUNT)}
+            >
+              0
+            </div>
             <div
               class="card-graphic card-graphic--robot"
               id="bot-container"
               aria-hidden="true"
               data-svg-src={`${base}assets/stat-robot.svg`}
-            ></div>
+            >
+            </div>
           </div>
         </div>
       </div>
@@ -161,9 +255,13 @@ const PROVIDER_LOCATIONS: [number, number][] = [
         --bg-slate: #0f172a;
         --grid-color: rgba(34, 211, 238, 0.05);
       }
-      * { margin: 0; padding: 0; box-sizing: border-box; }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
       body {
-        font-family: 'Outfit', sans-serif;
+        font-family: "Outfit", sans-serif;
         background-color: var(--bg-slate);
         background-image:
           linear-gradient(var(--grid-color) 1px, transparent 1px),
@@ -171,48 +269,120 @@ const PROVIDER_LOCATIONS: [number, number][] = [
         background-size: 40px 40px;
         color: #e2e8f0;
       }
-      .page { max-width: 900px; margin: 0 auto; padding: 2rem 1rem; }
-      .page-title { font-size: 1.5rem; font-weight: 900; letter-spacing: -0.02em; color: white; }
-      .page-subtitle { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: #64748b; margin-top: 0.25rem; }
+      .page {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 2rem 1rem;
+      }
+      .page-title {
+        font-size: 1.5rem;
+        font-weight: 900;
+        letter-spacing: -0.02em;
+        color: white;
+      }
+      .page-subtitle {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.7rem;
+        color: #64748b;
+        margin-top: 0.25rem;
+      }
 
-      .stats-stack { display: grid; grid-template-rows: repeat(4, 1fr); gap: 4px; max-width: 500px; margin: 0 auto; }
+      .stats-stack {
+        display: grid;
+        grid-template-rows: repeat(4, 1fr);
+        gap: 4px;
+        max-width: 500px;
+        margin: 0 auto;
+      }
 
       .stat-card {
         border: 1px solid rgba(34, 211, 238, 0.2);
         background: rgba(15, 23, 42, 0.8);
-        display: flex; flex-direction: column;
-        height: 170px; cursor: default; overflow: hidden;
-        opacity: 0; transform: translateY(12px);
+        display: flex;
+        flex-direction: column;
+        height: 170px;
+        cursor: default;
+        overflow: hidden;
+        opacity: 0;
+        transform: translateY(12px);
       }
-      .stat-card[data-accent="magenta"] { border-color: rgba(244, 114, 182, 0.2); }
-      .stat-card[data-accent="green"] { border-color: rgba(74, 222, 128, 0.2); border-left: 4px solid var(--neon-green); }
-      .stat-card[data-accent="amber"] { border-color: rgba(251, 191, 36, 0.2); }
+      .stat-card[data-accent="magenta"] {
+        border-color: rgba(244, 114, 182, 0.2);
+      }
+      .stat-card[data-accent="green"] {
+        border-color: rgba(74, 222, 128, 0.2);
+        border-left: 4px solid var(--neon-green);
+      }
+      .stat-card[data-accent="amber"] {
+        border-color: rgba(251, 191, 36, 0.2);
+      }
 
-      .card-top { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; }
-      .card-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; color: #64748b; }
+      .card-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 16px;
+      }
+      .card-label {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: #64748b;
+      }
 
-      .card-body { flex: 1; display: flex; align-items: flex-end; justify-content: space-between; padding: 0 16px 16px; position: relative; }
+      .card-body {
+        flex: 1;
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        padding: 0 16px 16px;
+        position: relative;
+      }
 
       .card-number {
-        font-family: 'JetBrains Mono', monospace;
+        font-family: "JetBrains Mono", monospace;
         font-size: clamp(42px, 10vw, 56px);
-        font-weight: 900; letter-spacing: -2px;
-        font-variant-numeric: tabular-nums; line-height: 1; z-index: 1;
+        font-weight: 900;
+        letter-spacing: -2px;
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
+        z-index: 1;
       }
-      [data-accent="cyan"] .card-number { color: var(--neon-cyan); }
-      [data-accent="magenta"] .card-number { color: var(--neon-magenta); }
-      [data-accent="green"] .card-number { color: var(--neon-green); }
-      [data-accent="amber"] .card-number { color: var(--neon-amber); }
+      [data-accent="cyan"] .card-number {
+        color: var(--neon-cyan);
+      }
+      [data-accent="magenta"] .card-number {
+        color: var(--neon-magenta);
+      }
+      [data-accent="green"] .card-number {
+        color: var(--neon-green);
+      }
+      [data-accent="amber"] .card-number {
+        color: var(--neon-amber);
+      }
 
-      .glow-cyan { text-shadow: 0 0 10px rgba(34, 211, 238, 0.5); }
-      .glow-magenta { text-shadow: 0 0 10px rgba(244, 114, 182, 0.5); }
-      .glow-green { text-shadow: 0 0 10px rgba(74, 222, 128, 0.5); }
-      .glow-amber { text-shadow: 0 0 10px rgba(251, 191, 36, 0.5); }
+      .glow-cyan {
+        text-shadow: 0 0 10px rgba(34, 211, 238, 0.5);
+      }
+      .glow-magenta {
+        text-shadow: 0 0 10px rgba(244, 114, 182, 0.5);
+      }
+      .glow-green {
+        text-shadow: 0 0 10px rgba(74, 222, 128, 0.5);
+      }
+      .glow-amber {
+        text-shadow: 0 0 10px rgba(251, 191, 36, 0.5);
+      }
 
       /* Graphics */
-      .card-graphic { align-self: flex-end; }
+      .card-graphic {
+        align-self: flex-end;
+      }
       .card-graphic--galaxy {
-        width: 150px; height: 150px;
+        width: 150px;
+        height: 150px;
         perspective: 600px;
         opacity: 0;
         position: absolute;
@@ -223,33 +393,64 @@ const PROVIDER_LOCATIONS: [number, number][] = [
         transform: rotateX(55deg);
         transform-origin: center center;
       }
-      .card-graphic--scatter { width: 200px; height: 100px; }
-      .card-graphic--globe { width: 120px; height: 120px; }
-      .card-graphic--robot { width: 150px; height: 120px; }
+      .card-graphic--scatter {
+        width: 200px;
+        height: 100px;
+      }
+      .card-graphic--globe {
+        width: 120px;
+        height: 120px;
+      }
+      .card-graphic--robot {
+        width: 150px;
+        height: 120px;
+      }
 
-      .scatter-dot { opacity: 0; }
+      .scatter-dot {
+        opacity: 0;
+      }
 
       /* Galaxy comparison */
       .galaxy-comparison {
-        display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
         margin-bottom: 3rem;
       }
-      .galaxy-option { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+      .galaxy-option {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+      }
       .option-label {
-        font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700;
-        letter-spacing: 0.15em; text-transform: uppercase; color: var(--neon-cyan);
+        font-family: "JetBrains Mono", monospace;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        color: var(--neon-cyan);
       }
       .option-note {
-        font-family: 'JetBrains Mono', monospace; font-size: 9px;
-        color: #475569; text-align: center;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 9px;
+        color: #475569;
+        text-align: center;
       }
       .galaxy-frame {
         border: 1px solid rgba(34, 211, 238, 0.2);
         background: rgba(15, 23, 42, 0.8);
-        width: 400px; height: 400px; overflow: hidden;
-        display: flex; align-items: center; justify-content: center;
+        width: 400px;
+        height: 400px;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
       }
-      .galaxy-frame canvas, .galaxy-frame div { display: block; }
+      .galaxy-frame canvas,
+      .galaxy-frame div {
+        display: block;
+      }
       .galaxy-frame--tilted {
         perspective: 800px;
         overflow: visible;
@@ -261,9 +462,16 @@ const PROVIDER_LOCATIONS: [number, number][] = [
 
       /* Reduced motion */
       @media (prefers-reduced-motion: reduce) {
-        .stat-card { opacity: 1 !important; transform: none !important; }
-        .card-graphic--galaxy { opacity: 1 !important; }
-        .scatter-dot { opacity: 0.6 !important; }
+        .stat-card {
+          opacity: 1 !important;
+          transform: none !important;
+        }
+        .card-graphic--galaxy {
+          opacity: 1 !important;
+        }
+        .scatter-dot {
+          opacity: 0.6 !important;
+        }
       }
     </style>
 
@@ -271,7 +479,15 @@ const PROVIDER_LOCATIONS: [number, number][] = [
       import { animate, stagger, onScroll, utils } from "animejs";
       import createGlobe from "cobe";
       import type { Globe } from "cobe";
-      import { Application, Graphics, Container, BlurFilter } from "pixi.js";
+      import {
+        Application,
+        Graphics,
+        Container,
+        ParticleContainer,
+        Particle,
+        Texture,
+        BlurFilter,
+      } from "pixi.js";
 
       // =============================================
       // Galaxy Comparison: Canvas 2D vs PixiJS
@@ -286,7 +502,10 @@ const PROVIDER_LOCATIONS: [number, number][] = [
       }
 
       // Generate spiral galaxy particles
-      function generateGalaxyParticles(count: number, radius: number): StarParticle[] {
+      function generateGalaxyParticles(
+        count: number,
+        radius: number,
+      ): StarParticle[] {
         const particles: StarParticle[] = [];
         const arms = 3;
         const armSpread = 0.4;
@@ -329,7 +548,9 @@ const PROVIDER_LOCATIONS: [number, number][] = [
 
       // --- Option 1: Canvas 2D ---
       function initCanvas2DGalaxy(): void {
-        const canvas = document.getElementById("galaxy-canvas2d") as HTMLCanvasElement;
+        const canvas = document.getElementById(
+          "galaxy-canvas2d",
+        ) as HTMLCanvasElement;
         if (!canvas) return;
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
@@ -475,7 +696,8 @@ const PROVIDER_LOCATIONS: [number, number][] = [
           ring.circle(0, 0, r);
           // Outer rings: very dark blue-gray (ambient light). Inner: pure black.
           const brightness = Math.floor(t * t * 18); // quadratic falloff, max ~18
-          const color = (brightness << 16) | (brightness + 2 << 8) | (brightness + 8);
+          const color =
+            (brightness << 16) | ((brightness + 2) << 8) | (brightness + 8);
           ring.fill({ color, alpha: 1 });
           sphereContainer.addChild(ring);
         }
@@ -517,6 +739,14 @@ const PROVIDER_LOCATIONS: [number, number][] = [
 
       // --- Card Galaxy (PixiJS, embedded in stat card) ---
       let cardGalaxySpeed = 0.001;
+      let cardGalaxyTwinkle = false;
+      let cardGalaxyTime = 0;
+      const cardGalaxyDots: {
+        particle: Particle;
+        baseAlpha: number;
+        phase: number;
+      }[] = [];
+
       async function initCardGalaxy(): Promise<void> {
         const el = document.getElementById("galaxy-card-pixi");
         if (!el) return;
@@ -540,24 +770,49 @@ const PROVIDER_LOCATIONS: [number, number][] = [
         galaxyContainer.y = 150;
         app.stage.addChild(galaxyContainer);
 
+        // Glow layer — regular Container + Graphics (needs BlurFilter)
         const glowContainer = new Container();
         galaxyContainer.addChild(glowContainer);
-        const sharpContainer = new Container();
+
+        // Sharp dots — ParticleContainer for GPU performance
+        // Generate a small white circle texture to tint per-particle
+        const dotGraphic = new Graphics();
+        dotGraphic.circle(0, 0, 4);
+        dotGraphic.fill({ color: 0xffffff });
+        const dotTexture = app.renderer.generateTexture(dotGraphic);
+
+        const sharpContainer = new ParticleContainer({
+          dynamicProperties: {
+            position: false,
+            rotation: false,
+            color: true, // needed for alpha twinkle
+          },
+        });
         galaxyContainer.addChild(sharpContainer);
 
         for (const p of particles) {
           const r = Math.round(34 + (255 - 34) * p.hue);
           const g = Math.round(211 + (255 - 211) * p.hue);
           const b = Math.round(238 + (255 - 238) * p.hue);
-          const color = (r << 16) | (g << 8) | b;
+          const tint = (r << 16) | (g << 8) | b;
 
-          const dot = new Graphics();
-          dot.circle(0, 0, p.size);
-          dot.fill({ color, alpha: p.opacity });
-          dot.x = p.x;
-          dot.y = p.y;
-          sharpContainer.addChild(dot);
+          const particle = new Particle({
+            texture: dotTexture,
+            x: p.x,
+            y: p.y,
+            scaleX: p.size / 4, // texture is r=4, scale to desired size
+            scaleY: p.size / 4,
+            tint,
+            alpha: p.opacity,
+          });
+          sharpContainer.addParticle(particle);
+          cardGalaxyDots.push({
+            particle,
+            baseAlpha: p.opacity,
+            phase: Math.random() * Math.PI * 2,
+          });
 
+          // Glow dot (regular Graphics, only for larger particles)
           if (p.size > 1.0) {
             const glow = new Graphics();
             glow.circle(0, 0, p.size * 2.5);
@@ -603,7 +858,8 @@ const PROVIDER_LOCATIONS: [number, number][] = [
           const ring = new Graphics();
           ring.circle(0, 0, r);
           const brightness = Math.floor(t * t * 18);
-          const color = (brightness << 16) | ((brightness + 2) << 8) | (brightness + 8);
+          const color =
+            (brightness << 16) | ((brightness + 2) << 8) | (brightness + 8);
           ring.fill({ color, alpha: 1 });
           sphereContainer.addChild(ring);
         }
@@ -635,6 +891,21 @@ const PROVIDER_LOCATIONS: [number, number][] = [
         app.ticker.add(() => {
           galaxyContainer.rotation += cardGalaxySpeed;
           blackHoleContainer.rotation -= cardGalaxySpeed * 2;
+
+          // Twinkle: sparse particles briefly flare bright, most stay at base
+          if (cardGalaxyTwinkle) {
+            cardGalaxyTime += 0.02;
+            for (const { particle, baseAlpha, phase } of cardGalaxyDots) {
+              // Each particle's sine wave — only the peak (>0.85) triggers a flare
+              const wave = Math.sin(cardGalaxyTime * 0.8 + phase * 6);
+              if (wave > 0.85) {
+                const flare = (wave - 0.85) / 0.15; // 0→1 during the narrow peak
+                particle.alpha = Math.min(1, baseAlpha + flare * 0.5);
+              } else {
+                particle.alpha = baseAlpha;
+              }
+            }
+          }
         });
       }
 
@@ -642,9 +913,16 @@ const PROVIDER_LOCATIONS: [number, number][] = [
       initPixiGalaxy();
 
       // --- Number counter ---
-      function countUp(el: HTMLElement, target: string, duration: number): void {
+      function countUp(
+        el: HTMLElement,
+        target: string,
+        duration: number,
+      ): void {
         const match = target.match(/^([\d,]+)(.*)$/);
-        if (!match) { el.textContent = target; return; }
+        if (!match) {
+          el.textContent = target;
+          return;
+        }
         const num = parseInt(match[1].replace(/,/g, ""), 10);
         const suffix = match[2];
         const counter = { value: 0 };
@@ -745,7 +1023,7 @@ const PROVIDER_LOCATIONS: [number, number][] = [
           ease: "inOutSine",
           loop: true,
           alternate: true,
-          opacity: 0.25
+          opacity: 0.25,
         });
 
         // Hover: eyes blink
@@ -761,16 +1039,16 @@ const PROVIDER_LOCATIONS: [number, number][] = [
         // Click: robot swap — current exits right, new one enters left
         const eyeColors = [
           "rgb(125,138,255)", // #1 original blue-purple
-          "rgb(34,211,238)",  // #2 cyan
+          "rgb(34,211,238)", // #2 cyan
           "rgb(244,114,182)", // #3 magenta
-          "rgb(74,222,128)",  // #4 green
-          "rgb(251,191,36)",  // #5 amber
-          "rgb(239,68,68)",   // #6 red
-          "rgb(168,85,247)",  // #7 purple
-          "rgb(59,130,246)",  // #8 blue
-          "rgb(20,184,166)",  // #9 teal
-          "rgb(245,158,11)",  // #10 orange
-          "rgb(236,72,153)",  // #11 pink
+          "rgb(74,222,128)", // #4 green
+          "rgb(251,191,36)", // #5 amber
+          "rgb(239,68,68)", // #6 red
+          "rgb(168,85,247)", // #7 purple
+          "rgb(59,130,246)", // #8 blue
+          "rgb(20,184,166)", // #9 teal
+          "rgb(245,158,11)", // #10 orange
+          "rgb(236,72,153)", // #11 pink
         ];
         let botIndex = 0;
         let swapping = false;
@@ -793,11 +1071,13 @@ const PROVIDER_LOCATIONS: [number, number][] = [
         function setBot(index: number) {
           const color = eyeColors[index % eyeColors.length];
           // Update eye colors
-          container!.querySelectorAll("#bot-eye-l path, #bot-eye-r path").forEach((p) => {
-            if ((p as SVGElement).getAttribute("fill")?.startsWith("rgb")) {
-              (p as SVGElement).setAttribute("fill", color);
-            }
-          });
+          container!
+            .querySelectorAll("#bot-eye-l path, #bot-eye-r path")
+            .forEach((p) => {
+              if ((p as SVGElement).getAttribute("fill")?.startsWith("rgb")) {
+                (p as SVGElement).setAttribute("fill", color);
+              }
+            });
           // Update number + match color to eyes
           numLabel.textContent = `${index + 1}`;
           numLabel.setAttribute("fill", color);
@@ -824,7 +1104,9 @@ const PROVIDER_LOCATIONS: [number, number][] = [
                   translateX: 0,
                   duration: 500,
                   ease: "outQuad",
-                  onComplete: () => { swapping = false; },
+                  onComplete: () => {
+                    swapping = false;
+                  },
                 });
               }, 1500);
             },
@@ -838,19 +1120,31 @@ const PROVIDER_LOCATIONS: [number, number][] = [
       let globeSpeed = 0.003;
 
       function initGlobe(): void {
-        const canvas = document.getElementById("globe-canvas") as HTMLCanvasElement;
+        const canvas = document.getElementById(
+          "globe-canvas",
+        ) as HTMLCanvasElement;
         if (!canvas) return;
-        const locs: [number, number][] = JSON.parse(canvas.dataset.locations || "[]");
+        const locs: [number, number][] = JSON.parse(
+          canvas.dataset.locations || "[]",
+        );
 
         globeInstance = createGlobe(canvas, {
-          devicePixelRatio: 2, width: 240, height: 240,
-          phi: 0, theta: 0.15, dark: 1, diffuse: 1.2,
-          mapSamples: 16000, mapBrightness: 4, mapBaseBrightness: 0.02,
+          devicePixelRatio: 2,
+          width: 240,
+          height: 240,
+          phi: 0,
+          theta: 0.15,
+          dark: 1,
+          diffuse: 1.2,
+          mapSamples: 16000,
+          mapBrightness: 4,
+          mapBaseBrightness: 0.02,
           baseColor: [0.12, 0.16, 0.26],
           markerColor: [0.29, 0.87, 0.5],
           glowColor: [0.08, 0.12, 0.2],
-          scale: 1, offset: [0, 0],
-          markers: locs.map(loc => ({ location: loc, size: 0.06 })),
+          scale: 1,
+          offset: [0, 0],
+          markers: locs.map((loc) => ({ location: loc, size: 0.06 })),
         });
 
         function spin() {
@@ -863,7 +1157,8 @@ const PROVIDER_LOCATIONS: [number, number][] = [
 
       // --- Activate all cards ---
       function activateCards(): void {
-        const cards = document.querySelectorAll<HTMLElement>("[data-stat-card]");
+        const cards =
+          document.querySelectorAll<HTMLElement>("[data-stat-card]");
 
         // Fade in all cards together
         animate(cards, {
@@ -882,7 +1177,9 @@ const PROVIDER_LOCATIONS: [number, number][] = [
 
         // Galaxy: init PixiJS + fade in
         initCardGalaxy();
-        const galaxy = document.querySelector<HTMLElement>(".card-graphic--galaxy");
+        const galaxy = document.querySelector<HTMLElement>(
+          ".card-graphic--galaxy",
+        );
         if (galaxy) {
           animate(galaxy, {
             opacity: [0, 1],
@@ -893,7 +1190,8 @@ const PROVIDER_LOCATIONS: [number, number][] = [
         }
 
         // Scatter dots: pop in
-        const dots = document.querySelectorAll<SVGCircleElement>(".scatter-dot");
+        const dots =
+          document.querySelectorAll<SVGCircleElement>(".scatter-dot");
         dots.forEach((dot) => {
           const targetR = parseFloat(dot.dataset.targetR || "2");
           const targetOp = parseFloat(dot.dataset.targetOpacity || "0.5");
@@ -915,32 +1213,56 @@ const PROVIDER_LOCATIONS: [number, number][] = [
 
       // --- Hover effects (subtle) ---
       function setupHoverEffects(): void {
-        // Galaxy: speed up rotation on hover
-        const galaxyCard = document.querySelector('.stat-card[data-accent="cyan"]');
+        // Galaxy: twinkle particles on hover
+        const galaxyCard = document.querySelector(
+          '.stat-card[data-accent="cyan"]',
+        );
         if (galaxyCard) {
-          galaxyCard.addEventListener("mouseenter", () => { cardGalaxySpeed = 0.004; });
-          galaxyCard.addEventListener("mouseleave", () => { cardGalaxySpeed = 0.001; });
+          galaxyCard.addEventListener("mouseenter", () => {
+            cardGalaxyTwinkle = true;
+          });
+          galaxyCard.addEventListener("mouseleave", () => {
+            cardGalaxyTwinkle = false;
+            // Restore original alphas
+            for (const { particle, baseAlpha } of cardGalaxyDots) {
+              particle.alpha = baseAlpha;
+            }
+          });
         }
 
         // Scatter: dots brighten
         const scatterCard = document.querySelector('[data-accent="magenta"]');
         if (scatterCard) {
           scatterCard.addEventListener("mouseenter", () => {
-            animate(".scatter-dot", { opacity: 0.9, duration: 300, ease: "outQuad" });
+            animate(".scatter-dot", {
+              opacity: 0.9,
+              duration: 300,
+              ease: "outQuad",
+            });
           });
           scatterCard.addEventListener("mouseleave", () => {
-            document.querySelectorAll<SVGCircleElement>(".scatter-dot").forEach((dot) => {
-              const targetOp = parseFloat(dot.dataset.targetOpacity || "0.5");
-              animate(dot, { opacity: targetOp, duration: 400, ease: "outQuad" });
-            });
+            document
+              .querySelectorAll<SVGCircleElement>(".scatter-dot")
+              .forEach((dot) => {
+                const targetOp = parseFloat(dot.dataset.targetOpacity || "0.5");
+                animate(dot, {
+                  opacity: targetOp,
+                  duration: 400,
+                  ease: "outQuad",
+                });
+              });
           });
         }
 
         // Globe: speed up on hover
         const globeCard = document.querySelector('[data-accent="green"]');
         if (globeCard) {
-          globeCard.addEventListener("mouseenter", () => { globeSpeed = 0.008; });
-          globeCard.addEventListener("mouseleave", () => { globeSpeed = 0.003; });
+          globeCard.addEventListener("mouseenter", () => {
+            globeSpeed = 0.008;
+          });
+          globeCard.addEventListener("mouseleave", () => {
+            globeSpeed = 0.003;
+          });
         }
 
         // Robot: handled by PixiJS internally
@@ -949,14 +1271,22 @@ const PROVIDER_LOCATIONS: [number, number][] = [
       // --- Click easter eggs ---
       function setupClickEasterEggs(): void {
         // Galaxy: burst spin on click
-        const galaxyClickCard = document.querySelector('.stat-card[data-accent="cyan"]');
+        const galaxyClickCard = document.querySelector(
+          '.stat-card[data-accent="cyan"]',
+        );
         if (galaxyClickCard) {
           galaxyClickCard.addEventListener("click", () => {
             // Ramp up speed then ease back down
             cardGalaxySpeed = 0.02;
-            setTimeout(() => { cardGalaxySpeed = 0.008; }, 400);
-            setTimeout(() => { cardGalaxySpeed = 0.003; }, 800);
-            setTimeout(() => { cardGalaxySpeed = 0.001; }, 1200);
+            setTimeout(() => {
+              cardGalaxySpeed = 0.008;
+            }, 400);
+            setTimeout(() => {
+              cardGalaxySpeed = 0.003;
+            }, 800);
+            setTimeout(() => {
+              cardGalaxySpeed = 0.001;
+            }, 1200);
           });
         }
 
@@ -964,14 +1294,16 @@ const PROVIDER_LOCATIONS: [number, number][] = [
         const scatterCard = document.querySelector('[data-accent="magenta"]');
         if (scatterCard) {
           scatterCard.addEventListener("click", () => {
-            document.querySelectorAll<SVGCircleElement>(".scatter-dot").forEach((dot) => {
-              animate(dot, {
-                cx: 12 + Math.random() * 178,
-                cy: 10 + Math.random() * 78,
-                duration: 600,
-                ease: "outElastic",
+            document
+              .querySelectorAll<SVGCircleElement>(".scatter-dot")
+              .forEach((dot) => {
+                animate(dot, {
+                  cx: 12 + Math.random() * 178,
+                  cy: 10 + Math.random() * 78,
+                  duration: 600,
+                  ease: "inOutBack(1.7)",
+                });
               });
-            });
           });
         }
 
@@ -994,7 +1326,9 @@ const PROVIDER_LOCATIONS: [number, number][] = [
       }
 
       // --- Init ---
-      const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const prefersReducedMotion = window.matchMedia(
+        "(prefers-reduced-motion: reduce)",
+      ).matches;
 
       if (!prefersReducedMotion) {
         // Scroll-triggered activation
@@ -1010,19 +1344,27 @@ const PROVIDER_LOCATIONS: [number, number][] = [
         }
       } else {
         // Reduced motion: show final state
-        document.querySelectorAll<HTMLElement>("[data-stat-card]").forEach((card) => {
-          card.style.opacity = "1";
-          card.style.transform = "none";
-          const numEl = card.querySelector<HTMLElement>("[data-count-target]");
-          if (numEl) numEl.textContent = numEl.dataset.countTarget || "0";
-        });
-        const galaxy = document.querySelector<HTMLElement>(".card-graphic--galaxy");
+        document
+          .querySelectorAll<HTMLElement>("[data-stat-card]")
+          .forEach((card) => {
+            card.style.opacity = "1";
+            card.style.transform = "none";
+            const numEl = card.querySelector<HTMLElement>(
+              "[data-count-target]",
+            );
+            if (numEl) numEl.textContent = numEl.dataset.countTarget || "0";
+          });
+        const galaxy = document.querySelector<HTMLElement>(
+          ".card-graphic--galaxy",
+        );
         if (galaxy) galaxy.style.opacity = "1";
         initCardGalaxy();
-        document.querySelectorAll<SVGCircleElement>(".scatter-dot").forEach((dot) => {
-          dot.setAttribute("r", dot.dataset.targetR || "2");
-          dot.setAttribute("opacity", dot.dataset.targetOpacity || "0.5");
-        });
+        document
+          .querySelectorAll<SVGCircleElement>(".scatter-dot")
+          .forEach((dot) => {
+            dot.setAttribute("r", dot.dataset.targetR || "2");
+            dot.setAttribute("opacity", dot.dataset.targetOpacity || "0.5");
+          });
         initGlobe();
         initRobot();
       }
