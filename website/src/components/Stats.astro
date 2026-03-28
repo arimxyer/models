@@ -1,207 +1,255 @@
 ---
-import {
-  BENCHMARK_COUNT,
-  DISPLAY,
-  PROVIDER_MODEL_COUNTS,
-  STATUS_PROVIDER_COUNT,
-} from "@/data/site";
+import { AGENT_COUNT, DISPLAY, STATUS_PROVIDER_COUNT } from "@/data/site";
+import StatCard from "./stats/StatCard.astro";
+import GalaxyGraphic from "./stats/GalaxyGraphic.astro";
+import ScatterGraphic from "./stats/ScatterGraphic.astro";
+import GlobeGraphic from "./stats/GlobeGraphic.astro";
+import RobotGraphic from "./stats/RobotGraphic.astro";
 
-// Card 2: scanline progress stack
-const SCAN_LINES = 10;
-const coverageFraction = Math.min(BENCHMARK_COUNT / 200, 1);
+// Scatter plot: benchmark-like comparison data
+const SCATTER_COUNT = 32;
+const scatterDots = Array.from({ length: SCATTER_COUNT }, () => ({
+  x: +(12 + Math.random() * 178).toFixed(1),
+  y: +(10 + Math.random() * 78).toFixed(1),
+  r: +(1.5 + Math.random() * 2).toFixed(1),
+  opacity: +(0.35 + Math.random() * 0.65).toFixed(2),
+}));
 
-// Card 3: radial tick dial
-const n = STATUS_PROVIDER_COUNT;
-const CX = 40,
-  CY = 40,
-  R_IN = 24,
-  R_OUT = 36;
-const ticks = Array.from({ length: n }, (_, i) => {
-  const a = (2 * Math.PI * i) / n - Math.PI / 2;
-  return {
-    x1: +(CX + R_IN * Math.cos(a)).toFixed(2),
-    y1: +(CY + R_IN * Math.sin(a)).toFixed(2),
-    x2: +(CX + R_OUT * Math.cos(a)).toFixed(2),
-    y2: +(CY + R_OUT * Math.sin(a)).toFixed(2),
-  };
-});
+// Provider locations (approximate lat/lon of major AI providers)
+const PROVIDER_LOCATIONS: [number, number][] = [
+  [37.77, -122.42],
+  [47.61, -122.33],
+  [40.71, -74.01],
+  [51.51, -0.13],
+  [48.86, 2.35],
+  [52.52, 13.41],
+  [35.68, 139.69],
+  [37.57, 126.98],
+  [31.23, 121.47],
+  [39.9, 116.4],
+  [22.54, 114.06],
+  [1.35, 103.82],
+  [43.65, -79.38],
+  [45.5, -73.57],
+  [13.08, 80.27],
+  [12.97, 77.59],
+  [25.2, 55.27],
+  [34.05, -118.24],
+  [42.36, -71.06],
+  [30.27, -97.74],
+  [55.75, 37.62],
+  [-33.87, 151.21],
+  [50.07, 14.44],
+  [59.33, 18.07],
+  [32.07, 34.78],
+];
 ---
 
-<div class="grid grid-rows-3 gap-4 lg:col-span-4">
-  <!-- Card 1: Model_Density — frequency histogram -->
-  <div class="data-border flex flex-col justify-between bg-slate-900/50 p-6">
-    <div class="font-mono text-[10px] tracking-widest text-slate-400 uppercase">
-      Model_Density
-    </div>
-    <div class="flex items-end gap-2">
-      <div
-        class="glow-cyan text-5xl font-black text-(--neon-cyan) [font-variant-numeric:tabular-nums]"
-      >
-        {DISPLAY.models}
-      </div>
-      <svg width="96" height="48" aria-hidden="true" class="mb-1 self-end">
-        {
-          PROVIDER_MODEL_COUNTS.map((count, i) => {
-            const maxCount = PROVIDER_MODEL_COUNTS[0] ?? 1;
-            const h = Math.max(2, Math.round((count / maxCount) * 44));
-            return (
-              <rect
-                x={i * 4}
-                y={48 - h}
-                width={3}
-                height={h}
-                fill="var(--neon-cyan)"
-                opacity={+(0.4 + 0.6 * (count / maxCount)).toFixed(2)}
-                class="hist-bar"
-                style={`--i:${i}`}
-              />
-            );
-          })
-        }
-      </svg>
-    </div>
-  </div>
-
-  <!-- Card 2: Bench_Validation — scanline progress stack -->
-  <div class="data-border flex flex-col justify-between bg-slate-900/50 p-6">
-    <div class="font-mono text-[10px] tracking-widest text-slate-400 uppercase">
-      Bench_Validation
-    </div>
-    <div class="flex items-end gap-2">
-      <div
-        class="glow-magenta text-5xl font-black text-(--neon-magenta) [font-variant-numeric:tabular-nums]"
-      >
-        {DISPLAY.benchmarks}
-      </div>
-      <svg
-        width="120"
-        height="44"
-        viewBox="0 0 120 44"
-        aria-hidden="true"
-        class="mb-1 self-end"
-      >
-        {
-          Array.from({ length: SCAN_LINES }, (_, i) => {
-            const y = i * 4 + 2;
-            const rowFrac = Math.min(
-              1,
-              Math.max(0, coverageFraction * SCAN_LINES - i),
-            );
-            const fillW = Math.round(rowFrac * 116);
-            return (
-              <>
-                <rect
-                  x="2"
-                  y={y}
-                  width="116"
-                  height="3"
-                  fill="var(--neon-magenta)"
-                  opacity="0.10"
-                />
-                {fillW > 0 && (
-                  <rect
-                    x="2"
-                    y={y}
-                    width={fillW}
-                    height="3"
-                    fill="var(--neon-magenta)"
-                    opacity="0.82"
-                    class="scan-line"
-                    style={`--i:${i}`}
-                  />
-                )}
-              </>
-            );
-          })
-        }
-      </svg>
-    </div>
-  </div>
-
-  <!-- Card 3: Provider_Nodes — radial tick dial -->
-  <div
-    class="data-border flex flex-col justify-between border-l-4 border-l-(--neon-green) bg-slate-900/50 p-6"
+<div class="grid grid-rows-4 gap-4 lg:col-span-4" id="stats-stack">
+  <StatCard label="Model_Density" value={DISPLAY.models} accent="cyan">
+    <GalaxyGraphic />
+  </StatCard>
+  <StatCard
+    label="Bench_Validation"
+    value={DISPLAY.benchmarks}
+    accent="magenta"
   >
-    <div class="font-mono text-[10px] tracking-widest text-slate-400 uppercase">
-      Provider_Nodes
-    </div>
-    <div class="flex items-center justify-between">
-      <div
-        class="glow-green text-5xl font-black text-(--neon-green) [font-variant-numeric:tabular-nums]"
-      >
-        {STATUS_PROVIDER_COUNT}
-      </div>
-      <svg width="80" height="80" viewBox="0 0 80 80" aria-hidden="true">
-        <circle
-          cx={CX}
-          cy={CY}
-          r={R_IN - 4}
-          fill="none"
-          stroke="var(--neon-green)"
-          stroke-width="8"
-          opacity="0.07"></circle>
-        {
-          ticks.map(({ x1, y1, x2, y2 }, i) => (
-            <line
-              x1={x1}
-              y1={y1}
-              x2={x2}
-              y2={y2}
-              stroke="var(--neon-green)"
-              stroke-width="1.5"
-              stroke-linecap="butt"
-              opacity="0.85"
-              class="dial-tick"
-              style={`--i:${i}`}
-            />
-          ))
-        }
-      </svg>
-    </div>
-  </div>
+    <ScatterGraphic dots={scatterDots} />
+  </StatCard>
+  <StatCard
+    label="Provider_Nodes"
+    value={String(STATUS_PROVIDER_COUNT)}
+    accent="green"
+    greenBorderLeft
+  >
+    <GlobeGraphic locations={PROVIDER_LOCATIONS} />
+  </StatCard>
+  <StatCard label="Agent_Tracker" value={DISPLAY.agents} accent="amber">
+    <RobotGraphic />
+  </StatCard>
 </div>
 
-<style is:global>
-  @media (prefers-reduced-motion: no-preference) {
-    .hist-bar {
-      transform-origin: bottom;
-      transform-box: fill-box;
-      animation: bar-grow 0.5s ease-out both;
-      animation-delay: calc(var(--i) * 12ms);
-    }
-    @keyframes bar-grow {
-      from {
-        transform: scaleY(0);
-      }
-      to {
-        transform: scaleY(1);
-      }
-    }
+<script>
+  import { animate, stagger, onScroll, utils } from "animejs";
 
-    .scan-line {
-      clip-path: inset(0 100% 0 0);
-      animation: scan-fill 0.35s ease-out both;
-      animation-delay: calc(var(--i) * 55ms);
+  // --- Number counter ---
+  function countUp(el: HTMLElement, target: string, duration: number): void {
+    const match = target.match(/^([\d,]+)(.*)$/);
+    if (!match) {
+      el.textContent = target;
+      return;
     }
-    @keyframes scan-fill {
-      from {
-        clip-path: inset(0 100% 0 0);
-      }
-      to {
-        clip-path: inset(0 0% 0 0);
-      }
-    }
+    const num = parseInt(match[1].replace(/,/g, ""), 10);
+    const suffix = match[2];
+    const counter = { value: 0 };
+    animate(counter, {
+      value: num,
+      duration,
+      ease: "outExpo",
+      modifier: utils.round(0),
+      onRender: () => {
+        el.textContent = counter.value.toLocaleString("en-US") + suffix;
+      },
+    });
+  }
 
-    .dial-tick {
-      stroke-dasharray: 12;
-      stroke-dashoffset: 12;
-      animation: tick-draw 0.12s ease-out both;
-      animation-delay: calc(var(--i) * 7ms);
-    }
-    @keyframes tick-draw {
-      to {
-        stroke-dashoffset: 0;
-      }
+  // --- Activate all cards ---
+  let cardsActivated = false;
+  function activateCards(): void {
+    if (cardsActivated) return;
+    cardsActivated = true;
+
+    const cards = document.querySelectorAll<HTMLElement>("[data-stat-card]");
+
+    // Fade in all cards together
+    animate(cards, {
+      opacity: [0, 1],
+      translateY: [12, 0],
+      duration: 600,
+      ease: "outQuad",
+      delay: stagger(100),
+    });
+
+    // Count up all numbers
+    cards.forEach((card) => {
+      const numEl = card.querySelector<HTMLElement>("[data-count-target]");
+      if (numEl) countUp(numEl, numEl.dataset.countTarget || "0", 1200);
+    });
+
+    // Activate all graphics via CustomEvents
+    document.dispatchEvent(new CustomEvent("galaxy:activate"));
+    document.dispatchEvent(new CustomEvent("scatter:activate"));
+    document.dispatchEvent(new CustomEvent("globe:activate"));
+    document.dispatchEvent(new CustomEvent("robot:activate"));
+
+    // Galaxy: fade in wrapper
+    const galaxy = document.querySelector<HTMLElement>(".galaxy-graphic");
+    if (galaxy) {
+      animate(galaxy, {
+        opacity: [0, 1],
+        duration: 800,
+        delay: 200,
+        ease: "outQuad",
+      });
     }
   }
-</style>
+
+  // --- Hover effects ---
+  function setupHoverEffects(): void {
+    // Galaxy: twinkle
+    const galaxyCard = document.querySelector<HTMLElement>(
+      '.grid [data-accent="cyan"]',
+    );
+    if (galaxyCard) {
+      galaxyCard.addEventListener("mouseenter", () => {
+        document.dispatchEvent(new CustomEvent("galaxy:hover-start"));
+      });
+      galaxyCard.addEventListener("mouseleave", () => {
+        document.dispatchEvent(new CustomEvent("galaxy:hover-end"));
+      });
+    }
+
+    // Scatter: brighten
+    const scatterCard = document.querySelector<HTMLElement>(
+      '[data-accent="magenta"]',
+    );
+    if (scatterCard) {
+      scatterCard.addEventListener("mouseenter", () => {
+        document.dispatchEvent(new CustomEvent("scatter:hover-start"));
+      });
+      scatterCard.addEventListener("mouseleave", () => {
+        document.dispatchEvent(new CustomEvent("scatter:hover-end"));
+      });
+    }
+
+    // Globe: speed up
+    const globeCard = document.querySelector<HTMLElement>(
+      '[data-accent="green"]',
+    );
+    if (globeCard) {
+      globeCard.addEventListener("mouseenter", () => {
+        document.dispatchEvent(new CustomEvent("globe:hover-start"));
+      });
+      globeCard.addEventListener("mouseleave", () => {
+        document.dispatchEvent(new CustomEvent("globe:hover-end"));
+      });
+    }
+
+    // Robot: hover handled internally by RobotGraphic
+  }
+
+  // --- Click easter eggs ---
+  function setupClickEasterEggs(): void {
+    // Galaxy: burst spin
+    const galaxyCard = document.querySelector<HTMLElement>(
+      '.grid [data-accent="cyan"]',
+    );
+    if (galaxyCard) {
+      galaxyCard.addEventListener("click", () => {
+        document.dispatchEvent(new CustomEvent("galaxy:click"));
+      });
+    }
+
+    // Scatter: re-randomize
+    const scatterCard = document.querySelector<HTMLElement>(
+      '[data-accent="magenta"]',
+    );
+    if (scatterCard) {
+      scatterCard.addEventListener("click", () => {
+        document.dispatchEvent(new CustomEvent("scatter:click"));
+      });
+    }
+
+    // Globe: outage flash
+    const globeCard = document.querySelector<HTMLElement>(
+      '[data-accent="green"]',
+    );
+    if (globeCard) {
+      globeCard.addEventListener("click", () => {
+        document.dispatchEvent(new CustomEvent("globe:click"));
+      });
+    }
+
+    // Robot: click handled internally by RobotGraphic
+  }
+
+  // --- Init ---
+  const prefersReducedMotion = window.matchMedia(
+    "(prefers-reduced-motion: reduce)",
+  ).matches;
+
+  if (!prefersReducedMotion) {
+    // Scroll-triggered activation
+    const stack = document.getElementById("stats-stack");
+    if (stack) {
+      onScroll({
+        target: stack,
+        enter: "bottom top",
+        onEnter: () => {
+          activateCards();
+        },
+      });
+    }
+  } else {
+    // Reduced motion: show final state immediately
+    document
+      .querySelectorAll<HTMLElement>("[data-stat-card]")
+      .forEach((card) => {
+        card.style.opacity = "1";
+        card.style.transform = "none";
+        const numEl = card.querySelector<HTMLElement>("[data-count-target]");
+        if (numEl) numEl.textContent = numEl.dataset.countTarget || "0";
+      });
+    const galaxy = document.querySelector<HTMLElement>(".galaxy-graphic");
+    if (galaxy) galaxy.style.opacity = "1";
+
+    // Still activate graphics (they need JS to render)
+    document.dispatchEvent(new CustomEvent("galaxy:activate"));
+    document.dispatchEvent(new CustomEvent("scatter:activate"));
+    document.dispatchEvent(new CustomEvent("globe:activate"));
+    document.dispatchEvent(new CustomEvent("robot:activate"));
+  }
+
+  setupHoverEffects();
+  setupClickEasterEggs();
+</script>

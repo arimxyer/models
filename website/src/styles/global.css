@@ -13,6 +13,8 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
   --color-border: var(--border);
@@ -36,6 +38,8 @@
   --accent-foreground: #e2e8f0;
   --destructive: #ef4444;
   --destructive-foreground: #e2e8f0;
+  --card: rgba(15, 23, 42, 0.8);
+  --card-foreground: #e2e8f0;
   --popover: #1e293b;
   --popover-foreground: #e2e8f0;
   --border: rgba(34, 211, 238, 0.2);
@@ -77,6 +81,9 @@ body {
 }
 .glow-green {
   text-shadow: 0 0 10px rgba(74, 222, 128, 0.5);
+}
+.glow-amber {
+  text-shadow: 0 0 10px rgba(251, 191, 36, 0.5);
 }
 .data-border {
   border: 1px solid rgba(34, 211, 238, 0.2);

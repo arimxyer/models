@@ -1,0 +1,17 @@
+---
+import { cn } from "@/utils/cn";
+import type { HTMLAttributes } from "astro/types";
+
+export interface Props extends HTMLAttributes<"div"> {}
+
+const { class: className, ...props } = Astro.props;
+
+const classes = cn(
+  "col-start-2 row-span-2 row-start-1 self-start justify-self-end",
+  className,
+);
+---
+
+<div class={classes} data-slot="card-action" {...props}>
+  <slot />
+</div>

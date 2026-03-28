@@ -1,0 +1,16 @@
+---
+import { cn } from "@/utils/cn";
+import type { HTMLAttributes } from "astro/types";
+
+export interface Props extends HTMLAttributes<"div"> {
+  size?: "default" | "sm";
+}
+
+const { size = "default", class: className, ...props } = Astro.props;
+
+const classes = cn("rounded-lg border bg-card text-card-foreground", className);
+---
+
+<div class={classes} data-slot="card" data-size={size} {...props}>
+  <slot />
+</div>

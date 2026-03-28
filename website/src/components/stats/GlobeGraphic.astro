@@ -1,0 +1,117 @@
+---
+interface Props {
+  locations: [number, number][];
+}
+
+const { locations } = Astro.props;
+---
+
+<canvas
+  class="globe-graphic"
+  width="240"
+  height="240"
+  aria-hidden="true"
+  data-locations={JSON.stringify(locations)}></canvas>
+
+<style>
+  .globe-graphic {
+    width: 90px;
+    height: 90px;
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+  }
+</style>
+
+<script>
+  import createGlobe from "cobe";
+  import type { Globe } from "cobe";
+
+  let globeInstance: Globe | null = null;
+  let globePhi = 0;
+  let globeSpeed = 0.003;
+  let globeSpinning = false;
+  let globeSwapping = false;
+  let allLocations: [number, number][] = [];
+
+  function createGlobeInstance(
+    canvas: HTMLCanvasElement,
+    locations: [number, number][],
+    markerColor: [number, number, number],
+    markerSize = 0.06,
+  ): void {
+    if (globeInstance) {
+      globeInstance.destroy();
+      globeInstance = null;
+    }
+
+    globeInstance = createGlobe(canvas, {
+      devicePixelRatio: 2,
+      width: 240,
+      height: 240,
+      phi: globePhi,
+      theta: 0.15,
+      dark: 1,
+      diffuse: 1.2,
+      mapSamples: 16000,
+      mapBrightness: 4,
+      mapBaseBrightness: 0.02,
+      baseColor: [0.12, 0.16, 0.26],
+      markerColor,
+      glowColor: [0.08, 0.12, 0.2],
+      scale: 1,
+      offset: [0, 0],
+      markers: locations.map((loc) => ({ location: loc, size: markerSize })),
+    });
+  }
+
+  function initGlobe(): void {
+    if (globeSpinning) return;
+    globeSpinning = true;
+    const canvas = document.querySelector<HTMLCanvasElement>(".globe-graphic");
+    if (!canvas) return;
+    allLocations = JSON.parse(canvas.dataset.locations || "[]");
+
+    createGlobeInstance(canvas, allLocations, [0.29, 0.87, 0.5]);
+
+    function spin() {
+      globePhi += globeSpeed;
+      globeInstance?.update({ phi: globePhi });
+      requestAnimationFrame(spin);
+    }
+    spin();
+  }
+
+  // Activation
+  document.addEventListener("globe:activate", () => {
+    initGlobe();
+  });
+
+  // Hover — speed up rotation
+  document.addEventListener("globe:hover-start", () => {
+    globeSpeed = 0.006;
+  });
+  document.addEventListener("globe:hover-end", () => {
+    globeSpeed = 0.003;
+  });
+
+  // Click — outage flash (all markers red, then recover to green)
+  document.addEventListener("globe:click", () => {
+    if (globeSwapping) return;
+    globeSwapping = true;
+    const canvas = document.querySelector<HTMLCanvasElement>(".globe-graphic");
+    if (!canvas) {
+      globeSwapping = false;
+      return;
+    }
+
+    // Phase 1: all markers flash red
+    createGlobeInstance(canvas, allLocations, [0.95, 0.27, 0.27]);
+
+    // Phase 2: recover to green after 1.5s
+    setTimeout(() => {
+      createGlobeInstance(canvas, allLocations, [0.29, 0.87, 0.5]);
+      globeSwapping = false;
+    }, 1500);
+  });
+</script>
