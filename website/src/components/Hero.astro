@@ -6,9 +6,8 @@ import TooltipContent from "@/components/bearnie/tooltip/TooltipContent.astro";
 ---
 
 <div
-  class="data-border active-scanline relative overflow-hidden bg-slate-900/50 p-8 backdrop-blur-sm lg:col-span-8"
+  class="data-border relative overflow-hidden bg-slate-900/50 p-8 backdrop-blur-sm lg:col-span-8"
 >
-  <div class="phosphor-sweep" aria-hidden="true"></div>
   <div
     aria-hidden="true"
     class="absolute top-4 right-6 font-mono text-[10px] text-slate-400"
@@ -61,15 +60,6 @@ import TooltipContent from "@/components/bearnie/tooltip/TooltipContent.astro";
     class="absolute bottom-4 left-8 hidden font-mono text-[10px] tracking-widest text-slate-400 uppercase sm:block"
   >
     SYS: NOMINAL
-  </div>
-  <div
-    aria-hidden="true"
-    class="absolute right-6 bottom-4 hidden items-center gap-1 font-mono text-[10px] tracking-widest text-slate-400 uppercase sm:flex"
-  >
-    FEED:
-    <span class="telemetry-live-dot inline-block h-1.5 w-1.5 bg-(--neon-green)"
-    ></span>
-    LIVE
   </div>
 </div>
 
