@@ -74,6 +74,8 @@ import TooltipContent from "@/components/bearnie/tooltip/TooltipContent.astro";
 </div>
 
 <script>
+  import { animate } from "animejs";
+
   const phrases = [
     { text: "Browse the AI ecosystem.", color: "var(--neon-magenta)" },
     { text: "Compare benchmarks.", color: "var(--neon-cyan)" },
@@ -82,7 +84,7 @@ import TooltipContent from "@/components/bearnie/tooltip/TooltipContent.astro";
   ];
 
   function initRotator() {
-    const el = document.getElementById("hero-rotator");
+    const el = document.getElementById("hero-rotator") as HTMLElement | null;
     if (!el || el.hasAttribute("data-rotator-init")) return;
     el.setAttribute("data-rotator-init", "true");
 
@@ -92,17 +94,25 @@ import TooltipContent from "@/components/bearnie/tooltip/TooltipContent.astro";
     if (prefersReducedMotion) return;
 
     let index = 0;
-    el.style.transition = "opacity 0.4s ease";
 
-    setInterval(() => {
-      el.style.opacity = "0";
+    function scheduleNext() {
       setTimeout(() => {
-        index = (index + 1) % phrases.length;
-        el.textContent = phrases[index].text;
-        el.style.color = phrases[index].color;
-        el.style.opacity = "1";
-      }, 400);
-    }, 6000);
+        animate(el!, {
+          opacity: 0,
+          duration: 400,
+          ease: "outQuad",
+          onComplete: () => {
+            index = (index + 1) % phrases.length;
+            el!.textContent = phrases[index].text;
+            el!.style.color = phrases[index].color;
+            animate(el!, { opacity: 1, duration: 400, ease: "inQuad" });
+            scheduleNext();
+          },
+        });
+      }, 6000);
+    }
+
+    scheduleNext();
   }
 
   initRotator();

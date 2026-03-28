@@ -25,7 +25,7 @@ const base = import.meta.env.BASE_URL;
     width: 100%;
     height: 100%;
   }
-  </style>
+</style>
 
 <script>
   import { animate } from "animejs";
@@ -59,76 +59,92 @@ const base = import.meta.env.BASE_URL;
 
     if (!prefersReducedMotion) {
       // Body float
-      idleAnims.push(animate("#bot-character", {
-        translateY: 70,
-        duration: 2500,
-        ease: "inOutSine",
-        loop: true,
-        alternate: true,
-      }));
+      idleAnims.push(
+        animate("#bot-character", {
+          translateY: 70,
+          duration: 2500,
+          ease: "inOutSine",
+          loop: true,
+          alternate: true,
+        }),
+      );
 
       // Head lag
-      idleAnims.push(animate("#bot-head-wrap", {
-        translateY: 3,
-        duration: 2800,
-        ease: "inOutSine",
-        loop: true,
-        alternate: true,
-      }));
+      idleAnims.push(
+        animate("#bot-head-wrap", {
+          translateY: 3,
+          duration: 2800,
+          ease: "inOutSine",
+          loop: true,
+          alternate: true,
+        }),
+      );
 
       // Visor/eyes follow head
-      idleAnims.push(animate("#bot-visor-wrap, #bot-eye-l-wrap, #bot-eye-r-wrap", {
-        translateY: 2,
-        duration: 3000,
-        ease: "inOutSine",
-        loop: true,
-        alternate: true,
-      }));
+      idleAnims.push(
+        animate("#bot-visor-wrap, #bot-eye-l-wrap, #bot-eye-r-wrap", {
+          translateY: 2,
+          duration: 3000,
+          ease: "inOutSine",
+          loop: true,
+          alternate: true,
+        }),
+      );
 
       // Arms sway
-      idleAnims.push(animate("#bot-hand-l-wrap", {
-        translateY: 4,
-        translateX: -1,
-        duration: 2900,
-        ease: "inOutSine",
-        loop: true,
-        alternate: true,
-      }));
-      idleAnims.push(animate("#bot-hand-r-wrap", {
-        translateY: 3,
-        translateX: 1,
-        duration: 3100,
-        ease: "inOutSine",
-        loop: true,
-        alternate: true,
-      }));
+      idleAnims.push(
+        animate("#bot-hand-l-wrap", {
+          translateY: 4,
+          translateX: -1,
+          duration: 2900,
+          ease: "inOutSine",
+          loop: true,
+          alternate: true,
+        }),
+      );
+      idleAnims.push(
+        animate("#bot-hand-r-wrap", {
+          translateY: 3,
+          translateX: 1,
+          duration: 3100,
+          ease: "inOutSine",
+          loop: true,
+          alternate: true,
+        }),
+      );
 
       // Ears drift
-      idleAnims.push(animate("#bot-ear-l-wrap", {
-        translateY: 2,
-        translateX: -1,
-        duration: 3300,
-        ease: "inOutSine",
-        loop: true,
-        alternate: true,
-      }));
-      idleAnims.push(animate("#bot-ear-r-wrap", {
-        translateY: 2,
-        translateX: 1,
-        duration: 3000,
-        ease: "inOutSine",
-        loop: true,
-        alternate: true,
-      }));
+      idleAnims.push(
+        animate("#bot-ear-l-wrap", {
+          translateY: 2,
+          translateX: -1,
+          duration: 3300,
+          ease: "inOutSine",
+          loop: true,
+          alternate: true,
+        }),
+      );
+      idleAnims.push(
+        animate("#bot-ear-r-wrap", {
+          translateY: 2,
+          translateX: 1,
+          duration: 3000,
+          ease: "inOutSine",
+          loop: true,
+          alternate: true,
+        }),
+      );
 
       // Shadow pulse
-      idleAnims.push(animate("#bot-shadow", {
-        duration: 2500,
-        ease: "inOutSine",
-        loop: true,
-        alternate: true,
-        opacity: 0.25,
-      }));
+      idleAnims.push(
+        animate("#bot-shadow", {
+          duration: 2500,
+          ease: "inOutSine",
+          loop: true,
+          alternate: true,
+          opacity: 0.25,
+        }),
+      );
 
       const observer = new IntersectionObserver(
         (entries) => {

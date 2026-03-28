@@ -108,6 +108,7 @@
       antialias: true,
       resolution: 2,
       autoDensity: true,
+      preference: "webgl",
     });
     // CSS handles display sizing via percentages; autoDensity handles resolution
     el.appendChild(app.canvas);
@@ -172,6 +173,7 @@
     }
 
     glowContainer.filters = [new BlurFilter({ strength: 4 })];
+    glowContainer.cacheAsTexture(true);
 
     // Black hole sphere
     const blackHoleContainer = new Container();
@@ -229,6 +231,7 @@
     rimLight.stroke({ color: 0x22d3ee, alpha: 0.2, width: 1.5 });
     sphereContainer.addChild(rimLight);
     rimLight.filters = [new BlurFilter({ strength: 2 })];
+    sphereContainer.cacheAsTexture(true);
 
     const hotSpot = new Graphics();
     hotSpot.circle(SPHERE_R + 4, 0, 2);

@@ -51,14 +51,14 @@ const { locations } = Astro.props;
     }
 
     globeInstance = createGlobe(canvas, {
-      devicePixelRatio: 2,
+      devicePixelRatio: 1,
       width: 240,
       height: 240,
       phi: globePhi,
       theta: 0.15,
       dark: 1,
       diffuse: 1.2,
-      mapSamples: 16000,
+      mapSamples: 8000,
       mapBrightness: 4,
       mapBaseBrightness: 0.02,
       baseColor: [0.12, 0.16, 0.26],
