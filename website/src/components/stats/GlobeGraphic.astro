@@ -29,10 +29,14 @@ const { locations } = Astro.props;
 <script>
   import createGlobe from "cobe";
   import type { Globe } from "cobe";
+  import { createAnimatable } from "animejs";
 
   let globeInstance: Globe | null = null;
   let globePhi = 0;
-  let globeSpeed = 0.003;
+  const globeState = { speed: 0.003 };
+  const animatable = createAnimatable(globeState, {
+    speed: { duration: 600, ease: "outQuad" },
+  });
   let globeSpinning = false;
   let globeSwapping = false;
   let allLocations: [number, number][] = [];
@@ -84,7 +88,7 @@ const { locations } = Astro.props;
         globeRafId = null;
         return;
       }
-      globePhi += globeSpeed;
+      globePhi += globeState.speed;
       globeInstance?.update({ phi: globePhi });
       globeRafId = requestAnimationFrame(spin);
     }
@@ -115,12 +119,12 @@ const { locations } = Astro.props;
     initGlobe();
   });
 
-  // Hover — speed up rotation
+  // Hover — smoothly speed up / slow down rotation
   document.addEventListener("globe:hover-start", () => {
-    globeSpeed = 0.006;
+    animatable.speed(0.006);
   });
   document.addEventListener("globe:hover-end", () => {
-    globeSpeed = 0.003;
+    animatable.speed(0.003);
   });
 
   // Click — outage flash (all markers red, then recover to green)

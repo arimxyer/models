@@ -9,38 +9,46 @@ const { dots } = Astro.props;
 <svg class="scatter-graphic" viewBox="0 0 200 100" aria-hidden="true">
   <!-- Axes -->
   <line
+    class="scatter-axis-line"
     x1="10"
     y1="92"
     x2="195"
     y2="92"
     stroke="var(--neon-magenta)"
     stroke-width="0.5"
+    fill="none"
     opacity="0.15"></line>
   <line
+    class="scatter-axis-line"
     x1="10"
     y1="8"
     x2="10"
     y2="92"
     stroke="var(--neon-magenta)"
     stroke-width="0.5"
+    fill="none"
     opacity="0.15"></line>
   <!-- Midlines (dashed) -->
   <line
+    class="scatter-axis-line"
     x1="10"
     y1="50"
     x2="195"
     y2="50"
     stroke="var(--neon-magenta)"
     stroke-width="0.3"
+    fill="none"
     opacity="0.08"
     stroke-dasharray="4 3"></line>
   <line
+    class="scatter-axis-line"
     x1="100"
     y1="8"
     x2="100"
     y2="92"
     stroke="var(--neon-magenta)"
     stroke-width="0.3"
+    fill="none"
     opacity="0.08"
     stroke-dasharray="4 3"></line>
   <!-- Labels -->
@@ -103,10 +111,14 @@ const { dots } = Astro.props;
 </style>
 
 <script>
-  import { animate, stagger } from "animejs";
+  import { animate, createAnimatable, stagger, svg } from "animejs";
 
-  // Reduced motion: show dots immediately at final state
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  const reducedMotion = window.matchMedia(
+    "(prefers-reduced-motion: reduce)",
+  ).matches;
+
+  // Reduced motion: show dots and axes immediately at final state
+  if (reducedMotion) {
     document
       .querySelectorAll<SVGCircleElement>(".scatter-dot")
       .forEach((dot) => {
@@ -115,34 +127,73 @@ const { dots } = Astro.props;
       });
   }
 
-  // Activation — pop in dots
+  // Per-dot persistent animatables for smooth hover interruption
+  // Each dot gets its own animatable so we can restore to its individual target opacity.
+  type DotAnimatable = ReturnType<typeof createAnimatable>;
+  const dotAnimatables = new Map<SVGCircleElement, DotAnimatable>();
+
+  // Activation — draw axes in, then pop in dots
   document.addEventListener("scatter:activate", () => {
+    // Draw axis lines in (skip for reduced motion — CSS keeps them at full opacity)
+    if (!reducedMotion) {
+      document
+        .querySelectorAll<SVGLineElement>(".scatter-axis-line")
+        .forEach((line) => {
+          animate(svg.createDrawable(line), {
+            draw: ["0 0", "0 1"],
+            duration: 800,
+            ease: "outQuad",
+          });
+        });
+    }
+
+    // Pop in dots with staggered delay (single call so stagger works across all dots)
     const dots = document.querySelectorAll<SVGCircleElement>(".scatter-dot");
+    animate(dots, {
+      r: (_: any, i: number) => [0, parseFloat(dots[i].dataset.targetR || "2")],
+      opacity: (_: any, i: number) => [
+        0,
+        parseFloat(dots[i].dataset.targetOpacity || "0.5"),
+      ],
+      duration: 400,
+      delay: stagger(15),
+      ease: "outBack",
+    });
+
+    // Create per-dot animatables for smooth hover interruption
     dots.forEach((dot) => {
-      const targetR = parseFloat(dot.dataset.targetR || "2");
-      const targetOp = parseFloat(dot.dataset.targetOpacity || "0.5");
-      animate(dot, {
-        r: [0, targetR],
-        opacity: [0, targetOp],
-        duration: 400,
-        delay: stagger(15),
-        ease: "outBack",
-      });
+      dotAnimatables.set(
+        dot,
+        createAnimatable(dot, {
+          opacity: { duration: 300, ease: "outQuad" },
+        }),
+      );
     });
   });
 
-  // Hover — brighten all dots
+  // Hover — brighten all dots via animatables for smooth interruption
   document.addEventListener("scatter:hover-start", () => {
-    animate(".scatter-dot", { opacity: 0.9, duration: 300, ease: "outQuad" });
+    if (dotAnimatables.size > 0) {
+      dotAnimatables.forEach((anim) => anim.opacity(0.9));
+    } else {
+      animate(".scatter-dot", { opacity: 0.9, duration: 300, ease: "outQuad" });
+    }
   });
 
   document.addEventListener("scatter:hover-end", () => {
-    document
-      .querySelectorAll<SVGCircleElement>(".scatter-dot")
-      .forEach((dot) => {
+    if (dotAnimatables.size > 0) {
+      dotAnimatables.forEach((anim, dot) => {
         const targetOp = parseFloat(dot.dataset.targetOpacity || "0.5");
-        animate(dot, { opacity: targetOp, duration: 400, ease: "outQuad" });
+        anim.opacity(targetOp);
       });
+    } else {
+      document
+        .querySelectorAll<SVGCircleElement>(".scatter-dot")
+        .forEach((dot) => {
+          const targetOp = parseFloat(dot.dataset.targetOpacity || "0.5");
+          animate(dot, { opacity: targetOp, duration: 400, ease: "outQuad" });
+        });
+    }
   });
 
   // Click — re-randomize positions

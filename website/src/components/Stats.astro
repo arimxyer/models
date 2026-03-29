@@ -119,7 +119,7 @@ const PROVIDER_LOCATIONS: [number, number][] = [
         translateY: [12, 0],
         duration: 600,
         ease: "outQuad",
-        delay: stagger(100),
+        delay: stagger(50, { grid: [2, 2], from: "center" }),
       });
 
       // Count up all numbers (JS engine — needs modifier + onRender callbacks)

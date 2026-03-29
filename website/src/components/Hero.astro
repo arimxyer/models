@@ -15,7 +15,7 @@ import TooltipContent from "@/components/bearnie/tooltip/TooltipContent.astro";
     ID: MDL-001-CORE
   </div>
   <h1
-    class="mb-8 text-[clamp(60px,15vw,180px)] leading-[0.8] font-black tracking-tighter text-balance text-white"
+    class="hero-heading mb-8 text-[clamp(60px,15vw,180px)] leading-[0.8] font-black tracking-tighter text-balance text-white"
   >
     models<span class="text-(--neon-cyan)">.</span>
   </h1>
@@ -64,7 +64,7 @@ import TooltipContent from "@/components/bearnie/tooltip/TooltipContent.astro";
 </div>
 
 <script>
-  import { createTimeline } from "animejs";
+  import { createTimeline, splitText, animate, stagger } from "animejs";
 
   const phrases = [
     { text: "Browse the AI ecosystem.", color: "var(--neon-magenta)" },
@@ -72,6 +72,23 @@ import TooltipContent from "@/components/bearnie/tooltip/TooltipContent.astro";
     { text: "Track coding agents.", color: "var(--neon-green)" },
     { text: "Monitor provider status.", color: "var(--neon-amber)" },
   ];
+
+  function initHeading() {
+    const h1 = document.querySelector<HTMLHeadingElement>(".hero-heading");
+    if (!h1 || h1.hasAttribute("data-heading-init")) return;
+    h1.setAttribute("data-heading-init", "true");
+
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    const { chars } = splitText(h1);
+    animate(chars, {
+      opacity: [0, 1],
+      translateY: [8, 0],
+      delay: stagger(25),
+      duration: 400,
+      ease: "outQuad",
+    });
+  }
 
   function initRotator() {
     const el = document.getElementById("hero-rotator") as HTMLElement | null;
@@ -99,6 +116,8 @@ import TooltipContent from "@/components/bearnie/tooltip/TooltipContent.astro";
       .add(el, { opacity: 1, duration: 400, ease: "inQuad" });
   }
 
+  initHeading();
   initRotator();
+  document.addEventListener("astro:page-load", initHeading);
   document.addEventListener("astro:page-load", initRotator);
 </script>
