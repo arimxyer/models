@@ -239,6 +239,9 @@ const tabTriggerClass =
 </section>
 
 <script>
+  import { animate } from "animejs";
+  import type { JSAnimation } from "animejs";
+
   function initTabCycle() {
     const prefersReducedMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
@@ -265,7 +268,7 @@ const tabTriggerClass =
     });
 
     let autoCycling = !prefersReducedMotion;
-    let progressRaf: number | null = null;
+    let progressAnim: JSAnimation | null = null;
 
     const toggleBtn = document.getElementById("cycle-toggle");
     const pauseIcon = document.getElementById("cycle-icon-pause");
@@ -286,22 +289,30 @@ const tabTriggerClass =
     }
 
     function clearAllProgress() {
+      if (progressAnim) {
+        progressAnim.cancel();
+        progressAnim = null;
+      }
       tabOrder.forEach((tab) => {
         if (tab.progress) tab.progress.style.width = "0%";
       });
     }
 
-    function animateProgress(video: HTMLVideoElement, bar: HTMLElement | null) {
-      if (progressRaf) cancelAnimationFrame(progressRaf);
-      if (!bar) return;
-      function tick() {
-        if (video.duration && !video.paused) {
-          const pct = (video.currentTime / video.duration) * 100;
-          bar!.style.width = `${pct}%`;
-        }
-        progressRaf = requestAnimationFrame(tick);
+    function startProgress(video: HTMLVideoElement, bar: HTMLElement | null) {
+      if (progressAnim) {
+        progressAnim.cancel();
+        progressAnim = null;
       }
-      progressRaf = requestAnimationFrame(tick);
+      if (!bar || !video.duration) return;
+
+      const remaining = (1 - video.currentTime / video.duration) * video.duration * 1000;
+      const startPct = `${(video.currentTime / video.duration) * 100}%`;
+
+      progressAnim = animate(bar, {
+        width: [startPct, "100%"],
+        duration: remaining,
+        ease: "linear",
+      });
     }
 
     function getActiveIndex(): number {
@@ -325,12 +336,20 @@ const tabTriggerClass =
       tabOrder[index].trigger.click();
       tabOrder[index].trigger.removeAttribute("data-auto-click");
 
-      const { video, progress } = tabOrder[index];
+      const { video, progress, content } = tabOrder[index];
+
       if (video) {
         video.currentTime = 0;
         video.loop = loop;
         video.play();
-        if (!loop) animateProgress(video, progress);
+        if (!loop) {
+          // Wait for metadata to get duration, then start progress
+          if (video.duration) {
+            startProgress(video, progress);
+          } else {
+            video.addEventListener("loadedmetadata", () => startProgress(video, progress), { once: true });
+          }
+        }
       }
     }
 
@@ -349,7 +368,6 @@ const tabTriggerClass =
         if (trigger.hasAttribute("data-auto-click")) return;
         autoCycling = false;
         updateToggle();
-        if (progressRaf) cancelAnimationFrame(progressRaf);
         clearAllProgress();
 
         tabOrder.forEach((t) => {
@@ -359,6 +377,7 @@ const tabTriggerClass =
             t.video.loop = false;
           }
         });
+
         const { video } = tabOrder[i];
         if (video) {
           video.currentTime = 0;
@@ -382,11 +401,10 @@ const tabTriggerClass =
           video.loop = false;
           if (video.ended) video.currentTime = 0;
           video.play();
-          animateProgress(video, progress);
+          startProgress(video, progress);
         }
       } else {
         if (video) video.loop = true;
-        if (progressRaf) cancelAnimationFrame(progressRaf);
         clearAllProgress();
       }
     });
@@ -399,7 +417,13 @@ const tabTriggerClass =
       if (video) {
         video.loop = !autoCycling;
         video.play();
-        if (autoCycling) animateProgress(video, progress);
+        if (autoCycling) {
+          if (video.duration) {
+            startProgress(video, progress);
+          } else {
+            video.addEventListener("loadedmetadata", () => startProgress(video, progress), { once: true });
+          }
+        }
       }
     }
   }
