@@ -49,6 +49,9 @@ const PROVIDER_LOCATIONS: [number, number][] = [
   <StatCard label="Model_Density" value={DISPLAY.models} accent="cyan">
     <GalaxyGraphic />
   </StatCard>
+  <StatCard label="Agent_Tracker" value={DISPLAY.agents} accent="amber">
+    <RobotGraphic />
+  </StatCard>
   <StatCard
     label="Bench_Validation"
     value={DISPLAY.benchmarks}
@@ -62,9 +65,6 @@ const PROVIDER_LOCATIONS: [number, number][] = [
     accent="green"
   >
     <GlobeGraphic locations={PROVIDER_LOCATIONS} />
-  </StatCard>
-  <StatCard label="Agent_Tracker" value={DISPLAY.agents} accent="amber">
-    <RobotGraphic />
   </StatCard>
 </div>
 
