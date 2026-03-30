@@ -96,7 +96,7 @@ export const DISPLAY = {
   benchmarks: formatCount(BENCHMARK_COUNT),
   providers: `${PROVIDER_COUNT}+`,
   agents: `${AGENT_COUNT}+`,
-  statusProviders: String(STATUS_PROVIDER_COUNT),
+  statusProviders: `${STATUS_PROVIDER_COUNT}+`,
 } as const;
 
 // --- Site metadata ---

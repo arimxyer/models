@@ -1,5 +1,5 @@
 ---
-import { AGENT_COUNT, DISPLAY, STATUS_PROVIDER_COUNT } from "@/data/site";
+import { DISPLAY } from "@/data/site";
 import StatCard from "./stats/StatCard.astro";
 import GalaxyGraphic from "./stats/GalaxyGraphic.astro";
 import ScatterGraphic from "./stats/ScatterGraphic.astro";
@@ -61,7 +61,7 @@ const PROVIDER_LOCATIONS: [number, number][] = [
   </StatCard>
   <StatCard
     label="Provider_Nodes"
-    value={String(STATUS_PROVIDER_COUNT)}
+    value={DISPLAY.statusProviders}
     accent="green"
   >
     <GlobeGraphic locations={PROVIDER_LOCATIONS} />
