@@ -64,7 +64,7 @@ import TooltipContent from "@/components/bearnie/tooltip/TooltipContent.astro";
 </div>
 
 <script>
-  import { createTimeline, splitText, animate, stagger } from "animejs";
+  import { splitText, animate, stagger, spring } from "animejs";
 
   const phrases = [
     { text: "Browse the AI ecosystem.", color: "var(--neon-magenta)" },
@@ -80,14 +80,21 @@ import TooltipContent from "@/components/bearnie/tooltip/TooltipContent.astro";
 
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
-    const { chars } = splitText(h1);
-    animate(chars, {
-      opacity: [0, 1],
-      translateY: [8, 0],
-      delay: stagger(25),
-      duration: 400,
-      ease: "outQuad",
-    });
+    // Start hidden, then animate in after page settles
+    h1.style.opacity = "0";
+    setTimeout(() => {
+      h1.style.opacity = "1";
+      // h1.style.overflow = "clip";
+      // h1.style.paddingBottom = "0.15em";
+      const { chars } = splitText(h1, {chars: true});
+      animate(chars, {
+        translateY: ["-1.2em", 0],
+        opacity: [0, 1],
+        delay: stagger(50, { from: "first" }),
+        duration: 1200,
+        ease: "outBounce",
+      });
+    }, 300);
   }
 
   function initRotator() {
@@ -95,25 +102,55 @@ import TooltipContent from "@/components/bearnie/tooltip/TooltipContent.astro";
     if (!el || el.hasAttribute("data-rotator-init")) return;
     el.setAttribute("data-rotator-init", "true");
 
-    const prefersReducedMotion = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
-    if (prefersReducedMotion) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
     let index = 0;
+    const HOLD = 8000;
 
-    createTimeline({ loop: true })
-      .add(el, { opacity: 0, duration: 400, ease: "outQuad" }, "+=6000")
-      .add(el, {
-        opacity: 0,
-        duration: 1,
-        onComplete: () => {
-          index = (index + 1) % phrases.length;
-          el.textContent = phrases[index].text;
-          el.style.color = phrases[index].color;
-        },
-      })
-      .add(el, { opacity: 1, duration: 400, ease: "inQuad" });
+    async function cycle() {
+      // Animate current words out (drop down and fade)
+      const outSplit = splitText(el!, { words: { wrap: "clip" } });
+      await animate(outSplit.words, {
+        translateY: "100%",
+        opacity: [1, 0],
+        duration: 400,
+        ease: "in(3)",
+        // ease: spring({ bounce: 0.5, duration: 400 }),
+        delay: stagger(70),
+      }).then();
+      outSplit.revert();
+
+      // Swap to next phrase
+      index = (index + 1) % phrases.length;
+      el!.textContent = phrases[index].text;
+      el!.style.color = phrases[index].color;
+
+      // Animate new words in (drop down from below)
+      const inSplit = splitText(el!, { words: { wrap: "clip" } });
+      await animate(inSplit.words, {
+        translateY: ["-100%", "0%"],
+        delay: stagger(70),
+        ease: spring({ bounce: 0.5, duration: 400 }),
+      }).then();
+      inSplit.revert();
+
+      setTimeout(cycle, HOLD);
+    }
+
+    // Initial entrance, then start the loop after it completes
+    requestAnimationFrame(async () => {
+      const initSplit = splitText(el!, { words: { wrap: "clip" } });
+      await animate(initSplit.words, {
+        translateY: ["-100%", "0%"],
+        delay: stagger(70),
+        // ease: spring({ mass: 1, stiffness: 120, damping: 10 }),
+        // ease: spring({ bounce: 0.5, duration: 400 }),
+        ease: "outBounce",
+      }).then();
+      initSplit.revert();
+
+      setTimeout(cycle, HOLD);
+    });
   }
 
   initHeading();
