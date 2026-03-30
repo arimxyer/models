@@ -33,7 +33,7 @@ const { locations } = Astro.props;
 
   let globeInstance: Globe | null = null;
   let globePhi = 0;
-  const globeState = { speed: 0.003 };
+  const globeState = { speed: 0.0015 };
   const animatable = createAnimatable(globeState, {
     speed: { duration: 600, ease: "outQuad" },
   });
@@ -121,10 +121,10 @@ const { locations } = Astro.props;
 
   // Hover — smoothly speed up / slow down rotation
   document.addEventListener("globe:hover-start", () => {
-    animatable.speed(0.006);
+    animatable.speed(0.003);
   });
   document.addEventListener("globe:hover-end", () => {
-    animatable.speed(0.003);
+    animatable.speed(0.0015);
   });
 
   // Click — outage flash (all markers red, then recover to green)
