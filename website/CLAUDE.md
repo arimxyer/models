@@ -56,7 +56,7 @@ src/
       GlobeGraphic.astro     -- cobe WebGL globe with outage flash easter egg
       RobotGraphic.astro     -- animated robot SVG with click-to-swap variants
     Screenshot.astro         -- TUI screenshot with terminal chrome + Astro Image
-    Features.astro           -- vertical tabs with autoplay videos, auto-cycle, progress bars
+    Features.astro           -- vertical tabs with scroll-gated videos, auto-cycle, anime.js progress bars
     Commands.astro           -- CLI command cards
     Install.astro            -- install method grid with copy-to-clipboard + global copy script
     Footer.astro             -- footer with dynamic version + copyright year
@@ -104,3 +104,11 @@ Components import from `@/data/site` — never hardcode stats, versions, or URLs
 - Lottie-to-SVG pipeline (historical, used for `stat-robot.svg`): export frame 0 via `lottie-to-svg`, wrap each `<g>` layer in an outer `<g id="part-wrap">` for safe anime.js transforms
 - anime.js v4 `alternate` syntax: use a single target value (`translateY: 8`) with `alternate: true` — NOT array syntax (`[-5, 5]`) which creates discrete keyframes and choppy motion
 - CSS `translateX`/`translateY` on SVG `<g>` elements uses SVG coordinate units (viewBox), not CSS pixels. In a 1080-wide viewBox rendered at 150px, ~1800 units needed to exit the frame
+- anime.js v4 `onScroll` is used for scroll-triggered entrances across Stats, Features, Commands, and Install. Pattern: `waapi.animate()` for compositor-thread performance, JS-set initial hidden state (not CSS) for progressive enhancement, `prefers-reduced-motion` guard, `data-*-init` idempotency flag
+- `svg.createDrawable()` returns an array — always index into it: `const drawable = svg.createDrawable(el)[0]`
+- `spring()` easing `bounce` param is clamped to [-1, 1] — values outside this range are silently clamped. Use `{ mass, stiffness, damping }` for explicit control
+- Features.astro video cycle is scroll-gated via `onScroll` — videos don't play until the section is visible, pause when scrolled away
+- `splitText` with `wrap: "clip"` is incompatible with `tracking-tighter` — clip wrappers use `overflow: hidden` on inline-block elements which ignore negative letter-spacing, causing character clipping. Use `splitText(el, {chars: true})` without clip for tight-tracked headings
+- SVG `preserveAspectRatio="none"` distorts blur filters — the blur operates in viewBox coordinates, stretching unevenly. Use percentage-based rect dims without viewBox instead
+- Two competing `animate()` calls on the same elements conflict — use per-property syntax in a single call, or a timeline
+- Vite `504 Outdated Optimize Dep` — fix by clearing `node_modules/.vite`, not restarting the dev server
