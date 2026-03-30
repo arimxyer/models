@@ -239,7 +239,7 @@ const tabTriggerClass =
 </section>
 
 <script>
-  import { animate } from "animejs";
+  import { animate, waapi, stagger, onScroll } from "animejs";
   import type { JSAnimation } from "animejs";
 
   function initTabCycle() {
@@ -428,6 +428,62 @@ const tabTriggerClass =
     }
   }
 
-  initTabCycle();
-  document.addEventListener("astro:page-load", initTabCycle);
+  function initFeatures() {
+    const section = document.querySelector("[data-tabs]");
+    if (!section || section.hasAttribute("data-features-init")) return;
+    section.setAttribute("data-features-init", "true");
+
+    const prefersReducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+
+    if (prefersReducedMotion) {
+      initTabCycle();
+      return;
+    }
+
+    // Hide tab triggers for entrance animation
+    const triggers = section.querySelectorAll<HTMLElement>("[data-tabs-trigger]");
+    triggers.forEach((t) => {
+      t.style.opacity = "0";
+      t.style.transform = "translateY(16px)";
+    });
+
+    let initialized = false;
+
+    onScroll({
+      target: section as HTMLElement,
+      enter: "bottom top",
+      onEnter: () => {
+        if (!initialized) {
+          initialized = true;
+
+          // Staggered entrance for tab triggers
+          waapi.animate(triggers, {
+            opacity: [0, 1],
+            translateY: [16, 0],
+            duration: 600,
+            ease: "outQuad",
+            delay: stagger(80),
+          });
+
+          initTabCycle();
+        } else {
+          // Resume active video on re-enter
+          const activeContent = section.querySelector(
+            '[data-tabs-content][data-state="active"]',
+          );
+          const video = activeContent?.querySelector("video");
+          if (video) video.play();
+        }
+      },
+      onLeave: () => {
+        // Pause all videos when scrolled away
+        section.querySelectorAll("video").forEach((v) => v.pause());
+      },
+    });
+  }
+
+  initFeatures();
+  document.addEventListener("astro:page-load", initFeatures);
 </script>
