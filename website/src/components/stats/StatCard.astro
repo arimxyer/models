@@ -5,10 +5,9 @@ interface Props {
   label: string;
   value: string;
   accent: "cyan" | "magenta" | "green" | "amber";
-  greenBorderLeft?: boolean;
 }
 
-const { label, value, accent, greenBorderLeft = false } = Astro.props;
+const { label, value, accent } = Astro.props;
 
 const accentColors = {
   cyan: "border-[rgba(34,211,238,0.2)]",
@@ -29,7 +28,6 @@ const numberColors = {
   class:list={[
     "overflow-hidden rounded-none",
     accentColors[accent],
-    greenBorderLeft && "border-l-4 border-l-(--neon-green)",
     "motion-safe:opacity-0",
   ]}
   data-stat-card

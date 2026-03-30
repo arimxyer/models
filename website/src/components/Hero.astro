@@ -22,11 +22,11 @@ import TooltipContent from "@/components/bearnie/tooltip/TooltipContent.astro";
   <p
     class="max-w-2xl text-2xl leading-tight font-light text-slate-300 md:text-4xl"
   >
-    High-density terminal navigator for the AI landscape.
+    High-density terminal navigator for
     <span
       id="hero-rotator"
       class="font-semibold text-(--neon-magenta)"
-      aria-live="polite">Browse the AI ecosystem.</span
+      aria-live="polite">browsing the AI ecosystem.</span
     >
   </p>
   <Tooltip>
@@ -64,13 +64,13 @@ import TooltipContent from "@/components/bearnie/tooltip/TooltipContent.astro";
 </div>
 
 <script>
-  import { splitText, animate, stagger, spring } from "animejs";
+  import { splitText, animate, stagger, spring, steps } from "animejs";
 
   const phrases = [
-    { text: "Browse the AI ecosystem.", color: "var(--neon-magenta)" },
-    { text: "Compare benchmarks.", color: "var(--neon-cyan)" },
-    { text: "Track coding agents.", color: "var(--neon-green)" },
-    { text: "Monitor provider status.", color: "var(--neon-amber)" },
+    { text: "browsing the AI ecosystem.", color: "var(--neon-magenta)" },
+    { text: "comparing model benchmarks.", color: "var(--neon-cyan)" },
+    { text: "tracking various agent harnesses.", color: "var(--neon-green)" },
+    { text: "monitoring provider statuses.", color: "var(--neon-amber)" },
   ];
 
   function initHeading() {
@@ -130,7 +130,8 @@ import TooltipContent from "@/components/bearnie/tooltip/TooltipContent.astro";
       await animate(inSplit.words, {
         translateY: ["-100%", "0%"],
         delay: stagger(70),
-        ease: spring({ bounce: 0.5, duration: 400 }),
+        // ease: spring({ bounce: 0.5, duration: 400 }),
+        ease: "outBounce"
       }).then();
       inSplit.revert();
 
@@ -153,8 +154,34 @@ import TooltipContent from "@/components/bearnie/tooltip/TooltipContent.astro";
     });
   }
 
+  function initCommand() {
+    const code = document.querySelector<HTMLElement>(".hero-command-text");
+    if (!code || code.hasAttribute("data-command-init")) return;
+    code.setAttribute("data-command-init", "true");
+
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (window.innerWidth < 768) return;
+
+    const text = code.textContent || "";
+    code.style.display = "inline-block";
+    code.style.overflow = "hidden";
+    code.style.whiteSpace = "nowrap";
+    code.style.width = "0";
+
+    // Typewriter reveal after heading animation settles
+    setTimeout(() => {
+      animate(code, {
+        width: [`0ch`, `${text.length}ch`],
+        duration: 1200,
+        ease: steps(20,true),
+      });
+    }, 400);
+  }
+
   initHeading();
   initRotator();
+  initCommand();
   document.addEventListener("astro:page-load", initHeading);
   document.addEventListener("astro:page-load", initRotator);
+  document.addEventListener("astro:page-load", initCommand);
 </script>

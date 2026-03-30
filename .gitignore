@@ -21,3 +21,4 @@ video-v3/
 
 # local mcp servers
 .mcp.json
+.stitch/
