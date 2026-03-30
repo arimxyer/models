@@ -92,37 +92,3 @@ body {
   background: rgba(34, 211, 238, 0.1);
   border-bottom: 1px solid rgba(34, 211, 238, 0.3);
 }
-@media (prefers-reduced-motion: no-preference) {
-  @media (min-width: 768px) {
-    .hero-command-text {
-      display: inline-block;
-      overflow: hidden;
-      white-space: nowrap;
-      width: 0;
-      animation: hero-type 1.2s steps(20) 0.4s forwards;
-    }
-    .hero-command-text::after {
-      content: "_";
-      color: var(--neon-cyan);
-      opacity: 0;
-      animation: hero-blink 0.9s step-end infinite 1.7s;
-    }
-  }
-  @keyframes hero-type {
-    from {
-      width: 0;
-    }
-    to {
-      width: 20ch;
-    }
-  }
-  @keyframes hero-blink {
-    0%,
-    100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0;
-    }
-  }
-}
