@@ -40,7 +40,7 @@
     hue: number;
   }
 
-  let cardGalaxySpeed = 0.001;
+  let cardGalaxySpeed = 0.0005;
   let cardGalaxyTwinkle = false;
   let cardGalaxyTime = 0;
   let cardGalaxyInitialized = false;
@@ -292,15 +292,15 @@
 
   // Click — burst spin
   document.addEventListener("galaxy:click", () => {
-    cardGalaxySpeed = 0.02;
-    setTimeout(() => {
-      cardGalaxySpeed = 0.007;
-    }, 400);
+    cardGalaxySpeed = 0.005;
     setTimeout(() => {
       cardGalaxySpeed = 0.003;
+    }, 400);
+    setTimeout(() => {
+      cardGalaxySpeed = 0.0015;
     }, 800);
     setTimeout(() => {
-      cardGalaxySpeed = 0.001;
+      cardGalaxySpeed = 0.0005;
     }, 1200);
   });
 </script>
