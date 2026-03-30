@@ -86,7 +86,7 @@ import TooltipContent from "@/components/bearnie/tooltip/TooltipContent.astro";
       h1.style.opacity = "1";
       // h1.style.overflow = "clip";
       // h1.style.paddingBottom = "0.15em";
-      const { chars } = splitText(h1, {chars: true});
+      const { chars } = splitText(h1, { chars: true });
       animate(chars, {
         translateY: ["-1.2em", 0],
         opacity: [0, 1],
@@ -131,7 +131,7 @@ import TooltipContent from "@/components/bearnie/tooltip/TooltipContent.astro";
         translateY: ["-100%", "0%"],
         delay: stagger(70),
         // ease: spring({ bounce: 0.5, duration: 400 }),
-        ease: "outBounce"
+        ease: "outBounce",
       }).then();
       inSplit.revert();
 
@@ -173,7 +173,7 @@ import TooltipContent from "@/components/bearnie/tooltip/TooltipContent.astro";
       animate(code, {
         width: [`0ch`, `${text.length}ch`],
         duration: 1200,
-        ease: steps(20,true),
+        ease: steps(20, true),
       });
     }, 400);
   }

@@ -305,7 +305,8 @@ const tabTriggerClass =
       }
       if (!bar || !video.duration) return;
 
-      const remaining = (1 - video.currentTime / video.duration) * video.duration * 1000;
+      const remaining =
+        (1 - video.currentTime / video.duration) * video.duration * 1000;
       const startPct = `${(video.currentTime / video.duration) * 100}%`;
 
       progressAnim = animate(bar, {
@@ -347,7 +348,11 @@ const tabTriggerClass =
           if (video.duration) {
             startProgress(video, progress);
           } else {
-            video.addEventListener("loadedmetadata", () => startProgress(video, progress), { once: true });
+            video.addEventListener(
+              "loadedmetadata",
+              () => startProgress(video, progress),
+              { once: true },
+            );
           }
         }
       }
@@ -421,7 +426,11 @@ const tabTriggerClass =
           if (video.duration) {
             startProgress(video, progress);
           } else {
-            video.addEventListener("loadedmetadata", () => startProgress(video, progress), { once: true });
+            video.addEventListener(
+              "loadedmetadata",
+              () => startProgress(video, progress),
+              { once: true },
+            );
           }
         }
       }
@@ -443,7 +452,9 @@ const tabTriggerClass =
     }
 
     // Hide tab triggers for entrance animation
-    const triggers = section.querySelectorAll<HTMLElement>("[data-tabs-trigger]");
+    const triggers = section.querySelectorAll<HTMLElement>(
+      "[data-tabs-trigger]",
+    );
     triggers.forEach((t) => {
       t.style.opacity = "0";
       t.style.transform = "translateY(16px)";

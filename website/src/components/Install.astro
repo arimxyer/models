@@ -4,52 +4,70 @@ import InstallCard from "@/components/InstallCard.astro";
 ---
 
 <section id="install-section" class="grid grid-cols-1 gap-4 lg:grid-cols-4">
-  <div class="data-border bg-(--neon-green) p-6 lg:col-span-1" data-install-item>
+  <div
+    class="data-border bg-(--neon-green) p-6 lg:col-span-1"
+    data-install-item
+  >
     <h2
       class="text-4xl leading-[0.9] font-black text-slate-900 uppercase italic"
     >
       <!-- System<br />Access -->
-      Installation <br/> Commands
+      Installation <br /> Commands
     </h2>
   </div>
   <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:col-span-3">
-    <div data-install-item><InstallCard label="Homebrew" command="brew install models" /></div>
-    <div data-install-item><InstallCard label="Cargo" command="cargo install modelsdev" /></div>
-    <div data-install-item><InstallCard label="Scoop" command="scoop install extras/models" /></div>
-    <div data-install-item><InstallCard label="AUR" command="paru -S models-bin" /></div>
+    <div data-install-item>
+      <InstallCard label="Homebrew" command="brew install models" />
+    </div>
+    <div data-install-item>
+      <InstallCard label="Cargo" command="cargo install modelsdev" />
+    </div>
+    <div data-install-item>
+      <InstallCard label="Scoop" command="scoop install extras/models" />
+    </div>
+    <div data-install-item>
+      <InstallCard label="AUR" command="paru -S models-bin" />
+    </div>
   </div>
-<div class="flex justify-center py-4 lg:col-span-4" data-install-item>
-  <a
-    id="releases-btn"
-    class="data-border group relative inline-flex items-center gap-4 bg-(--neon-green) p-4 text-2xl font-bold leading-[0.9] text-slate-900 uppercase italic transition-colors hover:bg-(--neon-green)/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--neon-cyan)"
-    href={RELEASES_URL}
-    rel="noopener noreferrer"
-  >
-    <svg
-      class="pointer-events-none absolute inset-0 h-full w-full overflow-visible"
-      aria-hidden="true"
+  <div class="flex justify-center py-4 lg:col-span-4" data-install-item>
+    <a
+      id="releases-btn"
+      class="data-border group relative inline-flex items-center gap-4 bg-(--neon-green) p-4 text-2xl leading-[0.9] font-bold text-slate-900 uppercase italic transition-colors hover:bg-(--neon-green)/90 focus-visible:ring-2 focus-visible:ring-(--neon-cyan) focus-visible:outline-none"
+      href={RELEASES_URL}
+      rel="noopener noreferrer"
     >
-      <rect
-        class="releases-trail"
-        x="0"
-        y="0"
-        width="100%"
-        height="100%"
-        stroke="#22d3ee"
-        stroke-width="4"
-        stroke-linecap="round"
-        fill="none"
-        filter="url(#trail-glow)"
-      />
-      <defs>
-        <filter id="trail-glow" x="-50%" y="-50%" width="200%" height="200%" filterUnits="objectBoundingBox">
-          <feGaussianBlur in="SourceGraphic" stdDeviation="3" />
-        </filter>
-      </defs>
-    </svg>
-    <span>GITHUB RELEASES</span>
-  </a>
-</div>
+      <svg
+        class="pointer-events-none absolute inset-0 h-full w-full overflow-visible"
+        aria-hidden="true"
+      >
+        <rect
+          class="releases-trail"
+          x="0"
+          y="0"
+          width="100%"
+          height="100%"
+          stroke="#22d3ee"
+          stroke-width="4"
+          stroke-linecap="round"
+          fill="none"
+          filter="url(#trail-glow)"></rect>
+        <defs>
+          <filter
+            id="trail-glow"
+            x="-50%"
+            y="-50%"
+            width="200%"
+            height="200%"
+            filterUnits="objectBoundingBox"
+          >
+            <feGaussianBlur in="SourceGraphic" stdDeviation="3"
+            ></feGaussianBlur>
+          </filter>
+        </defs>
+      </svg>
+      <span>GITHUB RELEASES</span>
+    </a>
+  </div>
 </section>
 
 <script>
