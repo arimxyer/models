@@ -17,7 +17,7 @@ const { dots } = Astro.props;
     stroke="var(--neon-magenta)"
     stroke-width="0.5"
     fill="none"
-    opacity="0.15"></line>
+    opacity="0.75"></line>
   <line
     class="scatter-axis-line"
     x1="10"
@@ -27,7 +27,7 @@ const { dots } = Astro.props;
     stroke="var(--neon-magenta)"
     stroke-width="0.5"
     fill="none"
-    opacity="0.15"></line>
+    opacity="0.75"></line>
   <!-- Midlines (dashed) -->
   <line
     class="scatter-axis-line"
@@ -38,7 +38,7 @@ const { dots } = Astro.props;
     stroke="var(--neon-magenta)"
     stroke-width="0.3"
     fill="none"
-    opacity="0.08"
+    opacity="0.38"
     stroke-dasharray="4 3"></line>
   <line
     class="scatter-axis-line"
@@ -49,7 +49,7 @@ const { dots } = Astro.props;
     stroke="var(--neon-magenta)"
     stroke-width="0.3"
     fill="none"
-    opacity="0.08"
+    opacity="0.38"
     stroke-dasharray="4 3"></line>
   <!-- Labels -->
   <text
@@ -59,7 +59,7 @@ const { dots } = Astro.props;
     font-size="5"
     font-family="'JetBrains Mono'"
     text-anchor="middle"
-    opacity="0.25">QUALITY</text
+    opacity="0.75">QUALITY</text
   >
   <text
     x="3"
@@ -68,7 +68,7 @@ const { dots } = Astro.props;
     font-size="5"
     font-family="'JetBrains Mono'"
     text-anchor="middle"
-    opacity="0.25"
+    opacity="0.75"
     transform="rotate(-90 3 52)">SPEED</text
   >
   <!-- Dots -->
@@ -141,8 +141,8 @@ const { dots } = Astro.props;
         .forEach((line) => {
           animate(svg.createDrawable(line), {
             draw: ["0 0", "0 1"],
-            duration: 800,
-            ease: "outQuad",
+            duration: 1000,
+            ease: "linear",
           });
         });
     }
@@ -155,8 +155,8 @@ const { dots } = Astro.props;
         0,
         parseFloat(dots[i].dataset.targetOpacity || "0.5"),
       ],
-      duration: 400,
-      delay: stagger(15),
+      duration: 2000,
+      delay: stagger(65),
       ease: "outBack",
     });
 
@@ -176,7 +176,7 @@ const { dots } = Astro.props;
     if (dotAnimatables.size > 0) {
       dotAnimatables.forEach((anim) => anim.opacity(0.9));
     } else {
-      animate(".scatter-dot", { opacity: 0.9, duration: 300, ease: "outQuad" });
+      animate(".scatter-dot", { opacity: 0.5, duration: 300, ease: "outQuad" });
     }
   });
 
