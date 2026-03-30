@@ -3,8 +3,8 @@ import { RELEASES_URL } from "@/data/site";
 import InstallCard from "@/components/InstallCard.astro";
 ---
 
-<section class="grid grid-cols-1 gap-4 lg:grid-cols-4">
-  <div class="data-border bg-(--neon-green) p-6 lg:col-span-1">
+<section id="install-section" class="grid grid-cols-1 gap-4 lg:grid-cols-4">
+  <div class="data-border bg-(--neon-green) p-6 lg:col-span-1" data-install-item>
     <h2
       class="text-4xl leading-[0.9] font-black text-slate-900 uppercase italic"
     >
@@ -12,10 +12,10 @@ import InstallCard from "@/components/InstallCard.astro";
     </h2>
   </div>
   <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:col-span-3">
-    <InstallCard label="Homebrew" command="brew install models" />
-    <InstallCard label="Cargo" command="cargo install modelsdev" />
-    <InstallCard label="Scoop" command="scoop install extras/models" />
-    <InstallCard label="AUR" command="paru -S models-bin" />
+    <div data-install-item><InstallCard label="Homebrew" command="brew install models" /></div>
+    <div data-install-item><InstallCard label="Cargo" command="cargo install modelsdev" /></div>
+    <div data-install-item><InstallCard label="Scoop" command="scoop install extras/models" /></div>
+    <div data-install-item><InstallCard label="AUR" command="paru -S models-bin" /></div>
   </div>
 </section>
 <div class="py-4">
@@ -28,6 +28,44 @@ import InstallCard from "@/components/InstallCard.astro";
     <span class="transition-transform group-hover:translate-x-2">→</span>
   </a>
 </div>
+
+<script>
+  import { waapi, stagger, onScroll } from "animejs";
+
+  function initInstall() {
+    const section = document.getElementById("install-section");
+    if (!section || section.hasAttribute("data-install-init")) return;
+    section.setAttribute("data-install-init", "true");
+
+    const prefersReducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    if (prefersReducedMotion) return;
+
+    const items = section.querySelectorAll<HTMLElement>("[data-install-item]");
+    items.forEach((item) => {
+      item.style.opacity = "0";
+      item.style.transform = "translateY(16px)";
+    });
+
+    onScroll({
+      target: section,
+      enter: "bottom top",
+      onEnter: () => {
+        waapi.animate(items, {
+          opacity: [0, 1],
+          translateY: [16, 0],
+          duration: 600,
+          ease: "outQuad",
+          delay: stagger(60),
+        });
+      },
+    });
+  }
+
+  initInstall();
+  document.addEventListener("astro:page-load", initInstall);
+</script>
 
 <script>
   document.querySelectorAll<HTMLElement>("[data-copy-btn]").forEach((btn) => {
