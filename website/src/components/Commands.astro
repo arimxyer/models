@@ -1,52 +1,108 @@
 ---
+const base = import.meta.env.BASE_URL;
 
+const commands = [
+  {
+    label: "COMMAND_FILTER",
+    command: "$ models list",
+    description: "BROWSE AND FILTER MODELS BY PROVIDER",
+    video: `${base}assets/wiki/cli-models-list.mp4`,
+    termLabel: "MODE: CLI // models list",
+  },
+  {
+    label: "COMMAND_BENCHMARK",
+    command: "$ models benchmarks list",
+    description: "COMPARE MODEL BENCHMARKS SIDE BY SIDE",
+    video: `${base}assets/wiki/cli-benchmarks-list.mp4`,
+    termLabel: "MODE: CLI // benchmarks list",
+  },
+  {
+    label: "COMMAND_STATUS",
+    command: "$ models agents status",
+    description: "CHECK INSTALLED AGENT VERSIONS",
+    video: `${base}assets/wiki/cli-agents.mp4`,
+    termLabel: "MODE: CLI // agents status",
+  },
+];
 ---
 
 <section id="commands-section" class="grid grid-cols-1 gap-4 md:grid-cols-3">
-  <div
-    class="data-border space-y-4 border-t-4 border-t-(--neon-magenta) bg-slate-900/50 p-6"
-    data-command-card
-  >
-    <div class="font-mono text-[10px] tracking-widest text-(--neon-magenta)">
-      COMMAND_FILTER
-    </div>
-    <code class="block font-mono text-sm text-white"
-      >$ models list --provider anthropic</code
-    >
-    <p class="font-mono text-[10px] text-slate-400 uppercase">
-      FILTER MODELS BY PROVIDER ENDPOINT
-    </p>
-  </div>
-  <div
-    class="data-border space-y-4 border-t-4 border-t-(--neon-magenta) bg-slate-900/50 p-6"
-    data-command-card
-  >
-    <div class="font-mono text-[10px] tracking-widest text-(--neon-magenta)">
-      COMMAND_BENCHMARK
-    </div>
-    <code class="block font-mono text-sm text-white"
-      >$ models benchmarks show gpt-4o</code
-    >
-    <p class="font-mono text-[10px] text-slate-400 uppercase">
-      DEEP DIVE ON ANY MODEL BENCHMARK
-    </p>
-  </div>
-  <div
-    class="data-border space-y-4 border-t-4 border-t-(--neon-magenta) bg-slate-900/50 p-6"
-    data-command-card
-  >
-    <div class="font-mono text-[10px] tracking-widest text-(--neon-magenta)">
-      COMMAND_STATUS
-    </div>
-    <code class="block font-mono text-sm text-white">$ agents status</code>
-    <p class="font-mono text-[10px] text-slate-400 uppercase">
-      CHECK INSTALLED AGENT VERSIONS
-    </p>
-  </div>
+  {
+    commands.map((cmd, i) => (
+      <button
+        type="button"
+        class="data-border group cursor-pointer space-y-4 border-t-4 border-t-(--neon-magenta) bg-slate-900/50 p-6 text-left transition-colors hover:bg-slate-900/70"
+        data-command-card
+        data-command-index={i}
+        data-video={cmd.video}
+        data-term-label={cmd.termLabel}
+        aria-label={`Preview: ${cmd.command}`}
+      >
+        <div class="font-mono text-[10px] tracking-widest text-(--neon-magenta)">
+          {cmd.label}
+        </div>
+        <code class="block font-mono text-sm text-white">{cmd.command}</code>
+        <p class="font-mono text-[10px] text-slate-400 uppercase">
+          {cmd.description}
+        </p>
+        <span class="mt-2 inline-block font-mono text-[10px] text-slate-500 uppercase transition-colors group-hover:text-(--neon-magenta)">
+          Click to preview
+        </span>
+      </button>
+    ))
+  }
 </section>
 
+<!-- Modal overlay (hidden by default) -->
+<div
+  id="command-modal-backdrop"
+  class="pointer-events-none fixed inset-0 z-50 flex items-center justify-center opacity-0"
+  aria-hidden="true"
+>
+  <div class="absolute inset-0 bg-black/80" data-modal-bg></div>
+  <div
+    id="command-modal"
+    class="relative w-[90vw] max-w-4xl"
+    role="dialog"
+    aria-modal="true"
+  >
+    <div data-border class="overflow-hidden bg-black">
+      <div
+        class="data-header flex items-center justify-between px-4 py-2"
+        aria-hidden="true"
+      >
+        <div class="flex gap-2">
+          <div class="h-2 w-2 rounded-full bg-slate-700"></div>
+          <div class="h-2 w-2 rounded-full bg-slate-700"></div>
+          <div class="h-2 w-2 rounded-full bg-slate-700"></div>
+        </div>
+        <span
+          id="modal-term-label"
+          class="font-mono text-[10px] text-slate-400 uppercase"></span>
+        <button
+          id="modal-close"
+          type="button"
+          class="font-mono text-xs text-slate-500 transition-colors hover:text-white focus-visible:text-white focus-visible:outline-none"
+          aria-label="Close preview"
+        >
+          [ESC]
+        </button>
+      </div>
+      <video
+        id="modal-video"
+        class="w-full opacity-0"
+        muted
+        playsinline
+        preload="metadata"
+      >
+        <source id="modal-source" src="" type="video/mp4" />
+      </video>
+    </div>
+  </div>
+</div>
+
 <script>
-  import { waapi, stagger, onScroll } from "animejs";
+  import { waapi, createTimeline, stagger, onScroll } from "animejs";
 
   function initCommands() {
     const section = document.getElementById("commands-section");
@@ -56,26 +112,183 @@
     const prefersReducedMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
     ).matches;
-    if (prefersReducedMotion) return;
 
     const cards = section.querySelectorAll<HTMLElement>("[data-command-card]");
+
+    // Scroll entrance animation
+    if (!prefersReducedMotion) {
+      cards.forEach((card) => {
+        card.style.opacity = "0";
+        card.style.transform = "translateY(16px)";
+      });
+
+      onScroll({
+        target: section,
+        enter: "bottom top",
+        onEnter: () => {
+          waapi.animate(cards, {
+            opacity: [0, 1],
+            translateY: [16, 0],
+            duration: 600,
+            ease: "outQuad",
+            delay: stagger(80),
+          });
+        },
+      });
+    }
+
+    // Modal elements — re-bind after null guard so TS narrows inside closures
+    const _backdrop = document.getElementById("command-modal-backdrop");
+    const _modal = document.getElementById("command-modal");
+    const _video = document.getElementById("modal-video") as HTMLVideoElement | null;
+    const _source = document.getElementById("modal-source") as HTMLSourceElement | null;
+    const _label = document.getElementById("modal-term-label");
+    const _close = document.getElementById("modal-close");
+
+    if (!_backdrop || !_modal || !_video || !_source || !_label || !_close)
+      return;
+
+    const backdrop: HTMLElement = _backdrop;
+    const modal: HTMLElement = _modal;
+    const modalVideo: HTMLVideoElement = _video;
+    const modalSource: HTMLSourceElement = _source;
+    const modalLabel: HTMLElement = _label;
+    const closeBtn: HTMLElement = _close;
+
+    let isOpen = false;
+
+    function openModal(card: HTMLElement) {
+      if (isOpen) return;
+      isOpen = true;
+
+      const videoSrc = card.getAttribute("data-video") || "";
+      const termLabel = card.getAttribute("data-term-label") || "";
+
+      modalSource.src = videoSrc;
+      modalLabel.textContent = termLabel;
+      modalVideo.load();
+      modalVideo.style.opacity = "0";
+
+      // Show backdrop
+      backdrop.style.pointerEvents = "auto";
+      backdrop.setAttribute("aria-hidden", "false");
+      document.body.style.overflow = "hidden";
+
+      if (prefersReducedMotion) {
+        backdrop.style.opacity = "1";
+        modalVideo.style.opacity = "1";
+        modalVideo.play();
+        return;
+      }
+
+      // Animate backdrop + modal entrance
+      const tl = createTimeline({ autoplay: true });
+
+      tl.add(backdrop, {
+        opacity: [0, 1],
+        duration: 300,
+        ease: "outQuad",
+      })
+        .add(
+          modal,
+          {
+            opacity: [0, 1],
+            scale: [0.9, 1],
+            translateY: [20, 0],
+            duration: 400,
+            ease: "outExpo",
+          },
+          "-=200",
+        )
+        .add(
+          modalVideo,
+          {
+            opacity: [0, 1],
+            duration: 250,
+            ease: "outQuad",
+            onComplete: () => {
+              modalVideo.play();
+            },
+          },
+          "-=150",
+        )
+        .add(
+          closeBtn,
+          {
+            opacity: [0, 1],
+            duration: 180,
+            ease: "outQuad",
+          },
+          "-=200",
+        );
+    }
+
+    function closeModal() {
+      if (!isOpen) return;
+      isOpen = false;
+
+      modalVideo.pause();
+      modalVideo.currentTime = 0;
+      document.body.style.overflow = "";
+
+      if (prefersReducedMotion) {
+        backdrop.style.opacity = "0";
+        backdrop.style.pointerEvents = "none";
+        backdrop.setAttribute("aria-hidden", "true");
+        return;
+      }
+
+      const tl = createTimeline({
+        autoplay: true,
+        onComplete: () => {
+          backdrop.style.pointerEvents = "none";
+          backdrop.setAttribute("aria-hidden", "true");
+        },
+      });
+
+      tl.add(modalVideo, {
+        opacity: [1, 0],
+        duration: 150,
+        ease: "inQuad",
+      })
+        .add(
+          modal,
+          {
+            opacity: [1, 0],
+            scale: [1, 0.95],
+            translateY: [0, 10],
+            duration: 250,
+            ease: "inQuart",
+          },
+          "-=100",
+        )
+        .add(
+          backdrop,
+          {
+            opacity: [1, 0],
+            duration: 200,
+            ease: "inQuad",
+          },
+          "-=150",
+        );
+    }
+
+    // Click handlers on cards
     cards.forEach((card) => {
-      card.style.opacity = "0";
-      card.style.transform = "translateY(16px)";
+      card.addEventListener("click", () => openModal(card));
     });
 
-    onScroll({
-      target: section,
-      enter: "bottom top",
-      onEnter: () => {
-        waapi.animate(cards, {
-          opacity: [0, 1],
-          translateY: [16, 0],
-          duration: 600,
-          ease: "outQuad",
-          delay: stagger(80),
-        });
-      },
+    // Close handlers
+    closeBtn.addEventListener("click", closeModal);
+    backdrop
+      .querySelector("[data-modal-bg]")
+      ?.addEventListener("click", closeModal);
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && isOpen) {
+        e.preventDefault();
+        closeModal();
+      }
     });
   }
 
