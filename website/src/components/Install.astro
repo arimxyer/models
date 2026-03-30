@@ -18,42 +18,39 @@ import InstallCard from "@/components/InstallCard.astro";
     <div data-install-item><InstallCard label="Scoop" command="scoop install extras/models" /></div>
     <div data-install-item><InstallCard label="AUR" command="paru -S models-bin" /></div>
   </div>
-</section>
-<div class="flex justify-center py-4">
+<div class="flex justify-center py-4 lg:col-span-4" data-install-item>
   <a
     id="releases-btn"
-    class="data-border group relative inline-flex items-center gap-4 bg-(--neon-green) p-4 text-lg font-bold leading-[0.9] text-slate-900 uppercase italic transition-colors hover:bg-(--neon-green)/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--neon-cyan)"
+    class="data-border group relative inline-flex items-center gap-4 bg-(--neon-green) p-4 text-2xl font-bold leading-[0.9] text-slate-900 uppercase italic transition-colors hover:bg-(--neon-green)/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--neon-cyan)"
     href={RELEASES_URL}
     rel="noopener noreferrer"
   >
     <svg
-      class="pointer-events-none absolute inset-0 h-full w-full"
-      viewBox="0 0 100 100"
-      preserveAspectRatio="none"
+      class="pointer-events-none absolute inset-0 h-full w-full overflow-visible"
       aria-hidden="true"
     >
       <rect
         class="releases-trail"
         x="0"
         y="0"
-        width="100"
-        height="100"
+        width="100%"
+        height="100%"
         stroke="#22d3ee"
-        stroke-width="2"
+        stroke-width="4"
         stroke-linecap="round"
         fill="none"
-        vector-effect="non-scaling-stroke"
         filter="url(#trail-glow)"
       />
       <defs>
-        <filter id="trail-glow" x="-20%" y="-20%" width="140%" height="140%">
-          <feGaussianBlur in="SourceGraphic" stdDeviation="2" />
+        <filter id="trail-glow" x="-50%" y="-50%" width="200%" height="200%" filterUnits="objectBoundingBox">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="3" />
         </filter>
       </defs>
     </svg>
     <span>GITHUB RELEASES</span>
   </a>
 </div>
+</section>
 
 <script>
   import { animate, waapi, stagger, onScroll, svg } from "animejs";
@@ -111,9 +108,9 @@ import InstallCard from "@/components/InstallCard.astro";
     btn.addEventListener("mouseenter", () => {
       if (trailAnim) trailAnim.pause();
       trailAnim = animate(drawable, {
-        draw: ["0 0.15", "1.0 1.15"],
+        draw: ["0 0.25", "1.0 1.25"],
         stroke: ["#22d3ee", "#f472b6", "#4ade80", "#fbbf24", "#22d3ee"],
-        duration: 3000,
+        duration: 9000,
         ease: "linear",
         loop: true,
       });
