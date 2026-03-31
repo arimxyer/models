@@ -153,6 +153,20 @@ fn load_catalog(config: &crate::config::Config) -> Result<Vec<CatalogAgent>> {
             tracked: config.is_tracked(id),
         })
         .collect();
+
+    // Merge custom agents from config (same logic as TUI's AgentsApp::new)
+    for custom in &config.agents.custom {
+        let id = custom.name.to_lowercase().replace(' ', "-");
+        if entries.iter().any(|e| e.id == id) {
+            continue;
+        }
+        entries.push(CatalogAgent {
+            id,
+            agent: custom.to_agent(),
+            tracked: true,
+        });
+    }
+
     entries.sort_by(|a, b| a.agent.name.cmp(&b.agent.name));
     Ok(entries)
 }
