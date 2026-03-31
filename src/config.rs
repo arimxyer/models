@@ -111,7 +111,7 @@ pub struct AgentsConfig {
     pub tracked: HashSet<String>,
     #[serde(default)]
     pub excluded: HashSet<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub custom: Vec<CustomAgent>,
 }
 
@@ -189,6 +189,15 @@ impl Config {
         let content = std::fs::read_to_string(&path)
             .with_context(|| format!("Failed to read config: {}", path.display()))?;
 
+        // Strip legacy `custom = []` lines that conflict with [[agents.custom]] blocks.
+        // Older versions of save() serialized the empty Vec as an inline array, which
+        // causes a TOML parse error if the user later adds [[agents.custom]] entries.
+        let content: String = content
+            .lines()
+            .filter(|line| line.trim() != "custom = []")
+            .collect::<Vec<_>>()
+            .join("\n");
+
         toml::from_str(&content).context("Failed to parse config.toml")
     }
 
@@ -203,7 +212,26 @@ impl Config {
                 .with_context(|| format!("Failed to create config dir: {}", parent.display()))?;
         }
 
-        let content = toml::to_string_pretty(self).context("Failed to serialize config")?;
+        let mut content = toml::to_string_pretty(self).context("Failed to serialize config")?;
+
+        // Append a commented example for custom agents when none are configured,
+        // so users know the syntax without needing to look up docs.
+        if self.agents.custom.is_empty() {
+            content.push_str(
+                "\n# To track custom agents, add [[agents.custom]] blocks:\n\
+                 #\n\
+                 # [[agents.custom]]\n\
+                 # name = \"My Agent\"\n\
+                 # repo = \"owner/repo\"\n\
+                 # agent_type = \"cli\"       # optional: \"cli\" or \"ide\"\n\
+                 # binary = \"myagent\"       # optional: for version detection\n\
+                 # version_command = [\"myagent\", \"--version\"]  # optional\n\
+                 #\n\
+                 # Add multiple agents with additional [[agents.custom]] blocks.\n\
+                 # See: https://github.com/arimxyer/models/wiki/Configuration#custom-agents\n",
+            );
+        }
+
         std::fs::write(&path, content)
             .with_context(|| format!("Failed to write config: {}", path.display()))?;
 
