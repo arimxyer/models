@@ -57,7 +57,7 @@ src/
       RobotGraphic.astro     -- animated robot SVG with click-to-swap variants
     Screenshot.astro         -- TUI screenshot with terminal chrome + Astro Image
     Features.astro           -- vertical tabs with scroll-gated videos, auto-cycle, anime.js progress bars
-    Commands.astro           -- CLI command cards
+    Commands.astro           -- CLI command cards with click-to-preview modal (anime.js createTimeline)
     Install.astro            -- install method grid with copy-to-clipboard + global copy script
     Footer.astro             -- footer with dynamic version + copyright year
     bearnie/                 -- Bearnie UI components (card, tabs, toast, tooltip, button)
@@ -108,6 +108,9 @@ Components import from `@/data/site` — never hardcode stats, versions, or URLs
 - `svg.createDrawable()` returns an array — always index into it: `const drawable = svg.createDrawable(el)[0]`
 - `spring()` easing `bounce` param is clamped to [-1, 1] — values outside this range are silently clamped. Use `{ mass, stiffness, damping }` for explicit control
 - Features.astro video cycle is scroll-gated via `onScroll` — videos don't play until the section is visible, pause when scrolled away
+- anime.js v4 `createTimeline()` is the v4 rename of `anime.timeline()` — used in Commands.astro for sequenced modal open/close animations with `.add()` and negative offsets (`'-=100'`)
+- CLI video assets (`cli-models-list.mp4`, `cli-benchmarks-list.mp4`, `cli-agents.mp4`) live in root `public/assets/wiki/` and must be copied to `website/public/assets/wiki/` for the website build
+- Bearnie Card's defaults (`rounded-lg`, `border`, `bg-card`, `text-card-foreground`) all conflict with the site's design system — use raw HTML with `data-border` + explicit Tailwind classes instead. StatCard.astro is the only justified Card usage (wraps slot content)
 - `splitText` with `wrap: "clip"` is incompatible with `tracking-tighter` — clip wrappers use `overflow: hidden` on inline-block elements which ignore negative letter-spacing, causing character clipping. Use `splitText(el, {chars: true})` without clip for tight-tracked headings
 - SVG `preserveAspectRatio="none"` distorts blur filters — the blur operates in viewBox coordinates, stretching unevenly. Use percentage-based rect dims without viewBox instead
 - Two competing `animate()` calls on the same elements conflict — use per-property syntax in a single call, or a timeline
