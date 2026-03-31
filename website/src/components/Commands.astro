@@ -3,23 +3,23 @@ const base = import.meta.env.BASE_URL;
 
 const commands = [
   {
-    label: "COMMAND_FILTER",
+    label: "COMMAND_MODELS",
     command: "$ models list",
-    description: "BROWSE AND FILTER MODELS BY PROVIDER",
+    description: "BROWSE AND FILTER MODELS BY RELEASE DATE AND MORE",
     video: `${base}assets/wiki/cli-models-list.mp4`,
     termLabel: "MODE: CLI // models list",
   },
   {
     label: "COMMAND_BENCHMARK",
     command: "$ models benchmarks list",
-    description: "COMPARE MODEL BENCHMARKS SIDE BY SIDE",
+    description: "QUICKLY EVALUATE MODEL RANKINGS FROM THE INLINE",
     video: `${base}assets/wiki/cli-benchmarks-list.mp4`,
     termLabel: "MODE: CLI // benchmarks list",
   },
   {
-    label: "COMMAND_STATUS",
+    label: "COMMAND_AGENTS",
     command: "$ models agents status",
-    description: "CHECK INSTALLED AGENT VERSIONS",
+    description: "QUICKLY CHECK THE STATUS OF ANY AGENTS / HARNESSES",
     video: `${base}assets/wiki/cli-agents.mp4`,
     termLabel: "MODE: CLI // agents status",
   },
@@ -31,13 +31,16 @@ const commands = [
     commands.map((cmd, i) => (
       <button
         type="button"
-        class="data-border group cursor-pointer space-y-4 border-t-4 border-t-(--neon-magenta) bg-slate-900/50 p-6 text-left transition-colors hover:bg-slate-900/70"
+        class="data-border group relative cursor-pointer space-y-4 border-t-4 border-t-(--neon-magenta) bg-slate-900/50 p-6 text-left transition-all hover:border-[rgba(244,114,182,0.3)] hover:border-t-(--neon-magenta) hover:bg-slate-900/70"
         data-command-card
         data-command-index={i}
         data-video={cmd.video}
         data-term-label={cmd.termLabel}
         aria-label={`Preview: ${cmd.command}`}
       >
+        <span class="absolute top-2 right-3 font-mono text-[10px] text-slate-600 uppercase transition-colors group-hover:text-(--neon-magenta)">
+          Preview
+        </span>
         <div class="font-mono text-[10px] tracking-widest text-(--neon-magenta)">
           {cmd.label}
         </div>
@@ -45,9 +48,6 @@ const commands = [
         <p class="font-mono text-[10px] text-slate-400 uppercase">
           {cmd.description}
         </p>
-        <span class="mt-2 inline-block font-mono text-[10px] text-slate-500 uppercase transition-colors group-hover:text-(--neon-magenta)">
-          Click to preview
-        </span>
       </button>
     ))
   }
@@ -140,8 +140,12 @@ const commands = [
     // Modal elements — re-bind after null guard so TS narrows inside closures
     const _backdrop = document.getElementById("command-modal-backdrop");
     const _modal = document.getElementById("command-modal");
-    const _video = document.getElementById("modal-video") as HTMLVideoElement | null;
-    const _source = document.getElementById("modal-source") as HTMLSourceElement | null;
+    const _video = document.getElementById(
+      "modal-video",
+    ) as HTMLVideoElement | null;
+    const _source = document.getElementById(
+      "modal-source",
+    ) as HTMLSourceElement | null;
     const _label = document.getElementById("modal-term-label");
     const _close = document.getElementById("modal-close");
 
