@@ -1,0 +1,17 @@
+---
+import { cn } from "@/utils/cn";
+import type { HTMLAttributes } from "astro/types";
+
+export interface Props extends HTMLAttributes<"span"> {}
+
+const { class: className, ...props } = Astro.props;
+---
+
+<span
+  class={cn("cursor-default", className)}
+  data-tooltip-trigger
+  tabindex="0"
+  {...props}
+>
+  <slot />
+</span>

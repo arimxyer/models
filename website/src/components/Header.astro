@@ -1,0 +1,31 @@
+---
+import { WIKI_URL, REPO_URL, STARS } from "@/data/site";
+import { Star } from "@lucide/astro";
+---
+
+<header
+  class="data-header sticky top-0 z-50 flex w-full items-center justify-between px-6 py-3 backdrop-blur-md"
+>
+  <div class="flex items-center">
+    <span class="text-3xl font-black tracking-tighter text-white"
+      >models<span class="text-(--neon-cyan)">.</span></span
+    >
+  </div>
+  <nav
+    class="flex gap-4 font-mono text-[10px] tracking-widest uppercase md:gap-8"
+    aria-label="Main navigation"
+  >
+    <a
+      class="text-(--neon-cyan) transition-colors hover:text-white focus-visible:text-white"
+      href={WIKI_URL}
+      rel="noopener noreferrer">[ documentation ]</a
+    >
+    <a
+      class="text-slate-400 transition-colors hover:text-white focus-visible:text-white"
+      href={REPO_URL}
+      rel="noopener noreferrer"
+      >[ <Star class="inline-block size-3" />
+      {STARS > 0 ? STARS.toLocaleString("en-US") : "—"} ]</a
+    >
+  </nav>
+</header>

@@ -1,0 +1,43 @@
+---
+import { ClipboardCopy, Check } from "@lucide/astro";
+import Button from "@/components/bearnie/button/Button.astro";
+import Tooltip from "@/components/bearnie/tooltip/Tooltip.astro";
+import TooltipContent from "@/components/bearnie/tooltip/TooltipContent.astro";
+
+interface Props {
+  label: string;
+  command: string;
+}
+
+const { label, command } = Astro.props;
+---
+
+<Tooltip class="w-full">
+  <Button
+    variant="ghost"
+    class="data-border group relative flex h-auto w-full cursor-pointer flex-col items-start gap-2 rounded-none border-0 bg-transparent p-4 text-left transition-colors hover:bg-(--neon-green)/10 focus-visible:ring-2 focus-visible:ring-(--neon-cyan) focus-visible:outline-none sm:flex-row sm:items-center sm:justify-between"
+    data-copy-btn
+    data-copy-text={command}
+    aria-label={`Copy install command: ${command}`}
+    data-tooltip-trigger
+  >
+    <span class="text-sm font-bold tracking-widest uppercase">{label}</span>
+    <div class="flex w-full justify-between gap-2 sm:w-auto sm:justify-start">
+      <code
+        class="font-mono text-xs break-all text-slate-400 transition-colors group-hover:text-(--neon-green) sm:break-normal"
+        >{command}</code
+      >
+      <div class="relative size-3.5 shrink-0 text-slate-400">
+        <ClipboardCopy
+          class="clipboard-icon absolute inset-0 transition-opacity duration-200"
+          aria-hidden="true"
+        />
+        <Check
+          class="check-icon absolute inset-0 opacity-0 transition-opacity duration-200"
+          aria-hidden="true"
+        />
+      </div>
+    </div>
+  </Button>
+  <TooltipContent side="top">Click to copy</TooltipContent>
+</Tooltip>

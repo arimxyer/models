@@ -1,0 +1,250 @@
+---
+const base = import.meta.env.BASE_URL;
+---
+
+<div
+  class="robot-graphic"
+  aria-hidden="true"
+  data-svg-src={`${base.replace(/\/?$/, "/")}assets/stat-robot.svg`}
+>
+</div>
+
+<style>
+  .robot-graphic {
+    position: absolute;
+    top: 50%;
+    right: 2%;
+    width: clamp(112px, 44%, 156px);
+    aspect-ratio: 5 / 4;
+    transform: translateY(-50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .robot-graphic :global(svg) {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+</style>
+
+<script>
+  import { animate } from "animejs";
+
+  let robotInitialized = false;
+
+  async function initRobot(): Promise<void> {
+    if (robotInitialized) return;
+    robotInitialized = true;
+
+    const container = document.querySelector<HTMLElement>(".robot-graphic");
+    if (!container) return;
+
+    const src = container.dataset.svgSrc;
+    if (!src) return;
+
+    const res = await fetch(src);
+    const svgText = await res.text();
+    container.innerHTML = svgText;
+
+    const svg = container.querySelector("svg");
+    if (!svg) return;
+    svg.style.width = "100%";
+    svg.style.height = "100%";
+
+    const prefersReducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+
+    const idleAnims: ReturnType<typeof animate>[] = [];
+
+    if (!prefersReducedMotion) {
+      // Body float
+      idleAnims.push(
+        animate("#bot-character", {
+          translateY: 70,
+          duration: 2500,
+          ease: "inOutSine",
+          loop: true,
+          alternate: true,
+        }),
+      );
+
+      // Head lag
+      idleAnims.push(
+        animate("#bot-head-wrap", {
+          translateY: 3,
+          duration: 2800,
+          ease: "inOutSine",
+          loop: true,
+          alternate: true,
+        }),
+      );
+
+      // Visor/eyes follow head
+      idleAnims.push(
+        animate("#bot-visor-wrap, #bot-eye-l-wrap, #bot-eye-r-wrap", {
+          translateY: 2,
+          duration: 3000,
+          ease: "inOutSine",
+          loop: true,
+          alternate: true,
+        }),
+      );
+
+      // Arms sway
+      idleAnims.push(
+        animate("#bot-hand-l-wrap", {
+          translateY: 4,
+          translateX: -1,
+          duration: 2900,
+          ease: "inOutSine",
+          loop: true,
+          alternate: true,
+        }),
+      );
+      idleAnims.push(
+        animate("#bot-hand-r-wrap", {
+          translateY: 3,
+          translateX: 1,
+          duration: 3100,
+          ease: "inOutSine",
+          loop: true,
+          alternate: true,
+        }),
+      );
+
+      // Ears drift
+      idleAnims.push(
+        animate("#bot-ear-l-wrap", {
+          translateY: 2,
+          translateX: -1,
+          duration: 3300,
+          ease: "inOutSine",
+          loop: true,
+          alternate: true,
+        }),
+      );
+      idleAnims.push(
+        animate("#bot-ear-r-wrap", {
+          translateY: 2,
+          translateX: 1,
+          duration: 3000,
+          ease: "inOutSine",
+          loop: true,
+          alternate: true,
+        }),
+      );
+
+      // Shadow pulse
+      idleAnims.push(
+        animate("#bot-shadow", {
+          duration: 2500,
+          ease: "inOutSine",
+          loop: true,
+          alternate: true,
+          opacity: 0.25,
+        }),
+      );
+
+      const observer = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (entry.isIntersecting) {
+              for (const anim of idleAnims) anim.play();
+            } else {
+              for (const anim of idleAnims) anim.pause();
+            }
+          }
+        },
+        { rootMargin: "50px", threshold: 0 },
+      );
+      observer.observe(container);
+    }
+
+    // Hover: eye blink (user-initiated, works even with reduced motion)
+    const card = container.closest("[data-accent='amber']");
+    card?.addEventListener("mouseenter", () => {
+      animate("#bot-eye-l, #bot-eye-r", {
+        opacity: [1, 0, 1],
+        duration: 250,
+        ease: "inOutQuad",
+      });
+    });
+
+    // Click: robot swap — current exits right, new one enters
+    const eyeColors = [
+      "rgb(125,138,255)", // #1 original blue-purple
+      "rgb(34,211,238)", // #2 cyan
+      "rgb(244,114,182)", // #3 magenta
+      "rgb(74,222,128)", // #4 green
+      "rgb(251,191,36)", // #5 amber
+      "rgb(239,68,68)", // #6 red
+      "rgb(168,85,247)", // #7 purple
+      "rgb(59,130,246)", // #8 blue
+      "rgb(20,184,166)", // #9 teal
+      "rgb(245,158,11)", // #10 orange
+      "rgb(236,72,153)", // #11 pink
+    ];
+    let botIndex = 0;
+    let swapping = false;
+
+    // Add number label to the body — large watermark centered on torso
+    const botBody = container!.querySelector("#bot-body");
+    const svgNs = "http://www.w3.org/2000/svg";
+    const numLabel = document.createElementNS(svgNs, "text");
+    numLabel.setAttribute("x", "-23");
+    numLabel.setAttribute("y", "235");
+    numLabel.setAttribute("text-anchor", "middle");
+    numLabel.setAttribute("font-size", "140");
+    numLabel.setAttribute("font-family", "'JetBrains Mono', monospace");
+    numLabel.setAttribute("font-weight", "900");
+    numLabel.setAttribute("fill", eyeColors[0]);
+    numLabel.setAttribute("opacity", "1");
+    numLabel.textContent = "1";
+    botBody?.appendChild(numLabel);
+
+    function setBot(index: number) {
+      const color = eyeColors[index % eyeColors.length];
+      container!
+        .querySelectorAll("#bot-eye-l path, #bot-eye-r path")
+        .forEach((p) => {
+          if ((p as SVGElement).getAttribute("fill")?.startsWith("rgb")) {
+            (p as SVGElement).setAttribute("fill", color);
+          }
+        });
+      numLabel.textContent = `${index + 1}`;
+      numLabel.setAttribute("fill", color);
+      numLabel.setAttribute("opacity", "0.35");
+    }
+
+    card?.addEventListener("click", () => {
+      if (swapping) return;
+      swapping = true;
+
+      animate("#bot", {
+        translateX: 1800,
+        duration: 500,
+        ease: "inQuad",
+        onComplete: () => {
+          botIndex = (botIndex + 1) % 11;
+          setBot(botIndex);
+
+          setTimeout(() => {
+            animate("#bot", {
+              translateX: 0,
+              duration: 500,
+              ease: "outQuad",
+              onComplete: () => {
+                swapping = false;
+              },
+            });
+          }, 1500);
+        },
+      });
+    });
+  }
+
+  document.addEventListener("robot:activate", () => {
+    initRobot();
+  });
+</script>

@@ -1,0 +1,306 @@
+<div class="galaxy-graphic" aria-hidden="true"></div>
+
+<style>
+  .galaxy-graphic {
+    position: absolute;
+    top: 50%;
+    right: 2%;
+    width: clamp(112px, 48%, 164px);
+    aspect-ratio: 1;
+    transform: translateY(-50%);
+    perspective: 600px;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .galaxy-graphic :global(canvas) {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+    transform: rotateX(55deg);
+    transform-origin: center center;
+  }
+</style>
+
+<script>
+  import {
+    Application,
+    Graphics,
+    Container,
+    ParticleContainer,
+    Particle,
+    BlurFilter,
+  } from "pixi.js";
+
+  interface StarParticle {
+    x: number;
+    y: number;
+    size: number;
+    opacity: number;
+    hue: number;
+  }
+
+  let cardGalaxySpeed = 0.0005;
+  let cardGalaxyTwinkle = false;
+  let cardGalaxyTime = 0;
+  let cardGalaxyInitialized = false;
+  const cardGalaxyDots: {
+    particle: Particle;
+    baseAlpha: number;
+    phase: number;
+  }[] = [];
+
+  function generateGalaxyParticles(
+    count: number,
+    radius: number,
+  ): StarParticle[] {
+    const particles: StarParticle[] = [];
+    const arms = 3;
+    const armSpread = 0.4;
+
+    // Core cluster — dense center
+    for (let i = 0; i < count * 0.3; i++) {
+      const r = Math.random() * radius * 0.25;
+      const angle = Math.random() * Math.PI * 2;
+      particles.push({
+        x: Math.cos(angle) * r,
+        y: Math.sin(angle) * r,
+        size: 0.5 + Math.random() * 2,
+        opacity: 0.4 + Math.random() * 0.6,
+        hue: Math.random() * 0.3, // mostly cyan
+      });
+    }
+
+    // Spiral arms
+    for (let i = 0; i < count * 0.7; i++) {
+      const arm = Math.floor(Math.random() * arms);
+      const armAngle = (arm / arms) * Math.PI * 2;
+      const t = Math.random(); // 0=center, 1=edge
+      const r = t * radius;
+      const spiralAngle = armAngle + t * Math.PI * 2.5; // 2.5 full turns
+      const scatter = armSpread * (0.2 + t * 0.8); // tighter at center
+      const offsetAngle = spiralAngle + (Math.random() - 0.5) * scatter;
+      const offsetR = r + (Math.random() - 0.5) * radius * 0.1;
+
+      particles.push({
+        x: Math.cos(offsetAngle) * offsetR,
+        y: Math.sin(offsetAngle) * offsetR,
+        size: 0.3 + Math.random() * 1.8 * (1 - t * 0.5), // larger near center
+        opacity: (0.2 + Math.random() * 0.8) * (1 - t * 0.4), // brighter near center
+        hue: t, // cyan at center → white at edges
+      });
+    }
+
+    return particles;
+  }
+
+  async function initCardGalaxy(): Promise<void> {
+    if (cardGalaxyInitialized) return;
+    cardGalaxyInitialized = true;
+    const el = document.querySelector(".galaxy-graphic");
+    if (!el) return;
+
+    const app = new Application();
+    await app.init({
+      width: 220,
+      height: 220,
+      backgroundAlpha: 0,
+      antialias: true,
+      resolution: 2,
+      autoDensity: true,
+      preference: "webgl",
+    });
+    // CSS handles display sizing via percentages; autoDensity handles resolution
+    el.appendChild(app.canvas);
+
+    const particles = generateGalaxyParticles(500, 90);
+    const galaxyContainer = new Container();
+    galaxyContainer.x = 120;
+    galaxyContainer.y = 120;
+    app.stage.addChild(galaxyContainer);
+
+    // Glow layer — regular Container + Graphics (needs BlurFilter)
+    const glowContainer = new Container();
+    galaxyContainer.addChild(glowContainer);
+
+    // Sharp dots — ParticleContainer for GPU performance
+    // Generate a small white circle texture to tint per-particle
+    const dotGraphic = new Graphics();
+    dotGraphic.circle(0, 0, 4);
+    dotGraphic.fill({ color: 0xffffff });
+    const dotTexture = app.renderer.generateTexture(dotGraphic);
+
+    const sharpContainer = new ParticleContainer({
+      dynamicProperties: {
+        position: false,
+        rotation: false,
+        color: true, // needed for alpha twinkle
+      },
+    });
+    galaxyContainer.addChild(sharpContainer);
+
+    for (const p of particles) {
+      const r = Math.round(34 + (255 - 34) * p.hue);
+      const g = Math.round(211 + (255 - 211) * p.hue);
+      const b = Math.round(238 + (255 - 238) * p.hue);
+      const tint = (r << 16) | (g << 8) | b;
+
+      const particle = new Particle({
+        texture: dotTexture,
+        x: p.x,
+        y: p.y,
+        scaleX: p.size / 4, // texture is r=4, scale to desired size
+        scaleY: p.size / 4,
+        tint,
+        alpha: p.opacity,
+      });
+      sharpContainer.addParticle(particle);
+      cardGalaxyDots.push({
+        particle,
+        baseAlpha: p.opacity,
+        phase: Math.random() * Math.PI * 2,
+      });
+
+      // Glow dot (regular Graphics, only for larger particles)
+      if (p.size > 1.0) {
+        const glow = new Graphics();
+        glow.circle(0, 0, p.size * 2.5);
+        glow.fill({ color: 0x22d3ee, alpha: p.opacity * 0.25 });
+        glow.x = p.x;
+        glow.y = p.y;
+        glowContainer.addChild(glow);
+      }
+    }
+
+    glowContainer.filters = [new BlurFilter({ strength: 4 })];
+    glowContainer.cacheAsTexture(true);
+
+    // Black hole sphere
+    const blackHoleContainer = new Container();
+    galaxyContainer.addChild(blackHoleContainer);
+
+    const SPHERE_R = 10;
+
+    const ringGlow = new Graphics();
+    ringGlow.circle(0, 0, SPHERE_R + 8);
+    ringGlow.stroke({ color: 0x22d3ee, alpha: 0.25, width: 6 });
+    blackHoleContainer.addChild(ringGlow);
+    ringGlow.filters = [new BlurFilter({ strength: 6 })];
+
+    const ringInner = new Graphics();
+    ringInner.circle(0, 0, SPHERE_R + 3);
+    ringInner.stroke({ color: 0x22d3ee, alpha: 0.45, width: 1.5 });
+    blackHoleContainer.addChild(ringInner);
+
+    const sphereContainer = new Container();
+    blackHoleContainer.addChild(sphereContainer);
+
+    const halo = new Graphics();
+    halo.circle(0, 0, SPHERE_R + 2);
+    halo.fill({ color: 0x0a0f1e, alpha: 0.8 });
+    sphereContainer.addChild(halo);
+    halo.filters = [new BlurFilter({ strength: 3 })];
+
+    const rings = 10;
+    for (let i = rings; i >= 0; i--) {
+      const t = i / rings;
+      const r = SPHERE_R * (0.3 + t * 0.7);
+      const ring = new Graphics();
+      ring.circle(0, 0, r);
+      const brightness = Math.floor(t * t * 18);
+      const color =
+        (brightness << 16) | ((brightness + 2) << 8) | (brightness + 8);
+      ring.fill({ color, alpha: 1 });
+      sphereContainer.addChild(ring);
+    }
+
+    const specular = new Graphics();
+    specular.circle(-3, -4, 3);
+    specular.fill({ color: 0x334155, alpha: 0.6 });
+    sphereContainer.addChild(specular);
+    specular.filters = [new BlurFilter({ strength: 2.5 })];
+
+    const specCore = new Graphics();
+    specCore.circle(-2.5, -3.5, 1.5);
+    specCore.fill({ color: 0x64748b, alpha: 0.4 });
+    sphereContainer.addChild(specCore);
+    specCore.filters = [new BlurFilter({ strength: 1.5 })];
+
+    const rimLight = new Graphics();
+    rimLight.arc(0, 0, SPHERE_R - 1, Math.PI * 0.15, Math.PI * 0.65);
+    rimLight.stroke({ color: 0x22d3ee, alpha: 0.2, width: 1.5 });
+    sphereContainer.addChild(rimLight);
+    rimLight.filters = [new BlurFilter({ strength: 2 })];
+    sphereContainer.cacheAsTexture(true);
+
+    const hotSpot = new Graphics();
+    hotSpot.circle(SPHERE_R + 4, 0, 2);
+    hotSpot.fill({ color: 0xffffff, alpha: 0.6 });
+    blackHoleContainer.addChild(hotSpot);
+    hotSpot.filters = [new BlurFilter({ strength: 2 })];
+
+    app.ticker.add(() => {
+      galaxyContainer.rotation += cardGalaxySpeed;
+      blackHoleContainer.rotation -= cardGalaxySpeed * 2;
+
+      // Twinkle: sparse particles briefly flare bright, most stay at base
+      if (cardGalaxyTwinkle) {
+        cardGalaxyTime += 0.02;
+        for (const { particle, baseAlpha, phase } of cardGalaxyDots) {
+          // Each particle's sine wave — only the peak (>0.85) triggers a flare
+          const wave = Math.sin(cardGalaxyTime * 0.8 + phase * 6);
+          if (wave > 0.85) {
+            const flare = (wave - 0.85) / 0.15; // 0→1 during the narrow peak
+            particle.alpha = Math.min(1, baseAlpha + flare * 0.5);
+          } else {
+            particle.alpha = baseAlpha;
+          }
+        }
+      }
+    });
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            app.ticker.start();
+          } else {
+            app.ticker.stop();
+          }
+        }
+      },
+      { rootMargin: "50px", threshold: 0 },
+    );
+    observer.observe(el);
+  }
+
+  // Activation
+  document.addEventListener("galaxy:activate", () => {
+    initCardGalaxy();
+  });
+
+  // Hover — twinkle
+  document.addEventListener("galaxy:hover-start", () => {
+    cardGalaxyTwinkle = true;
+  });
+  document.addEventListener("galaxy:hover-end", () => {
+    cardGalaxyTwinkle = false;
+    for (const { particle, baseAlpha } of cardGalaxyDots) {
+      particle.alpha = baseAlpha;
+    }
+  });
+
+  // Click — burst spin
+  document.addEventListener("galaxy:click", () => {
+    cardGalaxySpeed = 0.005;
+    setTimeout(() => {
+      cardGalaxySpeed = 0.003;
+    }, 400);
+    setTimeout(() => {
+      cardGalaxySpeed = 0.0015;
+    }, 800);
+    setTimeout(() => {
+      cardGalaxySpeed = 0.0005;
+    }, 1200);
+  });
+</script>

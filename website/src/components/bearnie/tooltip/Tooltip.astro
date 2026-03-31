@@ -1,0 +1,63 @@
+---
+import { cn } from "@/utils/cn";
+import type { HTMLAttributes } from "astro/types";
+
+export interface Props extends HTMLAttributes<"div"> {}
+
+const { class: className, ...props } = Astro.props;
+---
+
+<div class={cn("relative inline-block", className)} data-tooltip {...props}>
+  <slot />
+</div>
+
+<script>
+  import { generateId } from "@/utils/focus-trap";
+
+  function initTooltips() {
+    document.querySelectorAll("[data-tooltip]").forEach((tooltip) => {
+      if (tooltip.hasAttribute("data-initialized")) return;
+      tooltip.setAttribute("data-initialized", "true");
+
+      const trigger = tooltip.querySelector(
+        "[data-tooltip-trigger]",
+      ) as HTMLElement;
+      const content = tooltip.querySelector(
+        "[data-tooltip-content]",
+      ) as HTMLElement;
+
+      if (!trigger || !content) return;
+
+      // Generate ID for content if not present
+      if (!content.id) {
+        content.id = generateId("tooltip");
+      }
+
+      // Link trigger to content via aria-describedby
+      trigger.setAttribute("aria-describedby", content.id);
+
+      const showTooltip = () => {
+        content.hidden = false;
+      };
+
+      const hideTooltip = () => {
+        content.hidden = true;
+      };
+
+      trigger.addEventListener("mouseenter", showTooltip);
+      trigger.addEventListener("mouseleave", hideTooltip);
+      trigger.addEventListener("focus", showTooltip);
+      trigger.addEventListener("blur", hideTooltip);
+
+      // Hide on Escape
+      trigger.addEventListener("keydown", (e: KeyboardEvent) => {
+        if (e.key === "Escape") {
+          hideTooltip();
+        }
+      });
+    });
+  }
+
+  initTooltips();
+  document.addEventListener("astro:page-load", initTooltips);
+</script>

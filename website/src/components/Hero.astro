@@ -1,0 +1,187 @@
+---
+import { ClipboardCopy, Check } from "@lucide/astro";
+import Button from "@/components/bearnie/button/Button.astro";
+import Tooltip from "@/components/bearnie/tooltip/Tooltip.astro";
+import TooltipContent from "@/components/bearnie/tooltip/TooltipContent.astro";
+---
+
+<div
+  class="data-border relative overflow-hidden bg-slate-900/50 p-8 backdrop-blur-sm lg:col-span-8"
+>
+  <div
+    aria-hidden="true"
+    class="absolute top-4 right-6 font-mono text-[10px] text-slate-400"
+  >
+    ID: MDL-001-CORE
+  </div>
+  <h1
+    class="hero-heading mb-8 text-[clamp(60px,15vw,180px)] leading-[0.8] font-black tracking-tighter text-balance text-white"
+  >
+    models<span class="text-(--neon-cyan)">.</span>
+  </h1>
+  <p
+    class="max-w-2xl text-2xl leading-tight font-light text-slate-300 md:text-4xl"
+  >
+    High-density terminal navigator for
+    <span
+      id="hero-rotator"
+      class="font-semibold text-(--neon-magenta)"
+      aria-live="polite">browsing the AI ecosystem.</span
+    >
+  </p>
+  <Tooltip>
+    <Button
+      variant="ghost"
+      class="data-border mt-12 h-auto cursor-pointer items-center gap-3 rounded-none border-0 bg-black/40 p-4 font-mono transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-(--neon-cyan) focus-visible:outline-none"
+      data-copy-btn
+      data-copy-text="brew install models"
+      aria-label="Copy install command: brew install models"
+      data-tooltip-trigger
+    >
+      <span class="text-(--neon-green)">❯</span>
+      <code class="hero-command-text text-xl text-(--neon-cyan)" style="--n:20"
+        >brew install models</code
+      >
+      <div class="relative size-4 text-slate-400">
+        <ClipboardCopy
+          class="clipboard-icon absolute inset-0 transition-opacity duration-200"
+          aria-hidden="true"
+        />
+        <Check
+          class="check-icon absolute inset-0 opacity-0 transition-opacity duration-200"
+          aria-hidden="true"
+        />
+      </div>
+    </Button>
+    <TooltipContent side="bottom">Click to copy</TooltipContent>
+  </Tooltip>
+  <div
+    aria-hidden="true"
+    class="absolute bottom-4 left-8 hidden font-mono text-[10px] tracking-widest text-slate-400 uppercase sm:block"
+  >
+    SYS: NOMINAL
+  </div>
+</div>
+
+<script>
+  import { splitText, animate, stagger, steps } from "animejs";
+
+  const phrases = [
+    { text: "browsing the AI ecosystem.", color: "var(--neon-magenta)" },
+    { text: "comparing model benchmarks.", color: "var(--neon-cyan)" },
+    { text: "tracking various agent harnesses.", color: "var(--neon-green)" },
+    { text: "monitoring provider statuses.", color: "var(--neon-amber)" },
+  ];
+
+  function initHeading() {
+    const h1 = document.querySelector<HTMLHeadingElement>(".hero-heading");
+    if (!h1 || h1.hasAttribute("data-heading-init")) return;
+    h1.setAttribute("data-heading-init", "true");
+
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    // Start hidden, then animate in after page settles
+    h1.style.opacity = "0";
+    setTimeout(() => {
+      h1.style.opacity = "1";
+      // h1.style.overflow = "clip";
+      // h1.style.paddingBottom = "0.15em";
+      const { chars } = splitText(h1, { chars: true });
+      animate(chars, {
+        translateY: ["-1.2em", 0],
+        opacity: [0, 1],
+        delay: stagger(50, { from: "first" }),
+        duration: 1200,
+        ease: "outBounce",
+      });
+    }, 300);
+  }
+
+  function initRotator() {
+    const el = document.getElementById("hero-rotator") as HTMLElement | null;
+    if (!el || el.hasAttribute("data-rotator-init")) return;
+    el.setAttribute("data-rotator-init", "true");
+
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    let index = 0;
+    const HOLD = 8000;
+
+    async function cycle() {
+      // Animate current words out (drop down and fade)
+      const outSplit = splitText(el!, { words: { wrap: "clip" } });
+      await animate(outSplit.words, {
+        translateY: "100%",
+        opacity: [1, 0],
+        duration: 400,
+        ease: "in(3)",
+        // ease: spring({ bounce: 0.5, duration: 400 }),
+        delay: stagger(70),
+      }).then();
+      outSplit.revert();
+
+      // Swap to next phrase
+      index = (index + 1) % phrases.length;
+      el!.textContent = phrases[index].text;
+      el!.style.color = phrases[index].color;
+
+      // Animate new words in (drop down from below)
+      const inSplit = splitText(el!, { words: { wrap: "clip" } });
+      await animate(inSplit.words, {
+        translateY: ["-100%", "0%"],
+        delay: stagger(70),
+        // ease: spring({ bounce: 0.5, duration: 400 }),
+        ease: "outBounce",
+      }).then();
+      inSplit.revert();
+
+      setTimeout(cycle, HOLD);
+    }
+
+    // Initial entrance, then start the loop after it completes
+    requestAnimationFrame(async () => {
+      const initSplit = splitText(el!, { words: { wrap: "clip" } });
+      await animate(initSplit.words, {
+        translateY: ["-100%", "0%"],
+        delay: stagger(70),
+        // ease: spring({ mass: 1, stiffness: 120, damping: 10 }),
+        // ease: spring({ bounce: 0.5, duration: 400 }),
+        ease: "outBounce",
+      }).then();
+      initSplit.revert();
+
+      setTimeout(cycle, HOLD);
+    });
+  }
+
+  function initCommand() {
+    const code = document.querySelector<HTMLElement>(".hero-command-text");
+    if (!code || code.hasAttribute("data-command-init")) return;
+    code.setAttribute("data-command-init", "true");
+
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (window.innerWidth < 768) return;
+
+    const text = code.textContent || "";
+    code.style.display = "inline-block";
+    code.style.overflow = "hidden";
+    code.style.whiteSpace = "nowrap";
+    code.style.width = "0";
+
+    // Typewriter reveal after heading animation settles
+    setTimeout(() => {
+      animate(code, {
+        width: [`0ch`, `${text.length}ch`],
+        duration: 1200,
+        ease: steps(20, true),
+      });
+    }, 400);
+  }
+
+  initHeading();
+  initRotator();
+  initCommand();
+  document.addEventListener("astro:page-load", initHeading);
+  document.addEventListener("astro:page-load", initRotator);
+  document.addEventListener("astro:page-load", initCommand);
+</script>

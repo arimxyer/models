@@ -1,0 +1,26 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Header from "../components/Header.astro";
+import Hero from "../components/Hero.astro";
+import Stats from "../components/Stats.astro";
+import Screenshot from "../components/Screenshot.astro";
+import Features from "../components/Features.astro";
+import Commands from "../components/Commands.astro";
+import Install from "../components/Install.astro";
+import Footer from "../components/Footer.astro";
+---
+
+<Layout>
+  <Header />
+  <main id="main-content" tabindex="-1" class="space-y-8 p-4 md:px-8 md:pb-8">
+    <section class="grid grid-cols-1 gap-4 lg:grid-cols-12">
+      <Hero />
+      <Stats />
+    </section>
+    <Screenshot />
+    <Features />
+    <Commands />
+    <Install />
+  </main>
+  <Footer />
+</Layout>

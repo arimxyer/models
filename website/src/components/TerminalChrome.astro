@@ -1,0 +1,20 @@
+---
+interface Props {
+  label: string;
+  class?: string;
+}
+
+const { label, class: className } = Astro.props;
+---
+
+<div data-border class:list={["overflow-hidden bg-black", className]}>
+  <div class="data-header flex justify-between px-4 py-2" aria-hidden="true">
+    <div class="flex gap-2">
+      <div class="h-2 w-2 rounded-full bg-slate-700"></div>
+      <div class="h-2 w-2 rounded-full bg-slate-700"></div>
+      <div class="h-2 w-2 rounded-full bg-slate-700"></div>
+    </div>
+    <span class="font-mono text-[10px] text-slate-400 uppercase">{label}</span>
+  </div>
+  <slot />
+</div>

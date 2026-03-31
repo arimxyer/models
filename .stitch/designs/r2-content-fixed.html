@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>MODELS // TERMINAL_ECOSYSTEM_v0.11</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&amp;family=JetBrains+Mono:wght@400;700&amp;family=Outfit:wght@300;600;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style type="text/tailwindcss">
+        :root {
+            --bg-slate: #0f172a;
+            --neon-cyan: #22d3ee;
+            --neon-magenta: #f472b6;
+            --neon-green: #4ade80;
+            --grid-color: rgba(34, 211, 238, 0.05);
+        }
+        body {
+            background-color: var(--bg-slate);
+            color: #e2e8f0;
+            background-image: 
+                linear-gradient(var(--grid-color) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+        .glow-cyan { text-shadow: 0 0 10px rgba(34, 211, 238, 0.5); }
+        .glow-magenta { text-shadow: 0 0 10px rgba(244, 114, 182, 0.5); }
+        .glow-green { text-shadow: 0 0 10px rgba(74, 222, 128, 0.5); }
+        .data-border { border: 1px solid rgba(34, 211, 238, 0.2); }
+        .data-header { background: rgba(34, 211, 238, 0.1); border-bottom: 1px solid rgba(34, 211, 238, 0.3); }
+        .active-scanline {
+            position: relative;
+            overflow: hidden;
+        }
+        .active-scanline::after {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(to bottom, transparent 50%, rgba(34, 211, 238, 0.02) 50%);
+            background-size: 100% 4px;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="font-['Outfit'] selection:bg-[var(--neon-magenta)] selection:text-white">
+<header class="fixed top-0 w-full z-50 data-header backdrop-blur-md px-6 py-3 flex justify-between items-center">
+<div class="flex items-center gap-4">
+<div class="w-3 h-3 bg-[var(--neon-cyan)] animate-pulse"></div>
+<span class="font-black tracking-[0.2em] uppercase text-sm">System: Models_OS</span>
+</div>
+<nav class="flex gap-8 font-mono text-[10px] tracking-widest uppercase">
+<a class="text-[var(--neon-cyan)] hover:text-white transition-colors" href="#">[ documentation ]</a>
+<a class="text-slate-400 hover:text-white transition-colors" href="#">[ source_code ]</a>
+<a class="text-slate-400 hover:text-white transition-colors" href="#">[ license ]</a>
+</nav>
+</header>
+<main class="pt-16 p-4 md:p-8 space-y-8">
+<section class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+<div class="lg:col-span-8 data-border p-8 bg-slate-900/50 backdrop-blur-sm relative overflow-hidden active-scanline">
+<div class="absolute top-4 right-6 font-mono text-[10px] text-slate-500">ID: MDL-001-CORE</div>
+<h1 class="text-[clamp(60px,15vw,180px)] font-black leading-[0.8] tracking-tighter text-white mb-8">
+                models<span class="text-[var(--neon-cyan)]">.</span>
+</h1>
+<p class="text-2xl md:text-4xl font-light max-w-2xl text-slate-300 leading-tight">High-density terminal navigator for the AI landscape. <span class="text-[var(--neon-magenta)] font-semibold">Browse the AI ecosystem.</span></p>
+<div class="mt-12 inline-block data-border bg-black/40 p-4 font-mono">
+<span class="text-[var(--neon-green)] mr-4">❯</span>
+<code class="text-[var(--neon-cyan)] text-xl">brew install models</code>
+</div>
+</div>
+<div class="lg:col-span-4 grid grid-rows-3 gap-4">
+<div class="data-border bg-slate-900/50 p-6 flex flex-col justify-between">
+<span class="text-[10px] font-mono uppercase text-slate-500 tracking-widest">Model_Density</span>
+<div class="flex items-end gap-2">
+<span class="text-5xl font-black text-[var(--neon-cyan)] glow-cyan">4,000+</span>
+<div class="flex gap-1 mb-2">
+<div class="w-1 h-8 bg-[var(--neon-cyan)]"></div>
+<div class="w-1 h-6 bg-[var(--neon-cyan)] opacity-60"></div>
+<div class="w-1 h-10 bg-[var(--neon-cyan)]"></div>
+</div>
+</div>
+</div>
+<div class="data-border bg-slate-900/50 p-6 flex flex-col justify-between">
+<span class="text-[10px] font-mono uppercase text-slate-500 tracking-widest">Bench_Validation</span>
+<div class="flex items-end gap-2">
+<span class="text-5xl font-black text-[var(--neon-magenta)] glow-magenta">400+</span>
+<div class="h-[2px] w-full bg-slate-800 relative mb-4">
+<div class="absolute top-0 left-0 h-full w-[85%] bg-[var(--neon-magenta)]"></div>
+</div>
+</div>
+</div>
+<div class="data-border bg-slate-900/50 p-6 flex flex-col justify-between border-l-4 border-l-[var(--neon-green)]">
+<span class="text-[10px] font-mono uppercase text-slate-500 tracking-widest">Provider_Nodes</span>
+<div class="flex justify-between items-center">
+<span class="text-5xl font-black text-[var(--neon-green)] glow-green">22</span>
+<div class="grid grid-cols-4 gap-1">
+<div class="w-2 h-2 bg-[var(--neon-green)]"></div>
+<div class="w-2 h-2 bg-[var(--neon-green)] opacity-20"></div>
+<div class="w-2 h-2 bg-[var(--neon-green)]"></div>
+<div class="w-2 h-2 bg-[var(--neon-green)]"></div>
+<div class="w-2 h-2 bg-[var(--neon-green)] opacity-50"></div>
+<div class="w-2 h-2 bg-[var(--neon-green)]"></div>
+<div class="w-2 h-2 bg-[var(--neon-green)]"></div>
+<div class="w-2 h-2 bg-[var(--neon-green)] opacity-10"></div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section class="data-border bg-black relative">
+<div class="data-header px-4 py-2 flex justify-between">
+<div class="flex gap-2">
+<div class="w-2 h-2 rounded-full bg-slate-700"></div>
+<div class="w-2 h-2 rounded-full bg-slate-700"></div>
+<div class="w-2 h-2 rounded-full bg-slate-700"></div>
+</div>
+<span class="text-[10px] font-mono text-slate-500 uppercase">VIEWPORT: TUI_EMULATION_MODE</span>
+</div>
+<div class="aspect-video relative group overflow-hidden">
+<img alt="Interface" class="w-full h-full object-cover grayscale brightness-50 contrast-125" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAp7jWPV_9xvZ6WTTX7x1uqKe_kgWQ1ng6GpR3Wq4gwXGRzHcG54qilqU_MEe7dd_89a70WOnZDsZ3mGo2VrRCxwsGybb2ak2sxS8YpEtL8A_TcwjOpa5p8v4L6mRtG70dAZ0tu0Knn75i9oXRraN4WUfhoVtT0pyRattw4GSYtDBoCzSrLsacZ_G88iG2084hVS8Xbz3TYiRCD3K71v50ohj5UIT4Ef6HQJ9wAEX7CuZeA6EXFWrHw_24yp4CYVRDLuA7l9IoWMg"/>
+<div class="absolute inset-0 bg-gradient-to-t from-[var(--bg-slate)] to-transparent opacity-60"></div>
+<div class="absolute bottom-8 left-8">
+<div class="px-3 py-1 bg-[var(--neon-cyan)] text-slate-900 font-bold text-xs inline-block mb-2">LIVE_SYNC</div>
+<p class="text-white text-lg font-mono tracking-tighter">Terminal User Interface v0.11.3</p>
+</div>
+</div>
+</section>
+<section class="grid grid-cols-1 md:grid-cols-4 gap-4">
+<div class="md:col-span-1 space-y-2">
+<h2 class="text-4xl font-black text-white uppercase tracking-tighter mb-6">Operations</h2>
+<div class="data-border bg-[var(--neon-cyan)]/10 p-4 border-l-4 border-l-[var(--neon-cyan)]">
+<span class="text-[var(--neon-cyan)] font-bold block mb-1">01. MODELS</span>
+<p class="text-xs text-slate-400 font-mono">Filter by capability, price, context. 85+ providers. RTFO indicators.</p>
+</div>
+<div class="data-border bg-slate-900/30 p-4 border-l-4 border-l-transparent hover:border-l-slate-400 transition-all">
+<span class="text-slate-400 font-bold block mb-1 uppercase text-sm">02. Benchmarks</span>
+<p class="text-xs text-slate-400 font-mono">H2H tables, scatter plots, radar charts. ~400 entries.</p></div>
+<div class="data-border bg-slate-900/30 p-4 border-l-4 border-l-transparent hover:border-l-slate-400 transition-all">
+<span class="text-slate-400 font-bold block mb-1 uppercase text-sm">03. Agents</span>
+<p class="text-xs text-slate-400 font-mono">Version detection, GitHub releases, changelogs, service health.</p></div>
+<div class="data-border bg-slate-900/30 p-4 border-l-4 border-l-transparent hover:border-l-slate-400 transition-all">
+<span class="text-slate-400 font-bold block mb-1 uppercase text-sm">04. STATUS</span>
+<p class="text-xs text-slate-400 font-mono">Live health for 22 providers. Incidents, maintenance, gauges.</p></div>
+</div>
+<div class="md:col-span-3 data-border bg-slate-900/50 p-8 flex flex-col md:flex-row gap-8 items-center">
+<div class="w-full md:w-1/2 aspect-square data-border bg-black p-2">
+<img alt="Abstract" class="w-full h-full object-cover opacity-40 grayscale" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB5p0LivqSj8FQaxKMSDPWMDUNQC8jqGAErkDTTesDVUxYmXZ0PpksH1cUMDTMRBsTGubEZfkYybiXr1nu7kbK3IMBJHDk_Vl3qjSCBXOie0kuVE3E7vvhTURn2ClzZ0pJq3cWyqqIUdOxCEwXMBngkuxHvtcZwMGuFyGAder10l1tEmCyGMffVcHaco4Rdq7fbD-HMERT5PsICxx2_41IrZQ80PiVSlHGyZ0FloPNxCvoDRa4hBbJ7xM_sWDwCz49_GA5H4uXYuw"/>
+</div>
+<div class="w-full md:w-1/2">
+<p class="text-2xl font-light text-white leading-tight mb-6">Real-time ingestion of 4,000+ model definitions across 85+ providers from models.dev.</p>
+<ul class="font-mono text-xs text-[var(--neon-cyan)] space-y-2 uppercase"><li>+ Filter by capability and price</li><li>+ Sort by date, cost, context</li><li>+ Cross-provider search</li></ul>
+</div>
+</div>
+</section>
+<section class="grid grid-cols-1 md:grid-cols-3 gap-4">
+<div class="data-border bg-slate-900/50 p-6 space-y-4 border-t-4 border-t-[var(--neon-magenta)]">
+<div class="text-[var(--neon-magenta)] font-mono text-[10px] tracking-widest">COMMAND_LIST</div>
+<code class="block text-white text-sm font-mono">$ models list --provider anthropic</code>
+<p class="text-[10px] font-mono text-slate-500 uppercase">FILTER MODELS BY PROVIDER ENDPOINT</p>
+</div>
+<div class="data-border bg-slate-900/50 p-6 space-y-4 border-t-4 border-t-[var(--neon-magenta)]">
+<div class="text-[var(--neon-magenta)] font-mono text-[10px] tracking-widest">COMMAND_INSPECT</div>
+<code class="block text-white text-sm font-mono">$ models benchmarks show gpt-4o</code>
+<p class="text-[10px] font-mono text-slate-500 uppercase">DEEP DIVE ON ANY MODEL BENCHMARK</p>
+</div>
+<div class="data-border bg-slate-900/50 p-6 space-y-4 border-t-4 border-t-[var(--neon-magenta)]">
+<div class="text-[var(--neon-magenta)] font-mono text-[10px] tracking-widest">COMMAND_BENCH</div>
+<code class="block text-white text-sm font-mono">$ agents status</code>
+<p class="text-[10px] font-mono text-slate-500 uppercase">CHECK INSTALLED AGENT VERSIONS</p>
+</div>
+</section>
+<section class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+<div class="lg:col-span-1 data-border bg-[var(--neon-green)] p-6">
+<h2 class="text-4xl font-black text-slate-900 leading-[0.9] uppercase italic">System<br/>Access</h2>
+</div>
+<div class="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-4">
+<div class="data-border p-4 flex justify-between items-center hover:bg-[var(--neon-green)]/10 transition-colors cursor-pointer group">
+<span class="font-bold uppercase tracking-widest text-sm">Homebrew</span>
+<code class="font-mono text-xs text-slate-500 group-hover:text-[var(--neon-green)] transition-colors">brew install models</code>
+</div>
+<div class="data-border p-4 flex justify-between items-center hover:bg-[var(--neon-green)]/10 transition-colors cursor-pointer group">
+<span class="font-bold uppercase tracking-widest text-sm">Cargo</span>
+<code class="font-mono text-xs text-slate-500 group-hover:text-[var(--neon-green)] transition-colors">cargo install modelsdev</code>
+</div>
+<div class="data-border p-4 flex justify-between items-center hover:bg-[var(--neon-green)]/10 transition-colors cursor-pointer group">
+<span class="font-bold uppercase tracking-widest text-sm">Scoop</span>
+<code class="font-mono text-xs text-slate-500 group-hover:text-[var(--neon-green)] transition-colors">scoop install extras/models</code>
+</div>
+<div class="data-border p-4 flex justify-between items-center hover:bg-[var(--neon-green)]/10 transition-colors cursor-pointer group">
+<span class="font-bold uppercase tracking-widest text-sm">AUR</span>
+<code class="font-mono text-xs text-slate-500 group-hover:text-[var(--neon-green)] transition-colors">paru -S models-bin</code>
+</div>
+</div>
+</section>
+<div class="py-4">
+<a class="inline-flex items-center gap-4 text-[var(--neon-cyan)] hover:text-white transition-all font-mono font-bold uppercase tracking-widest group" href="#">
+<span class="text-xl">GitHub_Releases</span>
+<span class="material-symbols-outlined group-hover:translate-x-2 transition-transform">arrow_forward</span>
+</a>
+</div>
+</main>
+<footer class="mt-20 border-t border-[var(--neon-cyan)]/20 bg-black/40 backdrop-blur-md p-8">
+<div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+<div class="space-y-4">
+<div class="text-2xl font-black tracking-tighter text-white">MODELS</div>
+<p class="text-[10px] font-mono text-slate-500">RUNTIME: RUST_TOKIO_ASYNC<br/>FRAMEWORK: RATATUI_CROSSTERM<br/>CRATE: MODELSDEV</p>
+</div>
+<div class="space-y-2">
+<span class="text-[10px] font-mono text-slate-500 uppercase tracking-widest block">Navigation</span>
+<ul class="text-xs space-y-1 font-mono uppercase">
+<li><a class="hover:text-[var(--neon-cyan)] transition-colors" href="#">Github_Repo</a></li>
+<li><a class="hover:text-[var(--neon-cyan)] transition-colors" href="#">Docs_Index</a></li>
+<li>VER: v0.11.3</li>
+</ul>
+</div>
+<div class="space-y-2">
+<span class="text-[10px] font-mono text-slate-500 uppercase tracking-widest block">Environment</span>
+<ul class="text-xs space-y-1 font-mono uppercase">
+<li>OS: DARWIN_LINUX_WIN</li>
+<li>LICENSE: MIT_OPEN_SOURCE</li>
+<li>VER: v0.9.12-ALPHA</li>
+</ul>
+</div>
+<div class="flex items-end md:justify-end">
+<span class="text-[10px] font-mono text-slate-600">© 2025 MODELS. MIT LICENSE.</span>
+</div>
+</div>
+</footer>
+</body></html>

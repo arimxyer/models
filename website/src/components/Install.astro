@@ -1,0 +1,182 @@
+---
+import { RELEASES_URL } from "@/data/site";
+import InstallCard from "@/components/InstallCard.astro";
+---
+
+<section id="install-section" class="grid grid-cols-1 gap-4 lg:grid-cols-4">
+  <div
+    class="data-border bg-(--neon-green) p-6 lg:col-span-1"
+    data-install-item
+  >
+    <h2
+      class="text-4xl leading-[0.9] font-black text-slate-900 uppercase italic"
+    >
+      <!-- System<br />Access -->
+      Installation <br /> Commands
+    </h2>
+  </div>
+  <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:col-span-3">
+    <div data-install-item>
+      <InstallCard label="Homebrew" command="brew install models" />
+    </div>
+    <div data-install-item>
+      <InstallCard label="Cargo" command="cargo install modelsdev" />
+    </div>
+    <div data-install-item>
+      <InstallCard label="Scoop" command="scoop install extras/models" />
+    </div>
+    <div data-install-item>
+      <InstallCard label="AUR" command="paru -S models-bin" />
+    </div>
+  </div>
+  <div class="flex justify-center py-4 lg:col-span-4" data-install-item>
+    <a
+      id="releases-btn"
+      class="data-border group relative inline-flex items-center gap-4 bg-(--neon-green) p-4 text-2xl leading-[0.9] font-bold text-slate-900 uppercase italic transition-colors hover:bg-(--neon-green)/90 focus-visible:ring-2 focus-visible:ring-(--neon-cyan) focus-visible:outline-none"
+      href={RELEASES_URL}
+      rel="noopener noreferrer"
+    >
+      <svg
+        class="pointer-events-none absolute inset-0 h-full w-full overflow-visible"
+        aria-hidden="true"
+      >
+        <rect
+          class="releases-trail"
+          x="0"
+          y="0"
+          width="100%"
+          height="100%"
+          stroke="#22d3ee"
+          stroke-width="4"
+          stroke-linecap="round"
+          fill="none"
+          filter="url(#trail-glow)"></rect>
+        <defs>
+          <filter
+            id="trail-glow"
+            x="-50%"
+            y="-50%"
+            width="200%"
+            height="200%"
+            filterUnits="objectBoundingBox"
+          >
+            <feGaussianBlur in="SourceGraphic" stdDeviation="3"
+            ></feGaussianBlur>
+          </filter>
+        </defs>
+      </svg>
+      <span>GITHUB RELEASES</span>
+    </a>
+  </div>
+</section>
+
+<script>
+  import { animate, waapi, stagger, onScroll, svg } from "animejs";
+  import type { JSAnimation } from "animejs";
+
+  function initInstall() {
+    const section = document.getElementById("install-section");
+    if (!section || section.hasAttribute("data-install-init")) return;
+    section.setAttribute("data-install-init", "true");
+
+    const prefersReducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    if (prefersReducedMotion) return;
+
+    const items = section.querySelectorAll<HTMLElement>("[data-install-item]");
+    items.forEach((item) => {
+      item.style.opacity = "0";
+      item.style.transform = "translateY(16px)";
+    });
+
+    onScroll({
+      target: section,
+      enter: "bottom top",
+      onEnter: () => {
+        waapi.animate(items, {
+          opacity: [0, 1],
+          translateY: [16, 0],
+          duration: 600,
+          ease: "outQuad",
+          delay: stagger(60),
+        });
+      },
+    });
+  }
+
+  function initReleasesBtn() {
+    const btn = document.getElementById("releases-btn");
+    const trail = btn?.querySelector<SVGRectElement>(".releases-trail");
+    if (!btn || !trail || btn.hasAttribute("data-releases-init")) return;
+    btn.setAttribute("data-releases-init", "true");
+
+    const prefersReducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    if (prefersReducedMotion) return;
+
+    const drawables = svg.createDrawable(trail);
+    const drawable = drawables[0];
+    let trailAnim: JSAnimation | null = null;
+
+    // Start hidden
+    drawable.setAttribute("draw", "0 0");
+
+    btn.addEventListener("mouseenter", () => {
+      if (trailAnim) trailAnim.pause();
+      trailAnim = animate(drawable, {
+        draw: ["0 0.25", "1.0 1.25"],
+        stroke: ["#22d3ee", "#f472b6", "#4ade80", "#fbbf24", "#22d3ee"],
+        duration: 9000,
+        ease: "linear",
+        loop: true,
+      });
+    });
+
+    btn.addEventListener("mouseleave", () => {
+      if (trailAnim) {
+        trailAnim.pause();
+        trailAnim = null;
+      }
+      drawable.setAttribute("draw", "0 0");
+    });
+  }
+
+  initInstall();
+  initReleasesBtn();
+  document.addEventListener("astro:page-load", initInstall);
+  document.addEventListener("astro:page-load", initReleasesBtn);
+</script>
+
+<script>
+  document.querySelectorAll<HTMLElement>("[data-copy-btn]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const text = btn.getAttribute("data-copy-text");
+      if (!text) return;
+
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        return;
+      }
+
+      // Find icon elements within the button
+      const clipboardIcon = btn.querySelector<SVGElement>(".clipboard-icon");
+      const checkIcon = btn.querySelector<SVGElement>(".check-icon");
+
+      if (clipboardIcon && checkIcon) {
+        clipboardIcon.style.opacity = "0";
+        checkIcon.style.opacity = "1";
+
+        setTimeout(() => {
+          clipboardIcon.style.opacity = "1";
+          checkIcon.style.opacity = "0";
+        }, 1800);
+      }
+
+      // @ts-ignore
+      window.toast?.success?.("Copied!");
+    });
+  });
+</script>

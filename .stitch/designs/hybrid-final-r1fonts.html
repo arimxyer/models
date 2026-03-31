@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>MODELS. — The Technical Manuscript for AI Ecosystems</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@700&amp;family=Fraunces:opsz,wght@9..144,400;9..144,700&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-surface-variant": "#5b4040",
+              "surface-tint": "#ba1434",
+              "surface-container": "#eeeee9",
+              "on-tertiary-fixed": "#00201f",
+              "on-secondary-container": "#761f28",
+              "tertiary": "#005754",
+              "surface-container-low": "#f4f4ef",
+              "inverse-surface": "#2f312e",
+              "on-primary-fixed-variant": "#920023",
+              "surface-dim": "#dadad5",
+              "on-primary-container": "#ffdada",
+              "tertiary-fixed": "#9cf1ed",
+              "secondary-fixed-dim": "#ffb3b4",
+              "on-tertiary-container": "#9cf2ed",
+              "on-secondary-fixed": "#40000a",
+              "surface-bright": "#fafaf5",
+              "on-background": "#1a1c19",
+              "secondary-fixed": "#ffdad9",
+              "inverse-on-surface": "#f1f1ec",
+              "primary-fixed-dim": "#ffb3b4",
+              "outline": "#8f6f6f",
+              "tertiary-fixed-dim": "#80d5d1",
+              "primary": "#9e0027",
+              "on-error-container": "#93000a",
+              "surface": "#fafaf5",
+              "secondary-container": "#ff888d",
+              "inverse-primary": "#ffb3b4",
+              "on-tertiary-fixed-variant": "#00504d",
+              "on-surface": "#1a1c19",
+              "error-container": "#ffdad6",
+              "surface-container-high": "#e8e8e3",
+              "on-error": "#ffffff",
+              "on-tertiary": "#ffffff",
+              "primary-container": "#c41e3a",
+              "primary-fixed": "#ffdad9",
+              "on-primary-fixed": "#40000a",
+              "secondary": "#9f3e45",
+              "on-primary": "#ffffff",
+              "on-secondary-fixed-variant": "#80272f",
+              "surface-container-lowest": "#ffffff",
+              "error": "#ba1a1a",
+              "surface-variant": "#e3e3de",
+              "on-secondary": "#ffffff",
+              "background": "#fafaf5",
+              "surface-container-highest": "#e3e3de",
+              "tertiary-container": "#00716e",
+              "outline-variant": "#e3bebd"
+            },
+            fontFamily: {
+              "headline": ["'Archivo Narrow'", "sans-serif"],
+              "body": ["'Fraunces'", "serif"],
+              "label": ["'Archivo Narrow'", "sans-serif"],
+              "mono": ["'JetBrains Mono'", "monospace"]
+            },
+            borderRadius: {"DEFAULT": "0", "lg": "0", "xl": "0", "full": "0"},
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #fafaf5;
+            color: #1a1c19;
+            -webkit-font-smoothing: antialiased;
+        }
+        .brutalist-border {
+            border: 1px solid #1a1c19;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+    </style>
+</head>
+<body class="font-body selection:bg-primary-container selection:text-white">
+<!-- TopAppBar -->
+<header class="flex justify-between items-center w-full px-6 h-16 bg-[#fafaf5] dark:bg-[#1a1c19] border-b border-black dark:border-white/20 fixed top-0 z-50">
+<div class="text-2xl font-black tracking-tighter text-black dark:text-white uppercase font-headline">MODELS.</div>
+<nav class="hidden md:flex space-x-8 h-full items-center">
+<a class="font-bold uppercase tracking-tighter h-full flex items-center px-4 transition-colors duration-75 text-[#c41e3a] border-b-2 border-[#c41e3a] font-headline" href="#">Documentation</a>
+<a class="font-bold uppercase tracking-tighter h-full flex items-center px-4 transition-colors duration-75 text-black dark:text-white hover:bg-[#c41e3a] hover:text-white font-headline" href="#">Source</a>
+<a class="font-bold uppercase tracking-tighter h-full flex items-center px-4 transition-colors duration-75 text-black dark:text-white hover:bg-[#c41e3a] hover:text-white font-headline" href="#">License</a>
+</nav>
+<div class="md:hidden">
+<span class="material-symbols-outlined text-black">menu</span>
+</div>
+</header>
+<main class="pt-16 max-w-7xl mx-auto px-6">
+<!-- SECTION 1: HERO -->
+<section class="py-24 border-b border-black">
+<h1 class="font-headline text-[120px] md:text-[200px] leading-[0.8] font-black uppercase tracking-tighter mb-8 block overflow-hidden">
+                MODELS.
+            </h1>
+<div class="flex flex-col md:flex-row justify-between items-end gap-12">
+<p class="text-2xl md:text-4xl italic max-w-2xl leading-tight">
+                    Browse the AI ecosystem from your terminal. A high-performance Rust interface for the structural exploration of large language models.
+                </p>
+<div class="w-full md:w-auto">
+<div class="brutalist-border p-4 bg-primary-container text-white inline-block">
+<code class="font-mono text-lg">$ brew install models</code>
+</div>
+</div>
+</div>
+<!-- Stats Blocks -->
+<div class="grid grid-cols-2 md:grid-cols-4 mt-24 brutalist-border divide-x divide-black border-collapse">
+<div class="p-6">
+<span class="block font-headline font-bold uppercase text-xs tracking-widest mb-2 opacity-60">Models</span>
+<span class="block font-headline text-5xl font-black tracking-tighter">4,000+</span>
+</div>
+<div class="p-6">
+<span class="block font-headline font-bold uppercase text-xs tracking-widest mb-2 opacity-60">Benchmarks</span>
+<span class="block font-headline text-5xl font-black tracking-tighter">~400</span>
+</div>
+<div class="p-6">
+<span class="block font-headline font-bold uppercase text-xs tracking-widest mb-2 opacity-60">Providers</span>
+<span class="block font-headline text-5xl font-black tracking-tighter">22</span>
+</div>
+<div class="p-6">
+<span class="block font-headline font-bold uppercase text-xs tracking-widest mb-2 opacity-60">Agents</span>
+<span class="block font-headline text-5xl font-black tracking-tighter">11+</span>
+</div>
+</div>
+</section>
+<!-- SECTION 2: SCREENSHOT -->
+<section class="py-24">
+<div class="mb-6">
+<span class="font-headline font-bold uppercase tracking-[0.3em] text-xs">THE INTERFACE</span>
+</div>
+<div class="aspect-video w-full bg-[#1a1c19] brutalist-border relative flex items-center justify-center group overflow-hidden">
+<div class="absolute inset-0 opacity-20 pointer-events-none" style="background-image: radial-gradient(circle at 2px 2px, white 1px, transparent 0); background-size: 24px 24px;"></div>
+<img alt="terminal interface" class="w-full h-full object-cover opacity-50 grayscale contrast-125" data-alt="monochrome close-up of computer screen showing high-density green terminal code and technical documentation in a dark room environment" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDJIy_wv1duJii_KTTDhcw6K2miwZqJuYe0Dn-o4FrBT3NNDfHLDoMLT45PlukWVb0SMrLTDFVqDgmVz-1qtL9OmyBbfhWiXbZYuL9X2BSU8WNZ3Z7zJip_LOhhGKGsQ2C7XkFwTBKBqLP-TU7f6NelFVq41Y1pdCs_kAe6bjztuci2YJSjmkeS-IAYOgz7jQeiGY2E8gdBGy7nVPXvJ8RwQSUgX7yRC0-Juxv6ccg6q8eywdc7jtD3qupTOMuSAl6MphA44sczqg"/>
+<div class="absolute inset-0 flex items-center justify-center">
+<div class="bg-primary text-white p-6 brutalist-border font-mono text-sm tracking-tighter">
+                        [SYSTEM_CORE]: INITIALIZING TUI...
+                    </div>
+</div>
+</div>
+</section>
+<!-- SECTION 3: FEATURES -->
+<section class="py-24 border-t border-black">
+<h2 class="font-headline text-7xl font-black uppercase tracking-tighter mb-16">WHAT IT DOES</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 brutalist-border divide-y md:divide-y-0 md:divide-x divide-black">
+<div class="p-12 border-b border-black md:border-b-0 border-l-8 border-l-primary">
+<h3 class="font-headline text-4xl font-bold uppercase tracking-tighter mb-4">MODELS</h3>
+<p class="text-xl leading-relaxed">
+                        Instant access to the complete metadata of the global AI ecosystem. Filter by parameter count, quantization, or license type directly from your shell.
+                    </p>
+</div>
+<div class="p-12 border-b border-black md:border-b-0">
+<h3 class="font-headline text-4xl font-bold uppercase tracking-tighter mb-4">BENCHMARKS</h3>
+<p class="text-xl leading-relaxed">
+                        Raw performance data from MMLU to HumanEval. Compare latency and throughput across 22 major providers without leaving the terminal environment.
+                    </p>
+</div>
+<div class="p-12 border-t border-black">
+<h3 class="font-headline text-4xl font-bold uppercase tracking-tighter mb-4">AGENTS</h3>
+<p class="text-xl leading-relaxed">
+                        Track the active status of deployed autonomous agents. Monitor heartbeat, resource consumption, and task queues in a unified structural layout.
+                    </p>
+</div>
+<div class="p-12 border-t border-black">
+<h3 class="font-headline text-4xl font-bold uppercase tracking-tighter mb-4">STATUS</h3>
+<p class="text-xl leading-relaxed">
+                        Real-time endpoint health for OpenAI, Anthropic, Mistral, and local Ollama instances. Direct integration with systemd for background monitoring.
+                    </p>
+</div>
+</div>
+</section>
+<!-- SECTION 4: CLI -->
+<section class="py-24 bg-surface-container-low border-y border-black -mx-6 px-12">
+<div class="max-w-7xl mx-auto">
+<span class="font-mono text-xs uppercase tracking-widest mb-12 block">ALSO A CLI</span>
+<div class="space-y-12">
+<div class="flex flex-col md:flex-row md:items-center gap-6">
+<code class="font-mono text-2xl md:text-3xl font-semibold bg-white p-4 brutalist-border flex-shrink-0">
+                            $ models list --provider openai
+                        </code>
+<p class="italic text-xl opacity-70">Enumerate all available models from specific providers with JSON output support.</p>
+</div>
+<div class="flex flex-col md:flex-row md:items-center gap-6">
+<code class="font-mono text-2xl md:text-3xl font-semibold bg-white p-4 brutalist-border flex-shrink-0">
+                            $ models benchmarks show gpt-4o
+                        </code>
+<p class="italic text-xl opacity-70">Retrieve specific evaluative scores and capability tiers for a target architecture.</p>
+</div>
+<div class="flex flex-col md:flex-row md:items-center gap-6">
+<code class="font-mono text-2xl md:text-3xl font-semibold bg-white p-4 brutalist-border flex-shrink-0">
+                            $ agents status
+                        </code>
+<p class="italic text-xl opacity-70">Print a summary table of all active local and remote agent processes.</p>
+</div>
+</div>
+</div>
+</section>
+<!-- SECTION 5: INSTALL -->
+<section class="py-32">
+<h2 class="font-headline text-[120px] font-black uppercase tracking-tighter mb-16">GET IT.</h2>
+<div class="brutalist-border divide-y divide-black">
+<div class="flex items-center justify-between p-8 hover:bg-surface-container transition-colors">
+<span class="font-headline text-4xl font-black uppercase">Homebrew</span>
+<code class="font-mono text-xl text-primary">$ brew install models</code>
+</div>
+<div class="flex items-center justify-between p-8 hover:bg-surface-container transition-colors">
+<span class="font-headline text-4xl font-black uppercase">Cargo</span>
+<code class="font-mono text-xl text-primary">$ cargo install models-cli</code>
+</div>
+<div class="flex items-center justify-between p-8 hover:bg-surface-container transition-colors">
+<span class="font-headline text-4xl font-black uppercase">Scoop</span>
+<code class="font-mono text-xl text-primary">$ scoop install models</code>
+</div>
+<div class="flex items-center justify-between p-8 hover:bg-surface-container transition-colors">
+<span class="font-headline text-4xl font-black uppercase">AUR</span>
+<code class="font-mono text-xl text-primary">$ yay -S models-bin</code>
+</div>
+</div>
+<div class="mt-12 text-right">
+<a class="font-headline text-3xl font-black uppercase text-primary hover:underline group" href="#">
+                    GitHub Releases 
+                    <span class="inline-block transition-transform group-hover:translate-x-2">→</span>
+</a>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="flex justify-between items-center w-full px-6 py-8 border-t border-black bg-[#fafaf5] dark:bg-[#1a1c19]">
+<div class="font-['Space_Grotesk'] font-bold text-black dark:text-white uppercase tracking-tighter font-headline">
+            © 2024 models. <span class="ml-4 opacity-40 font-mono text-xs">v0.12.4</span>
+</div>
+<div class="flex gap-8">
+<a class="font-mono text-xs uppercase text-black/60 dark:text-white/60 hover:text-black dark:hover:text-white" href="#">GitHub</a>
+<a class="font-mono text-xs uppercase text-black/60 dark:text-white/60 hover:text-black dark:hover:text-white" href="#">Docs</a>
+<a class="font-mono text-xs uppercase text-black/60 dark:text-white/60 hover:text-black dark:hover:text-white" href="#">Crates.io</a>
+</div>
+</footer>
+</body></html>

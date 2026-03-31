@@ -1,0 +1,38 @@
+{
+  "name": "website",
+  "type": "module",
+  "version": "0.0.1",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "check": "astro check",
+    "typecheck": "astro check && tsc --noEmit",
+    "fmt": "prettier --write .",
+    "fmt:check": "prettier --check .",
+    "build": "astro check && astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/check": "^0.9.8",
+    "@lucide/astro": "^1.7.0",
+    "@tailwindcss/vite": "^4.2.2",
+    "animejs": "^4.3.6",
+    "astro": "^6.0.8",
+    "cobe": "^2.0.1",
+    "pixi.js": "^8.17.1",
+    "tailwind-merge": "^3.5.0",
+    "tailwindcss": "^4.2.2",
+    "typescript": "^6.0.2"
+  },
+  "devDependencies": {
+    "@astrojs/ts-plugin": "^1.10.7",
+    "@types/node": "^25.5.0",
+    "lottie-to-svg": "^1.1.0",
+    "prettier": "^3.8.1",
+    "prettier-plugin-astro": "^0.14.1",
+    "prettier-plugin-tailwindcss": "^0.7.2"
+  }
+}

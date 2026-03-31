@@ -1,0 +1,183 @@
+---
+import { cn } from "@/utils/cn";
+import type { HTMLAttributes } from "astro/types";
+
+export interface Props extends HTMLAttributes<"div"> {
+  position?:
+    | "top-left"
+    | "top-center"
+    | "top-right"
+    | "bottom-left"
+    | "bottom-center"
+    | "bottom-right";
+}
+
+const { position = "bottom-right", class: className, ...props } = Astro.props;
+
+const positionStyles = {
+  "top-left": "top-4 left-4",
+  "top-center": "top-4 left-1/2 -translate-x-1/2",
+  "top-right": "top-4 right-4",
+  "bottom-left": "bottom-4 left-4",
+  "bottom-center": "bottom-4 left-1/2 -translate-x-1/2",
+  "bottom-right": "bottom-4 right-4",
+};
+
+const classes = cn(
+  "fixed z-50 flex flex-col gap-2 w-full max-w-sm pointer-events-none",
+  positionStyles[position],
+  className,
+);
+---
+
+<div
+  id="toaster"
+  class={classes}
+  data-toaster
+  data-position={position}
+  {...props}
+>
+</div>
+
+<script>
+  // Toast types
+  type ToastType = "default" | "success" | "error" | "warning" | "info";
+
+  interface ToastOptions {
+    title?: string;
+    description?: string;
+    type?: ToastType;
+    duration?: number;
+    action?: {
+      label: string;
+      onClick: () => void;
+    };
+  }
+
+  // Toast manager
+  class ToastManager {
+    private container: HTMLElement | null = null;
+
+    constructor() {
+      this.container = document.getElementById("toaster");
+    }
+
+    private getIcon(type: ToastType): string {
+      const icons = {
+        default: "",
+        success: `<svg class="size-5 text-green-500 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>`,
+        error: `<svg class="size-5 text-destructive shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>`,
+        warning: `<svg class="size-5 text-yellow-500 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>`,
+        info: `<svg class="size-5 text-blue-500 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>`,
+      };
+      return icons[type] || icons.default;
+    }
+
+    show(options: ToastOptions | string) {
+      if (!this.container) return;
+
+      const opts: ToastOptions =
+        typeof options === "string" ? { description: options } : options;
+
+      const {
+        title,
+        description,
+        type = "default",
+        duration = 4000,
+        action,
+      } = opts;
+
+      const toast = document.createElement("div");
+      toast.className =
+        "pointer-events-auto relative flex w-full items-start gap-3 overflow-hidden rounded-none border bg-background p-4 transition-all";
+      toast.setAttribute("role", "alert");
+
+      const icon = this.getIcon(type);
+      const hasIcon = type !== "default";
+
+      toast.innerHTML = `
+        ${hasIcon ? icon : ""}
+        <div class="flex-1 space-y-1">
+          ${title ? `<p class="text-sm font-semibold">${title}</p>` : ""}
+          ${description ? `<p class="text-sm text-muted-foreground">${description}</p>` : ""}
+          ${action ? `<button class="mt-2 text-sm font-medium underline underline-offset-4 hover:no-underline" data-toast-action>${action.label}</button>` : ""}
+        </div>
+        <button type="button" class="absolute right-2 top-2 rounded-md p-1 text-foreground/50 opacity-0 transition-opacity hover:text-foreground focus:opacity-100 focus:outline-none group-hover:opacity-100 hover:opacity-100" data-toast-close>
+          <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      `;
+
+      // Add hover class for close button visibility
+      toast.classList.add("group");
+
+      // Close button handler
+      const closeBtn = toast.querySelector("[data-toast-close]");
+      closeBtn?.addEventListener("click", () => this.dismiss(toast));
+
+      // Action button handler
+      if (action) {
+        const actionBtn = toast.querySelector("[data-toast-action]");
+        actionBtn?.addEventListener("click", () => {
+          action.onClick();
+          this.dismiss(toast);
+        });
+      }
+
+      this.container.appendChild(toast);
+
+      // Auto dismiss
+      if (duration > 0) {
+        setTimeout(() => this.dismiss(toast), duration);
+      }
+
+      return toast;
+    }
+
+    dismiss(toast: HTMLElement) {
+      toast.style.opacity = "0";
+      setTimeout(() => toast.remove(), 150);
+    }
+
+    success(options: Omit<ToastOptions, "type"> | string) {
+      const opts =
+        typeof options === "string" ? { description: options } : options;
+      return this.show({ ...opts, type: "success" });
+    }
+
+    error(options: Omit<ToastOptions, "type"> | string) {
+      const opts =
+        typeof options === "string" ? { description: options } : options;
+      return this.show({ ...opts, type: "error" });
+    }
+
+    warning(options: Omit<ToastOptions, "type"> | string) {
+      const opts =
+        typeof options === "string" ? { description: options } : options;
+      return this.show({ ...opts, type: "warning" });
+    }
+
+    info(options: Omit<ToastOptions, "type"> | string) {
+      const opts =
+        typeof options === "string" ? { description: options } : options;
+      return this.show({ ...opts, type: "info" });
+    }
+  }
+
+  // Initialize and expose globally
+  const toastManager = new ToastManager();
+
+  // @ts-ignore
+  window.toast = (options: ToastOptions | string) => toastManager.show(options);
+  // @ts-ignore
+  window.toast.success = (options: Omit<ToastOptions, "type"> | string) =>
+    toastManager.success(options);
+  // @ts-ignore
+  window.toast.error = (options: Omit<ToastOptions, "type"> | string) =>
+    toastManager.error(options);
+  // @ts-ignore
+  window.toast.warning = (options: Omit<ToastOptions, "type"> | string) =>
+    toastManager.warning(options);
+  // @ts-ignore
+  window.toast.info = (options: Omit<ToastOptions, "type"> | string) =>
+    toastManager.info(options);
+</script>

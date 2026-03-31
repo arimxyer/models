@@ -1,0 +1,44 @@
+---
+import "../styles/global.css";
+import Toaster from "@/components/bearnie/toast/Toaster.astro";
+import { SITE } from "@/data/site";
+---
+
+<!doctype html>
+<html class="dark" lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href={`${import.meta.env.BASE_URL}favicon.svg`}
+    />
+    <link rel="icon" href={`${import.meta.env.BASE_URL}favicon.ico`} />
+    <meta name="generator" content={Astro.generator} />
+    <title>{SITE.title}</title>
+    <meta property="og:title" content={SITE.title} />
+    <meta property="og:description" content={SITE.description} />
+    <meta property="og:type" content="website" />
+    <meta name="description" content={SITE.description} />
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Outfit:wght@300;600;900&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body
+    class="font-['Outfit'] selection:bg-(--neon-magenta) selection:text-white"
+  >
+    <a
+      href="#main-content"
+      class="focus:bg-background sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-100 focus:px-4 focus:py-2 focus:text-(--neon-cyan) focus:outline-2 focus:outline-(--neon-cyan)"
+      >Skip to content</a
+    >
+    <slot />
+    <Toaster position="bottom-center" />
+  </body>
+</html>

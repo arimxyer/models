@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>MODELS — THE AI ECOSYSTEM CLI</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@700&amp;family=Fraunces:opsz,wght@9..144,400;9..144,700&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              "bg-paper": "#f4f4f2",
+              "ink": "#0a0a0a",
+              "accent": "#d90429", // Aggressive Crimson
+              "muted-ink": "#4a4a4a"
+            },
+            fontFamily: {
+              "display": ["'Archivo Narrow'", "sans-serif"],
+              "serif": ["'Fraunces'", "serif"],
+              "mono": ["'JetBrains Mono'", "monospace"]
+            }
+          },
+        },
+      }
+    </script>
+<style type="text/tailwindcss">
+        @layer base {
+            body {
+                @apply bg-bg-paper text-ink selection:bg-accent selection:text-white;
+            }
+            h1, h2, h3 {
+                @apply font-display uppercase leading-[0.85] tracking-tighter;
+            }
+            p {
+                @apply font-serif leading-relaxed;
+            }
+            .grid-line {
+                @apply border-ink border-t border-r;
+            }
+            .vertical-text {
+                writing-mode: vertical-rl;
+                transform: rotate(180deg);
+            }
+        }
+    </style>
+</head>
+<body class="antialiased overflow-x-hidden">
+<header class="border-b-2 border-ink flex justify-between items-end p-6 md:p-10">
+<div class="text-4xl md:text-6xl font-display uppercase leading-none">models.</div>
+<nav class="hidden md:flex gap-12 font-mono text-sm uppercase font-bold">
+<a class="hover:text-accent transition-colors underline decoration-2 underline-offset-4" href="#">Documentation</a>
+<a class="hover:text-accent transition-colors" href="#">Source</a>
+<a class="hover:text-accent transition-colors" href="#">License</a>
+</nav>
+</header>
+<main>
+<section class="relative min-h-screen flex flex-col justify-end p-6 md:p-10 overflow-hidden border-b-2 border-ink">
+<div class="absolute top-10 right-10 hidden lg:block">
+<div class="text-right font-mono text-[10px] leading-tight uppercase tracking-tighter w-48 opacity-40">
+                [SYSTEM_MANIFEST]<br/>
+                RUST_STABLE_1.75<br/>
+                BUILD_ID: 9X-224-ALPHA<br/>
+                LATENCY: 12MS
+            </div>
+</div>
+<h1 class="text-[clamp(100px,25vw,320px)] -ml-4 md:-ml-8 mb-4">
+            models.
+        </h1>
+<div class="grid grid-cols-1 md:grid-cols-12 gap-10 items-end">
+<div class="md:col-span-8">
+<p class="text-3xl md:text-5xl max-w-2xl font-serif italic mb-8">
+                    Browse the AI ecosystem directly from your terminal. No chrome, no overhead, just weights and benchmarks.
+                </p>
+</div>
+<div class="md:col-span-4 flex flex-col items-start md:items-end gap-6">
+<div class="font-mono text-xs uppercase tracking-widest text-muted-ink text-left md:text-right">
+                    4,000+ models<br/>
+                    400 benchmarks<br/>
+                    22 providers<br/>
+                    MIT license
+                </div>
+<div class="bg-ink text-white p-4 font-mono text-lg md:text-xl w-full md:w-auto">
+<span class="text-accent">$</span> brew install models
+                </div>
+</div>
+</div>
+</section>
+<section class="border-b-2 border-ink grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6">
+<div class="md:col-span-1 border-r-2 border-ink p-6 flex flex-col justify-between">
+<span class="font-display text-4xl leading-none">THE<br/>INTERFACE</span>
+<span class="font-mono text-xs uppercase tracking-tighter opacity-50 mt-20">Fig. 01 — Terminal UI Environment</span>
+</div>
+<div class="md:col-span-3 lg:col-span-5 p-4 md:p-12 bg-white">
+<div class="aspect-video relative overflow-hidden border-2 border-ink grayscale hover:grayscale-0 transition-all duration-700">
+<img alt="Interface" class="w-full h-full object-cover contrast-125" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAp7jWPV_9xvZ6WTTX7x1uqKe_kgWQ1ng6GpR3Wq4gwXGRzHcG54qilqU_MEe7dd_89a70WOnZDsZ3mGo2VrRCxwsGybb2ak2sxS8YpEtL8A_TcwjOpa5p8v4L6mRtG70dAZ0tu0Knn75i9oXRraN4WUfhoVtT0pyRattw4GSYtDBoCzSrLsacZ_G88iG2084hVS8Xbz3TYiRCD3K71v50ohj5UIT4Ef6HQJ9wAEX7CuZeA6EXFWrHw_24yp4CYVRDLuA7l9IoWMg"/>
+<div class="absolute inset-0 pointer-events-none border-[1px] border-accent/20"></div>
+</div>
+</div>
+</section>
+<section class="grid grid-cols-1 md:grid-cols-12 min-h-screen border-b-2 border-ink">
+<div class="md:col-span-7 p-6 md:p-10 border-r-2 border-ink">
+<h2 class="text-7xl md:text-[140px] mb-20 leading-none">WHAT<br/>IT DOES</h2>
+<div class="max-w-md ml-auto text-right">
+<div class="h-px bg-ink w-full mb-8"></div>
+<p class="text-2xl font-serif">
+                    Instantly filter through thousands of weights across HuggingFace, Anthropic, and OpenAI. Sort by parameter count, license, or release date directly from the TUI.
+                </p>
+</div>
+<div class="mt-20 w-full aspect-square md:aspect-[4/5] border-2 border-ink grayscale contrast-150">
+<img alt="Architectural Geometry" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB5p0LivqSj8FQaxKMSDPWMDUNQC8jqGAErkDTTesDVUxYmXZ0PpksH1cUMDTMRBsTGubEZfkYybiXr1nu7kbK3IMBJHDk_Vl3qjSCBXOie0kuVE3E7vvhTURn2ClzZ0pJq3cWyqqIUdOxCEwXMBngkuxHvtcZwMGuFyGAder10l1tEmCyGMffVcHaco4Rdq7fbD-HMERT5PsICxx2_41IrZQ80PiVSlHGyZ0FloPNxCvoDRa4hBbJ7xM_sWDwCz49_GA5H4uXYuw"/>
+</div>
+</div>
+<div class="md:col-span-5 flex flex-col">
+<div class="flex-grow grid grid-cols-1 divide-y-2 divide-ink">
+<div class="group p-10 hover:bg-accent hover:text-white transition-colors cursor-pointer relative overflow-hidden">
+<span class="font-mono text-xs absolute top-4 left-4">01.</span>
+<h3 class="text-6xl group-hover:italic transition-all">MODELS</h3>
+</div>
+<div class="group p-10 hover:bg-accent hover:text-white transition-colors cursor-pointer relative overflow-hidden">
+<span class="font-mono text-xs absolute top-4 left-4">02.</span>
+<h3 class="text-6xl group-hover:italic transition-all">BENCHMARKS</h3>
+</div>
+<div class="group p-10 bg-accent text-white relative overflow-hidden">
+<span class="font-mono text-xs absolute top-4 left-4">03.</span>
+<h3 class="text-6xl italic">AGENTS</h3>
+<div class="mt-8 font-serif text-lg opacity-90 max-w-sm">
+                        Orchestrate coding agents with local or remote backends. Seamless integration with open-source frameworks.
+                    </div>
+</div>
+<div class="group p-10 hover:bg-accent hover:text-white transition-colors cursor-pointer relative overflow-hidden">
+<span class="font-mono text-xs absolute top-4 left-4">04.</span>
+<h3 class="text-6xl group-hover:italic transition-all">STATUS</h3>
+</div>
+</div>
+</div>
+</section>
+<section class="p-6 md:p-24 bg-ink text-white">
+<div class="max-w-4xl mx-auto">
+<span class="font-mono text-accent text-xs uppercase tracking-[0.3em] block mb-12 text-center">Protocol: CLI_INTERFACE</span>
+<div class="space-y-20">
+<div class="flex flex-col md:flex-row gap-8 items-start">
+<div class="flex-shrink-0 font-display text-4xl opacity-20">CMD_A</div>
+<div class="flex-grow">
+<code class="font-mono text-xl md:text-3xl block mb-4">$ models list --provider anthropic</code>
+<p class="font-serif text-muted-ink text-lg">— Filter models by specific providers with ultra-low latency response.</p>
+</div>
+</div>
+<div class="flex flex-col md:flex-row gap-8 items-start">
+<div class="flex-shrink-0 font-display text-4xl opacity-20">CMD_B</div>
+<div class="flex-grow">
+<code class="font-mono text-xl md:text-3xl block mb-4">$ models inspect llama-3-70b</code>
+<p class="font-serif text-muted-ink text-lg">— View metadata, tensor shapes, and quantization levels in a structured view.</p>
+</div>
+</div>
+<div class="flex flex-col md:flex-row gap-8 items-start">
+<div class="flex-shrink-0 font-display text-4xl opacity-20">CMD_C</div>
+<div class="flex-grow">
+<code class="font-mono text-xl md:text-3xl block mb-4">$ models bench --local</code>
+<p class="font-serif text-muted-ink text-lg">— Run standardized performance tests on local hardware and compare results.</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section class="grid grid-cols-1 md:grid-cols-12 border-b-2 border-ink">
+<div class="md:col-span-5 p-6 md:p-10 border-r-2 border-ink">
+<h2 class="text-[80px] md:text-[180px] leading-none">GET<br/>IT.</h2>
+</div>
+<div class="md:col-span-7 flex flex-col">
+<div class="divide-y-2 divide-ink border-b-2 border-ink">
+<div class="flex justify-between items-center p-8">
+<span class="font-display text-3xl">HOMEBREW</span>
+<code class="font-mono text-accent">brew install models</code>
+</div>
+<div class="flex justify-between items-center p-8">
+<span class="font-display text-3xl">CARGO</span>
+<code class="font-mono text-accent">cargo install models-cli</code>
+</div>
+<div class="flex justify-between items-center p-8">
+<span class="font-display text-3xl">SCOOP</span>
+<code class="font-mono text-accent">scoop install models</code>
+</div>
+<div class="flex justify-between items-center p-8">
+<span class="font-display text-3xl">AUR</span>
+<code class="font-mono text-accent">yay -S models-bin</code>
+</div>
+</div>
+<div class="p-10 flex-grow flex items-center">
+<a class="font-display text-4xl hover:text-accent transition-colors flex items-center gap-4" href="#">
+                    GITHUB RELEASES <span class="text-accent">→</span>
+</a>
+</div>
+</div>
+</section>
+</main>
+<footer class="p-6 md:p-10 grid grid-cols-1 md:grid-cols-3 gap-10">
+<div>
+<div class="text-3xl font-display mb-4">MODELS.</div>
+<p class="font-mono text-[10px] uppercase text-muted-ink">Built for the future of computation. Written in Rust. Published 2024.</p>
+</div>
+<div class="flex flex-col gap-2 font-mono text-xs uppercase font-bold">
+<a class="hover:text-accent" href="#">Github</a>
+<a class="hover:text-accent" href="#">Crates.io</a>
+<a class="hover:text-accent" href="#">Discord</a>
+<a class="hover:text-accent" href="#">Documentation</a>
+</div>
+<div class="md:text-right flex flex-col justify-end">
+<p class="font-mono text-[10px] text-muted-ink uppercase">© 2024 MODELS_SYSTEMS_INTL</p>
+</div>
+</footer>
+
+</body></html>

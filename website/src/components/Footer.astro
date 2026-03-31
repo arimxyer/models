@@ -1,0 +1,68 @@
+---
+import { VERSION, REPO_URL, WIKI_URL, CRATES_URL } from "@/data/site";
+
+const year = new Date().getFullYear();
+---
+
+<footer
+  class="mt-20 border-t border-(--neon-cyan)/20 bg-black/40 p-8 backdrop-blur-md"
+>
+  <div class="grid grid-cols-1 gap-8 md:grid-cols-4">
+    <div class="space-y-4">
+      <div class="text-3xl font-black tracking-tighter text-white">
+        models<span class="text-(--neon-cyan)">.</span>
+      </div>
+      <p class="font-mono text-[10px] text-slate-400">
+        RUNTIME: RUST_TOKIO_ASYNC<br />FRAMEWORK: RATATUI_CROSSTERM<br />CRATE:
+        MODELSDEV
+      </p>
+    </div>
+    <div class="space-y-2">
+      <div
+        class="font-mono text-[10px] tracking-widest text-slate-400 uppercase"
+      >
+        Navigation
+      </div>
+      <ul class="space-y-1 font-mono text-xs uppercase">
+        <li>
+          <a
+            class="transition-colors hover:text-(--neon-cyan) focus-visible:text-(--neon-cyan)"
+            href={REPO_URL}
+            rel="noopener noreferrer">Github_Repo</a
+          >
+        </li>
+        <li>
+          <a
+            class="transition-colors hover:text-(--neon-cyan) focus-visible:text-(--neon-cyan)"
+            href={WIKI_URL}
+            rel="noopener noreferrer">Docs_Index</a
+          >
+        </li>
+        <li>
+          <a
+            class="transition-colors hover:text-(--neon-cyan) focus-visible:text-(--neon-cyan)"
+            href={CRATES_URL}
+            rel="noopener noreferrer">Crates.io</a
+          >
+        </li>
+        <li>VER: v{VERSION}</li>
+      </ul>
+    </div>
+    <div class="space-y-2">
+      <div
+        class="font-mono text-[10px] tracking-widest text-slate-400 uppercase"
+      >
+        Environment
+      </div>
+      <ul class="space-y-1 font-mono text-xs uppercase">
+        <li>OS: DARWIN_LINUX_WIN</li>
+        <li>LICENSE: MIT_OPEN_SOURCE</li>
+      </ul>
+    </div>
+    <div class="flex items-end md:justify-end">
+      <small class="font-mono text-[10px] text-slate-400"
+        >© {year} MODELS. MIT LICENSE.</small
+      >
+    </div>
+  </div>
+</footer>

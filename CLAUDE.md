@@ -83,6 +83,14 @@ Each module has its own `CLAUDE.md` with detailed documentation. Top-level highl
 - TLS uses `rustls-tls-native-roots` (not `rustls-tls`) — loads certificates from the OS trust store to support corporate TLS-inspecting proxies
 - Status-source quirks to preserve: Better Stack resources use `public_name`; Status.io `status_code = 400` means degraded; incident.io incidents and Instatus components need second fetches; the Google adapter is currently summary-derived rather than preserving raw incident rows
 
+## Website (`website/`)
+Astro 6 + Tailwind 4 + TypeScript landing page. See `website/CLAUDE.md` for full details.
+```bash
+cd website
+mise run fmt && mise run typecheck && mise run build
+```
+Deployed to GitHub Pages at `/models`. Uses bun, not npm.
+
 ## Releasing
 1. Bump version in `Cargo.toml`
 2. `mise run fmt && mise run clippy && mise run test`

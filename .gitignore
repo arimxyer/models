@@ -18,3 +18,7 @@ tapes/
 video/
 video-v2/
 video-v3/
+
+# local mcp servers
+.mcp.json
+.stitch/

@@ -1,0 +1,290 @@
+---
+import { DISPLAY } from "@/data/site";
+import StatCard from "./stats/StatCard.astro";
+import GalaxyGraphic from "./stats/GalaxyGraphic.astro";
+import ScatterGraphic from "./stats/ScatterGraphic.astro";
+import GlobeGraphic from "./stats/GlobeGraphic.astro";
+import RobotGraphic from "./stats/RobotGraphic.astro";
+
+// Scatter plot: benchmark-like comparison data
+const SCATTER_COUNT = 32;
+const scatterDots = Array.from({ length: SCATTER_COUNT }, () => ({
+  x: +(12 + Math.random() * 178).toFixed(1),
+  y: +(10 + Math.random() * 78).toFixed(1),
+  r: +(1.5 + Math.random() * 2).toFixed(1),
+  opacity: +(0.35 + Math.random() * 0.65).toFixed(2),
+}));
+
+// Provider locations (approximate lat/lon of major AI providers)
+const PROVIDER_LOCATIONS: [number, number][] = [
+  [37.77, -122.42],
+  [47.61, -122.33],
+  [40.71, -74.01],
+  [51.51, -0.13],
+  [48.86, 2.35],
+  [52.52, 13.41],
+  [35.68, 139.69],
+  [37.57, 126.98],
+  [31.23, 121.47],
+  [39.9, 116.4],
+  [22.54, 114.06],
+  [1.35, 103.82],
+  [43.65, -79.38],
+  [45.5, -73.57],
+  [13.08, 80.27],
+  [12.97, 77.59],
+  [25.2, 55.27],
+  [34.05, -118.24],
+  [42.36, -71.06],
+  [30.27, -97.74],
+  [55.75, 37.62],
+  [-33.87, 151.21],
+  [50.07, 14.44],
+  [59.33, 18.07],
+  [32.07, 34.78],
+];
+---
+
+<div class="grid grid-rows-4 gap-4 lg:col-span-4" id="stats-stack">
+  <StatCard label="Model_Density" value={DISPLAY.models} accent="cyan">
+    <GalaxyGraphic />
+  </StatCard>
+  <StatCard label="Agent_Tracker" value={DISPLAY.agents} accent="amber">
+    <RobotGraphic />
+  </StatCard>
+  <StatCard
+    label="Bench_Validation"
+    value={DISPLAY.benchmarks}
+    accent="magenta"
+  >
+    <ScatterGraphic dots={scatterDots} />
+  </StatCard>
+  <StatCard
+    label="Provider_Nodes"
+    value={DISPLAY.statusProviders}
+    accent="green"
+  >
+    <GlobeGraphic locations={PROVIDER_LOCATIONS} />
+  </StatCard>
+</div>
+
+<script>
+  import {
+    animate,
+    waapi,
+    stagger,
+    onScroll,
+    utils,
+    createScope,
+  } from "animejs";
+
+  // --- Number counter ---
+  function countUp(el: HTMLElement, target: string, duration: number): void {
+    const match = target.match(/^([\d,]+)(.*)$/);
+    if (!match) {
+      el.textContent = target;
+      return;
+    }
+    const num = parseInt(match[1].replace(/,/g, ""), 10);
+    const suffix = match[2];
+    const counter = { value: 0 };
+    animate(counter, {
+      value: num,
+      duration,
+      ease: "outExpo",
+      modifier: utils.round(0),
+      onRender: () => {
+        el.textContent = counter.value.toLocaleString("en-US") + suffix;
+      },
+    });
+  }
+
+  // --- Activate all cards ---
+  let cardsActivated = false;
+  function activateCards(): void {
+    if (cardsActivated) return;
+    cardsActivated = true;
+
+    const scope = createScope({
+      root: document.getElementById("stats-stack") ?? undefined,
+    });
+
+    scope.add(() => {
+      const cards = document.querySelectorAll<HTMLElement>("[data-stat-card]");
+
+      // Fade in all cards together (WAAPI — runs on compositor thread)
+      waapi.animate(cards, {
+        opacity: [0, 1],
+        translateY: [12, 0],
+        duration: 600,
+        ease: "outQuad",
+        delay: stagger(50, { grid: [2, 2], from: "center" }),
+      });
+
+      // Count up all numbers (JS engine — needs modifier + onRender callbacks)
+      cards.forEach((card) => {
+        const numEl = card.querySelector<HTMLElement>("[data-count-target]");
+        if (numEl) countUp(numEl, numEl.dataset.countTarget || "0", 1200);
+      });
+
+      // Activate all graphics via CustomEvents
+      document.dispatchEvent(new CustomEvent("galaxy:activate"));
+      document.dispatchEvent(new CustomEvent("scatter:activate"));
+      document.dispatchEvent(new CustomEvent("globe:activate"));
+      document.dispatchEvent(new CustomEvent("robot:activate"));
+
+      // Galaxy: fade in wrapper (single element, low impact — regular animate)
+      const galaxy = document.querySelector<HTMLElement>(".galaxy-graphic");
+      if (galaxy) {
+        animate(galaxy, {
+          opacity: [0, 1],
+          duration: 800,
+          delay: 200,
+          ease: "outQuad",
+        });
+      }
+    });
+
+    // Cleanup on Astro view-transition navigation
+    document.addEventListener("astro:before-swap", () => scope.revert(), {
+      once: true,
+    });
+  }
+
+  // --- Hover effects ---
+  function setupHoverEffects(): void {
+    // Galaxy: twinkle
+    const galaxyCard = document.querySelector<HTMLElement>(
+      '.grid [data-accent="cyan"]',
+    );
+    if (galaxyCard) {
+      galaxyCard.addEventListener("mouseenter", () => {
+        document.dispatchEvent(new CustomEvent("galaxy:hover-start"));
+      });
+      galaxyCard.addEventListener("mouseleave", () => {
+        document.dispatchEvent(new CustomEvent("galaxy:hover-end"));
+      });
+      galaxyCard.addEventListener("focusin", () => {
+        document.dispatchEvent(new CustomEvent("galaxy:hover-start"));
+      });
+      galaxyCard.addEventListener("focusout", () => {
+        document.dispatchEvent(new CustomEvent("galaxy:hover-end"));
+      });
+    }
+
+    // Scatter: brighten
+    const scatterCard = document.querySelector<HTMLElement>(
+      '[data-accent="magenta"]',
+    );
+    if (scatterCard) {
+      scatterCard.addEventListener("mouseenter", () => {
+        document.dispatchEvent(new CustomEvent("scatter:hover-start"));
+      });
+      scatterCard.addEventListener("mouseleave", () => {
+        document.dispatchEvent(new CustomEvent("scatter:hover-end"));
+      });
+      scatterCard.addEventListener("focusin", () => {
+        document.dispatchEvent(new CustomEvent("scatter:hover-start"));
+      });
+      scatterCard.addEventListener("focusout", () => {
+        document.dispatchEvent(new CustomEvent("scatter:hover-end"));
+      });
+    }
+
+    // Globe: speed up
+    const globeCard = document.querySelector<HTMLElement>(
+      '[data-accent="green"]',
+    );
+    if (globeCard) {
+      globeCard.addEventListener("mouseenter", () => {
+        document.dispatchEvent(new CustomEvent("globe:hover-start"));
+      });
+      globeCard.addEventListener("mouseleave", () => {
+        document.dispatchEvent(new CustomEvent("globe:hover-end"));
+      });
+      globeCard.addEventListener("focusin", () => {
+        document.dispatchEvent(new CustomEvent("globe:hover-start"));
+      });
+      globeCard.addEventListener("focusout", () => {
+        document.dispatchEvent(new CustomEvent("globe:hover-end"));
+      });
+    }
+
+    // Robot: hover handled internally by RobotGraphic
+  }
+
+  // --- Click easter eggs ---
+  function setupClickEasterEggs(): void {
+    // Galaxy: burst spin
+    const galaxyCard = document.querySelector<HTMLElement>(
+      '.grid [data-accent="cyan"]',
+    );
+    if (galaxyCard) {
+      galaxyCard.addEventListener("click", () => {
+        document.dispatchEvent(new CustomEvent("galaxy:click"));
+      });
+    }
+
+    // Scatter: re-randomize
+    const scatterCard = document.querySelector<HTMLElement>(
+      '[data-accent="magenta"]',
+    );
+    if (scatterCard) {
+      scatterCard.addEventListener("click", () => {
+        document.dispatchEvent(new CustomEvent("scatter:click"));
+      });
+    }
+
+    // Globe: outage flash
+    const globeCard = document.querySelector<HTMLElement>(
+      '[data-accent="green"]',
+    );
+    if (globeCard) {
+      globeCard.addEventListener("click", () => {
+        document.dispatchEvent(new CustomEvent("globe:click"));
+      });
+    }
+
+    // Robot: click handled internally by RobotGraphic
+  }
+
+  // --- Init ---
+  const prefersReducedMotion = window.matchMedia(
+    "(prefers-reduced-motion: reduce)",
+  ).matches;
+
+  if (!prefersReducedMotion) {
+    // Scroll-triggered activation
+    const stack = document.getElementById("stats-stack");
+    if (stack) {
+      onScroll({
+        target: stack,
+        enter: "bottom top",
+        onEnter: () => {
+          activateCards();
+        },
+      });
+    }
+  } else {
+    // Reduced motion: show final state immediately
+    document
+      .querySelectorAll<HTMLElement>("[data-stat-card]")
+      .forEach((card) => {
+        card.style.opacity = "1";
+        card.style.transform = "none";
+        const numEl = card.querySelector<HTMLElement>("[data-count-target]");
+        if (numEl) numEl.textContent = numEl.dataset.countTarget || "0";
+      });
+    const galaxy = document.querySelector<HTMLElement>(".galaxy-graphic");
+    if (galaxy) galaxy.style.opacity = "1";
+
+    // Still activate graphics (they need JS to render)
+    document.dispatchEvent(new CustomEvent("galaxy:activate"));
+    document.dispatchEvent(new CustomEvent("scatter:activate"));
+    document.dispatchEvent(new CustomEvent("globe:activate"));
+    document.dispatchEvent(new CustomEvent("robot:activate"));
+  }
+
+  setupHoverEffects();
+  setupClickEasterEggs();
+</script>

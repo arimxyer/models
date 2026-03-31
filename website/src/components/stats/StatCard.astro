@@ -1,0 +1,53 @@
+---
+import Card from "@/components/bearnie/card/Card.astro";
+
+interface Props {
+  label: string;
+  value: string;
+  accent: "cyan" | "magenta" | "green" | "amber";
+}
+
+const { label, value, accent } = Astro.props;
+
+const accentColors = {
+  cyan: "border-[rgba(34,211,238,0.2)]",
+  magenta: "border-[rgba(244,114,182,0.2)]",
+  green: "border-[rgba(74,222,128,0.2)]",
+  amber: "border-[rgba(251,191,36,0.2)]",
+};
+
+const numberColors = {
+  cyan: "text-[var(--neon-cyan)] glow-cyan",
+  magenta: "text-[var(--neon-magenta)] glow-magenta",
+  green: "text-[var(--neon-green)] glow-green",
+  amber: "text-[var(--neon-amber)] glow-amber",
+};
+---
+
+<Card
+  class:list={[
+    "overflow-hidden rounded-none",
+    accentColors[accent],
+    "motion-safe:opacity-0",
+  ]}
+  data-stat-card
+  data-accent={accent}
+>
+  <div class="relative flex flex-col justify-between p-6">
+    <div class="font-mono text-[10px] tracking-widest text-slate-500 uppercase">
+      {label}
+    </div>
+    <div class="mt-2">
+      <div
+        class:list={[
+          "z-10 text-5xl font-black [font-variant-numeric:tabular-nums]",
+          numberColors[accent],
+        ]}
+        data-count-target={value}
+      >
+        0
+      </div>
+    </div>
+    <slot />
+  </div>
+</Card>
