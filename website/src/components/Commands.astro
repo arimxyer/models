@@ -27,6 +27,7 @@ const commands = [
 ---
 
 <section id="commands-section" class="grid grid-cols-1 gap-4 md:grid-cols-3">
+  <h2 class="sr-only">Command Examples</h2>
   {
     commands.map((cmd, i) => (
       <button
@@ -65,6 +66,7 @@ const commands = [
     class="relative w-[90vw] max-w-4xl"
     role="dialog"
     aria-modal="true"
+    aria-label="Command preview"
   >
     <div data-border class="overflow-hidden bg-black">
       <div
@@ -83,7 +85,7 @@ const commands = [
           id="modal-close"
           type="button"
           class="font-mono text-xs text-slate-500 transition-colors hover:text-white focus-visible:text-white focus-visible:outline-none"
-          aria-label="Close preview"
+          aria-label="Close preview (Press Escape)"
         >
           [ESC]
         </button>
@@ -160,10 +162,12 @@ const commands = [
     const closeBtn: HTMLElement = _close;
 
     let isOpen = false;
+    let triggerElement: HTMLElement | null = null;
 
     function openModal(card: HTMLElement) {
       if (isOpen) return;
       isOpen = true;
+      triggerElement = card;
 
       const videoSrc = card.getAttribute("data-video") || "";
       const termLabel = card.getAttribute("data-term-label") || "";
@@ -182,6 +186,7 @@ const commands = [
         backdrop.style.opacity = "1";
         modalVideo.style.opacity = "1";
         modalVideo.play();
+        closeBtn.focus();
         return;
       }
 
@@ -222,6 +227,9 @@ const commands = [
             opacity: [0, 1],
             duration: 180,
             ease: "outQuad",
+            onComplete: () => {
+              closeBtn.focus();
+            },
           },
           "-=200",
         );
@@ -239,6 +247,8 @@ const commands = [
         backdrop.style.opacity = "0";
         backdrop.style.pointerEvents = "none";
         backdrop.setAttribute("aria-hidden", "true");
+        triggerElement?.focus();
+        triggerElement = null;
         return;
       }
 
@@ -247,6 +257,8 @@ const commands = [
         onComplete: () => {
           backdrop.style.pointerEvents = "none";
           backdrop.setAttribute("aria-hidden", "true");
+          triggerElement?.focus();
+          triggerElement = null;
         },
       });
 
