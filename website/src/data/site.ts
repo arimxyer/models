@@ -81,19 +81,17 @@ export const MODEL_COUNT = modelCount;
 export const PROVIDER_COUNT = providerCount;
 export const PROVIDER_MODEL_COUNTS: number[] = providerModelCounts;
 
-// --- GitHub stars (fetched at build time) ---
+// --- GitHub stars (fetched at build time via ungh.cc) ---
 
 let starCount = 0;
 
 try {
   const repoPath = REPO_URL.replace("https://github.com/", "");
-  const res = await fetch(`https://api.github.com/repos/${repoPath}`, {
-    headers: { Accept: "application/vnd.github.v3+json" },
-  });
-  const data = (await res.json()) as { stargazers_count?: number };
-  starCount = data.stargazers_count ?? 0;
+  const res = await fetch(`https://ungh.cc/repos/${repoPath}`);
+  const data = (await res.json()) as { repo?: { stars?: number } };
+  starCount = data.repo?.stars ?? 0;
 } catch {
-  // Fallback if GitHub API is unreachable during build
+  // Fallback if ungh.cc is unreachable during build
   starCount = 0;
 }
 
