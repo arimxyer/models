@@ -245,4 +245,4 @@ This pattern is used in both the TUI (`copy_to_clipboard()`) and the CLI models 
 | Picker | Default Sort | Direction |
 |--------|-------------|-----------|
 | Models | Release date | Descending |
-| Benchmarks | Intelligence index | Descending |
+| Benchmarks | Release date | Descending |

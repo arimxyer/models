@@ -121,6 +121,8 @@ Width: 3 chars for reasoning indicator, 2 for source indicator.
 - Other options: default style with `Color::DarkGray` prefix space
 - `s` opens picker, `Enter` confirms, `Esc` cancels
 
+Default sort on launch: `ReleaseDate` (descending).
+
 ---
 
 ## 7. H2H Table

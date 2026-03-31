@@ -84,7 +84,9 @@ Key `[n]` is `Color::Green` when active, `Color::DarkGray` when inactive. Label 
 **Filter keys**: `1`=installed only, `2`=CLI only, `3`=open source only
 
 **Sort labels** (shown in list title as `↓{label}`):
-- `"name"`, `"updated"`, `"stars"`, `"status"`
+- `"updated"`, `"name"`, `"stars"`, `"status"`
+
+Default sort on launch: `"updated"` (descending).
 
 Sort direction is always descending (`\u{2193}`) in the title — `AgentSortOrder` does not expose direction toggle.
 

@@ -104,7 +104,7 @@ Fixed column widths (left to right):
 **Sort indicator** in model list title:
 - Format: ` {arrow}{label}` — prepended space, arrow `\u{2193}`/`\u{2191}`, then label
 - Labels: `"date"` (ReleaseDate), `"cost"` (Cost), `"ctx"` (Context)
-- `SortOrder::Default` → empty string (no indicator)
+- `SortOrder::Default` → empty string (no indicator). Note: app launches with `ReleaseDate` descending, so a sort indicator is always visible on startup.
 
 **Model list title format**:
 ```
