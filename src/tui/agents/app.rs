@@ -7,8 +7,8 @@ use crate::config::Config;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AgentSortOrder {
-    #[default]
     Name,
+    #[default]
     Updated,
     Stars,
     Status,
