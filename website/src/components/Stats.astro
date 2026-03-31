@@ -164,6 +164,12 @@ const PROVIDER_LOCATIONS: [number, number][] = [
       galaxyCard.addEventListener("mouseleave", () => {
         document.dispatchEvent(new CustomEvent("galaxy:hover-end"));
       });
+      galaxyCard.addEventListener("focusin", () => {
+        document.dispatchEvent(new CustomEvent("galaxy:hover-start"));
+      });
+      galaxyCard.addEventListener("focusout", () => {
+        document.dispatchEvent(new CustomEvent("galaxy:hover-end"));
+      });
     }
 
     // Scatter: brighten
@@ -177,6 +183,12 @@ const PROVIDER_LOCATIONS: [number, number][] = [
       scatterCard.addEventListener("mouseleave", () => {
         document.dispatchEvent(new CustomEvent("scatter:hover-end"));
       });
+      scatterCard.addEventListener("focusin", () => {
+        document.dispatchEvent(new CustomEvent("scatter:hover-start"));
+      });
+      scatterCard.addEventListener("focusout", () => {
+        document.dispatchEvent(new CustomEvent("scatter:hover-end"));
+      });
     }
 
     // Globe: speed up
@@ -188,6 +200,12 @@ const PROVIDER_LOCATIONS: [number, number][] = [
         document.dispatchEvent(new CustomEvent("globe:hover-start"));
       });
       globeCard.addEventListener("mouseleave", () => {
+        document.dispatchEvent(new CustomEvent("globe:hover-end"));
+      });
+      globeCard.addEventListener("focusin", () => {
+        document.dispatchEvent(new CustomEvent("globe:hover-start"));
+      });
+      globeCard.addEventListener("focusout", () => {
         document.dispatchEvent(new CustomEvent("globe:hover-end"));
       });
     }
