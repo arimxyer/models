@@ -13,3 +13,12 @@
 - Focus navigation uses directional `focus_left()`/`focus_right()` cycling through Providers → Models → Details
 - `reset_detail_scroll()` called on every model selection change (navigation, sort, filter, search)
 - Provider list items display a category initial prefix (O/C/I/G/T for Origin/Cloud/Inference/Gateway/Tool) at the start of each item instead of an abbreviated label at the end
+
+## Provider Detail Card
+- Rendered above model detail in the right panel — border always DarkGray (not focusable)
+- Height dynamically computed from wrapped content lines + 2 borders
+- Shows: provider name (Cyan+BOLD), category, docs URL, API URL, env var
+
+## Gotchas
+- Provider card border is intentionally always DarkGray — it's not in the focus cycle
+- `model_list_state.select(Some(idx + 1))` offset accounts for header row at index 0

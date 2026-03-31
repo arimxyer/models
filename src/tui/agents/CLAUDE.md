@@ -10,3 +10,12 @@
 - Detail scroll uses `detail_scroll: u16` — counts visual wrapped lines, not logical lines
 - Source picker modal intercepts global keys (especially `q`) to prevent accidental quit
 - Service health display: agents with status provider mappings show health icon + label in detail panel via `resolve_agent_service_health()`
+
+## Filters & Sort
+- Filter keys: `1`=installed only, `2`=CLI only, `3`=open source only
+- `AgentSortOrder` variants: Updated (default), Name, Stars, Status — always descending
+- Dynamic list width: `max_name_len + 18` (borders + highlight + dot + gap + type + padding)
+
+## Gotchas
+- `detail_scroll` is `u16` not `ScrollOffset` — this tab predates the `ScrollOffset` Cell newtype
+- Search match indices are tracked during render and converted to visual offsets — positions shift when panel resizes

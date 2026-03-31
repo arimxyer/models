@@ -3,7 +3,7 @@
 ## Module Structure
 
 - **`types.rs`** — Core types: `ProviderHealth` enum, `ProviderStatus` struct, detail-state contract
-- **`registry.rs`** — `STATUS_REGISTRY` (22 entries), provider slug aliases, strategy/support tier lookup
+- **`registry.rs`** — `STATUS_REGISTRY` (23 entries), provider slug aliases, strategy/support tier lookup
 - **`assessment.rs`** — Assessment logic on `ProviderStatus`: coverage, freshness, confidence, contradictions, affected surfaces
 - **`fetch.rs`** — `StatusFetcher` async fetcher with bounded concurrency (≤10 in-flight), Google pre-fetch
 - **`adapters/`** — 7 adapters: statuspage, betterstack, google, instatus, onlineornot, status_io, fallback
@@ -33,7 +33,7 @@ Component status normalization via `adapters::normalize_component_status()` (Ins
 
 ### Adding a New Provider
 
-1. Add entry to `STATUS_REGISTRY` in `registry.rs` with `OfficialStatusSource` enum variant
+1. Add `OfficialStatusSource` variant in `types.rs`, then add entry to `STATUS_REGISTRY` in `registry.rs`
 2. Add endpoint URL + page URL to `OfficialStatusSource::endpoint_url()` and `page_url()`
 3. Add `source_method()` mapping (Statuspage V2, BetterStack, etc.)
 4. Create or reuse adapter in `adapters/` (statuspage.rs covers all Statuspage V2 APIs)
