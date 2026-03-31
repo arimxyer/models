@@ -81,6 +81,24 @@ export const MODEL_COUNT = modelCount;
 export const PROVIDER_COUNT = providerCount;
 export const PROVIDER_MODEL_COUNTS: number[] = providerModelCounts;
 
+// --- GitHub stars (fetched at build time) ---
+
+let starCount = 0;
+
+try {
+  const repoPath = REPO_URL.replace("https://github.com/", "");
+  const res = await fetch(`https://api.github.com/repos/${repoPath}`, {
+    headers: { Accept: "application/vnd.github.v3+json" },
+  });
+  const data = (await res.json()) as { stargazers_count?: number };
+  starCount = data.stargazers_count ?? 0;
+} catch {
+  // Fallback if GitHub API is unreachable during build
+  starCount = 0;
+}
+
+export const STARS = starCount;
+
 // --- Formatted display values ---
 
 function formatCount(n: number, suffix = "+"): string {
