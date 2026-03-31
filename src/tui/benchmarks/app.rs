@@ -12,7 +12,6 @@ const PAGE_SIZE: usize = 10;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BenchmarkSortColumn {
-    #[default]
     Intelligence,
     Coding,
     Math,
@@ -32,11 +31,13 @@ pub enum BenchmarkSortColumn {
     PriceOutput,
     PriceBlended,
     Name,
+    #[default]
     ReleaseDate,
 }
 
 impl BenchmarkSortColumn {
     pub const ALL: &[Self] = &[
+        Self::ReleaseDate,
         Self::Intelligence,
         Self::Coding,
         Self::Math,
@@ -56,7 +57,6 @@ impl BenchmarkSortColumn {
         Self::PriceOutput,
         Self::PriceBlended,
         Self::Name,
-        Self::ReleaseDate,
     ];
 
     pub fn picker_label(&self) -> &'static str {

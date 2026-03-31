@@ -20,12 +20,12 @@ use crate::{api, data::Model as ApiModel};
 
 use super::picker::{self, PickerTerminal};
 const PICKER_SORTS: [ModelSort; 6] = [
+    ModelSort::ReleaseDate,
     ModelSort::Name,
     ModelSort::Provider,
     ModelSort::Context,
     ModelSort::InputPrice,
     ModelSort::OutputPrice,
-    ModelSort::ReleaseDate,
 ];
 
 #[derive(Debug, Clone, Serialize)]

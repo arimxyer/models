@@ -16,8 +16,8 @@ pub enum Focus {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SortOrder {
-    #[default]
     Default,
+    #[default]
     ReleaseDate,
     Cost,
     Context,
@@ -86,7 +86,7 @@ impl ModelsApp {
             provider_list_state,
             model_list_state,
             focus: Focus::Providers,
-            sort_order: SortOrder::Default,
+            sort_order: SortOrder::ReleaseDate,
             sort_ascending: false,
             filters: Filters::default(),
             search_query: String::new(),
