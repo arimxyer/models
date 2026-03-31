@@ -30,7 +30,6 @@
   "devDependencies": {
     "@astrojs/ts-plugin": "^1.10.7",
     "@types/node": "^25.5.0",
-    "lottie-to-svg": "^1.1.0",
     "prettier": "^3.8.1",
     "prettier-plugin-astro": "^0.14.1",
     "prettier-plugin-tailwindcss": "^0.7.2"
