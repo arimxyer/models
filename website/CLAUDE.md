@@ -67,7 +67,7 @@ src/
 
 ### Design Direction
 
-R2 "Data Dashboard" — sci-fi neon-on-dark aesthetic. See `DESIGN.md` for the full design system (atmosphere, color palette, typography, component stylings, layout principles). Design explorations archived in `.stitch/designs/`.
+R2 "Data Dashboard" — sci-fi neon-on-dark aesthetic. See `DESIGN.md` for the full design system (atmosphere, color palette, typography, component stylings, layout principles). Design explorations archived locally in `.stitch/designs/` (gitignored).
 
 Key constraints: no rounded corners on containers, no box-shadows, no emoji, asymmetric layouts, `text-slate-400` minimum for contrast. See `.claude/rules/website-design.md` for implementation rules.
 
@@ -81,7 +81,7 @@ Static site — all data sourced at build time via `src/data/site.ts`:
 - GitHub stars: fetched from `ungh.cc/repos/{owner}/{repo}` (no auth, no rate limits)
 - Model/provider counts: fetched from `models.dev/api.json`
 
-Components import from `@/data/site` — never hardcode stats, versions, or URLs. Videos from `public/assets/wiki/`, hero screenshot from `src/assets/`.
+Components import from `@/data/site` — never hardcode stats, versions, or URLs. Videos from `website/public/assets/wiki/`, hero screenshot from `src/assets/`.
 
 ## Gotchas
 
@@ -110,7 +110,7 @@ Components import from `@/data/site` — never hardcode stats, versions, or URLs
 - `spring()` easing `bounce` param is clamped to [-1, 1] — values outside this range are silently clamped. Use `{ mass, stiffness, damping }` for explicit control
 - Features.astro video cycle is scroll-gated via `onScroll` — videos don't play until the section is visible, pause when scrolled away
 - anime.js v4 `createTimeline()` is the v4 rename of `anime.timeline()` — used in Commands.astro for sequenced modal open/close animations with `.add()` and negative offsets (`'-=100'`)
-- CLI video assets (`cli-models-list.mp4`, `cli-benchmarks-list.mp4`, `cli-agents.mp4`) live in root `public/assets/wiki/` and must be copied to `website/public/assets/wiki/` for the website build
+- CLI video assets (`cli-models-list.mp4`, `cli-benchmarks-list.mp4`, `cli-agents.mp4`) live in `website/public/assets/wiki/` — no separate root copy needed
 - Bearnie Card's defaults (`rounded-lg`, `border`, `bg-card`, `text-card-foreground`) all conflict with the site's design system — use raw HTML with `data-border` + explicit Tailwind classes instead. StatCard.astro is the only justified Card usage (wraps slot content)
 - `splitText` with `wrap: "clip"` is incompatible with `tracking-tighter` — clip wrappers use `overflow: hidden` on inline-block elements which ignore negative letter-spacing, causing character clipping. Use `splitText(el, {chars: true})` without clip for tight-tracked headings
 - SVG `preserveAspectRatio="none"` distorts blur filters — the blur operates in viewBox coordinates, stretching unevenly. Use percentage-based rect dims without viewBox instead
