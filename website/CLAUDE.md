@@ -78,6 +78,7 @@ Static site — all data sourced at build time via `src/data/site.ts`:
 - Version, repo URL, crate name: parsed from `../Cargo.toml`
 - Benchmark/agent counts: parsed from `../data/*.json`
 - Status provider count: regex-counted from `../src/status/registry.rs`
+- GitHub stars: fetched from `ungh.cc/repos/{owner}/{repo}` (no auth, no rate limits)
 - Model/provider counts: fetched from `models.dev/api.json`
 
 Components import from `@/data/site` — never hardcode stats, versions, or URLs. Videos from `public/assets/wiki/`, hero screenshot from `src/assets/`.
