@@ -16,7 +16,7 @@ import {
   STATUS_PROVIDER_COUNT,
 } from "@/data/site";
 
-const base = import.meta.env.BASE_URL;
+const base = import.meta.env.BASE_URL.replace(/\/?$/, "/");
 
 const tabTriggerClass =
   "group data-border relative block w-full cursor-pointer overflow-hidden rounded-none border-l-4 p-4 text-left transition-colors data-[state=active]:border-l-(--neon-cyan) data-[state=active]:bg-(--neon-cyan)/10 data-[state=inactive]:border-l-transparent data-[state=inactive]:bg-slate-900/30 data-[state=inactive]:hover:border-l-slate-400";
