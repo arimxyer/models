@@ -595,9 +595,9 @@
     "output_tps": 89.304,
     "ttft": 0.439,
     "ttfat": 0.439,
-    "price_input": 0.16,
-    "price_output": 0.16,
-    "price_blended": 0.16
+    "price_input": 0.245,
+    "price_output": 0.245,
+    "price_blended": 0.245
   },
   {
     "id": "922c69c7-9037-43c6-8bcf-a1c555e7f3eb",
