@@ -142,9 +142,9 @@
     "math_500": null,
     "aime": null,
     "aime_25": 0.934,
-    "output_tps": 212.807,
-    "ttft": 0.551,
-    "ttfat": 9.949,
+    "output_tps": 212.257,
+    "ttft": 0.553,
+    "ttfat": 9.975,
     "price_input": 0.15,
     "price_output": 0.6,
     "price_blended": 0.263
