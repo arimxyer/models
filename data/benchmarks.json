@@ -1412,7 +1412,7 @@
   {
     "id": "e9a09db3-8fd6-41dd-ba2f-20e0a2bff7f2",
     "name": "Claude Opus 4.7 (Adaptive Reasoning, Max Effort)",
-    "slug": "claude-opus-4-7-adaptive",
+    "slug": "claude-opus-4-7",
     "creator": "anthropic",
     "creator_id": "f0aa413f-e8ae-4fcd-9c48-0e049f4f3128",
     "creator_name": "Anthropic",
