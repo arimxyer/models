@@ -1368,7 +1368,7 @@
     "ifbench": 0.586,
     "lcr": 0.703,
     "terminalbench_hard": 0.515,
-    "tau2": 0.86,
+    "tau2": null,
     "math_500": null,
     "aime": null,
     "aime_25": null,
