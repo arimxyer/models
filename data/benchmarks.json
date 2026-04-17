@@ -1365,7 +1365,7 @@
     "hle": 0.396,
     "livecodebench": null,
     "scicode": 0.545,
-    "ifbench": null,
+    "ifbench": 0.586,
     "lcr": 0.703,
     "terminalbench_hard": 0.515,
     "tau2": 0.86,
