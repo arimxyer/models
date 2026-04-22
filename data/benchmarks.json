@@ -6502,12 +6502,12 @@
     "math_500": null,
     "aime": null,
     "aime_25": null,
-    "output_tps": 56.155,
-    "ttft": 0.397,
-    "ttfat": 36.013,
-    "price_input": 0.07,
-    "price_output": 0.175,
-    "price_blended": 0.096
+    "output_tps": 53.988,
+    "ttft": 0.562,
+    "ttfat": 37.608,
+    "price_input": 0.1,
+    "price_output": 0.15,
+    "price_blended": 0.113
   },
   {
     "id": "20da3b31-fc0a-4359-abec-d59367bf1d9f",
@@ -6532,12 +6532,12 @@
     "math_500": null,
     "aime": null,
     "aime_25": null,
-    "output_tps": 142.658,
-    "ttft": 0.28,
-    "ttfat": 0.28,
-    "price_input": 0.04,
-    "price_output": 0.2,
-    "price_blended": 0.08
+    "output_tps": null,
+    "ttft": null,
+    "ttfat": null,
+    "price_input": 0,
+    "price_output": 0,
+    "price_blended": 0
   },
   {
     "id": "0985ada8-2ed8-404d-bd8b-7357666ce40f",
@@ -6712,9 +6712,9 @@
     "math_500": null,
     "aime": null,
     "aime_25": null,
-    "output_tps": 215.739,
-    "ttft": 1.423,
-    "ttfat": 1.423,
+    "output_tps": 201.94,
+    "ttft": 0.845,
+    "ttfat": 0.845,
     "price_input": 0.1,
     "price_output": 0.3,
     "price_blended": 0.15
