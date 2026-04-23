@@ -4672,12 +4672,12 @@
     "math_500": null,
     "aime": null,
     "aime_25": null,
-    "output_tps": null,
-    "ttft": null,
-    "ttfat": null,
-    "price_input": 0,
-    "price_output": 0,
-    "price_blended": 0
+    "output_tps": 61.972,
+    "ttft": 1.587,
+    "ttfat": 33.859,
+    "price_input": 1,
+    "price_output": 3,
+    "price_blended": 1.5
   },
   {
     "id": "94d09368-9035-47cf-963a-b4310b433a16",
