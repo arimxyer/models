@@ -595,9 +595,9 @@
     "output_tps": null,
     "ttft": null,
     "ttfat": null,
-    "price_input": 0,
-    "price_output": 0,
-    "price_blended": 0
+    "price_input": 5,
+    "price_output": 30,
+    "price_blended": 11.25
   },
   {
     "id": "a89c4b28-2d8c-456e-88ea-255fb51fd2b6",
@@ -805,9 +805,9 @@
     "output_tps": 115.702,
     "ttft": 0.601,
     "ttfat": 0.601,
-    "price_input": 0.31,
+    "price_input": 0.35,
     "price_output": 0.85,
-    "price_blended": 0.461
+    "price_blended": 0.487
   },
   {
     "id": "ebf3b39f-0be6-43a1-a37a-f9b2978c9916",
