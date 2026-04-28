@@ -12442,9 +12442,9 @@
     "math_500": null,
     "aime": null,
     "aime_25": 0.947,
-    "output_tps": 84.162,
-    "ttft": 1.077,
-    "ttfat": 24.84,
+    "output_tps": 83.735,
+    "ttft": 1.083,
+    "ttfat": 24.967,
     "price_input": 0.6,
     "price_output": 2.5,
     "price_blended": 1.075
