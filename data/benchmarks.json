@@ -10285,9 +10285,9 @@
     "output_tps": null,
     "ttft": null,
     "ttfat": null,
-    "price_input": 3.75,
-    "price_output": 15,
-    "price_blended": 6.563
+    "price_input": 0,
+    "price_output": 0,
+    "price_blended": 0
   },
   {
     "id": "9e141c0d-fc82-4e07-bb2e-fe0003bc030b",
